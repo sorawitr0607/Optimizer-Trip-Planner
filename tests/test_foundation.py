@@ -72,13 +72,33 @@ class FoundationTest(unittest.TestCase):
 
     def test_secret_bearing_snapshot_is_rejected(self) -> None:
         trip = self.actions.create_trip(name="", destination="Taipei")
-        with self.assertRaisesRegex(ValueError, "not allowed"):
-            self.actions.save_plan_version(
-                trip_id=trip.trip_id,
-                snapshot={"OPENAI_API_KEY": "must-not-persist"},
-                cause="invalid_test",
-            )
-        self.assertEqual([], self.actions.list_plan_versions(trip.trip_id))
+        # Every credential this project configures, plus credential-shaped names.
+        for secret in (
+            "OPENAI_API_KEY",
+            "OPENROUTESERVICE_API_KEY",
+            "GOOGLE_MAPS_SERVER_KEY",
+            "GOOGLE_MAPS_BROWSER_KEY",
+            "access_token",
+            "client_secret",
+            "session_token",
+            "some_credential",
+        ):
+            with self.assertRaisesRegex(ValueError, "not allowed"):
+                self.actions.save_plan_version(
+                    trip_id=trip.trip_id,
+                    snapshot={secret: "must-not-persist"},
+                    cause="invalid_test",
+                )
+        # Legitimate fields that merely end in _key must still be allowed.
+        allowed = self.actions.save_plan_version(
+            trip_id=trip.trip_id,
+            snapshot={"generated_key": "entry_requirements:shared", "name_key": "sky view"},
+            cause="valid_test",
+        )
+        self.assertEqual(
+            "entry_requirements:shared", allowed.snapshot.as_dict()["generated_key"]
+        )
+        self.assertEqual(1, len(self.actions.list_plan_versions(trip.trip_id)))
 
     def test_streamlit_entry_point_renders(self) -> None:
         with patch.dict(os.environ, {"TOURIST_DB_PATH": str(self.database_path)}):

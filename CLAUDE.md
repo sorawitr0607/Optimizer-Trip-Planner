@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 uv run streamlit run app.py                                          # run the app
-uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 96 tests, ~7s
+uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 111 tests, ~7s
 uv run --locked python -m unittest tests.test_optimizer.OptimizerCoreTest.test_safe_route_and_weather_fallback_are_selected  # one test
 python3 scripts/validate_regression_fixtures.py                      # fixture catalog structure
 uv run --locked python scripts/run_optimizer_regressions.py          # 27 historic cases through the real optimizer
@@ -116,7 +116,11 @@ Behavior changes to the optimizer should be expressed there.
 `TOURIST_DB_PATH` (default `data/tourist.sqlite3`), `TOURIST_NOMINATIM_URL`, `TOURIST_OVERPASS_URL`,
 `TOURIST_USER_AGENT`. Keys are read from the environment only — `.env` / `secrets.local.json` are
 gitignored, `.env.example` / `secrets.example.json` hold names and placeholders. Paid usage is capped
-at US$10/month by decision (warn at $8), so prefer the free OSM path.
+at US$10/month by decision (warn at $8). `usage.py` is that ledger: `PRICES_USD` holds the estimated
+unit price per `provider:operation`, `actions._spend()` refuses a call that would cross the cap and
+records what it cost, and free-tier operations are recorded at zero so call counts stay reconcilable.
+Every paid provider call must route through `_spend`; an unpriced operation raises rather than being
+assumed free. Ledger rows are append-only by SQLite trigger.
 
 ## Graphify: this repo overrides the parent instructions
 

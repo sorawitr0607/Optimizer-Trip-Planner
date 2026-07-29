@@ -14,6 +14,10 @@ class ProviderUnavailable(RuntimeError):
     pass
 
 
+class ProviderBudgetExceeded(RuntimeError):
+    """The monthly paid cap would be crossed; this is a budget stop, not an outage."""
+
+
 class OpenStreetMapProvider:
     name = "openstreetmap"
     cache_version = "osm-baseline-v3"

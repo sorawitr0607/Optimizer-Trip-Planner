@@ -26,10 +26,14 @@ from .core import (
     new_setup_draft,
     new_trip,
 )
-from . import checklist, costs, exports
+from . import checklist, costs, exports, usage
 from .discovery import build_candidate_catalog
 from .optimizer import date_range, optimize_trip
-from .providers import OpenStreetMapProvider, ProviderUnavailable
+from .providers import (
+    OpenStreetMapProvider,
+    ProviderBudgetExceeded,
+    ProviderUnavailable,
+)
 from .ranking import build_ranking, validate_choice
 from .setup import build_setup_payload
 from .store import SQLiteStore
@@ -690,6 +694,72 @@ class PlannerActions:
         if not isinstance(planner_input, dict):
             return []
         return list(planner_input.get("facts", []))
+
+    def paid_usage_status(self, *, month: str | None = None) -> dict[str, Any]:
+        """This month's paid spend against the cap, with per-operation counts."""
+
+        now = datetime.now(timezone.utc).isoformat()
+        window = month or usage.month_of(now)
+        entries = self.store.list_paid_usage()
+        summary = usage.totals(entries, month=window)
+        cap = self.store.get_paid_cap() or usage.CAP_USD
+        return {
+            **summary,
+            **usage.status(summary["estimated_usd"], cap_usd=cap),
+            "cap_is_owner_raised": cap != usage.CAP_USD,
+        }
+
+    def set_paid_cap(self, cap_usd: float) -> float:
+        """Only the owner may raise the stop threshold."""
+
+        if float(cap_usd) < 0:
+            raise ValueError("A paid cap cannot be negative")
+        return self.store.set_paid_cap(
+            cap_usd=float(cap_usd), now=datetime.now(timezone.utc).isoformat()
+        )
+
+    def check_paid_call(self, *, operation: str, count: int = 1) -> dict[str, Any]:
+        """Judge a prospective paid call. Callers must honour `allowed`."""
+
+        current = self.paid_usage_status()
+        return usage.check_allowed(
+            operation=operation,
+            count=count,
+            spent_usd=current["estimated_usd"],
+            cap_usd=current["cap_usd"],
+        )
+
+    def record_paid_call(
+        self,
+        *,
+        operation: str,
+        count: int = 1,
+        trip_id: str | None = None,
+        outcome: str = "success",
+        detail: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        return self.store.add_paid_usage(
+            usage.new_entry(
+                operation=operation,
+                count=count,
+                created_at=datetime.now(timezone.utc).isoformat(),
+                trip_id=trip_id,
+                outcome=outcome,
+                detail=dict(detail or {}),
+            )
+        )
+
+    def _spend(
+        self, *, operation: str, count: int, trip_id: str | None, detail: Mapping[str, Any]
+    ) -> None:
+        """Refuse a call that would cross the cap, then record what it cost."""
+
+        decision = self.check_paid_call(operation=operation, count=count)
+        if not decision["allowed"]:
+            raise ProviderBudgetExceeded(decision["reason"])
+        self.record_paid_call(
+            operation=operation, count=count, trip_id=trip_id, detail=detail
+        )
 
     def save_rate_snapshot(
         self,

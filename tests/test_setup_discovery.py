@@ -229,6 +229,8 @@ class SchemaMigrationTest(unittest.TestCase):
                     "checklist_items",
                     "cost_items",
                     "exchange_rate_snapshots",
+                    "paid_usage",
+                    "paid_usage_cap",
                 }
                 <= tables
             )

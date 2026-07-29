@@ -23,8 +23,17 @@ FORBIDDEN_SNAPSHOT_KEYS = frozenset(
         "passport_number",
         "passport_document",
         "booking_document",
+        # The provider keys this project actually configures. Neither ends in
+        # `_api_key`, so the suffix rules below would have let them through.
+        "google_maps_server_key",
+        "google_maps_browser_key",
+        "client_secret",
+        "private_key",
     }
 )
+# Credential-shaped suffixes. A bare `_key` is deliberately absent: legitimate
+# fields such as `generated_key` and `name_key` end that way.
+FORBIDDEN_SNAPSHOT_SUFFIXES = ("_api_key", "_secret", "_token", "_credential")
 
 
 @dataclass(frozen=True, slots=True)
@@ -279,7 +288,9 @@ def _reject_forbidden_keys(value: Any, path: str = "snapshot") -> None:
             if not isinstance(key, str):
                 raise ValueError(f"{path} contains a non-text key")
             normalized = key.casefold().replace("-", "_")
-            if normalized in FORBIDDEN_SNAPSHOT_KEYS or normalized.endswith("_api_key"):
+            if normalized in FORBIDDEN_SNAPSHOT_KEYS or normalized.endswith(
+                FORBIDDEN_SNAPSHOT_SUFFIXES
+            ):
                 raise ValueError(f"{path}.{key} is not allowed in a plan snapshot")
             _reject_forbidden_keys(child, f"{path}.{key}")
     elif isinstance(value, (list, tuple)):

@@ -19,10 +19,11 @@ from .core import (
     ProviderCacheEntry,
     SetupDraft,
     Trip,
+    freeze_snapshot,
 )
 
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS trips (
     id TEXT PRIMARY KEY,
@@ -144,6 +145,38 @@ CREATE TABLE IF NOT EXISTS exchange_rate_snapshots (
     updated_at TEXT NOT NULL,
     FOREIGN KEY (trip_id) REFERENCES trips(id)
 );
+
+-- Paid-provider ledger. Append-only: spend already made is history, and the
+-- monthly cap is judged from it.
+CREATE TABLE IF NOT EXISTS paid_usage (
+    id TEXT PRIMARY KEY,
+    trip_id TEXT,
+    operation TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    request_count INTEGER NOT NULL,
+    estimated_usd REAL NOT NULL,
+    outcome TEXT NOT NULL CHECK (outcome IN ('success', 'error', 'cached')),
+    detail_json TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS paid_usage_cap (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    cap_usd REAL NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TRIGGER IF NOT EXISTS paid_usage_no_update
+BEFORE UPDATE ON paid_usage
+BEGIN
+    SELECT RAISE(ABORT, 'paid usage entries are immutable');
+END;
+
+CREATE TRIGGER IF NOT EXISTS paid_usage_no_delete
+BEFORE DELETE ON paid_usage
+BEGIN
+    SELECT RAISE(ABORT, 'paid usage entries are immutable');
+END;
 
 CREATE TRIGGER IF NOT EXISTS plan_versions_no_update
 BEFORE UPDATE ON plan_versions
@@ -560,6 +593,68 @@ class SQLiteStore:
         return self._verified_snapshot(
             row["snapshot_json"], row["snapshot_sha256"], "Exchange-rate snapshot"
         ).as_dict()
+
+    def add_paid_usage(self, entry: dict[str, Any]) -> dict[str, Any]:
+        row_id = f"usage_{uuid4().hex}"
+        with self.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO paid_usage (
+                    id, trip_id, operation, provider, request_count,
+                    estimated_usd, outcome, detail_json, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    row_id,
+                    entry.get("trip_id"),
+                    entry["operation"],
+                    entry["provider"],
+                    int(entry["request_count"]),
+                    float(entry["estimated_usd"]),
+                    entry["outcome"],
+                    freeze_snapshot(entry.get("detail") or {}).canonical_json,
+                    entry["created_at"],
+                ),
+            )
+        return {**entry, "usage_id": row_id}
+
+    def list_paid_usage(self) -> list[dict[str, Any]]:
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM paid_usage ORDER BY created_at, id"
+            ).fetchall()
+        return [
+            {
+                "usage_id": row["id"],
+                "trip_id": row["trip_id"],
+                "operation": row["operation"],
+                "provider": row["provider"],
+                "request_count": row["request_count"],
+                "estimated_usd": row["estimated_usd"],
+                "outcome": row["outcome"],
+                "created_at": row["created_at"],
+            }
+            for row in rows
+        ]
+
+    def get_paid_cap(self) -> float | None:
+        with self.connect() as connection:
+            row = connection.execute(
+                "SELECT cap_usd FROM paid_usage_cap WHERE id = 1"
+            ).fetchone()
+        return None if row is None else float(row["cap_usd"])
+
+    def set_paid_cap(self, *, cap_usd: float, now: str) -> float:
+        with self.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO paid_usage_cap (id, cap_usd, updated_at) VALUES (1, ?, ?)
+                ON CONFLICT (id) DO UPDATE SET
+                    cap_usd = excluded.cap_usd, updated_at = excluded.updated_at
+                """,
+                (float(cap_usd), now),
+            )
+        return float(cap_usd)
 
     def save_optimization_preview(
         self, preview: OptimizationPreview
