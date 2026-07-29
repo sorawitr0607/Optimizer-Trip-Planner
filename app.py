@@ -755,11 +755,17 @@ def _time_value(value: str | None, fallback: time) -> time:
     return time.fromisoformat(value) if value else fallback
 
 
+def _export_labels(language: str) -> dict:
+    """Interface copy plus optimizer-code wording, so documents match the app."""
+
+    return TEXT[language] | OPTIMIZER_CODE_TEXT.get(language, {})
+
+
 @st.cache_data(show_spinner=False)
 def _plan_documents(_snapshot: dict, sha256: str, language: str) -> dict[str, bytes]:
     """Cached per plan-version snapshot and language; exporters are pure."""
 
-    labels = TEXT[language]
+    labels = _export_labels(language)
     return {
         "pdf": plan_pdf(_snapshot, labels),
         "xlsx": plan_workbook_xlsx(_snapshot, labels),
@@ -768,7 +774,7 @@ def _plan_documents(_snapshot: dict, sha256: str, language: str) -> dict[str, by
 
 @st.cache_data(show_spinner=False)
 def _day_poster(_snapshot: dict, sha256: str, language: str, date: str) -> bytes:
-    return day_poster_png(_snapshot, date, TEXT[language])
+    return day_poster_png(_snapshot, date, _export_labels(language))
 
 
 def _render_fallback(fallback: dict, language: str) -> None:

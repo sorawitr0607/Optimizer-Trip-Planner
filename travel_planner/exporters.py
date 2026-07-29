@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import re
 from typing import Any
+import unicodedata
 
 from fpdf import FPDF
 from PIL import Image, ImageDraw, ImageFont
@@ -59,6 +60,62 @@ FONT_CANDIDATES = (
 )
 
 
+def fit_lines(
+    text: str, font: Any, max_width: float, *, max_lines: int = 1
+) -> list[str]:
+    """Break text to fit max_width, ellipsizing once max_lines is reached.
+
+    Pillow draws whatever it is given, so an unwrapped place name runs off the
+    poster and is clipped.  Thai and Chinese names carry no word spaces, so this
+    measures character by character and prefers a space break when one exists.
+    """
+
+    words = str(text or "")
+    if not words:
+        return [""]
+    lines: list[str] = []
+    current = ""
+    index = 0
+    while index < len(words):
+        candidate = current + words[index]
+        if font.getlength(candidate) <= max_width:
+            current = candidate
+            index += 1
+            continue
+        if not current:  # A single glyph wider than the box; take it anyway.
+            current, index = words[index], index + 1
+        elif len(lines) + 1 >= max_lines:
+            remaining = words[index:].strip()
+            if remaining:
+                current = _ellipsize(current, font, max_width)
+            lines.append(current)
+            return lines
+        else:
+            cut = current.rfind(" ")
+            if cut > 0:
+                index -= len(current) - cut - 1
+                current = current[:cut]
+            else:
+                # ponytail: character break. Thai needs a dictionary to break on
+                # word boundaries; this only refuses to strand a combining mark
+                # at the start of a line, which is the visibly broken case.
+                while len(current) > 1 and unicodedata.combining(words[index]) != 0:
+                    index -= 1
+                    current = current[:-1]
+        lines.append(current.strip() or current)
+        current = ""
+    if current.strip():
+        lines.append(current.strip())
+    return lines or [""]
+
+
+def _ellipsize(text: str, font: Any, max_width: float) -> str:
+    trimmed = text.rstrip()
+    while trimmed and font.getlength(trimmed + "…") > max_width:
+        trimmed = trimmed[:-1].rstrip()
+    return (trimmed + "…") if trimmed else text
+
+
 def resolve_font() -> Path:
     """Return a Unicode TTF able to draw the selected language and local names."""
 
@@ -87,13 +144,26 @@ def day_poster_png(
 
     image = Image.new("RGB", POSTER_SIZE, "#101820")
     draw = ImageDraw.Draw(image)
-    draw.text((72, 96), stamp["destination"], font=title_font, fill="#F2F5F7")
-    draw.text((72, 184), f"{date} · {stamp['trip_name']}", font=heading_font, fill="#8FB8D8")
-    draw.line((72, 268, POSTER_SIZE[0] - 72, 268), fill="#2A3B49", width=3)
+    margin = 72
+    full_width = POSTER_SIZE[0] - margin * 2
+    _draw_block(
+        draw, (margin, 96), stamp["destination"], title_font, "#F2F5F7", full_width
+    )
+    _draw_block(
+        draw,
+        (margin, 184),
+        f"{date} · {stamp['trip_name']}",
+        heading_font,
+        "#8FB8D8",
+        full_width,
+    )
+    draw.line((margin, 268, POSTER_SIZE[0] - margin, 268), fill="#2A3B49", width=3)
 
     highlights = [item for item in day["items"] if item["type"] == "visit"][
         :POSTER_HIGHLIGHTS
     ]
+    text_left = 150
+    text_width = POSTER_SIZE[0] - text_left - margin
     top = 340
     for item in highlights:
         centre = top + 28
@@ -101,47 +171,68 @@ def day_poster_png(
         draw.text(
             (88, centre - 16), str(item["stop_number"]), font=small_font, fill="#101820"
         )
-        if item is not highlights[-1]:
-            draw.line((96, centre + 24, 96, centre + 128), fill="#2A3B49", width=4)
-        draw.text((150, top), item["display_name"], font=heading_font, fill="#F2F5F7")
+        name_bottom = _draw_block(
+            draw,
+            (text_left, top),
+            item["display_name"],
+            heading_font,
+            "#F2F5F7",
+            text_width,
+            max_lines=2,
+            line_height=52,
+        )
         detail = f"{item['start']}–{item['end']} · {item['duration_minutes']} {words['minutes']}"
         if item.get("local_name"):
             detail = f"{detail} · {item['local_name']}"
-        draw.text((150, top + 52), detail, font=body_font, fill="#A9BECD")
-        top += 152
+        bottom = _draw_block(
+            draw, (text_left, name_bottom), detail, body_font, "#A9BECD", text_width
+        )
+        if item is not highlights[-1]:
+            draw.line((96, centre + 24, 96, bottom + 20), fill="#2A3B49", width=4)
+        top = bottom + 56
 
     totals = day["totals"]
     footer = POSTER_SIZE[1] - 400
-    draw.line((72, footer, POSTER_SIZE[0] - 72, footer), fill="#2A3B49", width=3)
-    draw.text(
-        (72, footer + 36),
+    draw.line((margin, footer, POSTER_SIZE[0] - margin, footer), fill="#2A3B49", width=3)
+    _draw_block(
+        draw,
+        (margin, footer + 36),
         f"{day['start']}–{day['end']} · {words['scheduled_visits']} "
         f"{totals['scheduled_visits']}",
-        font=heading_font,
-        fill="#F2F5F7",
+        heading_font,
+        "#F2F5F7",
+        full_width,
     )
-    draw.text(
-        (72, footer + 104),
+    _draw_block(
+        draw,
+        (margin, footer + 104),
         f"{words['walking_minutes']} {totals['walking_minutes']} {words['minutes']} · "
         f"{words['travel_minutes']} {totals['travel_minutes']} {words['minutes']}",
-        font=body_font,
-        fill="#A9BECD",
+        body_font,
+        "#A9BECD",
+        full_width,
+        max_lines=2,
+        line_height=44,
     )
     if day["highest_risk"]:
         risk = words.get(
             f"state_{day['highest_risk']['status']}", day["highest_risk"]["status"]
         )
-        draw.text(
-            (72, footer + 168),
+        _draw_block(
+            draw,
+            (margin, footer + 204),
             f"{words['highest_risk']}: {risk}",
-            font=body_font,
-            fill="#F2C14E",
+            body_font,
+            "#F2C14E",
+            full_width,
         )
-    draw.text(
-        (72, POSTER_SIZE[1] - 108),
+    _draw_block(
+        draw,
+        (margin, POSTER_SIZE[1] - 108),
         _stamp_line(snapshot),
-        font=small_font,
-        fill="#6C8598",
+        small_font,
+        "#6C8598",
+        full_width,
     )
 
     buffer = BytesIO()
@@ -183,11 +274,11 @@ def plan_pdf(snapshot: dict[str, Any], labels: dict[str, str] | None = None) -> 
     if snapshot["readiness"]["capability_gaps"]:
         _pdf_heading(pdf, words["capability_gaps"], size=13)
         for gap in snapshot["readiness"]["capability_gaps"]:
-            _pdf_line(pdf, f"- {gap}")
+            _pdf_line(pdf, f"- {_code(words, gap)}")
     if snapshot["warnings"]:
         _pdf_heading(pdf, words["optimizer_warning"], size=13)
         for warning in snapshot["warnings"]:
-            _pdf_line(pdf, f"- {warning}")
+            _pdf_line(pdf, f"- {_code(words, warning)}")
 
     for day in snapshot["days"]:
         pdf.add_page()
@@ -229,7 +320,8 @@ def plan_pdf(snapshot: dict[str, Any], labels: dict[str, str] | None = None) -> 
         for item in snapshot["unscheduled"]:
             _pdf_line(
                 pdf,
-                f"- {item['display_name']} · {item['reason']} · {item['consequence']}",
+                f"- {item['display_name']} · {_code(words, item['reason'])} · "
+                f"{_code(words, item['consequence'])}",
             )
 
     pdf.add_page()
@@ -627,6 +719,36 @@ def _item_line(item: dict[str, Any], words: dict[str, str]) -> str:
     return f"{clock}  [{item.get('reason') or 'buffer'}] ({item['duration_minutes']} {words['minutes']})"
 
 
+def _draw_block(
+    draw: Any,
+    xy: tuple[int, int],
+    text: str,
+    font: Any,
+    fill: str,
+    max_width: float,
+    *,
+    max_lines: int = 1,
+    line_height: int | None = None,
+) -> int:
+    """Draw text inside max_width and return the y below the last line."""
+
+    x, y = xy
+    step = line_height or int(font.size * 1.2)
+    lines = fit_lines(text, font, max_width, max_lines=max_lines)
+    for offset, line in enumerate(lines):
+        draw.text((x, y + offset * step), line, font=font, fill=fill)
+    return y + len(lines) * step
+
+
+def _code(words: dict[str, str], code: Any) -> str:
+    """Localize an optimizer code the way the app does, or prettify it."""
+
+    text = str(code or "")
+    if not text:
+        return ""
+    return words.get(text) or text.replace("_", " ").capitalize()
+
+
 def _coordinates(point: dict[str, Any]) -> str:
     if point.get("latitude") is None or point.get("longitude") is None:
         return ""
@@ -635,7 +757,7 @@ def _coordinates(point: dict[str, Any]) -> str:
 
 def _fallback_line(fallback: dict[str, Any], words: dict[str, str]) -> str:
     parts = [
-        f"{words['fallback_trigger']}: {fallback.get('trigger') or '?'}",
+        f"{words['fallback_trigger']}: {_code(words, fallback.get('trigger')) or '?'}",
         f"{fallback.get('primary_name')} > {fallback.get('replacement_name')}",
     ]
     if fallback.get("half_day"):
@@ -643,7 +765,7 @@ def _fallback_line(fallback: dict[str, Any], words: dict[str, str]) -> str:
     if fallback.get("day_reoptimized"):
         parts.append(words["day_reoptimized"])
     if fallback.get("displaced_consequence"):
-        parts.append(str(fallback["displaced_consequence"]))
+        parts.append(_code(words, fallback["displaced_consequence"]))
     return "- " + " · ".join(parts)
 
 

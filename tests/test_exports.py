@@ -7,6 +7,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
+import unicodedata
 import zipfile
 
 from PIL import Image
@@ -438,6 +439,66 @@ class ArtifactTest(unittest.TestCase):
         self.assertTrue(plan_pdf(rain).startswith(b"%PDF-"))
         self.assertTrue(plan_pdf(hotel).startswith(b"%PDF-"))
         self.assertIsNotNone(hotel["accommodation"]["anchor"])
+
+    def test_long_names_wrap_inside_the_poster_instead_of_being_clipped(self) -> None:
+        from PIL import ImageFont
+
+        font = ImageFont.truetype(str(exporters.resolve_font()), 44)
+        width = exporters.POSTER_SIZE[0] - 150 - 72
+        samples = {
+            "latin": "Erhai Lake Western Shoreline Cycling Viewpoint",
+            "thai": "จุดชมวิวเส้นทางปั่นจักรยานริมทะเลสาบเอ๋อไห่ฝั่งตะวันตก",
+            "han": "洱海西岸自行车观景平台大理古城南门历史文化街区洱海西岸",
+            "unbroken": "A" * 120,
+        }
+        for label, text in samples.items():
+            self.assertGreater(font.getlength(text), width, f"{label} must overflow")
+            lines = exporters.fit_lines(text, font, width, max_lines=2)
+            self.assertLessEqual(len(lines), 2, label)
+            for line in lines:
+                self.assertLessEqual(round(font.getlength(line)), width, f"{label}: {line}")
+                self.assertNotEqual(
+                    0, len(line), f"{label} produced an empty line"
+                )
+                # A line must never begin with an orphaned combining mark.
+                self.assertEqual(0, unicodedata.combining(line[0]), f"{label}: {line}")
+
+        # Truncation is visible rather than silent.
+        single = exporters.fit_lines(samples["thai"], font, width, max_lines=1)
+        self.assertEqual(1, len(single))
+        self.assertTrue(single[0].endswith("…"))
+        self.assertLessEqual(round(font.getlength(single[0])), width)
+
+        # A poster built from those names is still a valid 9:16 image.
+        export = export_for("ix-dali-hotel-whole-trip")
+        for day in export["days"]:
+            for item in day["items"]:
+                if item["type"] == "visit":
+                    item["display_name"] = samples["thai"]
+                    item["local_name"] = samples["han"]
+        image = Image.open(BytesIO(day_poster_png(export, export["days"][0]["date"])))
+        self.assertEqual(exporters.POSTER_SIZE, image.size)
+
+    def test_documents_localize_optimizer_codes_like_the_app(self) -> None:
+        export = export_for("ix-dali-hotel-whole-trip", language="th")
+        reasons = {item["reason"] for item in export["unscheduled"]}
+        self.assertIn("PLAIN_WALK_THRESHOLD", reasons)
+
+        thai = "การเดินทางธรรมดาเกินค่าที่ตั้งไว้"
+        words = exporters._labels({"PLAIN_WALK_THRESHOLD": thai})
+        # Same rule the app's _optimizer_code uses: table first, else prettify.
+        self.assertEqual(thai, exporters._code(words, "PLAIN_WALK_THRESHOLD"))
+        self.assertEqual(
+            "Plain walk threshold",
+            exporters._code(exporters._labels(None), "PLAIN_WALK_THRESHOLD"),
+        )
+        self.assertEqual(
+            "Kept in unscheduled shortlist",
+            exporters._code(words, "kept_in_unscheduled_shortlist"),
+        )
+        self.assertEqual("", exporters._code(words, None))
+        # A supplied code table survives into the document build.
+        self.assertTrue(plan_pdf(export, {"PLAIN_WALK_THRESHOLD": thai}).startswith(b"%PDF-"))
 
     def test_missing_export_font_is_a_precise_error(self) -> None:
         with patch.dict(os.environ, {"TOURIST_EXPORT_FONT": "/nowhere/none.ttf"}):
