@@ -304,6 +304,11 @@ def build() -> tuple[int, int]:
                     # this must track the real directory name; it read every
                     # PDF while it still said "Data".
                     "data",
+                    "--exclude",
+                    # Retained validation screenshots: images cost vision
+                    # tokens and add no structure. The tickets beside them
+                    # stay in the graph.
+                    ".wayfinder/evidence",
                     env=env,
                 )
             finally:
