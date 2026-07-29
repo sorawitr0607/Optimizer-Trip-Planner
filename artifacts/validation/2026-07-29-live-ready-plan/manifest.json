@@ -1,0 +1,97 @@
+{
+  "run_id": "2026-07-29-live-ready-plan",
+  "timestamp": "2026-07-29T00:00:00+00:00",
+  "application_version": "0.1.0",
+  "schema_version": 10,
+  "source_revision": "84a5ab2",
+  "recorded_at_revision": "84a5ab2",
+  "operating_system": "Darwin 25.5.0",
+  "python_version": "3.12.13",
+  "language": "en",
+  "configuration": {
+    "providers": [
+      "openrouteservice foot-walking",
+      "google time zone",
+      "google places text search"
+    ],
+    "database": "copy of the live SQLite file; live data was not modified",
+    "note": "trip dates, arrival, departure and a booked base were set on the copy, since the live trip is date-less"
+  },
+  "deterministic_seed": null,
+  "fixture_catalog_sha256": "82b654159978df0e2c1a7861f62f79d11bd403de9b80fa41d2d40718a0faba26",
+  "scorecard_gate": "Source and operational evidence; Whole-trip optimizer validity",
+  "action": "Fetched routes, time zone and opening hours for a live trip, then generated, validated and activated a plan",
+  "result": "pass",
+  "measurements": {
+    "opening_hours": {
+      "places_selected": 5,
+      "fetched": 5,
+      "with_published_hours": 2,
+      "without_published_hours": 3,
+      "usable_after_reduction": 1,
+      "refused": {
+        "CLOSED_ON_A_TRIP_DATE": 1
+      },
+      "derived_interval_example": {
+        "start": "12:00",
+        "end": "17:30"
+      }
+    },
+    "capability_gaps": {
+      "before_the_session": [
+        "ROUTE_SNAPSHOT_MISSING",
+        "DESTINATION_TIMEZONE_UNVERIFIED",
+        "ACCOMMODATION_BASE_UNCONFIRMED"
+      ],
+      "after": []
+    },
+    "provisional": {
+      "derived": false,
+      "rule": "an approximate arrival or departure, or an unbooked base, keeps a plan provisional"
+    },
+    "variants": {
+      "best_balance": "ready",
+      "relaxed": "ready",
+      "more_highlights": "ready"
+    },
+    "activated_variant": {
+      "variant_id": "best_balance",
+      "scheduled_visits": 1,
+      "validation_valid": true,
+      "hard_violations": 0,
+      "timetable": [
+        "2030-03-06 09:00-09:10 travel to the museum",
+        "2030-03-06 09:10-12:00 buffer, waiting for the verified opening time",
+        "2030-03-06 12:00-14:15 visit Hor Sophonsilp Museum"
+      ],
+      "note": "the buffer ends exactly at the 12:00 opening interval derived from the provider, so the schedule honours real evidence"
+    },
+    "export_readiness": {
+      "state": "ready",
+      "capability_gaps": []
+    },
+    "timezone_in_export": "Asia/Bangkok",
+    "ledger_after": {
+      "requests": 26,
+      "estimated_usd": 0.13,
+      "state": "ok",
+      "cap_usd": 10.0,
+      "by_operation": {
+        "openrouteservice:directions": 20,
+        "google_timezone:lookup": 1,
+        "google_places:search_text": 5
+      }
+    }
+  },
+  "request_counts": {
+    "provider_requests": 26,
+    "paid_requests": 6
+  },
+  "estimated_paid_cost_usd": 0.13,
+  "failure_details": null,
+  "retained_files": [],
+  "snapshot_sources": {
+    "input": "live trip copy",
+    "plan_versions": "plan_4fe093b731594c8abb2ff956922abcf4 activated in the copy"
+  }
+}

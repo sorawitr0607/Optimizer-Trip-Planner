@@ -23,7 +23,7 @@ from .core import (
 )
 
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS trips (
     id TEXT PRIMARY KEY,
@@ -206,6 +206,21 @@ CREATE TABLE IF NOT EXISTS trip_evidence (
     retrieved_at TEXT NOT NULL,
     expires_at TEXT NOT NULL,
     PRIMARY KEY (trip_id, kind),
+    FOREIGN KEY (trip_id) REFERENCES trips(id)
+);
+
+-- Per-place governed evidence, keyed by kind. A licensed live overlay is cached
+-- briefly and refreshed, never kept as durable open data.
+CREATE TABLE IF NOT EXISTS place_evidence (
+    trip_id TEXT NOT NULL,
+    place_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    snapshot_json TEXT NOT NULL,
+    snapshot_sha256 TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    retrieved_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    PRIMARY KEY (trip_id, place_id, kind),
     FOREIGN KEY (trip_id) REFERENCES trips(id)
 );
 
@@ -624,6 +639,63 @@ class SQLiteStore:
         return self._verified_snapshot(
             row["snapshot_json"], row["snapshot_sha256"], "Exchange-rate snapshot"
         ).as_dict()
+
+    def upsert_place_evidence(
+        self,
+        *,
+        trip_id: str,
+        place_id: str,
+        kind: str,
+        value: dict[str, Any],
+        provider: str,
+        retrieved_at: str,
+        expires_at: str,
+    ) -> dict[str, Any]:
+        snapshot = freeze_snapshot(value)
+        with self.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO place_evidence (
+                    trip_id, place_id, kind, snapshot_json, snapshot_sha256,
+                    provider, retrieved_at, expires_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (trip_id, place_id, kind) DO UPDATE SET
+                    snapshot_json = excluded.snapshot_json,
+                    snapshot_sha256 = excluded.snapshot_sha256,
+                    provider = excluded.provider,
+                    retrieved_at = excluded.retrieved_at,
+                    expires_at = excluded.expires_at
+                """,
+                (
+                    trip_id,
+                    place_id,
+                    kind,
+                    snapshot.canonical_json,
+                    snapshot.sha256,
+                    provider,
+                    retrieved_at,
+                    expires_at,
+                ),
+            )
+        return value
+
+    def list_place_evidence(self, trip_id: str, kind: str) -> list[dict[str, Any]]:
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM place_evidence WHERE trip_id = ? AND kind = ?"
+                " ORDER BY place_id",
+                (trip_id, kind),
+            ).fetchall()
+        return [
+            {
+                **self._verified_snapshot(
+                    row["snapshot_json"], row["snapshot_sha256"], "Place evidence"
+                ).as_dict(),
+                "retrieved_at": row["retrieved_at"],
+                "expires_at": row["expires_at"],
+            }
+            for row in rows
+        ]
 
     def upsert_trip_evidence(
         self,

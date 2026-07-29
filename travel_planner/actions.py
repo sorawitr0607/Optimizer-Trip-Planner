@@ -26,10 +26,11 @@ from .core import (
     new_setup_draft,
     new_trip,
 )
-from . import checklist, costs, exports, usage
+from . import checklist, costs, exports, opening, usage
 from .discovery import build_candidate_catalog
 from .optimizer import date_range, optimize_trip
 from .providers import (
+    GooglePlacesOpeningHoursProvider,
     GoogleTimeZoneProvider,
     OpenRouteServiceProvider,
     OpenStreetMapProvider,
@@ -76,11 +77,13 @@ class PlannerActions:
         place_provider: Any = None,
         route_provider: Any = None,
         timezone_provider: Any = None,
+        hours_provider: Any = None,
     ) -> None:
         self.store = SQLiteStore(database_path)
         self.place_provider = place_provider
         self.route_provider = route_provider
         self.timezone_provider = timezone_provider
+        self.hours_provider = hours_provider
 
     def create_trip(
         self,
@@ -405,6 +408,7 @@ class PlannerActions:
 
         candidates = []
         facts = []
+        opening_evidence = self.opening_intervals(trip_id)
         current_by_id = {item["place_id"]: item for item in current_candidates}
         for choice in choices:
             candidate = choice.candidate.as_dict()
@@ -433,10 +437,25 @@ class PlannerActions:
                     "requires_access_evidence": False,
                 }
             )
+            provider_hours = opening_evidence.get(choice.place_id) or {}
+            if provider_hours.get("interval"):
+                facts.append(
+                    {
+                        "subject_id": choice.place_id,
+                        "fact_type": "opening_interval",
+                        "value": provider_hours["interval"],
+                        "status": "verified",
+                        "source": provider_hours.get("provider") or "provider_hours",
+                        "retrieved_at": provider_hours.get("retrieved_at"),
+                        # The reduction across trip dates, recorded for audit.
+                        "applies_to_dates": local_dates,
+                    }
+                )
+                continue
             operational = current.get("operational_evidence", {})
-            opening = operational.get("opening_hours", {})
-            interval = _simple_interval(opening.get("value"))
-            if opening.get("state") in {"official_confirmed", "current_provider"} and interval:
+            hours = operational.get("opening_hours", {})
+            interval = _simple_interval(hours.get("value"))
+            if hours.get("state") in {"official_confirmed", "current_provider"} and interval:
                 facts.append(
                     {
                         "subject_id": choice.place_id,
@@ -496,7 +515,14 @@ class PlannerActions:
                     if basics.get("accommodation_status") == "not_booked"
                     else basics.get("accommodation_status")
                 ),
-                "provisional": True,
+                # Derived, not assumed: an approximate arrival or departure, or an
+                # unbooked base, keeps the plan provisional as decided. Once the
+                # owner confirms all three, a validated variant may become Ready.
+                "provisional": bool(
+                    basics.get("accommodation_status") != "booked"
+                    or not basics.get("arrival_time")
+                    or not basics.get("departure_time")
+                ),
                 "requires_route_evidence": True,
                 "capability_gaps": capability_gaps,
             },
@@ -719,6 +745,131 @@ class PlannerActions:
         if not isinstance(planner_input, dict):
             return []
         return list(planner_input.get("facts", []))
+
+    def refresh_opening_hours(self, trip_id: str, *, force: bool = False) -> dict[str, Any]:
+        """Fetch opening hours for the selected places, one paid call each."""
+
+        trip = self.store.get_trip(trip_id)
+        setup = self.store.get_setup(trip_id)
+        if trip is None:
+            raise ValueError(f"Unknown trip: {trip_id}")
+        if setup is None:
+            raise ValueError("Save the trip setup before fetching opening hours")
+        places = self._selected_places(trip_id)
+        if not places:
+            raise ValueError("Choose at least one place before fetching opening hours")
+
+        provider = self.hours_provider or GooglePlacesOpeningHoursProvider()
+        now = datetime.now(timezone.utc)
+        existing = {
+            item["place_id"]: item
+            for item in self.store.list_place_evidence(trip_id, provider.kind)
+        }
+        fetched = cached = failed = 0
+        errors: list[str] = []
+        for place in places:
+            current = existing.get(place["place_id"])
+            if not force and current and current["expires_at"] > now.isoformat():
+                cached += 1
+                self.record_paid_call(
+                    operation=provider.operation,
+                    count=1,
+                    trip_id=trip_id,
+                    outcome="cached",
+                )
+                continue
+            try:
+                self._spend(
+                    operation=provider.operation,
+                    count=1,
+                    trip_id=trip_id,
+                    detail={"place_id": place["place_id"]},
+                )
+                value = provider.opening_hours(place)
+            except ProviderBudgetExceeded:
+                raise
+            except ProviderUnavailable as error:
+                failed += 1
+                message = str(error)[:160]
+                if message not in errors:
+                    errors.append(message)
+                continue
+            self.store.upsert_place_evidence(
+                trip_id=trip_id,
+                place_id=place["place_id"],
+                kind=provider.kind,
+                value=value,
+                provider=str(provider.name),
+                retrieved_at=now.isoformat(),
+                expires_at=(
+                    now + timedelta(days=int(getattr(provider, "cache_ttl_days", 3)))
+                ).isoformat(),
+            )
+            fetched += 1
+
+        usable = self.opening_intervals(trip_id)
+        return {
+            "places": len(places),
+            "fetched": fetched,
+            "from_cache": cached,
+            "failed": failed,
+            "provider_errors": errors,
+            "usable_intervals": len(
+                [item for item in usable.values() if item["interval"]]
+            ),
+            "unusable": {
+                place_id: item["reason"]
+                for place_id, item in usable.items()
+                if not item["interval"]
+            },
+        }
+
+    def opening_intervals(self, trip_id: str) -> dict[str, Any]:
+        """The interval valid on every trip date, per place, with its reason."""
+
+        setup = self.store.get_setup(trip_id)
+        basics = setup.snapshot.as_dict().get("trip_basics", {}) if setup else {}
+        start, end = basics.get("start_date"), basics.get("end_date")
+        local_dates = date_range(start, end) if start and end else []
+        now = datetime.now(timezone.utc).isoformat()
+        result: dict[str, Any] = {}
+        for evidence in self.store.list_place_evidence(
+            trip_id, GooglePlacesOpeningHoursProvider.kind
+        ):
+            if evidence["expires_at"] <= now:
+                result[evidence["place_id"]] = {
+                    "interval": None,
+                    "reason": "EVIDENCE_EXPIRED",
+                    "retrieved_at": evidence["retrieved_at"],
+                }
+                continue
+            reduced = opening.common_interval(
+                evidence.get("weekly_periods") or [], local_dates
+            )
+            result[evidence["place_id"]] = {
+                **reduced,
+                "retrieved_at": evidence["retrieved_at"],
+                "provider": evidence.get("provider"),
+            }
+        return result
+
+    def _selected_places(self, trip_id: str) -> list[dict[str, Any]]:
+        places = []
+        for choice in self.store.list_candidate_choices(trip_id):
+            if choice.action not in {"must_do", "interested", "maybe"}:
+                continue
+            candidate = choice.candidate.as_dict()
+            if candidate.get("latitude") is None or candidate.get("longitude") is None:
+                continue
+            places.append(
+                {
+                    "place_id": choice.place_id,
+                    "name": candidate.get("name") or choice.place_id,
+                    "latitude": float(candidate["latitude"]),
+                    "longitude": float(candidate["longitude"]),
+                }
+            )
+        return sorted(places, key=lambda item: item["place_id"])
 
     def refresh_timezone(self, trip_id: str, *, force: bool = False) -> dict[str, Any]:
         """Look up the destination's IANA zone once, from its discovered centre."""

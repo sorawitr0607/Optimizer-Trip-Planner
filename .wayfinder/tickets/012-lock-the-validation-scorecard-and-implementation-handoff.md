@@ -121,6 +121,19 @@ Detail and retained files live in their validation bundles under `artifacts/vali
 - Costs are recorded by the owner in their original currency and converted to Thai baht against a sourced, timestamped rate snapshot the owner may edit and buffer. A paid expense locks its actual THB charge, so a later rate cannot rewrite what was spent; a currency with no rate stays a visible gap rather than a guess. The `Costs` sheet carries the agreed columns with split estimated and paid totals, and `Summary` reports both. A provider fare would add rows; it was never required for the sheet to work.
 - Still open. Destination-specific requirements, transit-country tasks, and the mandatory 30-day, 7-day, and 24-hour verification runs need official sources no configured provider supplies. `st.map` draws no basemap offline.
 
+### Live evidence implementation evidence — 2026-07-29
+
+The three capability gaps that kept every plan provisional are now closed from real provider evidence, and a live trip reached `Ready` for the first time. Bundles: [`live-walking-routes`](../../artifacts/validation/2026-07-29-live-walking-routes/manifest.json), [`live-destination-timezone`](../../artifacts/validation/2026-07-29-live-destination-timezone/manifest.json), [`live-ready-plan`](../../artifacts/validation/2026-07-29-live-ready-plan/manifest.json).
+
+- The paid ledger came first, because adding provider calls without it would have meant paid calls with no cap. `usage.py` prices each operation, warns at US$8, stops at US$10, and only the owner raises the stop. Free and cached calls are recorded at zero so counts reconcile. Rows are append-only.
+- Walking routes come from OpenRouteService, both directions per selected pair, capped at 60 requests with skipped pairs named. An expired leg reports itself stale and the gap returns.
+- The destination time zone comes from a coordinate lookup at the discovered coverage centre, never guessed from a country. Any status other than OK is unverified rather than a fallback zone.
+- Opening hours come from a licensed live overlay and are reduced to the interval valid on every trip date, which is the only interval a date-less fact can honestly assert. A place closed on a trip date, or with no window common to all dates, produces no verified fact and stays unschedulable rather than being placed into a closed day.
+- `provisional` is now derived rather than hardcoded: an approximate arrival or departure, or an unbooked base, keeps a plan provisional as decided.
+- Live result on a copy of the live database: 26 provider requests for US$0.13 against the US$10 cap; capability gaps went from three to none; all three variants reached `ready`; the activated plan validated with zero hard violations and its buffer ends exactly at the 12:00 opening interval derived from the provider, so the timetable honours real evidence.
+- Real-world data gaps this exposed, honestly reported rather than filled: three of five selected places publish no opening hours at all, and one is closed on a trip date. Only one place could be scheduled. Coverage of opening evidence, not the pipeline, is now the limit.
+- Still open. The optimizer's fact model carries no applicable date, so a per-date opening window cannot be expressed and the conservative intersection stands in. Transit routes, fares, crowd and best-time evidence remain unsourced.
+
 ### Smallest build order
 
 1. **Foundation:** one Python 3.12/Streamlit project, SQLite schema, environment settings, stable domain records, immutable snapshot/version storage, and no extra web service.

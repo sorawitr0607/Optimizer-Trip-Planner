@@ -27,6 +27,10 @@ PRICES_USD = {
     "openrouteservice:directions": 0.0,
     "openrouteservice:matrix": 0.0,
     "google_places:details": 0.017,
+    # Text search carrying opening hours falls in the dearer field tier. Priced
+    # high rather than low: an over-estimate protects the cap, an
+    # under-estimate spends past it.
+    "google_places:search_text": 0.025,
     "google_routes:compute": 0.005,
     "google_timezone:lookup": 0.005,
 }

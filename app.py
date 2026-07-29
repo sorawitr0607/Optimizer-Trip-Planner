@@ -416,6 +416,12 @@ TEXT = {
         "timezone_fetched": "Time zone recorded.",
         "no_timezone": "The destination time zone is not verified yet.",
         "timezone_cost": "One paid lookup, about US$0.005, cached for 180 days.",
+        "opening_hours": "Opening hours",
+        "fetch_hours": "Fetch opening hours",
+        "hours_fetched": "Opening hours recorded.",
+        "hours_usable": "Places with a verified window",
+        "hours_cost": "One paid lookup per selected place, about US$0.025 each, cached for 3 days.",
+        "hours_unusable": "Places with no usable window",
     },
     "th": {
         "title": "ตัวช่วยวางแผนท่องเที่ยวส่วนตัว",
@@ -794,6 +800,12 @@ TEXT = {
         "timezone_fetched": "บันทึกเขตเวลาแล้ว",
         "no_timezone": "ยังไม่ได้ยืนยันเขตเวลาของปลายทาง",
         "timezone_cost": "เรียกแบบมีค่าใช้จ่ายหนึ่งครั้ง ประมาณ 0.005 ดอลลาร์ เก็บไว้ 180 วัน",
+        "opening_hours": "เวลาเปิดทำการ",
+        "fetch_hours": "ดึงเวลาเปิดทำการ",
+        "hours_fetched": "บันทึกเวลาเปิดทำการแล้ว",
+        "hours_usable": "สถานที่ที่มีช่วงเวลายืนยันแล้ว",
+        "hours_cost": "เรียกแบบมีค่าใช้จ่ายหนึ่งครั้งต่อสถานที่ ประมาณ 0.025 ดอลลาร์ เก็บไว้ 3 วัน",
+        "hours_unusable": "สถานที่ที่ยังไม่มีช่วงเวลาที่ใช้ได้",
     },
 }
 
@@ -1987,6 +1999,28 @@ if verified_routes:
     st.markdown(f"**{copy['routes_available']}: {len(verified_routes)}**")
 else:
     st.info(copy["no_routes"])
+intervals = actions.opening_intervals(trip.trip_id)
+usable = [item for item in intervals.values() if item.get("interval")]
+st.markdown(f"**{copy['opening_hours']}** · {copy['hours_usable']}: {len(usable)}")
+unusable = {pid: item["reason"] for pid, item in intervals.items() if not item.get("interval")}
+if unusable:
+    st.caption(
+        f"{copy['hours_unusable']}: "
+        + ", ".join(f"{_optimizer_code(reason, language)}" for reason in sorted(set(unusable.values())))
+    )
+st.caption(copy["hours_cost"])
+if st.button(copy["fetch_hours"], key=f"fetch_hours_{trip.trip_id}", width="stretch"):
+    try:
+        hours_report = actions.refresh_opening_hours(trip.trip_id)
+    except (ProviderBudgetExceeded, ProviderUnavailable, ValueError) as error:
+        st.error(str(error))
+    else:
+        st.session_state[route_flash_key] = (
+            f"{copy['hours_fetched']} {copy['hours_usable']} "
+            f"{hours_report['usable_intervals']} / {hours_report['places']}"
+        )
+        st.rerun()
+
 if st.button(copy["fetch_routes"], key=f"fetch_routes_{trip.trip_id}", width="stretch"):
     try:
         report = actions.refresh_routes(trip.trip_id)

@@ -424,3 +424,127 @@ class GoogleTimeZoneProvider:
             "provider": self.name,
             "status": "verified",
         }
+
+
+class GooglePlacesOpeningHoursProvider:
+    """Opening hours for one place, from a licensed live overlay.
+
+    Text search carries the hours in the same response, so one request answers
+    one place. The result is a live overlay: it is normalized into planner facts
+    and cached briefly, never treated as durable open data.
+    """
+
+    name = "google_places"
+    operation = "google_places:search_text"
+    cache_version = "google-places-hours-v1"
+    cache_ttl_days = 3
+    kind = "opening_hours"
+    FIELD_MASK = (
+        "places.id,places.displayName,places.location,places.regularOpeningHours"
+    )
+
+    def __init__(self) -> None:
+        self.url = os.environ.get(
+            "TOURIST_PLACES_URL", "https://places.googleapis.com/v1/places:searchText"
+        )
+
+    def opening_hours(self, place: dict[str, Any]) -> dict[str, Any]:
+        key = os.environ.get("GOOGLE_MAPS_SERVER_KEY", "").strip()
+        if not key:
+            raise ProviderUnavailable("GOOGLE_MAPS_SERVER_KEY is not configured")
+        body = json.dumps(
+            {
+                "textQuery": str(place["name"]),
+                "maxResultCount": 1,
+                "locationBias": {
+                    "circle": {
+                        "center": {
+                            "latitude": float(place["latitude"]),
+                            "longitude": float(place["longitude"]),
+                        },
+                        "radius": 500.0,
+                    }
+                },
+            }
+        ).encode("utf-8")
+        request = Request(
+            self.url,
+            data=body,
+            headers={
+                "Content-Type": "application/json",
+                "X-Goog-Api-Key": key,
+                "X-Goog-FieldMask": self.FIELD_MASK,
+            },
+        )
+        try:
+            with urlopen(request, timeout=30) as response:
+                payload = json.load(response)
+        except HTTPError as error:
+            raise ProviderUnavailable(f"Places returned HTTP {error.code}") from None
+        except (URLError, TimeoutError) as error:
+            raise ProviderUnavailable(
+                f"Places is unreachable: {type(error).__name__}"
+            ) from None
+        except json.JSONDecodeError:
+            raise ProviderUnavailable("Places returned invalid JSON") from None
+        return self.normalize(payload, place=place)
+
+    def normalize(self, payload: dict[str, Any], *, place: dict[str, Any]) -> dict[str, Any]:
+        """Provider payload to weekly opening periods, or a refusal."""
+
+        places = payload.get("places") or []
+        if not places:
+            raise ProviderUnavailable("Places returned no match for this place")
+        match = places[0]
+        hours = match.get("regularOpeningHours") or {}
+        periods = hours.get("periods") or []
+        if not periods:
+            raise ProviderUnavailable("Places returned no opening hours for this place")
+        return {
+            "kind": self.kind,
+            "place_id": str(place["place_id"]),
+            "provider_place_id": str(match.get("id") or ""),
+            "matched_name": str((match.get("displayName") or {}).get("text") or ""),
+            "weekly_periods": _weekly_periods(periods),
+            "weekday_descriptions": list(hours.get("weekdayDescriptions") or []),
+            "provider": self.name,
+            "status": "verified",
+        }
+
+
+def _weekly_periods(periods: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Normalize Google periods, whose day 0 is Sunday, into plain records."""
+
+    result = []
+    for period in periods:
+        opens = period.get("open") or {}
+        if "day" not in opens:
+            continue
+        closes = period.get("close")
+        if closes is None:
+            # No close means open around the clock from that day.
+            result.append(
+                {
+                    "day": int(opens["day"]),
+                    "start": "00:00",
+                    "end": "23:59",
+                    "all_day": True,
+                    "overnight": False,
+                }
+            )
+            continue
+        start = f"{int(opens.get('hour', 0)):02d}:{int(opens.get('minute', 0)):02d}"
+        end = f"{int(closes.get('hour', 0)):02d}:{int(closes.get('minute', 0)):02d}"
+        overnight = int(closes.get("day", opens["day"])) != int(opens["day"])
+        result.append(
+            {
+                "day": int(opens["day"]),
+                "start": start,
+                # An overnight close belongs to the next day; for a single-day
+                # visit window the usable part ends at midnight.
+                "end": "23:59" if overnight else end,
+                "all_day": False,
+                "overnight": overnight,
+            }
+        )
+    return sorted(result, key=lambda item: (item["day"], item["start"]))
