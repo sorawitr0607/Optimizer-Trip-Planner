@@ -111,6 +111,10 @@ The ancestor `Thaksin/CLAUDE.md` tells agents to run `graphify query` for codeba
 after edits. **Do not do either here.** Read source and tests directly; consult
 `graphify-out/GRAPH_REPORT.md` only for a broad architecture question.
 
+`graphify-out/GRAPH_REPORT.md` carries a generated "Graph Freshness" line advising `graphify update .`
+after code changes. That is graphify 0.9.3 boilerplate, it is regenerated on every rebuild, and it is
+wrong for this repo — ignore it.
+
 On 2026-07-29 `graphify update . --no-cluster` corrupted the checked-in graph: it dropped the
 `directed` flag and removed the Wayfinder/document nodes. `graphify-out/graph.json` is canonical and
 must stay directed. Rebuild only through `python3 scripts/build_project_graph.py` (paid, needs
