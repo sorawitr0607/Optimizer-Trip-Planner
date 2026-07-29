@@ -169,6 +169,41 @@ TEMPLATES = (
 )
 
 
+def display_title(item: dict[str, Any], words: dict[str, str] | None) -> str:
+    """Localized task wording, or the stored English literal as a fallback.
+
+    Templates carry a code and its format arguments, the way optimizer reasons
+    do, so a generated task reads in the selected language everywhere.
+    """
+
+    return _localized(item, words, "task_", item.get("template_id"), "title")
+
+
+def display_consequence(item: dict[str, Any], words: dict[str, str] | None) -> str:
+    """Localized consequence; a template may vary it per generated variant."""
+
+    code = item.get("consequence_code") or item.get("template_id")
+    return _localized(item, words, "why_", code, "consequence")
+
+
+def _localized(
+    item: dict[str, Any],
+    words: dict[str, str] | None,
+    prefix: str,
+    code: Any,
+    fallback_key: str,
+) -> str:
+    fallback = str(item.get(fallback_key) or "")
+    template = (words or {}).get(f"{prefix}{code}") if code else None
+    if not template:
+        return fallback
+    try:
+        return str(template).format(**(item.get("title_args") or {}))
+    except (KeyError, IndexError, ValueError):
+        # A mistyped placeholder must not lose the task wording.
+        return fallback
+
+
 def propose_items(
     *,
     destination: str,
@@ -237,6 +272,10 @@ def propose_items(
                     "requirement_level": "required" if place["timed"] else "recommended",
                     "timing": "30_days_before",
                     "title": "Check opening hours and advance booking for {place}",
+                    # One title, two consequences: the code keeps both localizable.
+                    "consequence_code": (
+                        "place_booking_timed" if place["timed"] else "place_booking_open"
+                    ),
                     "consequence": (
                         "A timed or limited entry sells out or closes the visit"
                         if place["timed"]
@@ -412,12 +451,14 @@ def _generated(
     place: str | None = None,
 ) -> dict[str, Any]:
     timing = template["timing"]
-    title = template["title"].format(
-        destination=destination.strip() or "this destination", place=place or ""
-    )
+    args = {"destination": destination.strip() or "this destination", "place": place or ""}
+    title = template["title"].format(**args)
     return {
         "generated_key": f"{template['template_id']}:{scope}",
         "template_id": template["template_id"],
+        "consequence_code": template.get("consequence_code") or template["template_id"],
+        # The same arguments a localized template interpolates.
+        "title_args": args,
         "origin": "generated",
         "title": title,
         "category": template["category"],

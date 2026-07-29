@@ -10,6 +10,8 @@ import streamlit as st
 
 from travel_planner import PlannerActions
 from travel_planner.checklist import (
+    display_consequence,
+    display_title,
     AUTHORITY_TYPES as CHECKLIST_AUTHORITIES,
     CATEGORIES as CHECKLIST_CATEGORIES,
     PROGRESS_STATES as CHECKLIST_PROGRESS,
@@ -322,6 +324,33 @@ TEXT = {
         "health_authority": "Health authority",
         "transport_operator": "Transport operator",
         "attraction_operator": "Attraction operator",
+        "task_entry_requirements": "Verify entry requirements for {destination}",
+        "why_entry_requirements": "Denied boarding or refused entry",
+        "task_passport_validity": "Confirm every passport stays valid for the whole trip",
+        "why_passport_validity": "Denied boarding",
+        "task_immigration_forms": "Check whether {destination} requires an arrival or customs declaration",
+        "why_immigration_forms": "Held at the border or fined",
+        "task_insurance_health": "Decide travel insurance and check health requirements",
+        "why_insurance_health": "Unfunded medical cost, or a refused entry where cover is mandatory",
+        "task_money": "Prepare payment methods and local cash",
+        "why_money": "Unable to pay where cards are not accepted",
+        "task_connectivity": "Arrange data connectivity",
+        "why_connectivity": "No maps, tickets, or translation on arrival",
+        "task_transport_setup": "Set up local transport payment or passes",
+        "why_transport_setup": "Queues and higher fares on the first day",
+        "task_local_rules": "Read local rules and etiquette that carry penalties",
+        "why_local_rules": "Fines or refused access",
+        "task_packing": "Pack against the planned weather and walking load",
+        "why_packing": "Avoidable discomfort or an unusable item",
+        "task_emergency": "Save emergency contacts and embassy details offline",
+        "why_emergency": "No usable contact during an incident",
+        "task_departure_recheck": "Recheck departure time, terminal, and any closures",
+        "why_departure_recheck": "Missed departure",
+        "task_accommodation_base": "Confirm accommodation and record its address offline",
+        "why_accommodation_base": "No usable base for routing or for an arrival form",
+        "task_place_booking": "Check opening hours and advance booking for {place}",
+        "why_place_booking_timed": "A timed or limited entry sells out or closes the visit",
+        "why_place_booking_open": "Queueing, or arriving when the place cannot be entered",
     },
     "th": {
         "title": "ตัวช่วยวางแผนท่องเที่ยวส่วนตัว",
@@ -613,6 +642,33 @@ TEXT = {
         "health_authority": "หน่วยงานสาธารณสุข",
         "transport_operator": "ผู้ให้บริการขนส่ง",
         "attraction_operator": "ผู้ดูแลสถานที่",
+        "task_entry_requirements": "ตรวจสอบข้อกำหนดการเข้า {destination} จากแหล่งทางการ",
+        "why_entry_requirements": "ถูกปฏิเสธการขึ้นเครื่องหรือปฏิเสธการเข้าประเทศ",
+        "task_passport_validity": "ยืนยันว่าหนังสือเดินทางทุกเล่มมีอายุครอบคลุมทั้งทริป",
+        "why_passport_validity": "ถูกปฏิเสธการขึ้นเครื่อง",
+        "task_immigration_forms": "ตรวจว่า {destination} ต้องกรอกแบบฟอร์มขาเข้าหรือใบสำแดงศุลกากรหรือไม่",
+        "why_immigration_forms": "ถูกกักที่ด่านตรวจหรือถูกปรับ",
+        "task_insurance_health": "ตัดสินใจเรื่องประกันการเดินทางและตรวจข้อกำหนดด้านสุขภาพ",
+        "why_insurance_health": "ค่ารักษาที่ไม่มีผู้รับผิดชอบ หรือถูกปฏิเสธเข้าประเทศหากบังคับให้มีประกัน",
+        "task_money": "เตรียมวิธีชำระเงินและเงินสดสกุลท้องถิ่น",
+        "why_money": "จ่ายเงินไม่ได้ในที่ที่ไม่รับบัตร",
+        "task_connectivity": "จัดเตรียมอินเทอร์เน็ตสำหรับใช้ระหว่างเดินทาง",
+        "why_connectivity": "ใช้แผนที่ ตั๋ว หรือการแปลภาษาไม่ได้เมื่อไปถึง",
+        "task_transport_setup": "ตั้งค่าการชำระเงินหรือบัตรโดยสารขนส่งท้องถิ่น",
+        "why_transport_setup": "ต้องต่อคิวและจ่ายค่าโดยสารแพงขึ้นในวันแรก",
+        "task_local_rules": "อ่านกฎและธรรมเนียมท้องถิ่นที่มีบทลงโทษ",
+        "why_local_rules": "ถูกปรับหรือถูกปฏิเสธไม่ให้เข้า",
+        "task_packing": "จัดกระเป๋าให้เหมาะกับสภาพอากาศและปริมาณการเดินที่วางแผนไว้",
+        "why_packing": "ไม่สบายตัวโดยไม่จำเป็น หรือของที่พกไปใช้ไม่ได้",
+        "task_emergency": "บันทึกเบอร์ฉุกเฉินและข้อมูลสถานทูตให้ใช้ได้แบบออฟไลน์",
+        "why_emergency": "ติดต่อใครไม่ได้เมื่อเกิดเหตุ",
+        "task_departure_recheck": "ตรวจเวลาออกเดินทาง อาคารผู้โดยสาร และการปิดให้บริการอีกครั้ง",
+        "why_departure_recheck": "พลาดเที่ยวเดินทาง",
+        "task_accommodation_base": "ยืนยันที่พักและบันทึกที่อยู่ให้ใช้ได้แบบออฟไลน์",
+        "why_accommodation_base": "ไม่มีฐานที่พักสำหรับคำนวณเส้นทางหรือกรอกแบบฟอร์มขาเข้า",
+        "task_place_booking": "ตรวจเวลาเปิดและการจองล่วงหน้าของ {place}",
+        "why_place_booking_timed": "รอบเข้าชมแบบกำหนดเวลาหรือจำนวนจำกัดอาจเต็มหรือปิดรับ",
+        "why_place_booking_open": "ต้องต่อคิว หรือไปถึงตอนที่เข้าชมไม่ได้",
     },
 }
 
@@ -933,13 +989,14 @@ def _render_checklist_item(
     with st.container(border=True):
         badge = words[f"progress_{item['progress']}"]
         evidence = words[f"evidence_{item['evidence_state']}"]
-        st.markdown(f"**{item['title']}**")
+        st.markdown(f"**{display_title(item, words)}**")
         line = f"{words[item['requirement_level']]} · {badge} · {evidence}"
         if item.get("due_date"):
             line = f"{line} · {words['due']} {item['due_date']}"
         st.caption(line)
-        if item.get("consequence"):
-            st.caption(f"{words['consequence']}: {item['consequence']}")
+        consequence = display_consequence(item, words)
+        if consequence:
+            st.caption(f"{words['consequence']}: {consequence}")
 
         progress = st.selectbox(
             words["progress"],
@@ -1174,9 +1231,13 @@ if readiness and readiness["counts"]["total"]:
         f"{copy['open_tasks']} {readiness['counts']['open']}"
     )
     for item in readiness["overdue"][:3]:
-        st.warning(f"{copy['overdue']}: {item['title']} · {item['due_date']}")
+        st.warning(
+            f"{copy['overdue']}: {display_title(item, copy)} · {item['due_date']}"
+        )
     for item in readiness["due_soon"][:3]:
-        st.info(f"{copy['due_soon']}: {item['title']} · {item['due_date']}")
+        st.info(
+            f"{copy['due_soon']}: {display_title(item, copy)} · {item['due_date']}"
+        )
 
 setup = actions.get_setup(trip.trip_id)
 setup_payload = setup.snapshot.as_dict() if setup else _empty_setup(trip.planning_mode)
@@ -2097,9 +2158,13 @@ else:
         # are previewed first.
         with st.expander(f"{copy['checklist_preview']} ({pending})", expanded=True):
             for item in preview["additions"]:
-                st.markdown(f"➕ {item['title']} · {copy[item['timing']]}")
+                st.markdown(
+                    f"➕ {display_title(item, copy)} · {copy[item['timing']]}"
+                )
             for item in preview["removals"]:
-                st.markdown(f"➖ {item['title']} · {copy['will_be_dismissed']}")
+                st.markdown(
+                    f"➖ {display_title(item, copy)} · {copy['will_be_dismissed']}"
+                )
             for change in preview["deadline_changes"]:
                 st.markdown(
                     f"📅 {change['title']} · {change['from']['due_date'] or '—'} → "
@@ -2139,7 +2204,7 @@ else:
         if not bucket_items:
             continue
         st.markdown(f"#### {copy[bucket]}")
-        for item in sorted(bucket_items, key=lambda value: value["title"]):
+        for item in sorted(bucket_items, key=lambda value: display_title(value, copy)):
             _render_checklist_item(actions, trip, item, language, checklist_flash_key)
 
     with st.expander(copy["add_task"]):
@@ -2187,7 +2252,9 @@ else:
     if dismissed:
         with st.expander(f"{copy['dismissed_history']} ({len(dismissed)})"):
             for item in dismissed:
-                st.markdown(f"- {item['title']} · {copy[item['timing']]}")
+                st.markdown(
+                    f"- {display_title(item, copy)} · {copy[item['timing']]}"
+                )
                 if st.button(
                     copy["restore_task"],
                     key=f"restore_{item['item_id']}",

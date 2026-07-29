@@ -188,6 +188,9 @@ def _task(item: dict[str, Any]) -> dict[str, Any]:
     return {
         "item_id": item.get("item_id"),
         "title": item.get("title"),
+        "template_id": item.get("template_id"),
+        "consequence_code": item.get("consequence_code"),
+        "title_args": dict(item.get("title_args") or {}),
         "category": item.get("category"),
         "requirement_level": item.get("requirement_level"),
         "progress": item.get("progress"),

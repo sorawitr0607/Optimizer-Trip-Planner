@@ -4,6 +4,7 @@ from io import BytesIO
 import json
 import os
 from pathlib import Path
+import re
 import sqlite3
 from tempfile import TemporaryDirectory
 import unittest
@@ -332,11 +333,75 @@ class ChecklistPersistenceTest(unittest.TestCase):
         again = self.actions.apply_checklist_proposal(self.trip.trip_id)
 
         self.assertEqual(len(preview["additions"]), first["added"])
-        self.assertEqual({"added": 0, "deadlines_changed": 0, "dismissed": 0}, again)
+        self.assertEqual(
+            {"added": 0, "refreshed": 0, "deadlines_changed": 0, "dismissed": 0}, again
+        )
 
         resumed = PlannerActions(self.path).list_checklist_items(self.trip.trip_id)
         self.assertEqual(first["added"], len(resumed))
         self.assertEqual({"generated"}, {item["origin"] for item in resumed})
+
+    def test_apply_refreshes_template_wording_without_losing_owner_state(self) -> None:
+        self.actions.apply_checklist_proposal(self.trip.trip_id)
+        target = next(
+            item
+            for item in self.actions.list_checklist_items(self.trip.trip_id)
+            if item["template_id"] == "money"
+        )
+        self.actions.set_checklist_progress(
+            trip_id=self.trip.trip_id, item_id=target["item_id"], progress="waiting"
+        )
+        self.actions.record_checklist_evidence(
+            trip_id=self.trip.trip_id,
+            item_id=target["item_id"],
+            source_url="https://example.gov/money",
+            authority_type="government",
+            checked_at="2026-11-01T00:00:00+00:00",
+        )
+
+        # A template whose wording changed must reach the saved board.
+        with patch.object(
+            checklist,
+            "TEMPLATES",
+            tuple(
+                {**template, "title": "Prepare cash and cards (revised)"}
+                if template["template_id"] == "money"
+                else template
+                for template in checklist.TEMPLATES
+            ),
+        ):
+            result = self.actions.apply_checklist_proposal(self.trip.trip_id)
+
+        self.assertEqual(0, result["added"])
+        self.assertEqual(1, result["refreshed"])
+        after = next(
+            item
+            for item in self.actions.list_checklist_items(self.trip.trip_id)
+            if item["template_id"] == "money"
+        )
+        self.assertEqual("Prepare cash and cards (revised)", after["title"])
+        # Owner state survives the refresh.
+        self.assertEqual("waiting", after["progress"])
+        self.assertEqual("verified", after["evidence_state"])
+        self.assertEqual("https://example.gov/money", after["source_url"])
+        self.assertEqual("government", after["authority_type"])
+        self.assertEqual(target["item_id"], after["item_id"])
+
+    def test_generated_items_carry_the_arguments_a_localized_template_needs(self) -> None:
+        self.actions.apply_checklist_proposal(self.trip.trip_id)
+        for item in self.actions.list_checklist_items(self.trip.trip_id):
+            self.assertIn("title_args", item)
+            self.assertEqual("Taipei", item["title_args"]["destination"])
+            self.assertTrue(item["consequence_code"])
+        # Stored items localize, which is what the artifacts read.
+        entry = next(
+            item
+            for item in self.actions.list_checklist_items(self.trip.trip_id)
+            if item["template_id"] == "entry_requirements"
+        )
+        thai = checklist.display_title(entry, _app_text()["th"])
+        self.assertIn("Taipei", thai)
+        self.assertNotIn("Verify", thai)
 
     def test_owner_edits_progress_evidence_and_dismissal_with_history(self) -> None:
         self.actions.apply_checklist_proposal(self.trip.trip_id)
@@ -446,6 +511,85 @@ class ChecklistPersistenceTest(unittest.TestCase):
 
         with self.assertRaisesRegex(RuntimeError, "Checklist item"):
             self.actions.list_checklist_items(self.trip.trip_id)
+
+
+class ChecklistLocalizationTest(unittest.TestCase):
+    def test_every_template_has_wording_in_both_languages(self) -> None:
+        source = (ROOT / "travel_planner" / "checklist.py").read_text(encoding="utf-8")
+        template_ids = set(re.findall(r'"template_id": "([a-z_]+)"', source))
+        self.assertGreaterEqual(len(template_ids), 13)
+        consequence_codes = {
+            item["consequence_code"]
+            for item in checklist.propose_items(
+                destination="Taipei",
+                setup=setup_payload(),
+                choices=[
+                    {"place_id": "p1", "action": "must_do", "candidate": {"name": "A"}},
+                ],
+                facts=[
+                    {"subject_id": "p1", "fact_type": "crowd_risk", "status": "verified"}
+                ],
+            )
+        } | {"place_booking_open"}
+
+        for language in ("en", "th"):
+            words = _app_text()[language]
+            for template_id in template_ids:
+                self.assertIn(f"task_{template_id}", words, f"{language}/{template_id}")
+            for code in consequence_codes:
+                self.assertIn(f"why_{code}", words, f"{language}/{code}")
+
+    def test_generated_wording_follows_the_selected_language(self) -> None:
+        text = _app_text()
+        items = {
+            item["template_id"]: item
+            for item in checklist.propose_items(
+                destination="Taipei",
+                setup=setup_payload(),
+                choices=[
+                    {"place_id": "p1", "action": "must_do", "candidate": {"name": "Tower"}}
+                ],
+            )
+        }
+        entry, place = items["entry_requirements"], items["place_booking"]
+
+        self.assertEqual(
+            "Verify entry requirements for Taipei",
+            checklist.display_title(entry, text["en"]),
+        )
+        thai = checklist.display_title(entry, text["th"])
+        self.assertIn("Taipei", thai)
+        self.assertIn("ตรวจสอบข้อกำหนดการเข้า", thai)
+        self.assertNotIn("Verify", thai)
+
+        # The place name is interpolated into the localized template too.
+        self.assertIn("Tower", checklist.display_title(place, text["th"]))
+        self.assertIn("ตรวจเวลาเปิด", checklist.display_title(place, text["th"]))
+
+        # Consequences localize, including the per-variant code.
+        self.assertIn("ถูกปฏิเสธ", checklist.display_consequence(entry, text["th"]))
+        self.assertEqual("place_booking_open", place["consequence_code"])
+        self.assertIn("ต้องต่อคิว", checklist.display_consequence(place, text["th"]))
+
+    def test_missing_or_broken_wording_falls_back_to_the_stored_text(self) -> None:
+        item = checklist.propose_items(destination="Taipei", setup=setup_payload())[0]
+
+        self.assertEqual(item["title"], checklist.display_title(item, None))
+        self.assertEqual(item["title"], checklist.display_title(item, {}))
+        # A template with an unknown placeholder must not lose the wording.
+        broken = {f"task_{item['template_id']}": "Verify {nonexistent}"}
+        self.assertEqual(item["title"], checklist.display_title(item, broken))
+        # An owner-authored task has no template and keeps its own title.
+        manual = {"title": "Buy an adapter", "consequence": "No charging"}
+        self.assertEqual("Buy an adapter", checklist.display_title(manual, item))
+        self.assertEqual("No charging", checklist.display_consequence(manual, item))
+
+
+def _app_text() -> dict:
+    source = (ROOT / "app.py").read_text(encoding="utf-8")
+    namespace: dict = {}
+    exec(source[source.index("TEXT = {"):source.index("TAG_TEXT = {")], namespace)
+    return namespace["TEXT"]
 
 
 class ChecklistExportTest(unittest.TestCase):

@@ -35,6 +35,28 @@ from .setup import build_setup_payload
 from .store import SQLiteStore
 
 
+"""Fields a generated checklist item takes from its template on every apply.
+
+Everything else on the item is owner state: progress, note, evidence, source,
+authority, last-checked time, and dismissal.
+"""
+CHECKLIST_TEMPLATE_FIELDS = (
+    "template_id",
+    "consequence_code",
+    "title",
+    "title_args",
+    "consequence",
+    "category",
+    "requirement_level",
+    "timing",
+    "due_date",
+    "expected_authority",
+    "applies_to",
+    "nationality",
+    "related_component",
+)
+
+
 class PlannerActions:
     def __init__(self, database_path: str | Path, *, place_provider: Any = None) -> None:
         self.store = SQLiteStore(database_path)
@@ -533,20 +555,26 @@ class PlannerActions:
                     origin="generated",
                 )
             )
-        for change in preview["deadline_changes"]:
-            existing = saved[change["generated_key"]]
-            self._write_checklist_item(
-                trip_id,
-                {
-                    **existing,
-                    "timing": change["to"]["timing"],
-                    "due_date": change["to"]["due_date"],
-                },
-            )
+        # Refresh template-derived wording and grounds on the items already
+        # saved, keeping owner state. Without this, a template change or a new
+        # language never reaches a board that was applied earlier.
+        refreshed = 0
+        for item in preview["proposed"]:
+            existing = saved.get(item["generated_key"])
+            if existing is None:
+                continue
+            merged = {
+                **existing,
+                **{key: item[key] for key in CHECKLIST_TEMPLATE_FIELDS if key in item},
+            }
+            if merged != existing:
+                self._write_checklist_item(trip_id, merged)
+                refreshed += 1
         for item in preview["removals"]:
             self._write_checklist_item(trip_id, {**item, "dismissed": True})
         return {
             "added": len(preview["additions"]),
+            "refreshed": refreshed,
             "deadlines_changed": len(preview["deadline_changes"]),
             "dismissed": len(preview["removals"]),
         }

@@ -19,6 +19,8 @@ from fpdf import FPDF
 from PIL import Image, ImageDraw, ImageFont
 import xlsxwriter
 
+from .checklist import display_consequence, display_title
+
 
 POSTER_SIZE = (1080, 1920)  # 9:16
 PICTOGRAPHS = re.compile(r"[\U0001F000-\U0001FAFF←-⯿️]")
@@ -239,7 +241,7 @@ def day_poster_png(
             _draw_block(
                 draw,
                 (margin, task_top + offset * 44),
-                f"• {task['title']}",
+                f"• {display_title(task, words)}",
                 body_font,
                 "#A9BECD",
                 full_width,
@@ -381,7 +383,7 @@ def plan_pdf(snapshot: dict[str, Any], labels: dict[str, str] | None = None) -> 
         if board["dismissed"]:
             _pdf_heading(pdf, words["dismissed_history"], size=13)
             for item in board["dismissed"]:
-                _pdf_line(pdf, f"- {item['title']}")
+                _pdf_line(pdf, f"- {display_title(item, words)}")
     _pdf_heading(pdf, words["sources"], size=18)
     if snapshot["sources"]:
         for source in snapshot["sources"]:
@@ -433,7 +435,9 @@ def checklist_ics(
                 f"{words.get('progress_' + str(item['progress']), item['progress'])}",
                 f"{words['evidence']}: "
                 f"{words.get('evidence_' + str(item['evidence_state']), item['evidence_state'])}",
-                f"{words['consequence']}: {item['consequence']}" if item.get("consequence") else "",
+                f"{words['consequence']}: {display_consequence(item, words)}"
+                if item.get("consequence")
+                else "",
                 item.get("source_url") or "",
             )
             if part
@@ -445,7 +449,7 @@ def checklist_ics(
                 f"DTSTAMP:{dtstamp}",
                 f"DTSTART;VALUE=DATE:{due}",
                 f"DTEND;VALUE=DATE:{end}",
-                f"SUMMARY:{_ics_text(item['title'])}",
+                f"SUMMARY:{_ics_text(display_title(item, words))}",
                 f"DESCRIPTION:{_ics_text(description)}",
                 f"CATEGORIES:{_ics_text(str(item.get('category') or ''))}",
                 "TRANSP:TRANSPARENT",
@@ -778,7 +782,7 @@ def _write_checklist(
             row,
             0,
             [
-                item["title"] or "",
+                display_title(item, words) or "",
                 item["category"] or "",
                 item["requirement_level"] or "",
                 item["progress"] or "",
@@ -786,7 +790,7 @@ def _write_checklist(
                 ", ".join(item["applies_to"]),
                 item["due_date"] or (item["timing"] or ""),
                 item["related_component"] or "",
-                item["consequence"] or "",
+                display_consequence(item, words) or "",
                 item["source_url"] or "",
                 item["authority_type"] or (item["expected_authority"] or ""),
                 item["evidence_state"] or "",
@@ -951,9 +955,10 @@ def _task_line(item: dict[str, Any], words: dict[str, str]) -> str:
     ]
     if item.get("due_date"):
         parts.append(f"{words['due']} {item['due_date']}")
-    line = f"- {item['title']}  ({' · '.join(str(p) for p in parts)})"
-    if item.get("consequence"):
-        line = f"{line}\n  {words['consequence']}: {item['consequence']}"
+    line = f"- {display_title(item, words)}  ({' · '.join(str(p) for p in parts)})"
+    consequence = display_consequence(item, words)
+    if consequence:
+        line = f"{line}\n  {words['consequence']}: {consequence}"
     if item.get("source_url"):
         line = f"{line}\n  {item['source_url']}"
     return line
