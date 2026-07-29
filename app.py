@@ -9,6 +9,13 @@ from urllib.parse import quote
 import streamlit as st
 
 from travel_planner import PlannerActions
+from travel_planner.checklist import (
+    AUTHORITY_TYPES as CHECKLIST_AUTHORITIES,
+    CATEGORIES as CHECKLIST_CATEGORIES,
+    PROGRESS_STATES as CHECKLIST_PROGRESS,
+    REQUIREMENT_LEVELS as CHECKLIST_LEVELS,
+    TIMING_BUCKETS as CHECKLIST_TIMING,
+)
 from travel_planner.exporters import day_poster_png, plan_pdf, plan_workbook_xlsx
 from travel_planner.exports import half_day
 from travel_planner.setup import (
@@ -243,6 +250,71 @@ TEXT = {
         "hotel_anchor": "Hotel area",
         "morning": "Morning",
         "afternoon": "Afternoon",
+        "checklist_help": "Generated from your trip, fully editable. Warnings never block the itinerary or its exports.",
+        "checklist_needs_setup": "Save the trip setup first; the board is generated from it.",
+        "checklist_preview": "Proposed checklist changes",
+        "checklist_applied": "Checklist updated:",
+        "checklist_current": "The board matches the current trip.",
+        "apply_checklist": "Apply these changes",
+        "will_be_dismissed": "will move to history",
+        "open_tasks": "open tasks",
+        "overdue": "Overdue",
+        "due_soon": "Due soon",
+        "due": "due",
+        "timing": "Timing",
+        "requirement_level": "Requirement",
+        "required": "Required",
+        "recommended": "Recommended",
+        "optional": "Optional",
+        "do_now": "Do now / before booking",
+        "30_days_before": "30 days before",
+        "7_days_before": "7 days before",
+        "24_hours_before": "24 hours before",
+        "departure_arrival_day": "Departure / arrival day",
+        "progress": "Progress",
+        "progress_to_do": "To do",
+        "progress_waiting": "Waiting",
+        "progress_done": "Done",
+        "progress_not_applicable": "Not applicable",
+        "not_applicable_reason": "Why is it not applicable?",
+        "evidence": "Official evidence",
+        "evidence_verified": "Verified",
+        "evidence_verification_needed": "Verification needed",
+        "evidence_verification_needed_help": "No official source recorded yet. This app never guesses an entry rule.",
+        "expected_authority": "Confirm with",
+        "source_url": "Official source URL",
+        "authority_type": "Authority",
+        "record_evidence": "Record this source",
+        "evidence_recorded": "Official source recorded.",
+        "last_checked": "Last checked",
+        "save_task": "Save",
+        "task_saved": "Task updated.",
+        "dismiss_task": "Dismiss",
+        "task_dismissed": "Moved to history.",
+        "dismissed_history": "Dismissed history",
+        "restore_task": "Restore",
+        "task_restored": "Task restored.",
+        "add_task": "Add a task",
+        "task_title": "Task",
+        "task_added": "Task added.",
+        "entry_requirements": "Entry requirements",
+        "immigration_customs": "Immigration and customs",
+        "money": "Money",
+        "connectivity": "Connectivity",
+        "insurance_health": "Insurance and health",
+        "transport_setup": "Transport setup",
+        "reservations": "Reservations",
+        "registrations": "Registrations",
+        "packing": "Packing",
+        "local_rules": "Local rules",
+        "emergency": "Emergency",
+        "government": "Government",
+        "embassy": "Embassy",
+        "immigration": "Immigration",
+        "customs": "Customs",
+        "health_authority": "Health authority",
+        "transport_operator": "Transport operator",
+        "attraction_operator": "Attraction operator",
     },
     "th": {
         "title": "ตัวช่วยวางแผนท่องเที่ยวส่วนตัว",
@@ -467,6 +539,71 @@ TEXT = {
         "hotel_anchor": "ย่านที่พัก",
         "morning": "ช่วงเช้า",
         "afternoon": "ช่วงบ่าย",
+        "checklist_help": "สร้างจากข้อมูลทริปและแก้ไขได้ทั้งหมด คำเตือนไม่ปิดกั้นตารางเดินทางหรือไฟล์ส่งออก",
+        "checklist_needs_setup": "บันทึกการตั้งค่าทริปก่อน ระบบจะสร้างรายการจากข้อมูลนั้น",
+        "checklist_preview": "การเปลี่ยนแปลงที่เสนอ",
+        "checklist_applied": "อัปเดตรายการแล้ว:",
+        "checklist_current": "รายการตรงกับข้อมูลทริปปัจจุบันแล้ว",
+        "apply_checklist": "ใช้การเปลี่ยนแปลงนี้",
+        "will_be_dismissed": "จะย้ายไปประวัติ",
+        "open_tasks": "รายการที่ยังไม่เสร็จ",
+        "overdue": "เกินกำหนด",
+        "due_soon": "ใกล้ครบกำหนด",
+        "due": "กำหนด",
+        "timing": "ช่วงเวลา",
+        "requirement_level": "ระดับความจำเป็น",
+        "required": "จำเป็น",
+        "recommended": "แนะนำ",
+        "optional": "ไม่บังคับ",
+        "do_now": "ทำทันที / ก่อนจอง",
+        "30_days_before": "ก่อนเดินทาง 30 วัน",
+        "7_days_before": "ก่อนเดินทาง 7 วัน",
+        "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
+        "departure_arrival_day": "วันเดินทาง / วันถึง",
+        "progress": "สถานะงาน",
+        "progress_to_do": "ยังไม่ทำ",
+        "progress_waiting": "รอผล",
+        "progress_done": "เสร็จแล้ว",
+        "progress_not_applicable": "ไม่เกี่ยวข้อง",
+        "not_applicable_reason": "เหตุผลที่ไม่เกี่ยวข้อง",
+        "evidence": "หลักฐานจากแหล่งทางการ",
+        "evidence_verified": "ยืนยันแล้ว",
+        "evidence_verification_needed": "ต้องตรวจสอบ",
+        "evidence_verification_needed_help": "ยังไม่มีแหล่งทางการบันทึกไว้ แอปนี้ไม่เดากฎการเข้าเมือง",
+        "expected_authority": "ตรวจสอบกับ",
+        "source_url": "ลิงก์แหล่งทางการ",
+        "authority_type": "หน่วยงาน",
+        "record_evidence": "บันทึกแหล่งข้อมูลนี้",
+        "evidence_recorded": "บันทึกแหล่งทางการแล้ว",
+        "last_checked": "ตรวจครั้งล่าสุด",
+        "save_task": "บันทึก",
+        "task_saved": "อัปเดตรายการแล้ว",
+        "dismiss_task": "ซ่อนรายการ",
+        "task_dismissed": "ย้ายไปประวัติแล้ว",
+        "dismissed_history": "ประวัติรายการที่ซ่อน",
+        "restore_task": "นำกลับมา",
+        "task_restored": "นำรายการกลับมาแล้ว",
+        "add_task": "เพิ่มรายการ",
+        "task_title": "ชื่อรายการ",
+        "task_added": "เพิ่มรายการแล้ว",
+        "entry_requirements": "ข้อกำหนดการเข้าประเทศ",
+        "immigration_customs": "ตรวจคนเข้าเมืองและศุลกากร",
+        "money": "การเงิน",
+        "connectivity": "อินเทอร์เน็ต",
+        "insurance_health": "ประกันและสุขภาพ",
+        "transport_setup": "การเดินทางในพื้นที่",
+        "reservations": "การจอง",
+        "registrations": "การลงทะเบียน",
+        "packing": "การจัดกระเป๋า",
+        "local_rules": "กฎท้องถิ่น",
+        "emergency": "เหตุฉุกเฉิน",
+        "government": "หน่วยงานรัฐ",
+        "embassy": "สถานทูต",
+        "immigration": "ตรวจคนเข้าเมือง",
+        "customs": "ศุลกากร",
+        "health_authority": "หน่วยงานสาธารณสุข",
+        "transport_operator": "ผู้ให้บริการขนส่ง",
+        "attraction_operator": "ผู้ดูแลสถานที่",
     },
 }
 
@@ -777,6 +914,101 @@ def _day_poster(_snapshot: dict, sha256: str, language: str, date: str) -> bytes
     return day_poster_png(_snapshot, date, _export_labels(language))
 
 
+def _render_checklist_item(
+    actions, trip, item: dict, language: str, flash_key: str
+) -> None:
+    """One board row: state, deadline, consequence, and its evidence controls."""
+
+    words = TEXT[language]
+    with st.container(border=True):
+        badge = words[f"progress_{item['progress']}"]
+        evidence = words[f"evidence_{item['evidence_state']}"]
+        st.markdown(f"**{item['title']}**")
+        line = f"{words[item['requirement_level']]} · {badge} · {evidence}"
+        if item.get("due_date"):
+            line = f"{line} · {words['due']} {item['due_date']}"
+        st.caption(line)
+        if item.get("consequence"):
+            st.caption(f"{words['consequence']}: {item['consequence']}")
+
+        progress = st.selectbox(
+            words["progress"],
+            options=CHECKLIST_PROGRESS,
+            index=CHECKLIST_PROGRESS.index(item["progress"]),
+            format_func=lambda value: words[f"progress_{value}"],
+            key=f"progress_{item['item_id']}",
+        )
+        note = ""
+        if progress == "not_applicable":
+            note = st.text_input(
+                words["not_applicable_reason"],
+                value=item.get("note") or "",
+                key=f"note_{item['item_id']}",
+            )
+        if progress != item["progress"] or (note and note != (item.get("note") or "")):
+            if st.button(words["save_task"], key=f"save_{item['item_id']}"):
+                try:
+                    actions.set_checklist_progress(
+                        trip_id=trip.trip_id,
+                        item_id=item["item_id"],
+                        progress=progress,
+                        note=note or None,
+                    )
+                except ValueError as error:
+                    st.error(str(error))
+                else:
+                    st.session_state[flash_key] = words["task_saved"]
+                    st.rerun()
+
+        with st.expander(words["evidence"]):
+            if item.get("expected_authority"):
+                st.caption(
+                    f"{words['expected_authority']}: "
+                    f"{words.get(item['expected_authority'], item['expected_authority'])}"
+                )
+            if item["evidence_state"] == "verified":
+                st.markdown(f"{item.get('source_url')}")
+                st.caption(f"{words['last_checked']}: {item.get('last_checked_at')}")
+            else:
+                st.caption(words["evidence_verification_needed_help"])
+            url = st.text_input(
+                words["source_url"],
+                value=item.get("source_url") or "",
+                key=f"url_{item['item_id']}",
+            )
+            authority = st.selectbox(
+                words["authority_type"],
+                options=CHECKLIST_AUTHORITIES,
+                index=(
+                    CHECKLIST_AUTHORITIES.index(item["authority_type"])
+                    if item.get("authority_type") in CHECKLIST_AUTHORITIES
+                    else 0
+                ),
+                format_func=lambda value: words.get(value, value),
+                key=f"authority_{item['item_id']}",
+            )
+            if st.button(words["record_evidence"], key=f"verify_{item['item_id']}"):
+                try:
+                    actions.record_checklist_evidence(
+                        trip_id=trip.trip_id,
+                        item_id=item["item_id"],
+                        source_url=url,
+                        authority_type=authority,
+                    )
+                except ValueError as error:
+                    st.error(str(error))
+                else:
+                    st.session_state[flash_key] = words["evidence_recorded"]
+                    st.rerun()
+
+        if st.button(words["dismiss_task"], key=f"dismiss_{item['item_id']}"):
+            actions.set_checklist_dismissed(
+                trip_id=trip.trip_id, item_id=item["item_id"], dismissed=True
+            )
+            st.session_state[flash_key] = words["task_dismissed"]
+            st.rerun()
+
+
 def _render_fallback(fallback: dict, language: str) -> None:
     """The half-day's fallback, with its trigger, swap, and displaced selection."""
 
@@ -919,6 +1151,22 @@ if active_plan:
     st.caption(f"{copy['active_plan']}: {active_plan.version_id}")
 else:
     st.info(copy["no_plan"])
+
+# Readiness summary on the home surface; overdue work shows whenever the app opens.
+readiness = (
+    actions.checklist_readiness(trip.trip_id)
+    if actions.get_setup(trip.trip_id)
+    else None
+)
+if readiness and readiness["counts"]["total"]:
+    st.markdown(
+        f"**{copy['readiness']}: {copy[readiness['state']]}** · "
+        f"{copy['open_tasks']} {readiness['counts']['open']}"
+    )
+    for item in readiness["overdue"][:3]:
+        st.warning(f"{copy['overdue']}: {item['title']} · {item['due_date']}")
+    for item in readiness["due_soon"][:3]:
+        st.info(f"{copy['due_soon']}: {item['title']} · {item['due_date']}")
 
 setup = actions.get_setup(trip.trip_id)
 setup_payload = setup.snapshot.as_dict() if setup else _empty_setup(trip.planning_mode)
@@ -1808,3 +2056,124 @@ else:
                 hide_index=True,
                 width="stretch",
             )
+
+st.subheader(copy["checklist"])
+st.caption(copy["checklist_help"])
+checklist_flash_key = f"checklist_flash_{trip.trip_id}"
+if checklist_flash := st.session_state.pop(checklist_flash_key, None):
+    st.success(checklist_flash)
+
+if not actions.get_setup(trip.trip_id):
+    st.info(copy["checklist_needs_setup"])
+else:
+    preview = actions.propose_checklist(trip.trip_id)
+    pending = (
+        len(preview["additions"])
+        + len(preview["removals"])
+        + len(preview["deadline_changes"])
+    )
+    if pending:
+        # Nothing is applied silently: additions, removals, and deadline moves
+        # are previewed first.
+        with st.expander(f"{copy['checklist_preview']} ({pending})", expanded=True):
+            for item in preview["additions"]:
+                st.markdown(f"➕ {item['title']} · {copy[item['timing']]}")
+            for item in preview["removals"]:
+                st.markdown(f"➖ {item['title']} · {copy['will_be_dismissed']}")
+            for change in preview["deadline_changes"]:
+                st.markdown(
+                    f"📅 {change['title']} · {change['from']['due_date'] or '—'} → "
+                    f"{change['to']['due_date'] or '—'}"
+                )
+            if st.button(
+                copy["apply_checklist"],
+                key=f"apply_checklist_{trip.trip_id}",
+                width="stretch",
+            ):
+                result = actions.apply_checklist_proposal(trip.trip_id)
+                st.session_state[checklist_flash_key] = (
+                    f"{copy['checklist_applied']} "
+                    f"+{result['added']} / ~{result['deadlines_changed']} / "
+                    f"-{result['dismissed']}"
+                )
+                st.rerun()
+    else:
+        st.caption(copy["checklist_current"])
+
+    items = actions.list_checklist_items(trip.trip_id)
+    active_items = [item for item in items if not item["dismissed"]]
+    category_filter = st.multiselect(
+        copy["category"],
+        options=sorted({item["category"] for item in active_items}),
+        format_func=lambda value: copy.get(value, value),
+        key=f"checklist_categories_{trip.trip_id}",
+    )
+    shown = [
+        item
+        for item in active_items
+        if not category_filter or item["category"] in category_filter
+    ]
+
+    for bucket in CHECKLIST_TIMING:
+        bucket_items = [item for item in shown if item["timing"] == bucket]
+        if not bucket_items:
+            continue
+        st.markdown(f"#### {copy[bucket]}")
+        for item in sorted(bucket_items, key=lambda value: value["title"]):
+            _render_checklist_item(actions, trip, item, language, checklist_flash_key)
+
+    with st.expander(copy["add_task"]):
+        new_title = st.text_input(copy["task_title"], key=f"task_title_{trip.trip_id}")
+        new_category = st.selectbox(
+            copy["category"],
+            options=CHECKLIST_CATEGORIES,
+            format_func=lambda value: copy.get(value, value),
+            key=f"task_category_{trip.trip_id}",
+        )
+        new_timing = st.selectbox(
+            copy["timing"],
+            options=CHECKLIST_TIMING,
+            format_func=lambda value: copy[value],
+            key=f"task_timing_{trip.trip_id}",
+        )
+        new_level = st.selectbox(
+            copy["requirement_level"],
+            options=CHECKLIST_LEVELS,
+            format_func=lambda value: copy[value],
+            key=f"task_level_{trip.trip_id}",
+        )
+        new_consequence = st.text_input(
+            copy["consequence"], key=f"task_consequence_{trip.trip_id}"
+        )
+        if st.button(copy["add_task"], key=f"add_task_{trip.trip_id}", width="stretch"):
+            try:
+                actions.save_checklist_item(
+                    trip_id=trip.trip_id,
+                    item={
+                        "title": new_title,
+                        "category": new_category,
+                        "timing": new_timing,
+                        "requirement_level": new_level,
+                        "consequence": new_consequence,
+                    },
+                )
+            except ValueError as error:
+                st.error(str(error))
+            else:
+                st.session_state[checklist_flash_key] = copy["task_added"]
+                st.rerun()
+
+    dismissed = [item for item in items if item["dismissed"]]
+    if dismissed:
+        with st.expander(f"{copy['dismissed_history']} ({len(dismissed)})"):
+            for item in dismissed:
+                st.markdown(f"- {item['title']} · {copy[item['timing']]}")
+                if st.button(
+                    copy["restore_task"],
+                    key=f"restore_{item['item_id']}",
+                ):
+                    actions.set_checklist_dismissed(
+                        trip_id=trip.trip_id, item_id=item["item_id"], dismissed=False
+                    )
+                    st.session_state[checklist_flash_key] = copy["task_restored"]
+                    st.rerun()

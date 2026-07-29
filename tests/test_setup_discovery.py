@@ -11,7 +11,7 @@ from streamlit.testing.v1 import AppTest
 
 from travel_planner.actions import PlannerActions
 from travel_planner.providers import OpenStreetMapProvider, ProviderUnavailable
-from travel_planner.store import SQLiteStore
+from travel_planner.store import SCHEMA_VERSION, SQLiteStore
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -218,7 +218,7 @@ class SchemaMigrationTest(unittest.TestCase):
                 }
             finally:
                 connection.close()
-            self.assertEqual(4, version)
+            self.assertEqual(SCHEMA_VERSION, version)
             self.assertTrue(
                 {
                     "trip_setups",
@@ -226,6 +226,7 @@ class SchemaMigrationTest(unittest.TestCase):
                     "discovery_runs",
                     "candidate_choices",
                     "optimization_previews",
+                    "checklist_items",
                 }
                 <= tables
             )

@@ -52,6 +52,7 @@ def build_setup_payload(
     comfort: Iterable[str] = (),
     owner_description: str = "",
     owner_must_respect: Iterable[str] | str = (),
+    owner_nationality: str | None = None,
     travellers: Sequence[Mapping[str, Any]] = (),
     start_date: str | None = None,
     end_date: str | None = None,
@@ -81,6 +82,8 @@ def build_setup_payload(
             "tags": _tags(item.get("tags", ())),
             "description": str(item.get("description") or "").strip(),
             "must_respect": _text_list(item.get("must_respect", ())),
+            # Readiness generation needs nationality; passport numbers stay out.
+            "nationality": _nationality(item.get("nationality")),
         }
         for index, item in enumerate(travellers)
     ]
@@ -111,6 +114,7 @@ def build_setup_payload(
             "comfort": _tags(comfort),
             "description": owner_description.strip(),
             "must_respect": _text_list(owner_must_respect),
+            "nationality": _nationality(owner_nationality),
         },
         "travellers": members,
         "group_preference_weights": group_weights,
@@ -126,6 +130,13 @@ def _tags(values: Iterable[str]) -> list[str]:
         if tag not in result:
             result.append(tag)
     return result
+
+
+def _nationality(value: Any) -> str | None:
+    text = str(value or "").strip()
+    if len(text) > 60:
+        raise ValueError("nationality must be 60 characters or fewer")
+    return text or None
 
 
 def _text_list(values: Iterable[str] | str) -> list[str]:

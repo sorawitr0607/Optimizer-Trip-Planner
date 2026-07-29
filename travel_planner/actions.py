@@ -19,13 +19,14 @@ from .core import (
     Trip,
     freeze_snapshot,
     new_candidate_choice,
+    new_checklist_item,
     new_discovery_run,
     new_optimization_preview,
     new_plan_version,
     new_setup_draft,
     new_trip,
 )
-from . import exports
+from . import checklist, exports
 from .discovery import build_candidate_catalog
 from .optimizer import date_range, optimize_trip
 from .providers import OpenStreetMapProvider, ProviderUnavailable
@@ -73,6 +74,7 @@ class PlannerActions:
         comfort: Iterable[str] = (),
         owner_description: str = "",
         owner_must_respect: Iterable[str] | str = (),
+        owner_nationality: str | None = None,
         travellers: Sequence[Mapping[str, Any]] = (),
         start_date: str | None = None,
         end_date: str | None = None,
@@ -93,6 +95,7 @@ class PlannerActions:
             comfort=comfort,
             owner_description=owner_description,
             owner_must_respect=owner_must_respect,
+            owner_nationality=owner_nationality,
             travellers=travellers,
             start_date=start_date,
             end_date=end_date,
@@ -486,6 +489,179 @@ class PlannerActions:
 
     def get_active_plan(self, trip_id: str) -> PlanVersion | None:
         return self.store.get_active_plan(trip_id)
+
+    def propose_checklist(self, trip_id: str) -> dict[str, Any]:
+        """Preview the generated board against what is already saved."""
+
+        trip = self.store.get_trip(trip_id)
+        setup = self.store.get_setup(trip_id)
+        if trip is None:
+            raise ValueError(f"Unknown trip: {trip_id}")
+        if setup is None:
+            raise ValueError("Save the trip setup before building a checklist")
+        proposed = checklist.propose_items(
+            destination=trip.destination,
+            setup=setup.snapshot.as_dict(),
+            choices=[
+                {
+                    "place_id": choice.place_id,
+                    "action": choice.action,
+                    "candidate": choice.candidate.as_dict(),
+                }
+                for choice in self.store.list_candidate_choices(trip_id)
+            ],
+            facts=self._checklist_facts(trip_id),
+        )
+        current = self.list_checklist_items(trip_id)
+        return {"proposed": proposed, **checklist.diff_proposal(current, proposed)}
+
+    def apply_checklist_proposal(self, trip_id: str) -> dict[str, int]:
+        """Apply the previewed changes. A removal is dismissed, never deleted."""
+
+        preview = self.propose_checklist(trip_id)
+        saved = {
+            item["generated_key"]: item
+            for item in self.list_checklist_items(trip_id)
+            if item.get("generated_key")
+        }
+        for item in preview["additions"]:
+            self.store.upsert_checklist_item(
+                new_checklist_item(
+                    trip_id=trip_id,
+                    payload=checklist.validate_item(item),
+                    generated_key=item["generated_key"],
+                    origin="generated",
+                )
+            )
+        for change in preview["deadline_changes"]:
+            existing = saved[change["generated_key"]]
+            self._write_checklist_item(
+                trip_id,
+                {
+                    **existing,
+                    "timing": change["to"]["timing"],
+                    "due_date": change["to"]["due_date"],
+                },
+            )
+        for item in preview["removals"]:
+            self._write_checklist_item(trip_id, {**item, "dismissed": True})
+        return {
+            "added": len(preview["additions"]),
+            "deadlines_changed": len(preview["deadline_changes"]),
+            "dismissed": len(preview["removals"]),
+        }
+
+    def list_checklist_items(self, trip_id: str) -> list[dict[str, Any]]:
+        return [item.as_dict() for item in self.store.list_checklist_items(trip_id)]
+
+    def save_checklist_item(
+        self, *, trip_id: str, item: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        """Add or edit one board item, generated or owner-authored."""
+
+        payload = dict(item)
+        payload.setdefault("origin", "manual")
+        payload.setdefault("progress", "to_do")
+        payload.setdefault("evidence_state", "verification_needed")
+        payload.setdefault("timing", "do_now")
+        payload.setdefault("category", "packing")
+        payload.setdefault("requirement_level", "optional")
+        payload.setdefault("owner", "owner")
+        payload.setdefault("applies_to", [])
+        payload.setdefault("dismissed", False)
+        if payload.get("timing") and not payload.get("due_date"):
+            setup = self.store.get_setup(trip_id)
+            basics = (setup.snapshot.as_dict().get("trip_basics", {}) if setup else {})
+            payload["due_date"] = checklist.due_date_for(
+                payload["timing"], basics.get("start_date")
+            )
+        return self._write_checklist_item(trip_id, payload)
+
+    def set_checklist_progress(
+        self, *, trip_id: str, item_id: str, progress: str, note: str | None = None
+    ) -> dict[str, Any]:
+        item = self._checklist_item(trip_id, item_id)
+        return self._write_checklist_item(
+            trip_id, {**item, "progress": progress, "note": note or item.get("note")}
+        )
+
+    def record_checklist_evidence(
+        self,
+        *,
+        trip_id: str,
+        item_id: str,
+        source_url: str,
+        authority_type: str,
+        checked_at: str | None = None,
+    ) -> dict[str, Any]:
+        """Move an item to verified by recording its official source."""
+
+        item = self._checklist_item(trip_id, item_id)
+        return self._write_checklist_item(
+            trip_id,
+            {
+                **item,
+                "evidence_state": "verified",
+                "source_url": source_url,
+                "authority_type": authority_type,
+                "last_checked_at": checked_at or datetime.now(timezone.utc).isoformat(),
+            },
+        )
+
+    def set_checklist_dismissed(
+        self, *, trip_id: str, item_id: str, dismissed: bool
+    ) -> dict[str, Any]:
+        item = self._checklist_item(trip_id, item_id)
+        return self._write_checklist_item(trip_id, {**item, "dismissed": bool(dismissed)})
+
+    def checklist_readiness(self, trip_id: str, *, today: str | None = None) -> dict[str, Any]:
+        stamp = today or datetime.now(timezone.utc).date().isoformat()
+        setup = self.store.get_setup(trip_id)
+        basics = setup.snapshot.as_dict().get("trip_basics", {}) if setup else {}
+        items = self.list_checklist_items(trip_id)
+        for item in items:
+            if checklist.needs_recheck(
+                item, today=stamp, start_date=basics.get("start_date")
+            ):
+                item["evidence_state"] = "verification_needed"
+                item["stale"] = True
+        return checklist.readiness(items, today=stamp)
+
+    def _checklist_item(self, trip_id: str, item_id: str) -> dict[str, Any]:
+        stored = self.store.get_checklist_item(item_id)
+        if stored is None or stored.trip_id != trip_id:
+            raise ValueError(f"Unknown checklist item: {item_id}")
+        return stored.as_dict()
+
+    def _write_checklist_item(
+        self, trip_id: str, payload: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        clean = checklist.validate_item(dict(payload))
+        stored = self.store.upsert_checklist_item(
+            new_checklist_item(
+                trip_id=trip_id,
+                payload={
+                    key: value
+                    for key, value in clean.items()
+                    if key not in {"item_id", "updated_at"}
+                },
+                generated_key=clean.get("generated_key"),
+                origin=clean.get("origin", "manual"),
+            )
+        )
+        return stored.as_dict()
+
+    def _checklist_facts(self, trip_id: str) -> list[dict[str, Any]]:
+        """Verified operational facts that justify a booking or access task."""
+
+        active = self.store.get_active_plan(trip_id)
+        if active is None:
+            return []
+        snapshot = active.snapshot.as_dict()
+        planner_input = snapshot.get("optimizer_input")
+        if not isinstance(planner_input, dict):
+            return []
+        return list(planner_input.get("facts", []))
 
     def build_export_snapshot(
         self, trip_id: str, *, version_id: str | None = None, language: str | None = None

@@ -97,6 +97,28 @@ class CandidateChoice:
 
 
 @dataclass(frozen=True, slots=True)
+class ChecklistItem:
+    item_id: str
+    trip_id: str
+    generated_key: str | None
+    origin: str
+    snapshot: FrozenSnapshot
+    dismissed: bool
+    created_at: str
+    updated_at: str
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            **self.snapshot.as_dict(),
+            "item_id": self.item_id,
+            "generated_key": self.generated_key,
+            "origin": self.origin,
+            "dismissed": self.dismissed,
+            "updated_at": self.updated_at,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class OptimizationPreview:
     trip_id: str
     optimizer_input: FrozenSnapshot
@@ -195,6 +217,28 @@ def new_candidate_choice(
         reason=reason,
         candidate=freeze_snapshot(candidate),
         updated_at=_utc_now(),
+    )
+
+
+def new_checklist_item(
+    *,
+    trip_id: str,
+    payload: Mapping[str, Any],
+    generated_key: str | None,
+    origin: str,
+) -> ChecklistItem:
+    if origin not in {"generated", "manual"}:
+        raise ValueError(f"Unsupported checklist origin: {origin}")
+    now = _utc_now()
+    return ChecklistItem(
+        item_id=f"task_{uuid4().hex}",
+        trip_id=_required_text(trip_id, "trip_id"),
+        generated_key=generated_key,
+        origin=origin,
+        snapshot=freeze_snapshot(payload),
+        dismissed=bool(payload.get("dismissed")),
+        created_at=now,
+        updated_at=now,
     )
 
 

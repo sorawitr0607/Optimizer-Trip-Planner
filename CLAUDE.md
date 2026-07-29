@@ -80,6 +80,15 @@ Each stage is gated on the previous one having a matching hash (`_current_choice
 5. **Activation** — `activate_plan_preview()` refuses unless the preview's `input_sha256` still
    matches current choices AND the variant is `status == "ready"` with `validation.valid`. It then
    writes an immutable plan version and deletes the preview.
+6. **Readiness** — `checklist.propose_items()` generates a city-independent board from setup, choices,
+   and verified facts; `diff_proposal()` previews additions, removals, and deadline moves;
+   `apply_checklist_proposal()` writes them, dismissing rather than deleting so nothing silently
+   disappears. No provider supplies official entry rules, so a generated item stays
+   `verification_needed` with no `source_url` until the owner records one — the board names what to
+   verify and against which authority, and never asserts a legal conclusion. Requirement level and
+   evidence state move independently, and `validate_item()` refuses a verified `required` item with no
+   responsible authority type. Board items are the one mutable record type; readiness warnings are
+   explicitly non-blocking (`blocks_itinerary` is always False).
 
 Plans are append-only: `plan_versions` and `discovery_runs` carry SQLite triggers that abort UPDATE
 and DELETE. Restoring an old plan creates a *new* version pointing at the old snapshot. `active_plans`

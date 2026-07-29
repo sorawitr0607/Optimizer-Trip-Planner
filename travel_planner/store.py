@@ -10,6 +10,7 @@ from typing import Iterator
 
 from .core import (
     CandidateChoice,
+    ChecklistItem,
     DiscoveryRun,
     FrozenSnapshot,
     OptimizationPreview,
@@ -20,7 +21,7 @@ from .core import (
 )
 
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS trips (
     id TEXT PRIMARY KEY,
@@ -104,6 +105,22 @@ CREATE TABLE IF NOT EXISTS optimization_previews (
     proposal_json TEXT NOT NULL,
     proposal_sha256 TEXT NOT NULL,
     created_at TEXT NOT NULL,
+    FOREIGN KEY (trip_id) REFERENCES trips(id)
+);
+
+-- Readiness board items are editable, unlike plan versions. A dismissed
+-- generated requirement is kept and flagged so it cannot silently disappear.
+CREATE TABLE IF NOT EXISTS checklist_items (
+    id TEXT PRIMARY KEY,
+    trip_id TEXT NOT NULL,
+    generated_key TEXT,
+    origin TEXT NOT NULL CHECK (origin IN ('generated', 'manual')),
+    snapshot_json TEXT NOT NULL,
+    snapshot_sha256 TEXT NOT NULL,
+    dismissed INTEGER NOT NULL CHECK (dismissed IN (0, 1)),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE (trip_id, generated_key),
     FOREIGN KEY (trip_id) REFERENCES trips(id)
 );
 
@@ -381,6 +398,68 @@ class SQLiteStore:
             ).fetchall()
         return [self._candidate_choice(row) for row in rows]
 
+    def upsert_checklist_item(self, item: ChecklistItem) -> ChecklistItem:
+        with self.connect() as connection:
+            existing = None
+            if item.generated_key:
+                existing = connection.execute(
+                    "SELECT id, created_at FROM checklist_items"
+                    " WHERE trip_id = ? AND generated_key = ?",
+                    (item.trip_id, item.generated_key),
+                ).fetchone()
+            item_id = existing["id"] if existing else item.item_id
+            created_at = existing["created_at"] if existing else item.created_at
+            connection.execute(
+                """
+                INSERT INTO checklist_items (
+                    id, trip_id, generated_key, origin, snapshot_json,
+                    snapshot_sha256, dismissed, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (id) DO UPDATE SET
+                    snapshot_json = excluded.snapshot_json,
+                    snapshot_sha256 = excluded.snapshot_sha256,
+                    dismissed = excluded.dismissed,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    item_id,
+                    item.trip_id,
+                    item.generated_key,
+                    item.origin,
+                    item.snapshot.canonical_json,
+                    item.snapshot.sha256,
+                    int(item.dismissed),
+                    created_at,
+                    item.updated_at,
+                ),
+            )
+        return ChecklistItem(
+            item_id=item_id,
+            trip_id=item.trip_id,
+            generated_key=item.generated_key,
+            origin=item.origin,
+            snapshot=item.snapshot,
+            dismissed=item.dismissed,
+            created_at=created_at,
+            updated_at=item.updated_at,
+        )
+
+    def list_checklist_items(self, trip_id: str) -> list[ChecklistItem]:
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM checklist_items WHERE trip_id = ?"
+                " ORDER BY created_at, id",
+                (trip_id,),
+            ).fetchall()
+        return [self._checklist_item(row) for row in rows]
+
+    def get_checklist_item(self, item_id: str) -> ChecklistItem | None:
+        with self.connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM checklist_items WHERE id = ?", (item_id,)
+            ).fetchone()
+        return self._checklist_item(row) if row else None
+
     def save_optimization_preview(
         self, preview: OptimizationPreview
     ) -> OptimizationPreview:
@@ -553,6 +632,21 @@ class SQLiteStore:
                 row["candidate_sha256"],
                 f"candidate choice {row['trip_id']}:{row['place_id']}",
             ),
+            updated_at=row["updated_at"],
+        )
+
+    @staticmethod
+    def _checklist_item(row: sqlite3.Row) -> ChecklistItem:
+        return ChecklistItem(
+            item_id=row["id"],
+            trip_id=row["trip_id"],
+            generated_key=row["generated_key"],
+            origin=row["origin"],
+            snapshot=SQLiteStore._verified_snapshot(
+                row["snapshot_json"], row["snapshot_sha256"], "Checklist item"
+            ),
+            dismissed=bool(row["dismissed"]),
+            created_at=row["created_at"],
             updated_at=row["updated_at"],
         )
 
