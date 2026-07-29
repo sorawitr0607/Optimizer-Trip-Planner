@@ -33,15 +33,26 @@ actions = shared.actions()
 # `st.navigation` always renders at the top of the sidebar, so the trip context
 # sits directly beneath the stages it applies to.
 trips = actions.list_trips()
+
+
+def _trip_label(trip_id: str) -> str:
+    """Name and destination, but never the same text twice.
+
+    An unnamed trip takes its destination as its name, which read as
+    "Kyoto, Japan — Kyoto, Japan" in the selector.
+    """
+
+    item = next(item for item in trips if item.trip_id == trip_id)
+    if item.name == item.destination:
+        return item.name
+    return f"{item.name} — {item.destination}"
+
+
 if trips:
     st.sidebar.selectbox(
         copy["resume"],
         options=[item.trip_id for item in trips],
-        format_func=lambda value: next(
-            f"{item.name} — {item.destination}"
-            for item in trips
-            if item.trip_id == value
-        ),
+        format_func=_trip_label,
         key=shared.TRIP_KEY,
     )
 else:

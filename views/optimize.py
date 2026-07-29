@@ -62,34 +62,27 @@ if preview:
         )
     else:
         variants = proposal["variants"]
-        variant_id = st.selectbox(
+        variant_id = shared.translated_selectbox(
             copy["variant"],
-            options=[item["variant_id"] for item in variants],
-            format_func=lambda value: copy[value],
+            [item["variant_id"] for item in variants],
             key=f"plan_variant_{trip.trip_id}",
+            format_func=lambda value: copy[value],
         )
         variant = next(item for item in variants if item["variant_id"] == variant_id)
         st.markdown(f"#### {copy[variant_id]} · {copy[variant['status']]}")
-        metric_columns = st.columns(5)
-        for column, label, value in zip(
-            metric_columns,
-            (
-                "scheduled_visits",
-                "travel_minutes",
-                "walking_minutes",
-                "plain_walking_minutes",
-                "buffer_minutes",
-            ),
-            (
-                variant["metrics"]["scheduled_visits"],
-                variant["metrics"]["travel_minutes"],
-                variant["metrics"]["walking_minutes"],
-                variant["metrics"]["plain_walking_minutes"],
-                variant["metrics"]["buffer_minutes"],
-            ),
-            strict=True,
-        ):
-            column.metric(copy[label], value)
+        # Three per row, not five: at a fifth of a centered page these labels
+        # clipped the same way "Not evaluated yet" and "unavailable" did.
+        metric_labels = (
+            "scheduled_visits",
+            "travel_minutes",
+            "walking_minutes",
+            "plain_walking_minutes",
+            "buffer_minutes",
+        )
+        for row_start in (0, 3):
+            row_labels = metric_labels[row_start : row_start + 3]
+            for column, label in zip(st.columns(3), row_labels, strict=False):
+                column.metric(copy[label], variant["metrics"][label])
         if (
             variant["metrics"]["scheduled_visits"]
             and variant["objective_improved_or_equal_to_greedy"]

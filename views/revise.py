@@ -6,7 +6,7 @@ import streamlit as st
 
 from ui import shared
 from travel_planner.providers import ProviderBudgetExceeded, RevisionInterpretationUnavailable
-from ui.shared import _optimizer_code
+from ui.shared import _candidate_name, _optimizer_code
 
 actions = shared.actions()
 copy = shared.words()
@@ -24,23 +24,33 @@ if revision_flash := st.session_state.pop(revision_flash_key, None):
 if actions.get_active_plan(trip.trip_id) is None:
     st.info(copy["revision_needs_plan"])
 else:
+    # Every consequence below used to name a truncated place_id, so the owner read
+    # "node_240157284…" where the plan shows a place.
+    place_names = {
+        choice.place_id: _candidate_name(choice.candidate.as_dict(), language)
+        for choice in actions.list_candidate_choices(trip.trip_id)
+    }
+
+    def _place(place_id: str) -> str:
+        return place_names.get(place_id) or str(place_id)[:16]
+
     offered = actions.quick_actions(trip.trip_id)
     labels = {
         index: (
             copy.get(f"op_{item['operation']}", item["operation"])
             + (
-                f" · {str(item['arguments'].get('place_id'))[:14]}"
+                f" · {_place(item['arguments']['place_id'])}"
                 if item["arguments"].get("place_id")
                 else ""
             )
         )
         for index, item in enumerate(offered)
     }
-    chosen_index = st.selectbox(
+    chosen_index = shared.translated_selectbox(
         copy["quick_action"],
-        options=list(labels),
-        format_func=lambda value: labels[value],
+        list(labels),
         key=f"quick_action_{trip.trip_id}",
+        format_func=lambda value: labels[value],
     )
     pending = actions.get_revision_draft(trip.trip_id)
     if st.button(copy["run_action"], key=f"run_action_{trip.trip_id}", width="stretch"):
@@ -86,7 +96,7 @@ else:
                 )
                 for item in reasons["unscheduled"]:
                     st.markdown(
-                        f"- {item['place_id'][:16]} · "
+                        f"- {_place(item['place_id'])} · "
                         f"{_optimizer_code(item['reason'], language)}"
                     )
             change = pending.get("consequences")
@@ -111,12 +121,12 @@ else:
                     width="stretch",
                 )
                 for label, entries in (
-                    (copy["moved_items"], [f"{m['place_id'][:16]} {m['from']['date']} {m['from']['start']} → {m['to']['date']} {m['to']['start']}" for m in change["moved"]]),
-                    (copy["added_items"], [item[:16] for item in change["added"]]),
-                    (copy["removed_items"], [item[:16] for item in change["removed"]]),
-                    (copy["shortened_items"], [f"{m['place_id'][:16]} {m['from_minutes']}→{m['to_minutes']} {copy['minutes']}" for m in change["shortened"]]),
-                    (copy["lengthened_items"], [f"{m['place_id'][:16]} {m['from_minutes']}→{m['to_minutes']} {copy['minutes']}" for m in change["lengthened"]]),
-                    (copy["displaced_items"], [f"{m['place_id'][:16]} · {_optimizer_code(m['reason'], language)}" for m in change["displaced"]]),
+                    (copy["moved_items"], [f"{_place(m['place_id'])} {m['from']['date']} {m['from']['start']} → {m['to']['date']} {m['to']['start']}" for m in change["moved"]]),
+                    (copy["added_items"], [_place(item) for item in change["added"]]),
+                    (copy["removed_items"], [_place(item) for item in change["removed"]]),
+                    (copy["shortened_items"], [f"{_place(m['place_id'])} {m['from_minutes']}→{m['to_minutes']} {copy['minutes']}" for m in change["shortened"]]),
+                    (copy["lengthened_items"], [f"{_place(m['place_id'])} {m['from_minutes']}→{m['to_minutes']} {copy['minutes']}" for m in change["lengthened"]]),
+                    (copy["displaced_items"], [f"{_place(m['place_id'])} · {_optimizer_code(m['reason'], language)}" for m in change["displaced"]]),
                     (copy["new_warnings"], [_optimizer_code(w, language) for w in change["warnings"]["new"]]),
                     (copy["cleared_warnings"], [_optimizer_code(w, language) for w in change["warnings"]["cleared"]]),
                 ):

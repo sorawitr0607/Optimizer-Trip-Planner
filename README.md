@@ -16,7 +16,10 @@ for optional provider configuration; never commit local secrets.
 ## Repository map
 
 - `app.py` — Streamlit entry point.
+- `views/` — one script per journey stage; `ui/` holds every user-facing string and the shared renderers.
 - `travel_planner/` — planner domain logic, storage, providers, ranking, and optimization.
+- `travel_planner/destinations.py` — the country/city picker table. A convenience only: both
+  dropdowns accept a typed value, so any worldwide destination still works.
 - `tests/` — deterministic unit and UI tests; historic trip regressions are in `tests/fixtures/`.
 - `scripts/` — validation, regression, provider, and Graphify maintenance commands.
 - `data/reference-itineraries/<city>/` — source workbooks and PDF itineraries.

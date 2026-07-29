@@ -55,6 +55,25 @@ app.py (Streamlit)  →  travel_planner/actions.py  →  core.py / optimizer.py 
   `at.switch_page("views/<stage>.py")`, then `at.run()`. Without the switch, the default landing stage
   renders and assertions about another stage will fail. The trip selector is a sidebar widget keyed
   `selected_trip_id`.
+- Setup is the five editable steps of `Prototype the owner-led setup and confirmation flow`, not one
+  form. `views/setup.py` holds no `st.form`: the city list depends on the chosen country, and a form
+  defers every value until submit. Each step seeds its widgets from the saved draft rather than from
+  session state, because Streamlit drops widget state once a widget stops rendering, and each
+  `Save & continue` autosaves through an `on_click` callback. A callback runs after the values are
+  committed but before the rerun, so it saves what the owner can see; a closure captured at render time
+  would miss an edit made just before the click, and `st.rerun()` mid-script leaves two steps in one run.
+- A selectbox or multiselect whose `format_func` depends on the language must go through
+  `shared.translated_selectbox` / `shared.translated_multiselect`. Streamlit caches the selected
+  option's rendered text in the browser, so the plain widget keeps the previous language's wording
+  after a switch — the dropdown list updates, the closed control does not. The helpers key the widget
+  per language and carry the choice in a language-free key. Consequences: widget keys end in
+  `__<language>`, so a UI test looks up `key="country__en"`; and a value is read back with
+  `shared.chosen("<base key>")`, never straight from session state.
+- `travel_planner/destinations.py` (country/city) and `costs.COMMON_CURRENCIES` are picker
+  convenience only. Both dropdowns take a typed value, so a destination or currency absent from the
+  table stays reachable — the worldwide acceptance check requires it. A city name is the geocoder
+  query, so it is never localized; localizing it would let a language switch change which place is
+  searched.
 
 ### Everything crossing a boundary is a frozen, hashed snapshot
 
@@ -137,11 +156,12 @@ preview. `SCHEMA_VERSION` (`store.py`) is stamped into `PRAGMA user_version`; a 
 
 ### Bilingual by data, not by branching
 
-All user-facing strings live in `en`/`th` dicts at the top of `app.py` (`TEXT`, `TAG_TEXT`,
-`EXPLANATION_TEXT`, `OPTIMIZER_CODE_TEXT`, …). The core emits stable codes; `app.py` maps code →
+All user-facing strings live in `en`/`th` dicts in `ui/text.py` (`TEXT`, `TAG_TEXT`,
+`EXPLANATION_TEXT`, `OPTIMIZER_CODE_TEXT`, …). The core emits stable codes; the views map code →
 language → text. Switching language must never change ranking, scheduling, or the active plan — so
 never put display text in the core or a language check in a scoring path. New user-visible string ⇒
-add both `en` and `th`.
+add both `en` and `th`; a test asserts `TEXT["en"]` and `TEXT["th"]` carry the same keys, because a
+missing `th` key is a `KeyError` in front of a Thai owner rather than a typo.
 
 ### Tests
 
@@ -178,6 +198,14 @@ must stay directed. Rebuild only through `python3 scripts/build_project_graph.py
 `OPENAI_API_KEY`; wraps extract → normalize → cluster-only → export and restores the previous graph on
 failure), and only when explicitly asked or after a topology-changing milestone. After any graph
 change, `--check` must pass before committing. See `AGENTS.md`.
+
+A node's `source_file` may hold an absolute path from the machine that built the graph. Such a path is
+not `is_absolute()` on Windows, so joining it to the repository root produced a drive-relative path
+that matched nothing, and `--check` failed with `Extraction produced no node for WF-001` on every
+ticket except the one stored relatively. That reads exactly like the corruption above but is not it:
+the nodes are present. `build_project_graph.source_path()` resolves a node's source against the
+longest trailing segments that exist in this checkout, so the check works from any OS and any root.
+Diagnose a `--check` failure by counting the wayfinder-sourced nodes before assuming data loss.
 
 ## Wayfinder: decisions live in tickets
 

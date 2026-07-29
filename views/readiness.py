@@ -64,11 +64,11 @@ else:
 
     items = actions.list_checklist_items(trip.trip_id)
     active_items = [item for item in items if not item["dismissed"]]
-    category_filter = st.multiselect(
+    category_filter = shared.translated_multiselect(
         copy["category"],
-        options=sorted({item["category"] for item in active_items}),
-        format_func=lambda value: copy.get(value, value),
+        sorted({item["category"] for item in active_items}),
         key=f"checklist_categories_{trip.trip_id}",
+        format_func=lambda value: copy.get(value, value),
     )
     shown = [
         item
@@ -86,23 +86,23 @@ else:
 
     with st.expander(copy["add_task"]):
         new_title = st.text_input(copy["task_title"], key=f"task_title_{trip.trip_id}")
-        new_category = st.selectbox(
+        new_category = shared.translated_selectbox(
             copy["category"],
-            options=CHECKLIST_CATEGORIES,
-            format_func=lambda value: copy.get(value, value),
+            CHECKLIST_CATEGORIES,
             key=f"task_category_{trip.trip_id}",
+            format_func=lambda value: copy.get(value, value),
         )
-        new_timing = st.selectbox(
+        new_timing = shared.translated_selectbox(
             copy["timing"],
-            options=CHECKLIST_TIMING,
-            format_func=lambda value: copy[value],
+            CHECKLIST_TIMING,
             key=f"task_timing_{trip.trip_id}",
-        )
-        new_level = st.selectbox(
-            copy["requirement_level"],
-            options=CHECKLIST_LEVELS,
             format_func=lambda value: copy[value],
+        )
+        new_level = shared.translated_selectbox(
+            copy["requirement_level"],
+            CHECKLIST_LEVELS,
             key=f"task_level_{trip.trip_id}",
+            format_func=lambda value: copy[value],
         )
         new_consequence = st.text_input(
             copy["consequence"], key=f"task_consequence_{trip.trip_id}"

@@ -64,7 +64,9 @@ if latest:
     cell_count.metric(copy["cells"], report["geographic_cells_with_candidates"])
     st.caption(copy["unranked"])
     if catalog:
-        with st.expander(copy["browse_all"], expanded=False):
+        # Named apart from the ranked "Browse all" below: this one is the raw
+        # provider catalog with its evidence columns, that one is scored.
+        with st.expander(copy["catalog_table"], expanded=False):
             rows = []
             for candidate in catalog:
                 names = candidate.get("names", {})
@@ -131,25 +133,25 @@ if ranking:
             for place_id in ranking["lanes"]["browse_all"]
         ],
     }
-    lane = st.selectbox(
+    lane = shared.translated_selectbox(
         copy["lane"],
-        options=tuple(lane_entries),
-        format_func=lambda value: f"{copy[value]} ({len(lane_entries[value])})",
+        tuple(lane_entries),
         key=f"ranking_lane_{trip.trip_id}",
+        format_func=lambda value: f"{copy[value]} ({len(lane_entries[value])})",
     )
     entries = lane_entries[lane]
     if not entries:
         st.info(copy["no_lane_cards"])
     else:
         entry_by_id = {entry["place_id"]: entry for entry in entries}
-        card_id = st.selectbox(
+        card_id = shared.translated_selectbox(
             copy["select_card"],
-            options=[entry["place_id"] for entry in entries],
+            [entry["place_id"] for entry in entries],
+            key=f"ranking_card_{trip.trip_id}_{lane}",
             format_func=lambda place_id: (
                 f"{_candidate_name(candidate_by_id[place_id], language)} · "
                 f"{ranking['cards'][place_id]['total_score']:.1f}/100"
             ),
-            key=f"ranking_card_{trip.trip_id}_{lane}",
         )
         candidate = candidate_by_id[card_id]
         card = ranking["cards"][card_id]
@@ -252,18 +254,10 @@ if ranking:
                     else ""
                 )
             )
-        reason_options = (None, "too_crowded", "too_expensive", "too_tiring", "wrong_vibe", "weak_value", "already_seen")
-        rejection_reason = st.selectbox(
-            copy["rejection_reason"],
-            options=reason_options,
-            format_func=lambda value: REJECTION_TEXT[language][value],
-            key=f"rejection_reason_{trip.trip_id}_{card_id}",
-        )
-        action_columns = st.columns(4)
         clicked_action = None
         for column, action in zip(
-            action_columns,
-            ("must_do", "interested", "maybe", "not_for_trip"),
+            st.columns(3),
+            ("must_do", "interested", "maybe"),
             strict=True,
         ):
             if column.button(
@@ -272,6 +266,23 @@ if ranking:
                 width="stretch",
             ):
                 clicked_action = action
+
+        # Rejecting is the one action that carries a reason, so the reason lives
+        # with it instead of sitting above all four buttons on every card.
+        reason_options = (None, "too_crowded", "too_expensive", "too_tiring", "wrong_vibe", "weak_value", "already_seen")
+        with st.expander(copy["not_for_trip"]):
+            rejection_reason = shared.translated_selectbox(
+                copy["rejection_reason"],
+                reason_options,
+                key=f"rejection_reason_{trip.trip_id}_{card_id}",
+                format_func=lambda value: REJECTION_TEXT[language][value],
+            )
+            if st.button(
+                copy["not_for_trip"],
+                key=f"choice_not_for_trip_{trip.trip_id}_{card_id}",
+                width="stretch",
+            ):
+                clicked_action = "not_for_trip"
         if clicked_action:
             try:
                 actions.save_candidate_choice(

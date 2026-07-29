@@ -74,6 +74,69 @@ def words() -> dict:
     return TEXT[language()]
 
 
+def _language_key(base_key: str) -> str:
+    return f"{base_key}__{language()}"
+
+
+def chosen(base_key: str, default=None):
+    """Current value of a `translated_*` widget, by its language-free name.
+
+    The widget key carries the language, so read the live widget value first and
+    fall back to what the last render stored. A callback fires after the widget
+    it belongs to has rendered, so the first branch is the one that matters.
+    """
+
+    if _language_key(base_key) in st.session_state:
+        return st.session_state[_language_key(base_key)]
+    return st.session_state.get(f"{base_key}__choice", default)
+
+
+def _remember(base_key: str, picked):
+    st.session_state[f"{base_key}__choice"] = picked
+    return picked
+
+
+def _seed(base_key: str, values: list, *, accept_new: bool):
+    """The stored choice, kept selectable across a language switch."""
+
+    saved = st.session_state.get(f"{base_key}__choice")
+    if saved is not None and accept_new and saved not in values:
+        # A typed-in option is not in the table; keep it rather than dropping the
+        # owner's own entry the moment they change language.
+        values.append(saved)
+    return saved
+
+
+def translated_selectbox(label: str, options, *, key: str, index: int | None = 0, **kwargs):
+    """A selectbox whose shown option survives a language switch.
+
+    Streamlit caches the selected option's rendered text in the browser, so a
+    widget whose `format_func` depends on the language keeps displaying the old
+    wording: the dropdown list updates, the closed control does not. Giving the
+    widget a per-language key rebuilds it, and carrying the choice in a
+    language-free key means switching language changes only the wording.
+    """
+
+    values = list(options)
+    saved = _seed(key, values, accept_new=bool(kwargs.get("accept_new_options")))
+    if saved in values:
+        index = values.index(saved)
+    return _remember(
+        key, st.selectbox(label, values, index=index, key=_language_key(key), **kwargs)
+    )
+
+
+def translated_multiselect(label: str, options, *, key: str, default=(), **kwargs):
+    """A multiselect whose chips survive a language switch. See above."""
+
+    values = list(options)
+    saved = _seed(key, values, accept_new=bool(kwargs.get("accept_new_options")))
+    start = [item for item in (default if saved is None else saved) if item in values]
+    return _remember(
+        key, st.multiselect(label, values, default=start, key=_language_key(key), **kwargs)
+    )
+
+
 def trip():
     """The selected trip, or None when the owner has not created one yet."""
 
@@ -283,12 +346,12 @@ def _render_checklist_item(
         if consequence:
             st.caption(f"{words['consequence']}: {consequence}")
 
-        progress = st.selectbox(
+        progress = translated_selectbox(
             words["progress"],
-            options=CHECKLIST_PROGRESS,
+            CHECKLIST_PROGRESS,
+            key=f"progress_{item['item_id']}",
             index=CHECKLIST_PROGRESS.index(item["progress"]),
             format_func=lambda value: words[f"progress_{value}"],
-            key=f"progress_{item['item_id']}",
         )
         note = ""
         if progress == "not_applicable":
@@ -328,16 +391,16 @@ def _render_checklist_item(
                 value=item.get("source_url") or "",
                 key=f"url_{item['item_id']}",
             )
-            authority = st.selectbox(
+            authority = translated_selectbox(
                 words["authority_type"],
-                options=CHECKLIST_AUTHORITIES,
+                CHECKLIST_AUTHORITIES,
+                key=f"authority_{item['item_id']}",
                 index=(
                     CHECKLIST_AUTHORITIES.index(item["authority_type"])
                     if item.get("authority_type") in CHECKLIST_AUTHORITIES
                     else 0
                 ),
                 format_func=lambda value: words.get(value, value),
-                key=f"authority_{item['item_id']}",
             )
             if st.button(words["record_evidence"], key=f"verify_{item['item_id']}"):
                 try:

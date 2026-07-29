@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 from streamlit.testing.v1 import AppTest
 
+from travel_planner import destinations
 from travel_planner.actions import PlannerActions
 from travel_planner.providers import OpenStreetMapProvider, ProviderUnavailable
 from travel_planner.store import SCHEMA_VERSION, SQLiteStore
@@ -357,21 +358,34 @@ class SetupUiTest(unittest.TestCase):
                 app.switch_page("views/setup.py")
                 app.run()
                 app.text_input(key="trip_name").input("Taipei New Year")
-                app.text_input(key="destination").input("Taipei")
-                app.selectbox(key="planning_mode").select("ready_to_schedule")
-                app.button[0].click().run()
+                app.selectbox(key="country__en").select("Taiwan")
+                app.run()
+                app.selectbox(key="city__en").select("Taipei")
+                app.selectbox(key="planning_mode__en").select("ready_to_schedule")
+                app.button(key="create_trip").click().run()
                 trip_id = app.sidebar.selectbox(key="selected_trip_id").value
 
-                app.number_input(key=f"member_count_{trip_id}").set_value(2).run()
-                app.multiselect(key=f"main_style_{trip_id}").set_value(
+                # Step 1 of 5: basics are all optional here, so continue straight on.
+                app.button(key=f"continue_{trip_id}").click().run()
+
+                # Step 2 of 5: owner style.
+                app.multiselect(key=f"main_style_{trip_id}__en").set_value(
                     ["sightseeing", "culture"]
                 )
                 app.number_input(key=f"owner_age_{trip_id}").set_value(26)
+                app.button(key=f"continue_{trip_id}").click().run()
+
+                # Step 3 of 5: the member cards appear only after the count is set.
+                app.number_input(key=f"member_count_{trip_id}").set_value(2).run()
                 app.number_input(key=f"member_age_{trip_id}_0").set_value(19)
                 app.number_input(key=f"member_age_{trip_id}_1").set_value(50)
-                next(
-                    button for button in app.button if button.label == "Confirm setup"
-                ).click().run()
+                app.button(key=f"continue_{trip_id}").click().run()
+
+                # Step 4 of 5: no non-negotiables to add.
+                app.button(key=f"continue_{trip_id}").click().run()
+
+                # Step 5 of 5: review, then confirm.
+                app.button(key=f"confirm_{trip_id}").click().run()
 
                 self.assertFalse(app.exception)
                 setup = PlannerActions(database_path).get_setup(trip_id)
@@ -380,11 +394,71 @@ class SetupUiTest(unittest.TestCase):
                     [19, 50],
                     [item["age"] for item in setup.snapshot.as_dict()["travellers"]],
                 )
+                # Values entered on earlier steps survived the later ones.
+                saved_owner = setup.snapshot.as_dict()["owner"]
+                self.assertEqual(26, saved_owner["age"])
+                self.assertEqual(["sightseeing", "culture"], saved_owner["main_style"])
 
                 app.radio[0].set_value("th").run()
                 self.assertFalse(app.exception)
                 self.assertEqual("ตัวช่วยวางแผนท่องเที่ยวส่วนตัว", app.title[0].value)
                 self.assertIn("ตั้งค่าทริป", [item.value for item in app.subheader])
+
+    def test_a_destination_outside_the_picker_still_creates_a_trip(self) -> None:
+        """The picker is a convenience; a city it does not list must still work.
+
+        `AppTest` cannot type a new option into a selectbox — `set_value` refuses
+        anything outside `options` — so the worldwide acceptance check runs
+        through the same two calls the view makes with a typed value.
+        """
+
+        with TemporaryDirectory() as directory:
+            actions = PlannerActions(Path(directory) / "typed.sqlite3")
+            self.assertEqual((), destinations.city_options("Georgia"))
+            trip = actions.create_trip(
+                name="", destination=destinations.destination_text("Georgia", "Tbilisi")
+            )
+            self.assertEqual("Tbilisi, Georgia", trip.destination)
+            self.assertEqual("Tbilisi, Georgia", trip.name)
+
+
+class DestinationPickerTest(unittest.TestCase):
+    def test_the_pair_becomes_one_geocoder_query(self) -> None:
+        self.assertEqual(
+            "Taipei, Taiwan", destinations.destination_text("Taiwan", "Taipei")
+        )
+
+    def test_a_city_state_is_not_repeated(self) -> None:
+        # "Singapore, Singapore" is a worse Nominatim query than "Singapore".
+        self.assertEqual(
+            "Singapore", destinations.destination_text("Singapore", "Singapore")
+        )
+        self.assertEqual(
+            "Hong Kong", destinations.destination_text("Hong Kong", "hong kong")
+        )
+
+    def test_either_part_alone_is_accepted_but_neither_is_not(self) -> None:
+        self.assertEqual("Georgia", destinations.destination_text("Georgia", ""))
+        self.assertEqual("Tbilisi", destinations.destination_text("", "Tbilisi"))
+        with self.assertRaises(ValueError):
+            destinations.destination_text("  ", "")
+
+    def test_a_typed_country_simply_has_no_curated_cities(self) -> None:
+        self.assertIn("Taipei", destinations.city_options("Taiwan"))
+        self.assertEqual((), destinations.city_options("Georgia"))
+        self.assertEqual((), destinations.city_options(""))
+
+    def test_a_country_label_localizes_but_its_stored_value_does_not(self) -> None:
+        self.assertEqual("Japan", destinations.country_label("Japan", "en"))
+        self.assertEqual("ญี่ปุ่น", destinations.country_label("Japan", "th"))
+        # A typed country has no translation and must survive unchanged.
+        self.assertEqual("Georgia", destinations.country_label("Georgia", "th"))
+
+    def test_every_country_offers_at_least_one_city(self) -> None:
+        for country, entry in destinations.COUNTRIES.items():
+            with self.subTest(country=country):
+                self.assertTrue(entry["cities"], f"{country} has no cities")
+                self.assertTrue(entry["th"], f"{country} has no Thai label")
 
 
 if __name__ == "__main__":

@@ -278,7 +278,9 @@ class RankingUiTest(unittest.TestCase):
                 app.run()
                 self.assertFalse(app.exception)
                 self.assertIn("Personalized place cards", [item.value for item in app.subheader])
-                card_widget = app.selectbox(key=f"ranking_card_{trip.trip_id}_main_queue")
+                card_widget = app.selectbox(
+                    key=f"ranking_card_{trip.trip_id}_main_queue__en"
+                )
                 card_id = card_widget.value
 
                 app.button(key=f"choice_interested_{trip.trip_id}_{card_id}").click().run()

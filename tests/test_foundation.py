@@ -106,25 +106,45 @@ class FoundationTest(unittest.TestCase):
             self.assertFalse(app.exception)
             self.assertEqual("Personal Travel Planner", app.title[0].value)
 
+            # Nothing is pre-selected, so an untouched form is the empty
+            # destination the error exists for.
+            app.button(key="create_trip").click().run()
+            self.assertEqual("Destination is required.", app.error[0].value)
+
             app.text_input(key="trip_name").input("Taipei New Year")
-            app.text_input(key="destination").input("Taipei")
-            app.selectbox(key="planning_mode").select("ready_to_schedule")
-            app.button[0].click().run()
+            # Widget keys carry the language so a switch cannot leave a stale
+            # label behind; see `shared.translated_selectbox`.
+            app.selectbox(key="country__en").select("Taiwan")
+            # The city list is built from the chosen country, so it needs the rerun.
+            app.run()
+            app.selectbox(key="city__en").select("Taipei")
+            app.selectbox(key="planning_mode__en").select("ready_to_schedule")
+            app.button(key="create_trip").click().run()
             self.assertFalse(app.exception)
             self.assertEqual("Trip saved.", app.success[0].value)
             selected_id = app.sidebar.selectbox(key="selected_trip_id").value
-            self.assertEqual("Taipei", self.actions.get_trip(selected_id).destination)
+            self.assertEqual(
+                "Taipei, Taiwan", self.actions.get_trip(selected_id).destination
+            )
 
             app.radio[0].set_value("th").run()
             self.assertFalse(app.exception)
             self.assertEqual("ตัวช่วยวางแผนท่องเที่ยวส่วนตัว", app.title[0].value)
-            app.text_input(key="destination").input("")
-            app.button[0].click().run()
-            self.assertEqual("กรุณาระบุจุดหมายปลายทาง", app.error[0].value)
+            # The Thai widget carries over the country chosen in English, so a
+            # language switch changes the wording and nothing else.
+            self.assertEqual("Taiwan", app.selectbox(key="country__th").value)
+            self.assertEqual("Taipei", app.selectbox(key="city__th").value)
 
         saved = self.actions.list_trips()
         self.assertEqual(1, len(saved))
-        self.assertEqual("Taipei", saved[0].destination)
+        self.assertEqual("Taipei, Taiwan", saved[0].destination)
+
+    def test_every_interface_string_exists_in_both_languages(self) -> None:
+        """A missing `th` key is a KeyError in front of a Thai owner, not a typo."""
+
+        from ui.text import TEXT
+
+        self.assertEqual(set(TEXT["en"]), set(TEXT["th"]))
 
 
 if __name__ == "__main__":

@@ -206,7 +206,7 @@ class OptimizerActionsTest(unittest.TestCase):
                 )
                 self.assertEqual(
                     "best_balance",
-                    app.selectbox(key=f"plan_variant_{trip.trip_id}").value,
+                    app.selectbox(key=f"plan_variant_{trip.trip_id}__en").value,
                 )
                 self.assertTrue(
                     app.button(key=f"activate_plan_{trip.trip_id}_best_balance").disabled

@@ -133,7 +133,10 @@ else:
     except ValueError as error:
         st.error(shared.plain(error))
     else:
-        st.download_button(
+        # Four downloads in one row rather than four stacked full-width bars, so
+        # the day's content stays on screen next to them.
+        poster_column, pdf_column, excel_column, calendar_column = st.columns(4)
+        poster_column.download_button(
             copy["poster"],
             data=poster,
             file_name=f"plan-{version_tag}-{day['date']}-poster.png",
@@ -141,7 +144,7 @@ else:
             key=f"poster_{trip.trip_id}",
             width="stretch",
         )
-        st.download_button(
+        pdf_column.download_button(
             copy["pdf"],
             data=documents["pdf"],
             file_name=f"plan-{version_tag}.pdf",
@@ -149,7 +152,7 @@ else:
             key=f"pdf_{trip.trip_id}",
             width="stretch",
         )
-        st.download_button(
+        excel_column.download_button(
             copy["excel"],
             data=documents["xlsx"],
             file_name=f"plan-{version_tag}.xlsx",
@@ -158,7 +161,7 @@ else:
             width="stretch",
         )
         if export["checklist"]["items"]:
-            st.download_button(
+            calendar_column.download_button(
                 copy["calendar"],
                 data=documents["ics"],
                 file_name=f"plan-{version_tag}-readiness.ics",

@@ -6,7 +6,11 @@ import streamlit as st
 
 from ui import shared
 from datetime import date
-from travel_planner.costs import CATEGORIES as COST_CATEGORIES, PAYMENT_STATES as COST_STATES
+from travel_planner.costs import (
+    CATEGORIES as COST_CATEGORIES,
+    COMMON_CURRENCIES,
+    PAYMENT_STATES as COST_STATES,
+)
 
 actions = shared.actions()
 copy = shared.words()
@@ -38,15 +42,22 @@ with st.expander(copy["rate_snapshot"], expanded=not rate_snapshot):
             hide_index=True,
             width="stretch",
         )
-    rate_currency = st.text_input(
-        copy["rate_currency"], value="CNY", key=f"rate_cur_{trip.trip_id}"
+    # `accept_new_options` keeps every ISO code reachable while still offering the
+    # common ones, so nobody has to remember whether it is "NT$" or "TWD".
+    rate_currency = st.selectbox(
+        copy["rate_currency"],
+        options=COMMON_CURRENCIES,
+        index=COMMON_CURRENCIES.index("CNY"),
+        accept_new_options=True,
+        key=f"rate_cur_{trip.trip_id}",
     )
     rate_value = st.number_input(
         copy["rate_value"], min_value=0.0, value=5.0, step=0.01, key=f"rate_val_{trip.trip_id}"
     )
-    rate_as_of = st.text_input(
-        copy["rate_as_of"], value=date.today().isoformat(), key=f"rate_as_of_{trip.trip_id}"
-    )
+    # A typed date could be any format; the picker can only produce a real one.
+    rate_as_of = st.date_input(
+        copy["rate_as_of"], value=date.today(), key=f"rate_as_of_{trip.trip_id}"
+    ).isoformat()
     rate_source = st.text_input(
         copy["rate_source"], value="", key=f"rate_src_{trip.trip_id}"
     )
@@ -104,26 +115,47 @@ with st.expander(copy["add_cost"]):
     cost_amount = st.number_input(
         copy["cost_amount"], min_value=0.0, value=0.0, step=1.0, key=f"cost_amt_{trip.trip_id}"
     )
-    cost_currency = st.text_input(
-        copy["cost_currency"], value="THB", key=f"cost_cur_{trip.trip_id}"
+    # Flagging the unrated codes here shows the conversion gap while the cost is
+    # being entered, instead of as a warning after it is saved.
+    rated = set((rate_snapshot or {}).get("rates") or {"THB": 1.0})
+    cost_currency = shared.translated_selectbox(
+        copy["cost_currency"],
+        COMMON_CURRENCIES,
+        key=f"cost_cur_{trip.trip_id}",
+        index=COMMON_CURRENCIES.index("THB"),
+        format_func=lambda code: (
+            code if code in rated else f"{code} · {copy['rate_missing']}"
+        ),
+        accept_new_options=True,
     )
-    cost_category = st.selectbox(
+    cost_category = shared.translated_selectbox(
         copy["category"],
-        options=COST_CATEGORIES,
+        COST_CATEGORIES,
+        key=f"cost_cat_{trip.trip_id}",
         format_func=lambda value: copy.get(
             "accommodation_cost" if value == "accommodation" else
             "shopping_cost" if value == "shopping" else value, value
         ),
-        key=f"cost_cat_{trip.trip_id}",
     )
-    cost_state = st.selectbox(
+    cost_state = shared.translated_selectbox(
         copy["cost_state"],
-        options=COST_STATES,
-        format_func=lambda value: copy.get(value, value),
+        COST_STATES,
         key=f"cost_state_{trip.trip_id}",
+        format_func=lambda value: copy.get(value, value),
     )
-    cost_actual = st.number_input(
-        copy["cost_actual"], min_value=0.0, value=0.0, step=1.0, key=f"cost_act_{trip.trip_id}"
+    # Only a paid charge carries an actual THB amount, and leaving the field on
+    # screen for the other states invited the "a paid cost needs its actual THB
+    # charge" error from the opposite direction.
+    cost_actual = (
+        st.number_input(
+            copy["cost_actual"],
+            min_value=0.0,
+            value=0.0,
+            step=1.0,
+            key=f"cost_act_{trip.trip_id}",
+        )
+        if cost_state == "paid"
+        else None
     )
     if st.button(copy["add_cost"], key=f"add_cost_{trip.trip_id}", width="stretch"):
         try:
@@ -135,7 +167,7 @@ with st.expander(copy["add_cost"]):
                     "original_currency": cost_currency,
                     "category": cost_category,
                     "payment_state": cost_state,
-                    "actual_thb": cost_actual if cost_state == "paid" else None,
+                    "actual_thb": cost_actual,
                 },
             )
         except ValueError as error:

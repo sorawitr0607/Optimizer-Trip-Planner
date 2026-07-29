@@ -27,6 +27,36 @@ CATEGORIES = (
 # An estimate may be re-converted; a paid charge is history.
 PAYMENT_STATES = ("estimate", "committed", "paid")
 LOCKED_STATES = frozenset({"paid"})
+# Picker convenience for the costs form, not a restriction: `_currency` still
+# accepts any three-letter ISO code, so a trip outside this list can record its
+# own currency by typing it.
+COMMON_CURRENCIES = (
+    "THB",
+    "TWD",
+    "JPY",
+    "KRW",
+    "CNY",
+    "HKD",
+    "SGD",
+    "MYR",
+    "VND",
+    "IDR",
+    "PHP",
+    "INR",
+    "AED",
+    "USD",
+    "EUR",
+    "GBP",
+    "CHF",
+    "CZK",
+    "TRY",
+    "CAD",
+    "MXN",
+    "BRL",
+    "ARS",
+    "AUD",
+    "NZD",
+)
 
 
 def new_rate_snapshot(
