@@ -1,0 +1,848 @@
+{
+  "catalog_version": 1,
+  "fixture_notice": "Synthetic deterministic inputs derived from the owner's trip reports. They are regression evidence, not claims about current venue operations.",
+  "rule_registry": {
+    "HARD_OPEN_INTERVAL": {"severity": "hard", "description": "A visit must fit a verified opening and last-entry interval."},
+    "HARD_SHOW_INTERVAL": {"severity": "hard", "description": "A timed show claim must match a verified show interval and type."},
+    "HARD_TRANSPORT_MODE_ALLOWED": {"severity": "hard", "description": "A route may use only a mode permitted on that route."},
+    "READY_REQUIRES_ACCESS_EVIDENCE": {"severity": "hard", "description": "Unknown required access evidence prevents Ready status."},
+    "READY_REQUIRES_ROUTE_EVIDENCE": {"severity": "hard", "description": "Unknown required route evidence prevents Ready status."},
+    "SOFT_BEST_TIME_WINDOW": {"severity": "soft", "description": "Prefer the supported viewing window or expose the weaker-time consequence."},
+    "SOFT_PLAIN_WALK_LOAD": {"severity": "soft", "description": "Keep plain transfer walking within the confirmed threshold or expose a tradeoff."},
+    "SOFT_PHYSICAL_LOAD": {"severity": "soft", "description": "Keep total physical load within traveller thresholds or expose a tradeoff."},
+    "WALK_REWARD_REQUIRES_EVIDENCE": {"severity": "quality", "description": "Walking earns experience value only with named evidence-supported highlights."},
+    "ROUTE_EXPERIENCE_REQUIRES_TIME_EVIDENCE": {"severity": "quality", "description": "A route earns view value only when the claimed experience is supported at that time."},
+    "WEATHER_CLUSTER_REQUIRES_FALLBACK": {"severity": "resilience", "description": "A weather-sensitive half-day needs a nearby verified fallback."},
+    "FALLBACK_REOPTIMIZES_DAY": {"severity": "resilience", "description": "Activating a fallback reruns the remaining day and preserves timeline validity."},
+    "SOFT_EXPECTED_VALUE": {"severity": "soft", "description": "Weak expected value must affect ranking or be explained as a tradeoff."},
+    "SOFT_TOURIST_TRAP_RISK": {"severity": "soft", "description": "Tourist-trap risk must be visible and preference-aware."},
+    "SOFT_CROWD_RISK": {"severity": "soft", "description": "Crowd risk must be visible and preference-aware."},
+    "SOFT_QUEUE_WAIT": {"severity": "soft", "description": "Queue time counts toward visit and meal timing."},
+    "SOFT_MEAL_WINDOW": {"severity": "soft", "description": "Meals should fit the confirmed window or expose the affected traveller and consequence."},
+    "SOFT_HEAT_EXPOSURE": {"severity": "soft", "description": "Heat exposure counts toward physical-load and comfort thresholds."},
+    "SOFT_BACKTRACKING": {"severity": "soft", "description": "Avoid removable A-to-B-to-A travel and repeated hotel returns."},
+    "HOTEL_AREA_GLOBAL_EFFICIENCY": {"severity": "soft", "description": "Compare an unbooked hotel area against all day clusters and arrival/departure anchors."},
+    "ACCESS_INSTRUCTIONS_REQUIRED": {"severity": "operational", "description": "A complex entrance needs a verified gate, approach, or landmark instruction."},
+    "EXPLICIT_TRADEOFF_REQUIRED": {"severity": "explanation", "description": "Any threshold exception needs owner acceptance and quantified consequences."},
+    "SELECTED_ITEM_RECONCILIATION": {"severity": "explanation", "description": "Every selected item must be Fits, Fits with tradeoff, or Cannot currently fit."},
+    "CONTINUOUS_TIMELINE": {"severity": "hard", "description": "Every revised day must remain non-overlapping with all required travel and buffers."}
+  },
+  "fixtures": [
+    {
+      "metadata": {
+        "id": "jp-uniqlo-closed-arrival",
+        "schema_version": 1,
+        "layer": "atomic",
+        "failure_class": "closed_arrival",
+        "source_trip": "Japan",
+        "history_refs": ["japan.day1.uniqlo_closed"]
+      },
+      "planner_input": {
+        "trip": {"timezone": "Asia/Tokyo", "local_dates": ["2030-01-01"], "usable_windows": [{"date": "2030-01-01", "start": "21:00", "end": "22:00"}]},
+        "travellers": [],
+        "candidates": [{"id": "uniqlo_asakusa", "kind": "shopping", "duration_minutes": 45, "priority": "interested"}],
+        "facts": [{"subject_id": "uniqlo_asakusa", "fact_type": "opening_interval", "value": {"start": "10:00", "end": "20:00"}, "status": "verified", "source": "historic_fixture"}],
+        "routes": [],
+        "locks": [],
+        "weights": {},
+        "thresholds": {}
+      },
+      "expected_rules": [{"rule_id": "HARD_OPEN_INTERVAL", "subjects": ["uniqlo_asakusa"], "expect": "pass"}],
+      "acceptable_outcomes": [{"type": "cannot_fit", "subjects": ["uniqlo_asakusa"], "reason_codes": ["CLOSED_AT_AVAILABLE_TIME"]}]
+    },
+    {
+      "metadata": {
+        "id": "jp-shibuya-plain-walk-overload",
+        "schema_version": 1,
+        "layer": "atomic",
+        "failure_class": "unrewarding_long_walk",
+        "source_trip": "Japan",
+        "history_refs": ["japan.day2.plain_walking"]
+      },
+      "planner_input": {
+        "trip": {"timezone": "Asia/Tokyo", "local_dates": ["2030-01-02"], "usable_windows": [{"date": "2030-01-02", "start": "09:00", "end": "18:00"}]},
+        "travellers": [{"id": "owner", "constraints": [], "comfort_thresholds": {"plain_walking_minutes_per_day": 40}}],
+        "candidates": [{"id": "shibuya_a", "kind": "sightseeing"}, {"id": "shibuya_b", "kind": "sightseeing"}, {"id": "shibuya_c", "kind": "sightseeing"}],
+        "facts": [],
+        "routes": [
+          {"origin_id": "shibuya_a", "destination_id": "shibuya_b", "mode": "walk", "duration_minutes": 35, "walking_minutes": 35, "distance_m": 2500, "experience_evidence": [], "status": "verified"},
+          {"origin_id": "shibuya_b", "destination_id": "shibuya_c", "mode": "walk", "duration_minutes": 35, "walking_minutes": 35, "distance_m": 2400, "experience_evidence": [], "status": "verified"}
+        ],
+        "locks": [],
+        "weights": {},
+        "thresholds": {"plain_walking_minutes_per_day": 40}
+      },
+      "expected_rules": [
+        {"rule_id": "SOFT_PLAIN_WALK_LOAD", "subjects": ["owner"], "expect": "pass_or_explain"},
+        {"rule_id": "WALK_REWARD_REQUIRES_EVIDENCE", "subjects": ["shibuya_a", "shibuya_b", "shibuya_c"], "expect": "pass"},
+        {"rule_id": "EXPLICIT_TRADEOFF_REQUIRED", "subjects": ["owner"], "expect": "pass"}
+      ],
+      "acceptable_outcomes": [
+        {"type": "scheduled", "conditions": ["plain_walking_minutes_lte_40"]},
+        {"type": "tradeoff", "reason_codes": ["PLAIN_WALK_THRESHOLD"], "conditions": ["owner_acceptance_required", "walking_consequence_quantified"]},
+        {"type": "cannot_fit", "reason_codes": ["PLAIN_WALK_THRESHOLD"]}
+      ]
+    },
+    {
+      "metadata": {
+        "id": "jp-magnet-closed-morning",
+        "schema_version": 1,
+        "layer": "atomic",
+        "failure_class": "closed_arrival",
+        "source_trip": "Japan",
+        "history_refs": ["japan.day2.magnet_closed"]
+      },
+      "planner_input": {
+        "trip": {"timezone": "Asia/Tokyo", "local_dates": ["2030-01-02"], "usable_windows": [{"date": "2030-01-02", "start": "09:00", "end": "09:45"}]},
+        "travellers": [],
+        "candidates": [{"id": "magnet_shibuya", "kind": "shopping", "duration_minutes": 45, "priority": "interested"}],
+        "facts": [{"subject_id": "magnet_shibuya", "fact_type": "opening_interval", "value": {"start": "10:00", "end": "21:00"}, "status": "verified", "source": "historic_fixture"}],
+        "routes": [],
+        "locks": [],
+        "weights": {},
+        "thresholds": {}
+      },
+      "expected_rules": [{"rule_id": "HARD_OPEN_INTERVAL", "subjects": ["magnet_shibuya"], "expect": "pass"}],
+      "acceptable_outcomes": [{"type": "cannot_fit", "subjects": ["magnet_shibuya"], "reason_codes": ["CLOSED_AT_AVAILABLE_TIME"]}]
+    },
+    {
+      "metadata": {
+        "id": "jp-shibuya-sky-morning-view",
+        "schema_version": 1,
+        "layer": "atomic",
+        "failure_class": "poor_viewing_time",
+        "source_trip": "Japan",
+        "history_refs": ["japan.day2.shibuya_sky_morning"]
+      },
+      "planner_input": {
+        "trip": {"timezone": "Asia/Tokyo", "local_dates": ["2030-01-02"], "usable_windows": [{"date": "2030-01-02", "start": "09:00", "end": "20:00"}]},
+        "travellers": [],
+        "candidates": [{"id": "shibuya_sky", "kind": "viewpoint", "duration_minutes": 90, "priority": "interested"}],
+        "facts": [{"subject_id": "shibuya_sky", "fact_type": "best_time_interval", "value": {"start": "16:00", "end": "19:00"}, "status": "verified", "source": "historic_fixture"}],
+        "routes": [],
+        "locks": [],
+        "weights": {},
+        "thresholds": {}
+      },
+      "expected_rules": [
+        {"rule_id": "SOFT_BEST_TIME_WINDOW", "subjects": ["shibuya_sky"], "expect": "pass_or_explain"},
+        {"rule_id": "EXPLICIT_TRADEOFF_REQUIRED", "subjects": ["shibuya_sky"], "expect": "pass"}
+      ],
+      "acceptable_outcomes": [
+        {"type": "scheduled", "subjects": ["shibuya_sky"], "conditions": ["visit_inside_best_time_interval"]},
+        {"type": "tradeoff", "subjects": ["shibuya_sky"], "reason_codes": ["WEAKER_VIEWING_TIME"], "conditions": ["owner_acceptance_required"]}
+      ]
+    },
+    {
+      "metadata": {
+        "id": "jp-teamlab-odaiba-long-walk",
+        "schema_version": 1,
+        "layer": "atomic",
+        "failure_class": "excessive_transfer_walk",
+        "source_trip": "Japan",
+        "history_refs": ["japan.day4.teamlab_odaiba_walk"]
+      },
+      "planner_input": {
+        "trip": {"timezone": "Asia/Tokyo", "local_dates": ["2030-01-04"], "usable_windows": [{"date": "2030-01-04", "start": "09:00", "end": "21:00"}]},
+        "travellers": [{"id": "owner", "constraints": [], "comfort_thresholds": {"walking_minutes_per_leg": 20}}],
+        "candidates": [{"id": "teamlab", "kind": "interactive"}, {"id": "odaiba", "kind": "sightseeing"}],
+        "facts": [],
+        "routes": [
+          {"origin_id": "teamlab", "destination_id": "odaiba", "mode": "walk", "duration_minutes": 42, "walking_minutes": 42, "distance_m": 3100, "status": "verified"},
+          {"origin_id": "teamlab", "destination_id": "odaiba", "mode": "transit", "duration_minutes": 24, "walking_minutes": 8, "distance_m": 600, "status": "verified"}
+        ],
+        "locks": [],
+        "weights": {},
+        "thresholds": {"walking_minutes_per_leg": 20}
+      },
+      "expected_rules": [
+        {"rule_id": "SOFT_PHYSICAL_LOAD", "subjects": ["owner"], "expect": "pass_or_explain"},
+        {"rule_id": "EXPLICIT_TRADEOFF_REQUIRED", "subjects": ["owner"], "expect": "pass"}
+      ],
+      "acceptable_outcomes": [
+        {"type": "scheduled", "conditions": ["selected_route_walking_minutes_lte_20"]},
+        {"type": "tradeoff", "reason_codes": ["LONG_TRANSFER_WALK"], "conditions": ["owner_acceptance_required", "walking_consequence_quantified"]}
+      ]
+    },
+    {
+      "metadata": {
+        "id": "jp-odaiba-dark-train-view",
+        "schema_version": 1,
+        "layer": "atomic",
+        "failure_class": "unsupported_route_experience",
+        "source_trip": "Japan",
+        "history_refs": ["japan.day4.dark_train_view"]
+      },
+      "planner_input": {
+        "trip": {"timezone": "Asia/Tokyo", "local_dates": ["2030-01-04"], "usable_windows": [{"date": "2030-01-04", "start": "19:00", "end": "20:00"}]},
+        "travellers": [],
+        "candidates": [{"id": "teamlab", "kind": "interactive"}, {"id": "odaiba", "kind": "sightseeing"}],
+        "facts": [{"subject_id": "tokyo_bay_view", "fact_type": "supported_view_interval", "value": {"start": "06:00", "end": "17:00"}, "status": "verified", "source": "historic_fixture"}],
+        "routes": [{"origin_id": "teamlab", "destination_id": "odaiba", "mode": "train", "departure_time": "19:15", "duration_minutes": 25, "walking_minutes": 7, "claimed_experience": "tokyo_bay_view", "experience_evidence": [], "status": "verified"}],
+        "locks": [],
+        "weights": {},
+        "thresholds": {}
+      },
+      "expected_rules": [{"rule_id": "ROUTE_EXPERIENCE_REQUIRES_TIME_EVIDENCE", "subjects": ["tokyo_bay_view"], "expect": "pass"}],
+      "acceptable_outcomes": [
+        {"type": "scheduled", "conditions": ["route_experience_value_zero_after_dark"]},
+        {"type": "scheduled", "conditions": ["route_moved_inside_supported_view_interval"]}
+      ]
+    },
+    {
+      "metadata": {
+        "id": "jp-rain-without-backup",
+        "schema_version": 1,
+        "layer": "atomic",
+        "failure_class": "missing_weather_fallback",
+        "source_trip": "Japan",
+        "history_refs": ["japan.last_day.rain_no_backup"]
+      },
+      "planner_input": {
+        "trip": {"timezone": "Asia/Tokyo", "local_dates": ["2030-01-06"], "usable_windows": [{"date": "2030-01-06", "start": "09:00", "end": "17:00"}]},
+        "travellers": [],
+        "candidates": [
+          {"id": "outdoor_walk", "kind": "rewarding_walk", "weather_exposure": "outdoor", "priority": "interested"},
+          {"id": "nearby_museum", "kind": "culture", "weather_exposure": "indoor", "priority": "backup"}
+        ],
+        "facts": [
+          {"subject_id": "2030-01-06-am", "fact_type": "weather", "value": {"condition": "rain"}, "status": "verified", "source": "historic_fixture"},
+          {"subject_id": "nearby_museum", "fact_type": "opening_interval", "value": {"start": "09:00", "end": "17:00"}, "status": "verified", "source": "historic_fixture"}
+        ],
+        "routes": [{"origin_id": "outdoor_walk", "destination_id": "nearby_museum", "mode": "transit", "duration_minutes": 18, "walking_minutes": 5, "status": "verified"}],
+        "locks": [],
+        "weights": {},
+        "thresholds": {}
+      },
+      "expected_rules": [{"rule_id": "WEATHER_CLUSTER_REQUIRES_FALLBACK", "subjects": ["outdoor_walk"], "expect": "pass"}],
+      "acceptable_outcomes": [
+        {"type": "scheduled", "conditions": ["verified_nearby_fallback_linked"]},
+        {"type": "cannot_fit", "reason_codes": ["NO_VERIFIED_WEATHER_FALLBACK"]}
+      ]
+    },
+    {
+      "metadata": {
+        "id": "fuk-hakata-old-town-low-value",
+        "schema_version": 1,
+        "layer": "atomic",
+        "failure_class": "weak_expected_value",
+        "source_trip": "Fukuoka",
+        "history_refs": ["fukuoka.day1.hakata_low_value"]
+      },
+      "planner_input": {
+        "trip": {"timezone": "Asia/Tokyo", "local_dates": ["2030-02-01"], "usable_windows": [{"date": "2030-02-01", "start": "10:00", "end": "18:00"}]},
+        "travellers": [{"id": "owner", "preferences": {"values": ["culture", "worth_the_effort"]}}],
+        "candidates": [{"id": "hakata_old_town", "kind": "culture", "duration_minutes": 90, "priority": "interested"}],
+        "facts": [{"subject_id": "hakata_old_town", "fact_type": "expected_value_signal", "value": {"uniqueness": "low", "evidence_confidence": "low"}, "status": "verified", "source": "historic_fixture"}],
+        "routes": [{"origin_id": "hotel", "destination_id": "hakata_old_town", "mode": "transit", "duration_minutes": 35, "walking_minutes": 12, "status": "verified"}],
+        "locks": [],
+        "weights": {},
+        "thresholds": {}
+      },
+      "expected_rules": [
+        {"rule_id": "SOFT_EXPECTED_VALUE", "subjects": ["hakata_old_town"], "expect": "pass_or_explain"},
+        {"rule_id": "SELECTED_ITEM_RECONCILIATION", "subjects": ["hakata_old_town"], "expect": "pass"}
+      ],
+      "acceptable_outcomes": [
+        {"type": "cannot_fit", "reason_codes": ["WEAK_VALUE_FOR_EFFORT"]},
+        {"type": "tradeoff", "reason_codes": ["WEAK_VALUE_FOR_EFFORT"], "conditions": ["owner_acceptance_required"]},
+        {"type": "scheduled", "conditions": ["stronger_supporting_evidence_present"]}
+      ]
+    },
+    {
+      "metadata": {
+        "id": "fuk-yatai-tourist-trap",
+        "schema_version": 1,
+        "layer": "atomic",
+        "failure_class": "tourist_trap_risk",
+        "source_trip": "Fukuoka",
+        "history_refs": ["fukuoka.day1.yatai_tourist_trap"]
+      },
+      "planner_input": {
+        "trip": {"timezone": "Asia/Tokyo", "local_dates": ["2030-02-01"], "usable_windows": [{"date": "2030-02-01", "start": "18:00", "end": "22:00"}]},
+        "travellers": [{"id": "owner", "preferences": {"dislikes": ["tourist_traps", "heavy_crowds"]}}],
+        "candidates": [{"id": "tourist_yatai", "kind": "local_food", "priority": "interested"}, {"id": "local_food_street", "kind": "local_food", "priority": "alternative"}],
+        "facts": [{"subject_id": "tourist_yatai", "fact_type": "tourist_trap_risk", "value": "high", "status": "verified", "source": "historic_fixture"}],
+        "routes": [],
+        "locks": [],
+        "weights": {},
+        "thresholds": {"crowd_tolerance": "low"}
+      },
+      "expected_rules": [
+        {"rule_id": "SOFT_TOURIST_TRAP_RISK", "subjects": ["tourist_yatai"], "expect": "pass_or_explain"},
+        {"rule_id": "EXPLICIT_TRADEOFF_REQUIRED", "subjects": ["tourist_yatai"], "expect": "pass"}
+      ],
+      "acceptable_outcomes": [
+        {"type": "scheduled", "subjects": ["local_food_street"], "conditions": ["lower_risk_alternative_selected"]},
+        {"type": "tradeoff", "subjects": ["tourist_yatai"], "reason_codes": ["TOURIST_TRAP_RISK"], "conditions": ["owner_acceptance_required"]},
+        {"type": "cannot_fit", "subjects": ["tourist_yatai"], "reason_codes": ["TOURIST_TRAP_RISK"]}
+      ]
+    },
+    {
+      "metadata": {
+        "id": "fuk-hakata-port-fatigue",
+        "schema_version": 1,
+        "layer": "atomic",
+        "failure_class": "fatigue_overload",
+        "source_trip": "Fukuoka",
+        "history_refs": ["fukuoka.day2.port_fatigue"]
+      },
+      "planner_input": {
+        "trip": {"timezone": "Asia/Tokyo", "local_dates": ["2030-02-02"], "usable_windows": [{"date": "2030-02-02", "start": "09:00", "end": "18:00"}]},
+        "travellers": [{"id": "owner", "constraints": [], "comfort_thresholds": {"physical_load_points_per_day": 60}}],
+        "candidates": [{"id": "morning_cluster", "kind": "sightseeing", "physical_load_points": 45, "priority": "must_do"}, {"id": "hakata_port", "kind": "sightseeing", "physical_load_points": 30, "priority": "optional"}],
+        "facts": [],
+        "routes": [],
+        "locks": [],
+        "weights": {},
+        "thresholds": {"physical_load_points_per_day": 60}
+      },
+      "expected_rules": [
+        {"rule_id": "SOFT_PHYSICAL_LOAD", "subjects": ["owner"], "expect": "pass_or_explain"},
+        {"rule_id": "SELECTED_ITEM_RECONCILIATION", "subjects": ["hakata_port"], "expect": "pass"}
+      ],
+      "acceptable_outcomes": [
+        {"type": "cannot_fit", "subjects": ["hakata_port"], "reason_codes": ["FATIGUE_THRESHOLD"]},
+        {"type": "tradeoff", "subjects": ["hakata_port"], "reason_codes": ["FATIGUE_THRESHOLD"], "conditions": ["owner_acceptance_required", "load_consequence_quantified"]},
+        {"type": "scheduled", "conditions": ["physical_load_points_lte_60"]}
+      ]
+    },
+    {
+      "metadata": {
+        "id": "fuk-canal-show-after-last-big-show",
+        "schema_version": 1,
+        "layer": "atomic",
+        "failure_class": "invalid_showtime",
+        "source_trip": "Fukuoka",
+        "history_refs": ["fukuoka.day3.canal_show_late"]
+      },
+      "planner_input": {
+        "trip": {"timezone": "Asia/Tokyo", "local_dates": ["2030-02-03"], "usable_windows": [{"date": "2030-02-03", "start": "20:45", "end": "22:00"}]},
+        "travellers": [],
+        "candidates": [{"id": "canal_city_big_fountain_show", "kind": "timed_show", "duration_minutes": 20, "priority": "interested"}],
+        "facts": [{"subject_id": "canal_city_big_fountain_show", "fact_type": "show_intervals", "value": [{"start": "18:30", "end": "18:50", "show_type": "big"}, {"start": "20:10", "end": "20:30", "show_type": "big"}], "status": "verified", "source": "historic_fixture"}],
+        "routes": [],
+        "locks": [],
+        "weights": {},
+        "thresholds": {}
+      },
+      "expected_rules": [{"rule_id": "HARD_SHOW_INTERVAL", "subjects": ["canal_city_big_fountain_show"], "expect": "pass"}],
+      "acceptable_outcomes": [{"type": "cannot_fit", "subjects": ["canal_city_big_fountain_show"], "reason_codes": ["SHOW_TYPE_UNAVAILABLE_AT_TIME"]}]
+    },
+    {
+      "metadata": {
+        "id": "kun-yunnan-university-access",
+        "schema_version": 1,
+        "layer": "atomic",
+        "failure_class": "unclear_access",
+        "source_trip": "Kunming/Dali",
+        "history_refs": ["kunming.day1.university_access"]
+      },
+      "planner_input": {
+        "trip": {"timezone": "Asia/Shanghai", "local_dates": ["2030-03-01"], "usable_windows": [{"date": "2030-03-01", "start": "09:00", "end": "17:00"}]},
+        "travellers": [],
+        "candidates": [{"id": "yunnan_university", "kind": "culture", "priority": "interested"}],
+        "facts": [
+          {"subject_id": "yunnan_university", "fact_type": "entry_rule", "value": null, "status": "unavailable", "source": "historic_fixture"},
+          {"subject_id": "yunnan_university", "fact_type": "entrance_instruction", "value": null, "status": "unavailable", "source": "historic_fixture"},
+          {"subject_id": "yunnan_university", "fact_type": "internal_walking_route", "value": null, "status": "unavailable", "source": "historic_fixture"}
+        ],
+        "routes": [],
+        "locks": [],
+        "weights": {},
+        "thresholds": {}
+      },
+      "expected_rules": [
+        {"rule_id": "READY_REQUIRES_ACCESS_EVIDENCE", "subjects": ["yunnan_university"], "expect": "block_ready_if_unmet"},
+        {"rule_id": "ACCESS_INSTRUCTIONS_REQUIRED", "subjects": ["yunnan_university"], "expect": "pass_or_name_gap"}
+      ],
+      "acceptable_outcomes": [
+        {"type": "tradeoff", "subjects": ["yunnan_university"], "reason_codes": ["ACCESS_UNVERIFIED"], "conditions": ["status_not_ready", "missing_fields_named"]},
+        {"type": "cannot_fit", "subjects": ["yunnan_university"], "reason_codes": ["ACCESS_UNVERIFIED"]}
+      ]
+    },
+    {
+      "metadata": {
+        "id": "dali-hotel-backtracking-pattern",
+        "schema_version": 1,
+        "layer": "atomic",
+        "failure_class": "hotel_backtracking",
+        "source_trip": "Kunming/Dali",
+        "history_refs": ["dali.day2.hotel_backtracking"]
+      },
+      "planner_input": {
+        "trip": {"timezone": "Asia/Shanghai", "local_dates": ["2030-03-02", "2030-03-03"], "usable_windows": [{"date": "2030-03-02", "start": "09:00", "end": "21:00"}, {"date": "2030-03-03", "start": "09:00", "end": "21:00"}], "accommodation_status": "unbooked"},
+        "travellers": [],
+        "candidates": [{"id": "hotel_far", "kind": "hotel_area"}, {"id": "hotel_near", "kind": "hotel_area"}, {"id": "dali_ancient_market", "kind": "local_market"}, {"id": "dali_town", "kind": "culture"}],
+        "facts": [],
+        "routes": [
+          {"origin_id": "dali_town", "destination_id": "hotel_far", "mode": "transit", "duration_minutes": 45, "walking_minutes": 8, "status": "verified"},
+          {"origin_id": "hotel_far", "destination_id": "dali_ancient_market", "mode": "transit", "duration_minutes": 45, "walking_minutes": 8, "status": "verified"},
+          {"origin_id": "dali_town", "destination_id": "hotel_near", "mode": "walk", "duration_minutes": 10, "walking_minutes": 10, "status": "verified"},
+          {"origin_id": "hotel_near", "destination_id": "dali_ancient_market", "mode": "walk", "duration_minutes": 10, "walking_minutes": 10, "status": "verified"}
+        ],
+        "locks": [],
+        "weights": {},
+        "thresholds": {}
+      },
+      "expected_rules": [
+        {"rule_id": "SOFT_BACKTRACKING", "subjects": ["hotel_far", "hotel_near"], "expect": "pass_or_explain"},
+        {"rule_id": "HOTEL_AREA_GLOBAL_EFFICIENCY", "subjects": ["hotel_far", "hotel_near"], "expect": "pass"}
+      ],
+      "acceptable_outcomes": [
+        {"type": "variant", "subjects": ["hotel_near"], "conditions": ["default_hotel_is_lower_total_travel_option", "runner_up_tradeoffs_quantified"]},
+        {"type": "tradeoff", "subjects": ["hotel_far"], "reason_codes": ["HOTEL_BACKTRACKING"], "conditions": ["owner_acceptance_required", "travel_delta_quantified"]}
+      ]
+    },
+    {
+      "metadata": {
+        "id": "erhai-scooter-prohibited",
+        "schema_version": 1,
+        "layer": "atomic",
+        "failure_class": "prohibited_transport",
+        "source_trip": "Kunming/Dali",
+        "history_refs": ["erhai.day3.scooter_prohibited"]
+      },
+      "planner_input": {
+        "trip": {"timezone": "Asia/Shanghai", "local_dates": ["2030-03-03"], "usable_windows": [{"date": "2030-03-03", "start": "09:00", "end": "18:00"}]},
+        "travellers": [],
+        "candidates": [{"id": "erhai_lake_route", "kind": "nature"}],
+        "facts": [{"subject_id": "erhai_lake_route", "fact_type": "allowed_transport_modes", "value": ["bike", "walk", "taxi"], "status": "verified", "source": "historic_fixture"}],
+        "routes": [{"origin_id": "erhai_start", "destination_id": "erhai_finish", "mode": "scooter", "duration_minutes": 90, "walking_minutes": 0, "status": "verified"}],
+        "locks": [],
+        "weights": {},
+        "thresholds": {}
+      },
+      "expected_rules": [{"rule_id": "HARD_TRANSPORT_MODE_ALLOWED", "subjects": ["erhai_lake_route"], "expect": "pass"}],
+      "acceptable_outcomes": [{"type": "cannot_fit", "subjects": ["erhai_lake_route"], "reason_codes": ["TRANSPORT_MODE_PROHIBITED"]}]
+    },
+    {
+      "metadata": {
+        "id": "erhai-bike-heat-fatigue",
+        "schema_version": 1,
+        "layer": "atomic",
+        "failure_class": "heat_and_effort_overload",
+        "source_trip": "Kunming/Dali",
+        "history_refs": ["erhai.day3.bike_heat"]
+      },
+      "planner_input": {
+        "trip": {"timezone": "Asia/Shanghai", "local_dates": ["2030-03-03"], "usable_windows": [{"date": "2030-03-03", "start": "11:00", "end": "16:00"}]},
+        "travellers": [{"id": "owner", "constraints": [], "comfort_thresholds": {"cycling_minutes_per_day": 60, "heat_exposure": "medium"}}],
+        "candidates": [{"id": "erhai_lake_route", "kind": "nature"}],
+        "facts": [{"subject_id": "2030-03-03-midday", "fact_type": "heat_exposure", "value": "high", "status": "verified", "source": "historic_fixture"}],
+        "routes": [{"origin_id": "erhai_start", "destination_id": "erhai_finish", "mode": "bike", "duration_minutes": 150, "walking_minutes": 0, "status": "verified"}],
+        "locks": [],
+        "weights": {},
+        "thresholds": {"cycling_minutes_per_day": 60, "heat_exposure": "medium"}
+      },
+      "expected_rules": [
+        {"rule_id": "SOFT_PHYSICAL_LOAD", "subjects": ["owner"], "expect": "pass_or_explain"},
+        {"rule_id": "SOFT_HEAT_EXPOSURE", "subjects": ["owner"], "expect": "pass_or_explain"},
+        {"rule_id": "EXPLICIT_TRADEOFF_REQUIRED", "subjects": ["owner"], "expect": "pass"}
+      ],
+      "acceptable_outcomes": [
+        {"type": "tradeoff", "reason_codes": ["HEAT_AND_CYCLING_LOAD"], "conditions": ["owner_acceptance_required", "load_consequence_quantified"]},
+        {"type": "cannot_fit", "reason_codes": ["HEAT_AND_CYCLING_LOAD"]},
+        {"type": "scheduled", "conditions": ["cycling_minutes_lte_60", "heat_exposure_lte_medium"]}
+      ]
+    },
+    {
+      "metadata": {
+        "id": "sha-sukiyaki-queue-meal",
+        "schema_version": 1,
+        "layer": "atomic",
+        "failure_class": "queue_delays_meal",
+        "source_trip": "Shanghai",
+        "history_refs": ["shanghai.day1.sukiyaki_queue"]
+      },
+      "planner_input": {
+        "trip": {"timezone": "Asia/Shanghai", "local_dates": ["2030-04-01"], "usable_windows": [{"date": "2030-04-01", "start": "17:30", "end": "21:30"}]},
+        "travellers": [{"id": "mother", "constraints": [], "comfort_thresholds": {"meal_window": {"start": "18:00", "end": "20:00"}}}],
+        "candidates": [{"id": "new_sukiyaki", "kind": "meal", "duration_minutes": 75, "priority": "interested"}, {"id": "nearby_dinner", "kind": "meal", "duration_minutes": 60, "priority": "backup"}],
+        "facts": [{"subject_id": "new_sukiyaki", "fact_type": "queue_wait_minutes", "value": 90, "status": "verified", "source": "historic_fixture"}],
+        "routes": [],
+        "locks": [],
+        "weights": {},
+        "thresholds": {"meal_window": {"start": "18:00", "end": "20:00"}, "queue_wait_minutes": 30}
+      },
+      "expected_rules": [
+        {"rule_id": "SOFT_QUEUE_WAIT", "subjects": ["new_sukiyaki"], "expect": "pass_or_explain"},
+        {"rule_id": "SOFT_MEAL_WINDOW", "subjects": ["mother"], "expect": "pass_or_explain"},
+        {"rule_id": "EXPLICIT_TRADEOFF_REQUIRED", "subjects": ["mother"], "expect": "pass"}
+      ],
+      "acceptable_outcomes": [
+        {"type": "scheduled", "subjects": ["nearby_dinner"], "conditions": ["meal_inside_window"]},
+        {"type": "tradeoff", "subjects": ["new_sukiyaki"], "reason_codes": ["QUEUE_CAUSES_LATE_MEAL"], "conditions": ["owner_acceptance_required", "meal_consequence_quantified"]},
+        {"type": "cannot_fit", "subjects": ["new_sukiyaki"], "reason_codes": ["QUEUE_CAUSES_LATE_MEAL"]}
+      ]
+    },
+    {
+      "metadata": {
+        "id": "sha-yuyuan-tourist-trap",
+        "schema_version": 1,
+        "layer": "atomic",
+        "failure_class": "tourist_trap_risk",
+        "source_trip": "Shanghai",
+        "history_refs": ["shanghai.day2.yuyuan_tourist_trap"]
+      },
+      "planner_input": {
+        "trip": {"timezone": "Asia/Shanghai", "local_dates": ["2030-04-02"], "usable_windows": [{"date": "2030-04-02", "start": "09:00", "end": "20:00"}]},
+        "travellers": [{"id": "owner", "preferences": {"dislikes": ["tourist_traps", "heavy_crowds"]}}],
+        "candidates": [{"id": "yuyuan", "kind": "culture", "priority": "interested"}, {"id": "local_garden", "kind": "culture", "priority": "alternative"}],
+        "facts": [{"subject_id": "yuyuan", "fact_type": "tourist_trap_risk", "value": "high", "status": "verified", "source": "historic_fixture"}],
+        "routes": [],
+        "locks": [],
+        "weights": {},
+        "thresholds": {"crowd_tolerance": "low"}
+      },
+      "expected_rules": [
+        {"rule_id": "SOFT_TOURIST_TRAP_RISK", "subjects": ["yuyuan"], "expect": "pass_or_explain"},
+        {"rule_id": "EXPLICIT_TRADEOFF_REQUIRED", "subjects": ["yuyuan"], "expect": "pass"}
+      ],
+      "acceptable_outcomes": [
+        {"type": "scheduled", "subjects": ["local_garden"], "conditions": ["lower_risk_alternative_selected"]},
+        {"type": "tradeoff", "subjects": ["yuyuan"], "reason_codes": ["TOURIST_TRAP_RISK"], "conditions": ["owner_acceptance_required"]},
+        {"type": "cannot_fit", "subjects": ["yuyuan"], "reason_codes": ["TOURIST_TRAP_RISK"]}
+      ]
+    },
+    {
+      "metadata": {
+        "id": "sha-wukang-after-dark",
+        "schema_version": 1,
+        "layer": "atomic",
+        "failure_class": "poor_viewing_time",
+        "source_trip": "Shanghai",
+        "history_refs": ["shanghai.day2.wukang_after_dark"]
+      },
+      "planner_input": {
+        "trip": {"timezone": "Asia/Shanghai", "local_dates": ["2030-04-02"], "usable_windows": [{"date": "2030-04-02", "start": "09:00", "end": "20:00"}]},
+        "travellers": [],
+        "candidates": [{"id": "wukang_road", "kind": "rewarding_walk", "duration_minutes": 90, "priority": "interested"}],
+        "facts": [{"subject_id": "wukang_road", "fact_type": "best_time_interval", "value": {"start": "09:00", "end": "17:00"}, "status": "verified", "source": "historic_fixture"}],
+        "routes": [],
+        "locks": [],
+        "weights": {},
+        "thresholds": {}
+      },
+      "expected_rules": [
+        {"rule_id": "SOFT_BEST_TIME_WINDOW", "subjects": ["wukang_road"], "expect": "pass_or_explain"},
+        {"rule_id": "EXPLICIT_TRADEOFF_REQUIRED", "subjects": ["wukang_road"], "expect": "pass"}
+      ],
+      "acceptable_outcomes": [
+        {"type": "scheduled", "subjects": ["wukang_road"], "conditions": ["visit_ends_by_17_00"]},
+        {"type": "tradeoff", "subjects": ["wukang_road"], "reason_codes": ["AFTER_BEST_LIGHT"], "conditions": ["owner_acceptance_required"]}
+      ]
+    },
+    {
+      "metadata": {
+        "id": "sha-ferry-crowd-buffer",
+        "schema_version": 1,
+        "layer": "atomic",
+        "failure_class": "crowd_and_boarding_risk",
+        "source_trip": "Shanghai",
+        "history_refs": ["shanghai.day4.ferry_crowd"]
+      },
+      "planner_input": {
+        "trip": {"timezone": "Asia/Shanghai", "local_dates": ["2030-04-04"], "usable_windows": [{"date": "2030-04-04", "start": "15:00", "end": "20:00"}]},
+        "travellers": [{"id": "owner", "preferences": {"dislikes": ["heavy_crowds"]}}],
+        "candidates": [{"id": "tourist_ferry", "kind": "transport_experience", "priority": "interested"}],
+        "facts": [{"subject_id": "tourist_ferry", "fact_type": "crowd_risk", "value": "high", "status": "verified", "source": "historic_fixture"}],
+        "routes": [{"origin_id": "pier_approach", "destination_id": "tourist_ferry", "mode": "walk", "duration_minutes": 10, "walking_minutes": 10, "boarding_buffer_minutes": 0, "status": "verified"}],
+        "locks": [],
+        "weights": {},
+        "thresholds": {"crowd_tolerance": "low", "minimum_boarding_buffer_minutes": 20}
+      },
+      "expected_rules": [
+        {"rule_id": "SOFT_CROWD_RISK", "subjects": ["tourist_ferry"], "expect": "pass_or_explain"},
+        {"rule_id": "EXPLICIT_TRADEOFF_REQUIRED", "subjects": ["tourist_ferry"], "expect": "pass"}
+      ],
+      "acceptable_outcomes": [
+        {"type": "scheduled", "conditions": ["boarding_buffer_minutes_gte_20", "crowd_consequence_visible"]},
+        {"type": "tradeoff", "reason_codes": ["CROWD_AND_BOARDING_RISK"], "conditions": ["owner_acceptance_required"]},
+        {"type": "cannot_fit", "reason_codes": ["CROWD_AND_BOARDING_RISK"]}
+      ]
+    },
+    {
+      "metadata": {
+        "id": "sha-ferry-unclear-entrance",
+        "schema_version": 1,
+        "layer": "atomic",
+        "failure_class": "unclear_access",
+        "source_trip": "Shanghai",
+        "history_refs": ["shanghai.day4.ferry_access"]
+      },
+      "planner_input": {
+        "trip": {"timezone": "Asia/Shanghai", "local_dates": ["2030-04-04"], "usable_windows": [{"date": "2030-04-04", "start": "15:00", "end": "20:00"}]},
+        "travellers": [],
+        "candidates": [{"id": "tourist_ferry", "kind": "transport_experience", "priority": "interested"}],
+        "facts": [
+          {"subject_id": "tourist_ferry", "fact_type": "entrance_coordinate", "value": null, "status": "unavailable", "source": "historic_fixture"},
+          {"subject_id": "tourist_ferry", "fact_type": "approach_instruction", "value": null, "status": "unavailable", "source": "historic_fixture"}
+        ],
+        "routes": [],
+        "locks": [],
+        "weights": {},
+        "thresholds": {}
+      },
+      "expected_rules": [
+        {"rule_id": "READY_REQUIRES_ACCESS_EVIDENCE", "subjects": ["tourist_ferry"], "expect": "block_ready_if_unmet"},
+        {"rule_id": "ACCESS_INSTRUCTIONS_REQUIRED", "subjects": ["tourist_ferry"], "expect": "pass_or_name_gap"}
+      ],
+      "acceptable_outcomes": [
+        {"type": "tradeoff", "reason_codes": ["ENTRANCE_UNVERIFIED"], "conditions": ["status_not_ready", "missing_fields_named"]},
+        {"type": "cannot_fit", "reason_codes": ["ENTRANCE_UNVERIFIED"]}
+      ]
+    },
+    {
+      "metadata": {
+        "id": "ix-jp-shibuya-hours-view-walk",
+        "schema_version": 1,
+        "layer": "interaction",
+        "failure_class": "hours_view_and_walking_interaction",
+        "source_trip": "Japan",
+        "history_refs": ["japan.day2.plain_walking", "japan.day2.magnet_closed", "japan.day2.shibuya_sky_morning"],
+        "covers_fixture_ids": ["jp-shibuya-plain-walk-overload", "jp-magnet-closed-morning", "jp-shibuya-sky-morning-view"]
+      },
+      "planner_input": {
+        "trip": {"timezone": "Asia/Tokyo", "local_dates": ["2030-01-02"], "usable_windows": [{"date": "2030-01-02", "start": "09:00", "end": "20:00"}]},
+        "travellers": [{"id": "owner", "constraints": [], "comfort_thresholds": {"plain_walking_minutes_per_day": 45}}],
+        "candidates": [{"id": "magnet_shibuya", "kind": "shopping", "duration_minutes": 45}, {"id": "shibuya_sky", "kind": "viewpoint", "duration_minutes": 90}, {"id": "harajuku", "kind": "rewarding_walk", "duration_minutes": 90}],
+        "facts": [
+          {"subject_id": "magnet_shibuya", "fact_type": "opening_interval", "value": {"start": "10:00", "end": "21:00"}, "status": "verified", "source": "historic_fixture"},
+          {"subject_id": "shibuya_sky", "fact_type": "best_time_interval", "value": {"start": "16:00", "end": "19:00"}, "status": "verified", "source": "historic_fixture"}
+        ],
+        "routes": [
+          {"origin_id": "harajuku", "destination_id": "magnet_shibuya", "mode": "walk", "duration_minutes": 30, "walking_minutes": 30, "experience_evidence": ["streetscape"], "status": "verified"},
+          {"origin_id": "magnet_shibuya", "destination_id": "shibuya_sky", "mode": "walk", "duration_minutes": 15, "walking_minutes": 15, "experience_evidence": [], "status": "verified"}
+        ],
+        "locks": [],
+        "weights": {},
+        "thresholds": {"plain_walking_minutes_per_day": 45}
+      },
+      "expected_rules": [
+        {"rule_id": "HARD_OPEN_INTERVAL", "subjects": ["magnet_shibuya"], "expect": "pass"},
+        {"rule_id": "SOFT_BEST_TIME_WINDOW", "subjects": ["shibuya_sky"], "expect": "pass_or_explain"},
+        {"rule_id": "SOFT_PLAIN_WALK_LOAD", "subjects": ["owner"], "expect": "pass_or_explain"},
+        {"rule_id": "CONTINUOUS_TIMELINE", "subjects": ["2030-01-02"], "expect": "pass"}
+      ],
+      "acceptable_outcomes": [
+        {"type": "variant", "conditions": ["magnet_starts_at_or_after_10_00", "shibuya_sky_inside_best_time_or_tradeoff", "plain_walking_minutes_lte_45_or_tradeoff"]},
+        {"type": "cannot_fit", "reason_codes": ["COMBINED_DAY_CONSTRAINTS"], "conditions": ["every_selected_item_reconciled"]}
+      ]
+    },
+    {
+      "metadata": {
+        "id": "ix-jp-odaiba-effort-and-view",
+        "schema_version": 1,
+        "layer": "interaction",
+        "failure_class": "route_effort_and_experience_interaction",
+        "source_trip": "Japan",
+        "history_refs": ["japan.day4.teamlab_odaiba_walk", "japan.day4.dark_train_view"],
+        "covers_fixture_ids": ["jp-teamlab-odaiba-long-walk", "jp-odaiba-dark-train-view"]
+      },
+      "planner_input": {
+        "trip": {"timezone": "Asia/Tokyo", "local_dates": ["2030-01-04"], "usable_windows": [{"date": "2030-01-04", "start": "14:00", "end": "21:00"}]},
+        "travellers": [{"id": "owner", "constraints": [], "comfort_thresholds": {"walking_minutes_per_leg": 20}}],
+        "candidates": [{"id": "teamlab", "kind": "interactive", "duration_minutes": 120}, {"id": "odaiba", "kind": "sightseeing", "duration_minutes": 120}],
+        "facts": [{"subject_id": "tokyo_bay_view", "fact_type": "supported_view_interval", "value": {"start": "06:00", "end": "17:00"}, "status": "verified", "source": "historic_fixture"}],
+        "routes": [
+          {"origin_id": "teamlab", "destination_id": "odaiba", "mode": "walk", "duration_minutes": 42, "walking_minutes": 42, "status": "verified"},
+          {"origin_id": "teamlab", "destination_id": "odaiba", "mode": "train", "departure_time": "19:15", "duration_minutes": 24, "walking_minutes": 8, "claimed_experience": "tokyo_bay_view", "experience_evidence": [], "status": "verified"}
+        ],
+        "locks": [],
+        "weights": {},
+        "thresholds": {"walking_minutes_per_leg": 20}
+      },
+      "expected_rules": [
+        {"rule_id": "SOFT_PHYSICAL_LOAD", "subjects": ["owner"], "expect": "pass_or_explain"},
+        {"rule_id": "ROUTE_EXPERIENCE_REQUIRES_TIME_EVIDENCE", "subjects": ["tokyo_bay_view"], "expect": "pass"},
+        {"rule_id": "CONTINUOUS_TIMELINE", "subjects": ["2030-01-04"], "expect": "pass"}
+      ],
+      "acceptable_outcomes": [
+        {"type": "variant", "conditions": ["selected_route_walking_minutes_lte_20_or_tradeoff", "no_scenic_value_claim_after_17_00"]},
+        {"type": "cannot_fit", "reason_codes": ["EFFORT_OR_TIME_CONFLICT"], "conditions": ["every_selected_item_reconciled"]}
+      ]
+    },
+    {
+      "metadata": {
+        "id": "ix-dali-hotel-whole-trip",
+        "schema_version": 1,
+        "layer": "interaction",
+        "failure_class": "whole_trip_hotel_backtracking",
+        "source_trip": "Kunming/Dali",
+        "history_refs": ["dali.day2.hotel_backtracking"],
+        "covers_fixture_ids": ["dali-hotel-backtracking-pattern"]
+      },
+      "planner_input": {
+        "trip": {"timezone": "Asia/Shanghai", "local_dates": ["2030-03-02", "2030-03-03"], "usable_windows": [{"date": "2030-03-02", "start": "09:00", "end": "21:00"}, {"date": "2030-03-03", "start": "09:00", "end": "21:00"}], "accommodation_status": "unbooked"},
+        "travellers": [{"id": "owner", "constraints": [], "comfort_thresholds": {"plain_walking_minutes_per_day": 60}}],
+        "candidates": [{"id": "hotel_far", "kind": "hotel_area"}, {"id": "hotel_near", "kind": "hotel_area"}, {"id": "ancient_market", "kind": "local_market"}, {"id": "dali_town", "kind": "culture"}, {"id": "lake_day", "kind": "nature"}],
+        "facts": [],
+        "routes": [
+          {"origin_id": "hotel_far", "destination_id": "ancient_market", "mode": "transit", "duration_minutes": 45, "walking_minutes": 8, "status": "verified"},
+          {"origin_id": "hotel_far", "destination_id": "dali_town", "mode": "transit", "duration_minutes": 45, "walking_minutes": 8, "status": "verified"},
+          {"origin_id": "hotel_near", "destination_id": "ancient_market", "mode": "walk", "duration_minutes": 10, "walking_minutes": 10, "status": "verified"},
+          {"origin_id": "hotel_near", "destination_id": "dali_town", "mode": "walk", "duration_minutes": 10, "walking_minutes": 10, "status": "verified"},
+          {"origin_id": "hotel_near", "destination_id": "lake_day", "mode": "transit", "duration_minutes": 30, "walking_minutes": 5, "status": "verified"}
+        ],
+        "locks": [],
+        "weights": {},
+        "thresholds": {}
+      },
+      "expected_rules": [
+        {"rule_id": "HOTEL_AREA_GLOBAL_EFFICIENCY", "subjects": ["hotel_far", "hotel_near"], "expect": "pass"},
+        {"rule_id": "SOFT_BACKTRACKING", "subjects": ["hotel_far", "hotel_near"], "expect": "pass_or_explain"}
+      ],
+      "acceptable_outcomes": [
+        {"type": "variant", "subjects": ["hotel_near"], "conditions": ["default_hotel_minimizes_whole_trip_travel", "runner_up_pros_cons_and_delta_shown"]},
+        {"type": "tradeoff", "subjects": ["hotel_far"], "reason_codes": ["HOTEL_BACKTRACKING"], "conditions": ["owner_acceptance_required", "whole_trip_delta_quantified"]}
+      ]
+    },
+    {
+      "metadata": {
+        "id": "ix-erhai-mode-heat-effort",
+        "schema_version": 1,
+        "layer": "interaction",
+        "failure_class": "mode_legality_and_comfort_interaction",
+        "source_trip": "Kunming/Dali",
+        "history_refs": ["erhai.day3.scooter_prohibited", "erhai.day3.bike_heat"],
+        "covers_fixture_ids": ["erhai-scooter-prohibited", "erhai-bike-heat-fatigue"]
+      },
+      "planner_input": {
+        "trip": {"timezone": "Asia/Shanghai", "local_dates": ["2030-03-03"], "usable_windows": [{"date": "2030-03-03", "start": "09:00", "end": "18:00"}]},
+        "travellers": [{"id": "owner", "constraints": [], "comfort_thresholds": {"cycling_minutes_per_day": 60, "heat_exposure": "medium"}}],
+        "candidates": [{"id": "erhai_lake_route", "kind": "nature", "priority": "interested"}],
+        "facts": [
+          {"subject_id": "erhai_lake_route", "fact_type": "allowed_transport_modes", "value": ["bike", "walk", "taxi"], "status": "verified", "source": "historic_fixture"},
+          {"subject_id": "2030-03-03-midday", "fact_type": "heat_exposure", "value": "high", "status": "verified", "source": "historic_fixture"}
+        ],
+        "routes": [
+          {"origin_id": "erhai_start", "destination_id": "erhai_finish", "mode": "scooter", "duration_minutes": 90, "walking_minutes": 0, "status": "verified"},
+          {"origin_id": "erhai_start", "destination_id": "erhai_finish", "mode": "bike", "duration_minutes": 150, "walking_minutes": 0, "status": "verified"},
+          {"origin_id": "erhai_start", "destination_id": "erhai_finish", "mode": "taxi", "duration_minutes": 45, "walking_minutes": 5, "status": "verified"}
+        ],
+        "locks": [],
+        "weights": {},
+        "thresholds": {"cycling_minutes_per_day": 60, "heat_exposure": "medium"}
+      },
+      "expected_rules": [
+        {"rule_id": "HARD_TRANSPORT_MODE_ALLOWED", "subjects": ["erhai_lake_route"], "expect": "pass"},
+        {"rule_id": "SOFT_PHYSICAL_LOAD", "subjects": ["owner"], "expect": "pass_or_explain"},
+        {"rule_id": "SOFT_HEAT_EXPOSURE", "subjects": ["owner"], "expect": "pass_or_explain"}
+      ],
+      "acceptable_outcomes": [
+        {"type": "variant", "conditions": ["scooter_never_selected", "taxi_selected_or_bike_tradeoff_accepted"]},
+        {"type": "cannot_fit", "reason_codes": ["NO_LEGAL_COMFORTABLE_MODE"], "conditions": ["scooter_never_selected"]}
+      ]
+    },
+    {
+      "metadata": {
+        "id": "ix-sha-yuyuan-wukang-order",
+        "schema_version": 1,
+        "layer": "interaction",
+        "failure_class": "risk_and_daylight_ordering",
+        "source_trip": "Shanghai",
+        "history_refs": ["shanghai.day2.yuyuan_tourist_trap", "shanghai.day2.wukang_after_dark"],
+        "covers_fixture_ids": ["sha-yuyuan-tourist-trap", "sha-wukang-after-dark"]
+      },
+      "planner_input": {
+        "trip": {"timezone": "Asia/Shanghai", "local_dates": ["2030-04-02"], "usable_windows": [{"date": "2030-04-02", "start": "09:00", "end": "20:00"}]},
+        "travellers": [{"id": "owner", "preferences": {"dislikes": ["tourist_traps", "heavy_crowds"]}}],
+        "candidates": [{"id": "yuyuan", "kind": "culture", "duration_minutes": 90, "priority": "interested"}, {"id": "wukang_road", "kind": "rewarding_walk", "duration_minutes": 90, "priority": "must_do"}],
+        "facts": [
+          {"subject_id": "yuyuan", "fact_type": "tourist_trap_risk", "value": "high", "status": "verified", "source": "historic_fixture"},
+          {"subject_id": "wukang_road", "fact_type": "best_time_interval", "value": {"start": "09:00", "end": "17:00"}, "status": "verified", "source": "historic_fixture"}
+        ],
+        "routes": [{"origin_id": "yuyuan", "destination_id": "wukang_road", "mode": "transit", "duration_minutes": 45, "walking_minutes": 8, "status": "verified"}],
+        "locks": [],
+        "weights": {},
+        "thresholds": {"crowd_tolerance": "low"}
+      },
+      "expected_rules": [
+        {"rule_id": "SOFT_TOURIST_TRAP_RISK", "subjects": ["yuyuan"], "expect": "pass_or_explain"},
+        {"rule_id": "SOFT_BEST_TIME_WINDOW", "subjects": ["wukang_road"], "expect": "pass_or_explain"},
+        {"rule_id": "SELECTED_ITEM_RECONCILIATION", "subjects": ["yuyuan", "wukang_road"], "expect": "pass"}
+      ],
+      "acceptable_outcomes": [
+        {"type": "variant", "conditions": ["wukang_road_ends_by_17_00", "yuyuan_risk_visible_or_alternative_selected"]},
+        {"type": "tradeoff", "reason_codes": ["RISK_OR_DAYLIGHT_CONFLICT"], "conditions": ["owner_acceptance_required", "every_selected_item_reconciled"]}
+      ]
+    },
+    {
+      "metadata": {
+        "id": "ix-sha-ferry-access-crowd",
+        "schema_version": 1,
+        "layer": "interaction",
+        "failure_class": "access_and_crowd_interaction",
+        "source_trip": "Shanghai",
+        "history_refs": ["shanghai.day4.ferry_crowd", "shanghai.day4.ferry_access"],
+        "covers_fixture_ids": ["sha-ferry-crowd-buffer", "sha-ferry-unclear-entrance"]
+      },
+      "planner_input": {
+        "trip": {"timezone": "Asia/Shanghai", "local_dates": ["2030-04-04"], "usable_windows": [{"date": "2030-04-04", "start": "15:00", "end": "20:00"}]},
+        "travellers": [{"id": "owner", "preferences": {"dislikes": ["heavy_crowds"]}}],
+        "candidates": [{"id": "ferry_pier_a", "kind": "transport_experience"}, {"id": "ferry_pier_b", "kind": "transport_experience"}],
+        "facts": [
+          {"subject_id": "ferry_pier_a", "fact_type": "entrance_coordinate", "value": null, "status": "unavailable", "source": "historic_fixture"},
+          {"subject_id": "ferry_pier_a", "fact_type": "crowd_risk", "value": "high", "status": "verified", "source": "historic_fixture"},
+          {"subject_id": "ferry_pier_b", "fact_type": "entrance_coordinate", "value": {"lat": 31.0, "lng": 121.0}, "status": "verified", "source": "historic_fixture"},
+          {"subject_id": "ferry_pier_b", "fact_type": "approach_instruction", "value": "Use the signed east entrance beside the station exit.", "status": "verified", "source": "historic_fixture"},
+          {"subject_id": "ferry_pier_b", "fact_type": "crowd_risk", "value": "medium", "status": "verified", "source": "historic_fixture"}
+        ],
+        "routes": [
+          {"origin_id": "station", "destination_id": "ferry_pier_a", "mode": "walk", "duration_minutes": 15, "walking_minutes": 15, "boarding_buffer_minutes": 0, "status": "unavailable"},
+          {"origin_id": "station", "destination_id": "ferry_pier_b", "mode": "walk", "duration_minutes": 12, "walking_minutes": 12, "boarding_buffer_minutes": 20, "status": "verified"}
+        ],
+        "locks": [],
+        "weights": {},
+        "thresholds": {"crowd_tolerance": "low", "minimum_boarding_buffer_minutes": 20}
+      },
+      "expected_rules": [
+        {"rule_id": "READY_REQUIRES_ACCESS_EVIDENCE", "subjects": ["ferry_pier_a", "ferry_pier_b"], "expect": "pass"},
+        {"rule_id": "ACCESS_INSTRUCTIONS_REQUIRED", "subjects": ["ferry_pier_a", "ferry_pier_b"], "expect": "pass"},
+        {"rule_id": "SOFT_CROWD_RISK", "subjects": ["ferry_pier_a", "ferry_pier_b"], "expect": "pass_or_explain"}
+      ],
+      "acceptable_outcomes": [
+        {"type": "variant", "subjects": ["ferry_pier_b"], "conditions": ["verified_entrance_selected", "boarding_buffer_minutes_gte_20"]},
+        {"type": "tradeoff", "subjects": ["ferry_pier_a"], "reason_codes": ["ENTRANCE_UNVERIFIED", "CROWD_AND_BOARDING_RISK"], "conditions": ["status_not_ready", "owner_acceptance_required"]}
+      ]
+    },
+    {
+      "metadata": {
+        "id": "ix-jp-rain-fallback-reoptimization",
+        "schema_version": 1,
+        "layer": "interaction",
+        "failure_class": "weather_fallback_reoptimization",
+        "source_trip": "Japan",
+        "history_refs": ["japan.last_day.rain_no_backup"],
+        "covers_fixture_ids": ["jp-rain-without-backup"]
+      },
+      "planner_input": {
+        "trip": {"timezone": "Asia/Tokyo", "local_dates": ["2030-01-06"], "usable_windows": [{"date": "2030-01-06", "start": "09:00", "end": "18:00"}]},
+        "travellers": [{"id": "mother", "constraints": [], "comfort_thresholds": {"meal_window": {"start": "12:00", "end": "13:30"}}}],
+        "candidates": [{"id": "outdoor_walk", "kind": "rewarding_walk", "duration_minutes": 150, "weather_exposure": "outdoor"}, {"id": "nearby_museum", "kind": "culture", "duration_minutes": 120, "weather_exposure": "indoor"}, {"id": "lunch", "kind": "meal", "duration_minutes": 60}],
+        "facts": [
+          {"subject_id": "2030-01-06-am", "fact_type": "weather", "value": {"condition": "rain"}, "status": "verified", "source": "historic_fixture"},
+          {"subject_id": "nearby_museum", "fact_type": "opening_interval", "value": {"start": "09:00", "end": "17:00"}, "status": "verified", "source": "historic_fixture"}
+        ],
+        "routes": [
+          {"origin_id": "hotel", "destination_id": "outdoor_walk", "mode": "transit", "duration_minutes": 30, "walking_minutes": 10, "status": "verified"},
+          {"origin_id": "hotel", "destination_id": "nearby_museum", "mode": "transit", "duration_minutes": 20, "walking_minutes": 5, "status": "verified"},
+          {"origin_id": "nearby_museum", "destination_id": "lunch", "mode": "walk", "duration_minutes": 10, "walking_minutes": 10, "status": "verified"}
+        ],
+        "locks": [],
+        "weights": {},
+        "thresholds": {"meal_window": {"start": "12:00", "end": "13:30"}}
+      },
+      "expected_rules": [
+        {"rule_id": "WEATHER_CLUSTER_REQUIRES_FALLBACK", "subjects": ["outdoor_walk"], "expect": "pass"},
+        {"rule_id": "FALLBACK_REOPTIMIZES_DAY", "subjects": ["2030-01-06"], "expect": "pass"},
+        {"rule_id": "CONTINUOUS_TIMELINE", "subjects": ["2030-01-06"], "expect": "pass"},
+        {"rule_id": "SOFT_MEAL_WINDOW", "subjects": ["mother"], "expect": "pass_or_explain"}
+      ],
+      "acceptable_outcomes": [
+        {"type": "fallback_activated", "subjects": ["nearby_museum"], "conditions": ["outdoor_walk_removed_or_unscheduled", "timeline_non_overlapping", "required_routes_present", "meal_inside_window_or_tradeoff"]}
+      ]
+    }
+  ]
+}

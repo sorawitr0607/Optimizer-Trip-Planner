@@ -1,0 +1,1518 @@
+"""Pure deterministic whole-trip scheduling and validation.
+
+The optimizer consumes normalized snapshots only.  It never calls providers,
+SQLite, Streamlit, exporters, or a language model.
+"""
+
+from __future__ import annotations
+
+from copy import deepcopy
+from datetime import date, timedelta
+from hashlib import sha256
+import json
+from math import ceil
+from time import monotonic
+from typing import Any
+
+
+OPTIMIZER_VERSION = "whole-trip-v1"
+VARIANT_CONFIGS = (
+    {"id": "best_balance", "duration": "ideal", "buffer_minutes": 10},
+    {"id": "relaxed", "duration": "maximum", "buffer_minutes": 20},
+    {"id": "more_highlights", "duration": "minimum", "buffer_minutes": 5},
+)
+PRIORITY_ORDER = {
+    "locked": 0,
+    "must_do": 1,
+    "interested": 2,
+    "maybe": 3,
+    "optional": 4,
+    "alternative": 5,
+    "backup": 6,
+}
+ACCESS_FACT_TYPES = frozenset(
+    {
+        "entry_rule",
+        "entrance_instruction",
+        "internal_walking_route",
+        "entrance_coordinate",
+        "approach_instruction",
+        "access",
+    }
+)
+
+
+def optimize_trip(
+    snapshot: dict[str, Any], *, time_limit_seconds: float = 30.0
+) -> dict[str, Any]:
+    """Return deterministic proposals from one provider-neutral snapshot."""
+
+    _validate_input(snapshot)
+    if time_limit_seconds <= 0:
+        raise ValueError("time_limit_seconds must be positive")
+    canonical = json.dumps(
+        snapshot, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":")
+    )
+    input_sha256 = sha256(canonical.encode("utf-8")).hexdigest()
+    selected = _selected_candidates(snapshot)
+    if not selected:
+        raise ValueError("Choose at least one Must do, Interested, or Maybe place")
+
+    if not snapshot["trip"].get("local_dates"):
+        return {
+            "schema_version": 1,
+            "optimizer_version": OPTIMIZER_VERSION,
+            "input_sha256": input_sha256,
+            "mode": "stay_recommendation",
+            "stay_recommendations": _stay_recommendations(selected),
+            "variants": [],
+            "stopped_at_limit": False,
+        }
+
+    deadline = monotonic() + time_limit_seconds
+    variants = [
+        _solve_variant(snapshot, config, deadline=deadline) for config in VARIANT_CONFIGS
+    ]
+    proposal = {
+        "schema_version": 1,
+        "optimizer_version": OPTIMIZER_VERSION,
+        "input_sha256": input_sha256,
+        "mode": "dated_plan",
+        "variants": variants,
+        "stopped_at_limit": any(item["stopped_at_limit"] for item in variants),
+    }
+    signature_payload = deepcopy(proposal)
+    proposal["deterministic_signature"] = sha256(
+        json.dumps(
+            signature_payload,
+            ensure_ascii=False,
+            allow_nan=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    return proposal
+
+
+def validate_variant(snapshot: dict[str, Any], variant: dict[str, Any]) -> dict[str, Any]:
+    """Recheck a proposal independently; never trust solver construction alone."""
+
+    errors: list[dict[str, Any]] = []
+    visits: dict[str, dict[str, Any]] = {}
+    for day in variant.get("days", []):
+        window = _window_for(snapshot, day["date"])
+        previous_end = _minutes(window["start"])
+        for item in day.get("items", []):
+            start = _minutes(item["start"])
+            end = _minutes(item["end"])
+            if start < previous_end or end < start:
+                errors.append(
+                    {
+                        "code": "TIMELINE_OVERLAP_OR_NEGATIVE_SLACK",
+                        "subject_id": day["date"],
+                    }
+                )
+            if start < _minutes(window["start"]) or end > _minutes(window["end"]):
+                errors.append(
+                    {"code": "OUTSIDE_USABLE_WINDOW", "subject_id": item.get("subject_id")}
+                )
+            previous_end = end
+            if item["type"] == "visit":
+                subject = item["subject_id"]
+                if subject in visits:
+                    errors.append({"code": "DUPLICATE_VISIT", "subject_id": subject})
+                visits[subject] = item
+                opening = _verified_fact(snapshot, subject, "opening_interval")
+                if opening and not _inside(item, opening["value"]):
+                    errors.append({"code": "CLOSED_DURING_VISIT", "subject_id": subject})
+                show = _verified_fact(snapshot, subject, "show_intervals")
+                if show and not any(_inside(item, interval) for interval in show["value"]):
+                    errors.append({"code": "SHOW_INTERVAL_MISSED", "subject_id": subject})
+            if item["type"] == "travel" and item.get("status") != "verified":
+                errors.append(
+                    {"code": "ROUTE_UNVERIFIED", "subject_id": item.get("subject_id")}
+                )
+
+    selected_ids = {_candidate_id(item) for item in _selected_candidates(snapshot)}
+    reconciliation = variant.get("reconciliation", [])
+    reconciled_ids = [item["place_id"] for item in reconciliation]
+    if len(reconciled_ids) != len(set(reconciled_ids)) or set(reconciled_ids) != selected_ids:
+        errors.append({"code": "SELECTION_RECONCILIATION_INCOMPLETE", "subject_id": None})
+
+    locked = {
+        str(lock.get("subject_id") or lock.get("place_id")): lock
+        for lock in snapshot.get("locks", [])
+    }
+    for subject, lock in locked.items():
+        visit = visits.get(subject)
+        if not visit:
+            errors.append({"code": "LOCK_MISSING", "subject_id": subject})
+            continue
+        if lock.get("date") and visit["date"] != lock["date"]:
+            errors.append({"code": "LOCK_DATE_CHANGED", "subject_id": subject})
+        if lock.get("start") and visit["start"] != lock["start"]:
+            errors.append({"code": "LOCK_TIME_CHANGED", "subject_id": subject})
+
+    metrics = variant.get("metrics", {})
+    thresholds = _thresholds(snapshot)
+    accepted_reasons = {
+        item["reason"]
+        for item in variant.get("reconciliation", [])
+        if item["status"] == "fits_with_tradeoff"
+        and not item.get("owner_acceptance_required", True)
+    }
+    if metrics.get("plain_walking_minutes", 0) > int(
+        thresholds.get("plain_walking_minutes_per_day", 10**9)
+    ) and "PLAIN_WALK_THRESHOLD" not in accepted_reasons:
+        errors.append({"code": "UNAPPROVED_PLAIN_WALK_THRESHOLD", "subject_id": None})
+    if metrics.get("maximum_walking_minutes_per_leg", 0) > int(
+        thresholds.get("walking_minutes_per_leg", 10**9)
+    ) and "LONG_TRANSFER_WALK" not in accepted_reasons:
+        errors.append({"code": "UNAPPROVED_WALKING_LEG_THRESHOLD", "subject_id": None})
+    if metrics.get("cycling_minutes", 0) > int(
+        thresholds.get("cycling_minutes_per_day", 10**9)
+    ) and "HEAT_AND_CYCLING_LOAD" not in accepted_reasons:
+        errors.append({"code": "UNAPPROVED_CYCLING_THRESHOLD", "subject_id": None})
+
+    meal_window = _meal_window(snapshot)
+    if meal_window:
+        for visit in visits.values():
+            if visit.get("kind") == "meal" and not _inside(visit, meal_window):
+                errors.append({"code": "UNAPPROVED_MEAL_WINDOW", "subject_id": visit["subject_id"]})
+
+    candidate_by_id = {_candidate_id(item): item for item in snapshot["candidates"]}
+    for subject, visit in visits.items():
+        candidate = candidate_by_id.get(subject, {})
+        if candidate.get("requires_access_evidence") and _access_gap(snapshot, candidate):
+            errors.append({"code": "ACCESS_UNVERIFIED", "subject_id": subject})
+    allowed_facts = [
+        fact
+        for fact in snapshot.get("facts", [])
+        if fact.get("fact_type") == "allowed_transport_modes"
+        and fact.get("status") == "verified"
+    ]
+    travel_items = [
+        item
+        for day in variant.get("days", [])
+        for item in day.get("items", [])
+        if item["type"] == "travel"
+    ]
+    for fact in allowed_facts:
+        subject = fact["subject_id"]
+        relevant = [
+            item
+            for item in travel_items
+            if subject in {item.get("origin_id"), item.get("destination_id")}
+        ]
+        if not relevant and len(visits) == 1 and subject in visits:
+            relevant = travel_items
+        if any(item.get("mode") not in set(fact["value"]) for item in relevant):
+            errors.append({"code": "TRANSPORT_MODE_PROHIBITED", "subject_id": subject})
+
+    high_heat = any(
+        fact.get("fact_type") == "heat_exposure"
+        and fact.get("status") == "verified"
+        and fact.get("value") == "high"
+        for fact in snapshot.get("facts", [])
+    )
+    if high_heat and thresholds.get("heat_exposure") in {"low", "medium"} and {
+        "walk",
+        "bike",
+    } & set(metrics.get("selected_modes", [])):
+        errors.append({"code": "UNAPPROVED_HEAT_EXPOSURE", "subject_id": None})
+
+    return {
+        "valid": not errors,
+        "hard_violations": errors,
+        "scheduled_visit_count": len(visits),
+        "selected_reconciled_count": len(reconciled_ids),
+        "continuous_timeline": not any(
+            item["code"] == "TIMELINE_OVERLAP_OR_NEGATIVE_SLACK" for item in errors
+        ),
+    }
+
+
+def _solve_variant(
+    snapshot: dict[str, Any], config: dict[str, Any], *, deadline: float
+) -> dict[str, Any]:
+    prepared = _prepare_candidates(snapshot, config)
+    active = prepared["active"]
+    active, fatigue_reconciliation = _apply_physical_load_limit(snapshot, active)
+    prepared["reconciliation"].update(fatigue_reconciliation)
+
+    schedules, skipped, stopped = _insertion_search(
+        snapshot, active, config, deadline=deadline
+    )
+    scheduled_ids = {
+        item["subject_id"]
+        for day in schedules
+        for item in day["items"]
+        if item["type"] == "visit"
+    }
+    reconciliation = []
+    selected = _selected_candidates(snapshot)
+    for candidate in sorted(selected, key=lambda item: _candidate_id(item)):
+        place_id = _candidate_id(candidate)
+        if place_id in prepared["reconciliation"]:
+            reconciliation.append(prepared["reconciliation"][place_id])
+        elif place_id in scheduled_ids:
+            reconciliation.append(
+                _reconciliation(candidate, "fits", "SCHEDULED", "scheduled_once")
+            )
+        else:
+            reconciliation.append(
+                _reconciliation(
+                    candidate,
+                    "cannot_currently_fit",
+                    _skip_reason(snapshot, candidate, skipped),
+                    "kept_in_unscheduled_shortlist",
+                )
+            )
+
+    metrics = _schedule_metrics(snapshot, schedules)
+    objective = _objective(snapshot, selected, scheduled_ids, metrics, reconciliation)
+    baseline = _greedy_baseline(snapshot, active, selected, config)
+    variant = {
+        "variant_id": config["id"],
+        "status": "unavailable",
+        "days": schedules,
+        "reconciliation": reconciliation,
+        "fallbacks": prepared["fallbacks"],
+        "hotel_recommendation": prepared["hotel_recommendation"],
+        "warnings": sorted(set(prepared["warnings"] + metrics["warnings"])),
+        "metrics": metrics,
+        "objective": objective,
+        "objective_tuple": [
+            objective["hard_violations"],
+            objective["must_do_unscheduled"],
+            objective["comfort_violations"],
+            -objective["experience_value"],
+            objective["dead_travel_minutes"],
+            -objective["lower_priority_scheduled"],
+        ],
+        "greedy_baseline": baseline,
+        "stopped_at_limit": stopped,
+        "limit_action": "optimize_longer" if stopped else None,
+    }
+    validation = validate_variant(snapshot, variant)
+    variant["validation"] = validation
+    variant["objective"]["hard_violations"] = len(validation["hard_violations"])
+    variant["objective_tuple"][0] = len(validation["hard_violations"])
+    variant["objective_improved_or_equal_to_greedy"] = (
+        variant["objective_tuple"] <= baseline["objective_tuple"]
+    )
+    has_unaccepted_tradeoff = any(
+        item["status"] == "fits_with_tradeoff" for item in reconciliation
+    )
+    if validation["valid"] and validation["scheduled_visit_count"]:
+        variant["status"] = (
+            "provisional"
+            if snapshot["trip"].get("provisional") or has_unaccepted_tradeoff
+            else "ready"
+        )
+    elif not validation["scheduled_visit_count"]:
+        variant["warnings"].append("NO_SELECTED_PLACE_COULD_BE_SCHEDULED")
+    return variant
+
+
+def _prepare_candidates(
+    snapshot: dict[str, Any], config: dict[str, Any]
+) -> dict[str, Any]:
+    candidates = { _candidate_id(item): deepcopy(item) for item in snapshot["candidates"] }
+    active = [deepcopy(item) for item in _selected_candidates(snapshot)]
+    reconciliation: dict[str, dict[str, Any]] = {}
+    fallbacks: list[dict[str, Any]] = []
+    warnings: list[str] = list(snapshot["trip"].get("capability_gaps", []))
+    alternatives = [
+        item
+        for item in snapshot["candidates"]
+        if item.get("priority") in {"alternative", "backup"}
+    ]
+
+    rain = any(
+        fact.get("status") == "verified"
+        and fact.get("fact_type") == "weather"
+        and isinstance(fact.get("value"), dict)
+        and fact["value"].get("condition") in {"rain", "storm", "heavy_rain"}
+        for fact in snapshot.get("facts", [])
+    )
+    prepared: list[dict[str, Any]] = []
+    for candidate in active:
+        place_id = _candidate_id(candidate)
+        kind = candidate.get("kind", "attraction")
+
+        if rain and candidate.get("weather_exposure") == "outdoor":
+            backup = next(
+                (
+                    item
+                    for item in snapshot["candidates"]
+                    if _candidate_id(item) != place_id
+                    if item.get("weather_exposure") == "indoor"
+                    and _opening_overlaps_trip(snapshot, item, config)
+                    and _fallback_route_compatible(snapshot, place_id, _candidate_id(item))
+                ),
+                None,
+            )
+            if backup:
+                replacement = deepcopy(backup)
+                replacement["replaces"] = place_id
+                prepared.append(replacement)
+                reconciliation[place_id] = _reconciliation(
+                    candidate,
+                    "cannot_currently_fit",
+                    "RAIN_FALLBACK_ACTIVATED",
+                    f"replaced_by:{_candidate_id(backup)}",
+                )
+                fallbacks.append(
+                    {
+                        "primary_id": place_id,
+                        "fallback_id": _candidate_id(backup),
+                        "trigger": "rain",
+                        "status": "activated",
+                        "day_reoptimized": True,
+                    }
+                )
+                continue
+            reconciliation[place_id] = _reconciliation(
+                candidate,
+                "cannot_currently_fit",
+                "NO_VERIFIED_WEATHER_FALLBACK",
+                "broader_replan_required",
+            )
+            continue
+
+        access_gap = _access_gap(snapshot, candidate)
+        if access_gap:
+            reconciliation[place_id] = _reconciliation(
+                candidate,
+                "cannot_currently_fit",
+                access_gap,
+                "verify:" + ",".join(_missing_access_fields(snapshot, place_id)),
+            )
+            continue
+
+        if candidate.get("requires_opening_evidence") and not _verified_fact(
+            snapshot, place_id, "opening_interval"
+        ):
+            reconciliation[place_id] = _reconciliation(
+                candidate,
+                "cannot_currently_fit",
+                "OPENING_UNVERIFIED",
+                "verify_dated_opening_hours",
+            )
+            continue
+        if not _opening_overlaps_trip(snapshot, candidate, config):
+            reconciliation[place_id] = _reconciliation(
+                candidate,
+                "cannot_currently_fit",
+                "CLOSED_AT_AVAILABLE_TIME",
+                "move_date_or_drop_place",
+            )
+            continue
+        if _verified_fact(snapshot, place_id, "show_intervals") and not _show_fits_trip(
+            snapshot, candidate
+        ):
+            reconciliation[place_id] = _reconciliation(
+                candidate,
+                "cannot_currently_fit",
+                "SHOW_TYPE_UNAVAILABLE_AT_TIME",
+                "choose_a_verified_show_time",
+            )
+            continue
+
+        weak_value = _verified_fact(snapshot, place_id, "expected_value_signal")
+        if weak_value and isinstance(weak_value["value"], dict) and weak_value["value"].get(
+            "uniqueness"
+        ) == "low":
+            reconciliation[place_id] = _reconciliation(
+                candidate,
+                "cannot_currently_fit",
+                "WEAK_VALUE_FOR_EFFORT",
+                "keep_as_optional_or_choose_stronger_evidence",
+            )
+            continue
+
+        risk = _verified_fact(snapshot, place_id, "tourist_trap_risk")
+        if risk and risk.get("value") == "high" and _dislikes(snapshot, "tourist_traps"):
+            alternative = next(
+                (item for item in alternatives if item.get("kind") == kind), None
+            )
+            reconciliation[place_id] = _reconciliation(
+                candidate,
+                "cannot_currently_fit",
+                "TOURIST_TRAP_RISK",
+                f"alternative:{_candidate_id(alternative)}" if alternative else "owner_decision",
+            )
+            if alternative:
+                prepared.append(deepcopy(alternative))
+            continue
+
+        queue = _verified_fact(snapshot, place_id, "queue_wait_minutes")
+        if queue and kind == "meal" and _queue_breaks_meal_window(snapshot, candidate, queue):
+            alternative = next(
+                (item for item in alternatives if item.get("kind") == "meal"), None
+            )
+            reconciliation[place_id] = _reconciliation(
+                candidate,
+                "cannot_currently_fit",
+                "QUEUE_CAUSES_LATE_MEAL",
+                f"alternative:{_candidate_id(alternative)}" if alternative else "choose_earlier_meal",
+            )
+            if alternative:
+                prepared.append(deepcopy(alternative))
+            continue
+
+        allowed = _verified_fact(snapshot, place_id, "allowed_transport_modes")
+        if allowed:
+            route = _activity_route(snapshot, candidate, allowed["value"])
+            if not route:
+                reconciliation[place_id] = _reconciliation(
+                    candidate,
+                    "cannot_currently_fit",
+                    "TRANSPORT_MODE_PROHIBITED",
+                    "choose_a_verified_allowed_mode",
+                )
+                continue
+            if _route_breaks_heat_or_cycling(snapshot, route):
+                reconciliation[place_id] = _reconciliation(
+                    candidate,
+                    "cannot_currently_fit",
+                    "HEAT_AND_CYCLING_LOAD",
+                    "choose_a_shorter_or_lower_exposure_mode",
+                )
+                continue
+            candidate["_activity_route"] = route
+        elif len(active) == 1:
+            standalone = _standalone_activity_route(snapshot, place_id)
+            if standalone:
+                if _route_breaks_heat_or_cycling(snapshot, standalone):
+                    reconciliation[place_id] = _reconciliation(
+                        candidate,
+                        "cannot_currently_fit",
+                        "HEAT_AND_CYCLING_LOAD",
+                        "choose_a_shorter_or_lower_exposure_mode",
+                    )
+                    continue
+                candidate["_activity_route"] = standalone
+
+        if candidate.get("requires_route_evidence") and not _has_incident_verified_route(
+            snapshot, place_id
+        ):
+            reconciliation[place_id] = _reconciliation(
+                candidate,
+                "cannot_currently_fit",
+                "ROUTE_UNVERIFIED",
+                "collect_a_verified_route",
+            )
+            continue
+        prepared.append(candidate)
+
+    # Avoid scheduling an original alternative twice when it was promoted above.
+    unique = { _candidate_id(item): item for item in prepared }
+    return {
+        "active": list(unique.values()),
+        "reconciliation": reconciliation,
+        "fallbacks": fallbacks,
+        "hotel_recommendation": _hotel_recommendation(snapshot, candidates),
+        "warnings": warnings,
+    }
+
+
+def _insertion_search(
+    snapshot: dict[str, Any],
+    candidates: list[dict[str, Any]],
+    config: dict[str, Any],
+    *,
+    deadline: float,
+) -> tuple[list[dict[str, Any]], set[str], bool]:
+    dates = [window["date"] for window in snapshot["trip"]["usable_windows"]]
+    states: list[tuple[dict[str, list[dict[str, Any]]], set[str]]] = [
+        ({day: [] for day in dates}, set())
+    ]
+    ordered = sorted(candidates, key=lambda item: _candidate_sort_key(snapshot, item))
+    stopped = False
+    for index, candidate in enumerate(ordered):
+        if monotonic() >= deadline:
+            stopped = True
+            remaining = {_candidate_id(item) for item in ordered[index:]}
+            sequences, skipped = states[0]
+            states = [(sequences, skipped | remaining)]
+            break
+        place_id = _candidate_id(candidate)
+        generated: list[tuple[dict[str, list[dict[str, Any]]], set[str]]] = []
+        for sequences, skipped in states:
+            for day in dates:
+                lock = _lock_for(snapshot, place_id)
+                if lock and lock.get("date") and lock["date"] != day:
+                    continue
+                for position in range(len(sequences[day]) + 1):
+                    proposal = {key: list(value) for key, value in sequences.items()}
+                    proposal[day].insert(position, candidate)
+                    built = _build_schedules(snapshot, proposal, config)
+                    if not built["hard_errors"]:
+                        generated.append((proposal, set(skipped)))
+            if candidate.get("priority", "interested") != "must_do":
+                generated.append((sequences, skipped | {place_id}))
+        if not generated:
+            sequences, skipped = states[0]
+            generated = [(sequences, skipped | {place_id})]
+
+        unique: dict[tuple[Any, ...], tuple[dict[str, list[dict[str, Any]]], set[str]]] = {}
+        for state in generated:
+            signature = tuple(
+                (day, tuple(_candidate_id(item) for item in state[0][day])) for day in dates
+            )
+            unique.setdefault(signature, state)
+        processed = ordered[: index + 1]
+        states = sorted(
+            unique.values(),
+            key=lambda state: _search_objective(
+                snapshot, state[0], state[1], processed, config
+            ),
+        )[:64]
+
+    sequences, skipped = states[0]
+    built = _build_schedules(snapshot, sequences, config)
+    return built["days"], skipped, stopped
+
+
+def _build_schedules(
+    snapshot: dict[str, Any],
+    sequences: dict[str, list[dict[str, Any]]],
+    config: dict[str, Any],
+) -> dict[str, Any]:
+    days = []
+    hard_errors: list[dict[str, Any]] = []
+    candidate_ids = {_candidate_id(item) for values in sequences.values() for item in values}
+    for day, sequence in sequences.items():
+        built = _build_day(snapshot, day, sequence, candidate_ids, config)
+        hard_errors.extend(built["hard_errors"])
+        days.append(built["day"])
+    return {"days": days, "hard_errors": hard_errors}
+
+
+def _build_day(
+    snapshot: dict[str, Any],
+    day: str,
+    sequence: list[dict[str, Any]],
+    candidate_ids: set[str],
+    config: dict[str, Any],
+) -> dict[str, Any]:
+    window = _window_for(snapshot, day)
+    current = _minutes(window["start"])
+    window_end = _minutes(window["end"])
+    items: list[dict[str, Any]] = []
+    hard_errors: list[dict[str, Any]] = []
+    previous: str | None = None
+    for candidate in sequence:
+        place_id = _candidate_id(candidate)
+        route = (
+            _best_inbound_route(snapshot, place_id, candidate_ids)
+            if previous is None
+            else _best_route(snapshot, previous, place_id)
+        )
+        if route:
+            departure = _minutes(route["departure_time"]) if route.get("departure_time") else current
+            if departure < current:
+                hard_errors.append({"code": "MISSED_ROUTE_DEPARTURE", "subject_id": place_id})
+                continue
+            current = _append_wait(items, day, current, departure, "route_departure")
+            route_end = current + int(route.get("duration_minutes", 0))
+            travel_item = _travel_item(
+                day, current, route_end, previous, place_id, route, snapshot
+            )
+            items.append(travel_item)
+            current = route_end
+            boarding = max(
+                int(route.get("boarding_buffer_minutes", 0)),
+                _required_boarding_buffer(snapshot, place_id),
+            )
+            travel_item["boarding_buffer_minutes"] = boarding
+            if boarding:
+                items.append(_buffer_item(day, current, current + boarding, "boarding"))
+                current += boarding
+            if config["buffer_minutes"] and previous is not None:
+                items.append(
+                    _buffer_item(
+                        day,
+                        current,
+                        current + config["buffer_minutes"],
+                        "transfer_contingency",
+                    )
+                )
+                current += config["buffer_minutes"]
+        elif previous is not None and snapshot["trip"].get("requires_route_evidence"):
+            hard_errors.append({"code": "ROUTE_UNVERIFIED", "subject_id": place_id})
+            continue
+
+        activity_route = candidate.get("_activity_route")
+        if activity_route:
+            route_end = current + int(activity_route.get("duration_minutes", 0))
+            items.append(
+                _travel_item(day, current, route_end, place_id, place_id, activity_route, snapshot)
+            )
+            current = route_end
+
+        duration = _duration(candidate, config["duration"])
+        start = _earliest_visit_start(snapshot, candidate, day, current, duration)
+        if start is None:
+            hard_errors.append({"code": "NO_VALID_VISIT_INTERVAL", "subject_id": place_id})
+            continue
+        current = _append_wait(items, day, current, start, "timing_window")
+        end = start + duration
+        if end > window_end:
+            hard_errors.append({"code": "DAY_WINDOW_EXCEEDED", "subject_id": place_id})
+            continue
+        items.append(
+            {
+                "type": "visit",
+                "subject_id": place_id,
+                "name": candidate.get("name") or place_id,
+                "names": candidate.get("names", {}),
+                "kind": candidate.get("kind", "attraction"),
+                "date": day,
+                "start": _clock(start),
+                "end": _clock(end),
+                "duration_minutes": duration,
+                "priority": candidate.get("priority", "interested"),
+                "score": float(candidate.get("score", 10)),
+                "replaces": candidate.get("replaces"),
+            }
+        )
+        current = end
+        previous = place_id
+    return {
+        "day": {
+            "date": day,
+            "window": {"start": window["start"], "end": window["end"]},
+            "items": items,
+        },
+        "hard_errors": hard_errors,
+    }
+
+
+def _schedule_metrics(
+    snapshot: dict[str, Any], days: list[dict[str, Any]]
+) -> dict[str, Any]:
+    visits = [item for day in days for item in day["items"] if item["type"] == "visit"]
+    travel = [item for day in days for item in day["items"] if item["type"] == "travel"]
+    buffers = [item for day in days for item in day["items"] if item["type"] == "buffer"]
+    plain_walk = sum(
+        item.get("walking_minutes", 0)
+        for item in travel
+        if not item.get("experience_evidence")
+    )
+    rewarding_walk = sum(
+        item.get("walking_minutes", 0)
+        for item in travel
+        if item.get("experience_evidence")
+    )
+    warnings = []
+    for item in travel:
+        if item.get("claimed_experience") and not item.get("experience_supported_at_time"):
+            warnings.append("ROUTE_EXPERIENCE_NOT_SUPPORTED_AT_SCHEDULED_TIME")
+        if _crowd_risk(snapshot, item["destination_id"]) in {"medium", "high"}:
+            warnings.append("CROWD_CONSEQUENCE_VISIBLE")
+    return {
+        "scheduled_visits": len(visits),
+        "visit_minutes": sum(item["duration_minutes"] for item in visits),
+        "travel_minutes": sum(item["duration_minutes"] for item in travel),
+        "walking_minutes": sum(item.get("walking_minutes", 0) for item in travel),
+        "plain_walking_minutes": plain_walk,
+        "rewarding_walking_minutes": rewarding_walk,
+        "cycling_minutes": sum(
+            item["duration_minutes"] for item in travel if item.get("mode") == "bike"
+        ),
+        "buffer_minutes": sum(item["duration_minutes"] for item in buffers),
+        "maximum_walking_minutes_per_leg": max(
+            (item.get("walking_minutes", 0) for item in travel), default=0
+        ),
+        "maximum_boarding_buffer_minutes": max(
+            (item.get("boarding_buffer_minutes", 0) for item in travel), default=0
+        ),
+        "selected_modes": sorted({item.get("mode") for item in travel if item.get("mode")}),
+        "route_experience_value": sum(
+            1 for item in travel if item.get("experience_supported_at_time")
+        ),
+        "warnings": warnings,
+    }
+
+
+def _objective(
+    snapshot: dict[str, Any],
+    selected: list[dict[str, Any]],
+    scheduled_ids: set[str],
+    metrics: dict[str, Any],
+    reconciliation: list[dict[str, Any]],
+) -> dict[str, Any]:
+    must = {
+        _candidate_id(item) for item in selected if item.get("priority") == "must_do"
+    }
+    comfort = _comfort_violation_count(snapshot, metrics) + sum(
+        1 for item in reconciliation if item["status"] == "fits_with_tradeoff"
+    )
+    experience = sum(
+        float(item.get("score", 10))
+        for item in selected
+        if _candidate_id(item) in scheduled_ids
+    )
+    lower = sum(
+        1
+        for item in selected
+        if _candidate_id(item) in scheduled_ids
+        and item.get("priority", "interested") != "must_do"
+    )
+    return {
+        "hard_violations": 0,
+        "must_do_unscheduled": len(must - scheduled_ids),
+        "comfort_violations": comfort,
+        "experience_value": round(experience, 2),
+        "dead_travel_minutes": metrics["travel_minutes"],
+        "lower_priority_scheduled": lower,
+    }
+
+
+def _greedy_baseline(
+    snapshot: dict[str, Any],
+    candidates: list[dict[str, Any]],
+    selected: list[dict[str, Any]],
+    config: dict[str, Any],
+) -> dict[str, Any]:
+    dates = [window["date"] for window in snapshot["trip"]["usable_windows"]]
+    sequences = {day: [] for day in dates}
+    skipped: set[str] = set()
+    for candidate in sorted(candidates, key=lambda item: _candidate_sort_key(snapshot, item)):
+        placed = False
+        for day in dates:
+            lock = _lock_for(snapshot, _candidate_id(candidate))
+            if lock and lock.get("date") and lock["date"] != day:
+                continue
+            proposal = {key: list(value) for key, value in sequences.items()}
+            proposal[day].append(candidate)
+            if not _build_schedules(snapshot, proposal, config)["hard_errors"]:
+                sequences = proposal
+                placed = True
+                break
+        if not placed:
+            skipped.add(_candidate_id(candidate))
+    built = _build_schedules(snapshot, sequences, config)
+    metrics = _schedule_metrics(snapshot, built["days"])
+    scheduled = {
+        item["subject_id"]
+        for day in built["days"]
+        for item in day["items"]
+        if item["type"] == "visit"
+    }
+    objective = _objective(snapshot, selected, scheduled, metrics, [])
+    objective["hard_violations"] = len(built["hard_errors"]) + _missing_route_edges(
+        snapshot, sequences
+    )
+    objective_tuple = [
+        objective["hard_violations"],
+        objective["must_do_unscheduled"],
+        objective["comfort_violations"],
+        -objective["experience_value"],
+        objective["dead_travel_minutes"],
+        -objective["lower_priority_scheduled"],
+    ]
+    return {
+        "objective": objective,
+        "objective_tuple": objective_tuple,
+        "scheduled_place_ids": sorted(scheduled),
+        "skipped_place_ids": sorted(skipped),
+    }
+
+
+def _search_objective(
+    snapshot: dict[str, Any],
+    sequences: dict[str, list[dict[str, Any]]],
+    skipped: set[str],
+    processed: list[dict[str, Any]],
+    config: dict[str, Any],
+) -> tuple[Any, ...]:
+    built = _build_schedules(snapshot, sequences, config)
+    metrics = _schedule_metrics(snapshot, built["days"])
+    missing_route_edges = _missing_route_edges(snapshot, sequences)
+    scheduled = {
+        item["subject_id"]
+        for day in built["days"]
+        for item in day["items"]
+        if item["type"] == "visit"
+    }
+    must_missing = sum(
+        1
+        for item in processed
+        if item.get("priority") == "must_do" and _candidate_id(item) not in scheduled
+    )
+    soft = _comfort_violation_count(snapshot, metrics)
+    experience = sum(float(item.get("score", 10)) for item in processed if _candidate_id(item) in scheduled)
+    lower = sum(
+        1
+        for item in processed
+        if _candidate_id(item) in scheduled and item.get("priority", "interested") != "must_do"
+    )
+    return (
+        len(built["hard_errors"]),
+        missing_route_edges,
+        must_missing,
+        soft,
+        -experience,
+        metrics["travel_minutes"],
+        -lower,
+        len(skipped),
+        tuple(tuple(_candidate_id(item) for item in sequences[day]) for day in sequences),
+    )
+
+
+def _comfort_violation_count(snapshot: dict[str, Any], metrics: dict[str, Any]) -> int:
+    thresholds = _thresholds(snapshot)
+    count = 0
+    if metrics["plain_walking_minutes"] > int(
+        thresholds.get("plain_walking_minutes_per_day", 10**9)
+    ):
+        count += 1
+    if metrics["maximum_walking_minutes_per_leg"] > int(
+        thresholds.get("walking_minutes_per_leg", 10**9)
+    ):
+        count += 1
+    if metrics["cycling_minutes"] > int(thresholds.get("cycling_minutes_per_day", 10**9)):
+        count += 1
+    return count
+
+
+def _apply_physical_load_limit(
+    snapshot: dict[str, Any], candidates: list[dict[str, Any]]
+) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
+    limit = _thresholds(snapshot).get("physical_load_points_per_day")
+    if limit is None:
+        return candidates, {}
+    active = list(candidates)
+    removed: dict[str, dict[str, Any]] = {}
+    while sum(float(item.get("physical_load_points", 0)) for item in active) > float(limit):
+        removable = [item for item in active if item.get("priority") != "must_do"]
+        if not removable:
+            break
+        candidate = max(
+            removable,
+            key=lambda item: (
+                PRIORITY_ORDER.get(item.get("priority", "interested"), 9),
+                float(item.get("physical_load_points", 0)),
+                _candidate_id(item),
+            ),
+        )
+        active.remove(candidate)
+        removed[_candidate_id(candidate)] = _reconciliation(
+            candidate,
+            "cannot_currently_fit",
+            "FATIGUE_THRESHOLD",
+            f"daily_load_limit:{limit}",
+        )
+    return active, removed
+
+
+def _hotel_recommendation(
+    snapshot: dict[str, Any], candidates: dict[str, dict[str, Any]]
+) -> dict[str, Any] | None:
+    if snapshot["trip"].get("accommodation_status") != "unbooked":
+        return None
+    hotels = [item for item in candidates.values() if item.get("kind") == "hotel_area"]
+    destinations = [
+        item
+        for item in _selected_candidates(snapshot)
+        if item.get("kind") != "hotel_area"
+    ]
+    if not hotels:
+        return None
+    scored = []
+    for hotel in hotels:
+        hotel_id = _candidate_id(hotel)
+        total = 0
+        missing = 0
+        for destination in destinations:
+            routes = _routes_between(snapshot, hotel_id, _candidate_id(destination), symmetric=True)
+            if routes:
+                total += min(int(route.get("duration_minutes", 0)) for route in routes)
+            else:
+                missing += 1
+        scored.append((missing, total, hotel_id))
+    scored.sort()
+    winner = scored[0]
+    runner = scored[1] if len(scored) > 1 else None
+    return {
+        "default_area_id": winner[2],
+        "total_known_travel_minutes": winner[1],
+        "missing_route_count": winner[0],
+        "runner_up_area_id": runner[2] if runner else None,
+        "runner_up_total_known_travel_minutes": runner[1] if runner else None,
+        "travel_delta_minutes": (runner[1] - winner[1]) if runner else None,
+        "pros": ["lower_whole_trip_known_travel"],
+        "cons": ["hotel_quality_price_and_room_fit_not_evaluated"],
+    }
+
+
+def _stay_recommendations(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    minutes = sum(_duration(item, "ideal") + 30 for item in candidates)
+    minimum = max(1, ceil(minutes / 540))
+    balanced = max(minimum, ceil(minutes / 420))
+    relaxed = max(balanced, ceil(minutes / 330))
+    return [
+        {"id": "minimum", "days": minimum, "daily_capacity_minutes": 540},
+        {"id": "balanced", "days": balanced, "daily_capacity_minutes": 420},
+        {"id": "relaxed", "days": relaxed, "daily_capacity_minutes": 330},
+    ]
+
+
+def _validate_input(snapshot: dict[str, Any]) -> None:
+    required = {"trip", "travellers", "candidates", "facts", "routes", "locks", "weights", "thresholds"}
+    if not isinstance(snapshot, dict) or required - set(snapshot):
+        raise ValueError(f"Optimizer input is missing fields: {sorted(required - set(snapshot or {}))}")
+    if not isinstance(snapshot["trip"], dict):
+        raise ValueError("trip must be an object")
+    for field in required - {"trip", "weights", "thresholds"}:
+        if not isinstance(snapshot[field], list):
+            raise ValueError(f"{field} must be a list")
+    ids = [_candidate_id(item) for item in snapshot["candidates"]]
+    if any(not item for item in ids) or len(ids) != len(set(ids)):
+        raise ValueError("Candidate IDs must be non-empty and unique")
+    windows = snapshot["trip"].get("usable_windows", [])
+    dates = snapshot["trip"].get("local_dates", [])
+    if dates and (not windows or {item["date"] for item in windows} != set(dates)):
+        raise ValueError("Every local date needs exactly one usable window")
+    for window in windows:
+        date.fromisoformat(window["date"])
+        if _minutes(window["start"]) >= _minutes(window["end"]):
+            raise ValueError("Usable window end must be after start")
+
+
+def _selected_candidates(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        item
+        for item in snapshot["candidates"]
+        if item.get("priority", "interested")
+        not in {"backup", "alternative", "not_for_trip"}
+        and item.get("kind") != "hotel_area"
+    ]
+
+
+def _candidate_id(candidate: dict[str, Any]) -> str:
+    return str(candidate.get("id") or candidate.get("place_id") or "")
+
+
+def _candidate_sort_key(snapshot: dict[str, Any], candidate: dict[str, Any]) -> tuple[Any, ...]:
+    place_id = _candidate_id(candidate)
+    preferred = _verified_fact(snapshot, place_id, "best_time_interval") or _verified_fact(
+        snapshot, place_id, "opening_interval"
+    )
+    start = _minutes(preferred["value"]["start"]) if preferred else 0
+    return (
+        PRIORITY_ORDER.get(candidate.get("priority", "interested"), 9),
+        start,
+        place_id,
+    )
+
+
+def _duration(candidate: dict[str, Any], choice: str) -> int:
+    bounds = candidate.get("duration_bounds") or {}
+    if bounds:
+        key = {"minimum": "minimum_minutes", "ideal": "ideal_minutes", "maximum": "maximum_minutes"}[choice]
+        fallback = bounds.get("ideal_minutes") or bounds.get("minimum_minutes") or 0
+        return max(0, int(bounds.get(key, fallback)))
+    return max(0, int(candidate.get("duration_minutes", 0)))
+
+
+def _opening_overlaps_trip(
+    snapshot: dict[str, Any], candidate: dict[str, Any], config: dict[str, Any]
+) -> bool:
+    fact = _verified_fact(snapshot, _candidate_id(candidate), "opening_interval")
+    if not fact:
+        return True
+    duration = _duration(candidate, config["duration"])
+    opening = fact["value"]
+    return any(
+        max(_minutes(window["start"]), _minutes(opening["start"])) + duration
+        <= min(_minutes(window["end"]), _minutes(opening["end"]))
+        for window in snapshot["trip"]["usable_windows"]
+    )
+
+
+def _show_fits_trip(snapshot: dict[str, Any], candidate: dict[str, Any]) -> bool:
+    fact = _verified_fact(snapshot, _candidate_id(candidate), "show_intervals")
+    if not fact:
+        return True
+    return any(
+        _minutes(window["start"]) <= _minutes(show["start"])
+        and _minutes(show["end"]) <= _minutes(window["end"])
+        for window in snapshot["trip"]["usable_windows"]
+        for show in fact["value"]
+    )
+
+
+def _earliest_visit_start(
+    snapshot: dict[str, Any],
+    candidate: dict[str, Any],
+    day: str,
+    current: int,
+    duration: int,
+) -> int | None:
+    place_id = _candidate_id(candidate)
+    window = _window_for(snapshot, day)
+    latest = _minutes(window["end"])
+    start = current
+    opening = _verified_fact(snapshot, place_id, "opening_interval")
+    if opening:
+        start = max(start, _minutes(opening["value"]["start"]))
+        latest = min(latest, _minutes(opening["value"]["end"]))
+    show = _verified_fact(snapshot, place_id, "show_intervals")
+    if show:
+        starts = [
+            _minutes(item["start"])
+            for item in show["value"]
+            if _minutes(item["start"]) >= start
+            and _minutes(item["end"]) <= _minutes(window["end"])
+        ]
+        return min(starts) if starts else None
+    best = _verified_fact(snapshot, place_id, "best_time_interval")
+    if best and max(start, _minutes(best["value"]["start"])) + duration <= min(
+        latest, _minutes(best["value"]["end"])
+    ):
+        start = max(start, _minutes(best["value"]["start"]))
+        latest = min(latest, _minutes(best["value"]["end"]))
+    meal = _meal_window(snapshot) if candidate.get("kind") == "meal" else None
+    if meal:
+        start = max(start, _minutes(meal["start"]))
+        latest = min(latest, _minutes(meal["end"]))
+    lock = _lock_for(snapshot, place_id)
+    if lock:
+        if lock.get("date") and lock["date"] != day:
+            return None
+        if lock.get("start"):
+            locked_start = _minutes(lock["start"])
+            if locked_start < start:
+                return None
+            start = locked_start
+        if lock.get("end"):
+            latest = min(latest, _minutes(lock["end"]))
+    return start if start + duration <= latest else None
+
+
+def _verified_fact(
+    snapshot: dict[str, Any], subject_id: str, fact_type: str
+) -> dict[str, Any] | None:
+    return next(
+        (
+            fact
+            for fact in snapshot.get("facts", [])
+            if fact.get("subject_id") == subject_id
+            and fact.get("fact_type") == fact_type
+            and fact.get("status") == "verified"
+            and fact.get("value") is not None
+        ),
+        None,
+    )
+
+
+def _access_gap(snapshot: dict[str, Any], candidate: dict[str, Any]) -> str | None:
+    place_id = _candidate_id(candidate)
+    access = [
+        fact
+        for fact in snapshot.get("facts", [])
+        if fact.get("subject_id") == place_id and fact.get("fact_type") in ACCESS_FACT_TYPES
+    ]
+    if any(fact.get("status") in {"unavailable", "stale", "conflicting", "error"} for fact in access):
+        return "ENTRANCE_UNVERIFIED" if any(
+            fact.get("fact_type") in {"entrance_coordinate", "approach_instruction"}
+            for fact in access
+        ) else "ACCESS_UNVERIFIED"
+    if candidate.get("requires_access_evidence") and not any(
+        fact.get("status") == "verified" and fact.get("value") is not None for fact in access
+    ):
+        return "ACCESS_UNVERIFIED"
+    return None
+
+
+def _missing_access_fields(snapshot: dict[str, Any], place_id: str) -> list[str]:
+    missing = [
+        str(fact.get("fact_type"))
+        for fact in snapshot.get("facts", [])
+        if fact.get("subject_id") == place_id
+        and fact.get("fact_type") in ACCESS_FACT_TYPES
+        and (fact.get("status") != "verified" or fact.get("value") is None)
+    ]
+    return sorted(missing) or ["access"]
+
+
+def _dislikes(snapshot: dict[str, Any], value: str) -> bool:
+    return any(
+        value in traveller.get("preferences", {}).get("dislikes", [])
+        for traveller in snapshot.get("travellers", [])
+    ) or value in snapshot.get("preferences", {}).get("dislikes", [])
+
+
+def _queue_breaks_meal_window(
+    snapshot: dict[str, Any], candidate: dict[str, Any], queue: dict[str, Any]
+) -> bool:
+    meal = _meal_window(snapshot)
+    if not meal:
+        return False
+    earliest = min(
+        _minutes(window["start"]) for window in snapshot["trip"]["usable_windows"]
+    )
+    finish = max(earliest, _minutes(meal["start"])) + int(queue["value"]) + _duration(candidate, "ideal")
+    return finish > _minutes(meal["end"])
+
+
+def _activity_route(
+    snapshot: dict[str, Any], candidate: dict[str, Any], allowed_modes: list[str]
+) -> dict[str, Any] | None:
+    routes = [
+        route
+        for route in snapshot.get("routes", [])
+        if route.get("status") == "verified" and route.get("mode") in set(allowed_modes)
+    ]
+    if not routes:
+        return None
+    thresholds = _thresholds(snapshot)
+    heat_high = any(
+        fact.get("fact_type") == "heat_exposure"
+        and fact.get("status") == "verified"
+        and fact.get("value") == "high"
+        for fact in snapshot.get("facts", [])
+    )
+    def key(route: dict[str, Any]) -> tuple[Any, ...]:
+        cycling_over = route.get("mode") == "bike" and int(route.get("duration_minutes", 0)) > int(
+            thresholds.get("cycling_minutes_per_day", 10**9)
+        )
+        heat_penalty = route.get("mode") in {"bike", "walk"} and heat_high
+        walk_over = int(route.get("walking_minutes", 0)) > int(
+            thresholds.get("walking_minutes_per_leg", 10**9)
+        )
+        return cycling_over, heat_penalty, walk_over, int(route.get("duration_minutes", 0)), str(route.get("mode"))
+    return deepcopy(min(routes, key=key))
+
+
+def _standalone_activity_route(
+    snapshot: dict[str, Any], place_id: str
+) -> dict[str, Any] | None:
+    if _has_incident_verified_route(snapshot, place_id):
+        return None
+    routes = [
+        route for route in snapshot.get("routes", []) if route.get("status") == "verified"
+    ]
+    if not routes:
+        return None
+    allowed = [str(route.get("mode")) for route in routes]
+    return _activity_route(snapshot, {"id": place_id}, allowed)
+
+
+def _route_breaks_heat_or_cycling(snapshot: dict[str, Any], route: dict[str, Any]) -> bool:
+    thresholds = _thresholds(snapshot)
+    if route.get("mode") == "bike" and int(route.get("duration_minutes", 0)) > int(
+        thresholds.get("cycling_minutes_per_day", 10**9)
+    ):
+        return True
+    heat_limit = thresholds.get("heat_exposure")
+    heat_high = any(
+        fact.get("fact_type") == "heat_exposure"
+        and fact.get("status") == "verified"
+        and fact.get("value") == "high"
+        for fact in snapshot.get("facts", [])
+    )
+    return bool(heat_high and heat_limit in {"low", "medium"} and route.get("mode") in {"walk", "bike"})
+
+
+def _best_route(snapshot: dict[str, Any], origin: str, destination: str) -> dict[str, Any] | None:
+    routes = _routes_between(snapshot, origin, destination)
+    if not routes:
+        hotel_ids = {
+            _candidate_id(item)
+            for item in snapshot.get("candidates", [])
+            if item.get("kind") == "hotel_area"
+        }
+        for hotel_id in sorted(hotel_ids):
+            first = _routes_between(snapshot, origin, hotel_id)
+            second = _routes_between(snapshot, hotel_id, destination)
+            if first and second:
+                left = min(first, key=lambda item: int(item.get("duration_minutes", 0)))
+                right = min(second, key=lambda item: int(item.get("duration_minutes", 0)))
+                routes.append(
+                    {
+                        "origin_id": origin,
+                        "destination_id": destination,
+                        "mode": left.get("mode")
+                        if left.get("mode") == right.get("mode")
+                        else "mixed",
+                        "duration_minutes": int(left.get("duration_minutes", 0))
+                        + int(right.get("duration_minutes", 0)),
+                        "walking_minutes": int(left.get("walking_minutes", 0))
+                        + int(right.get("walking_minutes", 0)),
+                        "distance_m": None,
+                        "status": "verified",
+                        "via": [hotel_id],
+                        "experience_evidence": [],
+                    }
+                )
+                break
+    if not routes:
+        return None
+    walk_limit = int(_thresholds(snapshot).get("walking_minutes_per_leg", 10**9))
+    return deepcopy(
+        min(
+            routes,
+            key=lambda item: (
+                int(item.get("walking_minutes", 0)) > walk_limit,
+                int(item.get("duration_minutes", 0)),
+                int(item.get("walking_minutes", 0)),
+                str(item.get("mode")),
+            ),
+        )
+    )
+
+
+def _best_inbound_route(
+    snapshot: dict[str, Any], destination: str, candidate_ids: set[str]
+) -> dict[str, Any] | None:
+    routes = [
+        route
+        for route in snapshot.get("routes", [])
+        if route.get("status") == "verified"
+        and route.get("destination_id") == destination
+        and route.get("origin_id") not in candidate_ids
+    ]
+    return deepcopy(min(routes, key=lambda item: int(item.get("duration_minutes", 0)))) if routes else None
+
+
+def _routes_between(
+    snapshot: dict[str, Any], origin: str, destination: str, *, symmetric: bool = False
+) -> list[dict[str, Any]]:
+    return [
+        route
+        for route in snapshot.get("routes", [])
+        if route.get("status") == "verified"
+        and (
+            (route.get("origin_id") == origin and route.get("destination_id") == destination)
+            or (
+                symmetric
+                and route.get("origin_id") == destination
+                and route.get("destination_id") == origin
+            )
+        )
+    ]
+
+
+def _has_verified_route_between(snapshot: dict[str, Any], left: str, right: str) -> bool:
+    return bool(_routes_between(snapshot, left, right, symmetric=True))
+
+
+def _fallback_route_compatible(snapshot: dict[str, Any], left: str, right: str) -> bool:
+    if _has_verified_route_between(snapshot, left, right):
+        return True
+    left_origins = {
+        route.get("origin_id")
+        for route in snapshot.get("routes", [])
+        if route.get("status") == "verified" and route.get("destination_id") == left
+    }
+    right_origins = {
+        route.get("origin_id")
+        for route in snapshot.get("routes", [])
+        if route.get("status") == "verified" and route.get("destination_id") == right
+    }
+    return bool(left_origins & right_origins)
+
+
+def _missing_route_edges(
+    snapshot: dict[str, Any], sequences: dict[str, list[dict[str, Any]]]
+) -> int:
+    if not snapshot.get("routes"):
+        return 0
+    incident = {
+        str(endpoint)
+        for route in snapshot["routes"]
+        if route.get("status") == "verified"
+        for endpoint in (route.get("origin_id"), route.get("destination_id"))
+        if endpoint
+    }
+    return sum(
+        1
+        for sequence in sequences.values()
+        for left, right in zip(sequence, sequence[1:])
+        if _candidate_id(left) in incident
+        and _candidate_id(right) in incident
+        and not _best_route(snapshot, _candidate_id(left), _candidate_id(right))
+    )
+
+
+def _has_incident_verified_route(snapshot: dict[str, Any], place_id: str) -> bool:
+    return any(
+        route.get("status") == "verified"
+        and place_id in {route.get("origin_id"), route.get("destination_id")}
+        for route in snapshot.get("routes", [])
+    )
+
+
+def _travel_item(
+    day: str,
+    start: int,
+    end: int,
+    origin: str | None,
+    destination: str,
+    route: dict[str, Any],
+    snapshot: dict[str, Any],
+) -> dict[str, Any]:
+    claimed = route.get("claimed_experience")
+    supported = _route_experience_supported(snapshot, claimed, start) if claimed else False
+    return {
+        "type": "travel",
+        "subject_id": f"{origin or 'start'}->{destination}",
+        "origin_id": origin or route.get("origin_id"),
+        "destination_id": destination,
+        "date": day,
+        "start": _clock(start),
+        "end": _clock(end),
+        "duration_minutes": end - start,
+        "mode": route.get("mode"),
+        "walking_minutes": int(route.get("walking_minutes", 0)),
+        "distance_m": route.get("distance_m"),
+        "transfers": route.get("transfers"),
+        "boarding_buffer_minutes": int(route.get("boarding_buffer_minutes", 0)),
+        "experience_evidence": list(route.get("experience_evidence", [])),
+        "claimed_experience": claimed,
+        "experience_supported_at_time": supported,
+        "status": route.get("status"),
+    }
+
+
+def _route_experience_supported(
+    snapshot: dict[str, Any], claimed: str | None, departure: int
+) -> bool:
+    if not claimed:
+        return False
+    fact = _verified_fact(snapshot, claimed, "supported_view_interval")
+    return bool(
+        fact
+        and fact["value"]
+        and _minutes(fact["value"]["start"]) <= departure <= _minutes(fact["value"]["end"])
+    )
+
+
+def _required_boarding_buffer(snapshot: dict[str, Any], place_id: str) -> int:
+    if _crowd_risk(snapshot, place_id) != "high":
+        return 0
+    return int(_thresholds(snapshot).get("minimum_boarding_buffer_minutes", 0))
+
+
+def _crowd_risk(snapshot: dict[str, Any], place_id: str) -> str | None:
+    fact = _verified_fact(snapshot, place_id, "crowd_risk")
+    return str(fact["value"]) if fact else None
+
+
+def _meal_window(snapshot: dict[str, Any]) -> dict[str, str] | None:
+    value = _thresholds(snapshot).get("meal_window")
+    return value if isinstance(value, dict) and value.get("start") and value.get("end") else None
+
+
+def _thresholds(snapshot: dict[str, Any]) -> dict[str, Any]:
+    result = dict(snapshot.get("thresholds", {}))
+    for traveller in snapshot.get("travellers", []):
+        for key, value in traveller.get("comfort_thresholds", {}).items():
+            if key not in result:
+                result[key] = value
+            elif isinstance(value, (int, float)) and isinstance(result[key], (int, float)):
+                result[key] = min(result[key], value)
+    return result
+
+
+def _lock_for(snapshot: dict[str, Any], place_id: str) -> dict[str, Any] | None:
+    return next(
+        (
+            lock
+            for lock in snapshot.get("locks", [])
+            if str(lock.get("subject_id") or lock.get("place_id")) == place_id
+        ),
+        None,
+    )
+
+
+def _window_for(snapshot: dict[str, Any], day: str) -> dict[str, Any]:
+    return next(item for item in snapshot["trip"]["usable_windows"] if item["date"] == day)
+
+
+def _reconciliation(
+    candidate: dict[str, Any], status: str, reason: str, consequence: str
+) -> dict[str, Any]:
+    return {
+        "place_id": _candidate_id(candidate),
+        "name": candidate.get("name") or _candidate_id(candidate),
+        "names": candidate.get("names", {}),
+        "priority": candidate.get("priority", "interested"),
+        "status": status,
+        "reason": reason,
+        "consequence": consequence,
+        "smallest_alternative": consequence,
+        "owner_acceptance_required": status == "fits_with_tradeoff",
+    }
+
+
+def _skip_reason(
+    snapshot: dict[str, Any], candidate: dict[str, Any], skipped: set[str]
+) -> str:
+    if _candidate_id(candidate) not in skipped:
+        return "NO_TIME_CAPACITY"
+    thresholds = _thresholds(snapshot)
+    if thresholds.get("plain_walking_minutes_per_day") is not None:
+        return "PLAIN_WALK_THRESHOLD"
+    if thresholds.get("walking_minutes_per_leg") is not None:
+        if any(route.get("departure_time") for route in snapshot.get("routes", [])):
+            return "EFFORT_OR_TIME_CONFLICT"
+        return "LONG_TRANSFER_WALK"
+    return "NO_TIME_CAPACITY"
+
+
+def _buffer_item(day: str, start: int, end: int, reason: str) -> dict[str, Any]:
+    return {
+        "type": "buffer",
+        "subject_id": reason,
+        "date": day,
+        "start": _clock(start),
+        "end": _clock(end),
+        "duration_minutes": end - start,
+        "reason": reason,
+    }
+
+
+def _append_wait(
+    items: list[dict[str, Any]], day: str, current: int, target: int, reason: str
+) -> int:
+    if target > current:
+        items.append(_buffer_item(day, current, target, reason))
+    return max(current, target)
+
+
+def _inside(item: dict[str, Any], interval: dict[str, Any]) -> bool:
+    return _minutes(interval["start"]) <= _minutes(item["start"]) and _minutes(
+        item["end"]
+    ) <= _minutes(interval["end"])
+
+
+def _minutes(value: str) -> int:
+    try:
+        hour, minute = value.split(":", 1)
+        result = int(hour) * 60 + int(minute)
+    except (AttributeError, TypeError, ValueError) as error:
+        raise ValueError(f"Invalid local time: {value!r}") from error
+    if not (0 <= result <= 24 * 60) or int(minute) >= 60:
+        raise ValueError(f"Invalid local time: {value!r}")
+    return result
+
+
+def _clock(value: int) -> str:
+    return f"{value // 60:02d}:{value % 60:02d}"
+
+
+def date_range(start: str, end: str) -> list[str]:
+    """Small shared helper for application snapshot assembly."""
+
+    first, last = date.fromisoformat(start), date.fromisoformat(end)
+    return [
+        (first + timedelta(days=offset)).isoformat()
+        for offset in range((last - first).days + 1)
+    ]

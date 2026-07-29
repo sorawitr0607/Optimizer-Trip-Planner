@@ -1,0 +1,152 @@
+{
+  "Main/build_project_graph.py": {
+    "mtime": 1785273731.6280773,
+    "ast_hash": "0c54461478b5bd47a2f46a72b554aa27",
+    "semantic_hash": "0c54461478b5bd47a2f46a72b554aa27"
+  },
+  "Main/check_provider_access.py": {
+    "mtime": 1785251698.0189724,
+    "ast_hash": "cb23394124d77b1d29d27c498439ab94",
+    "semantic_hash": "cb23394124d77b1d29d27c498439ab94"
+  },
+  "Main/validate_regression_fixtures.py": {
+    "mtime": 1785272061.300913,
+    "ast_hash": "9603ecbfae9bfc1e07a3906dd59287b4",
+    "semantic_hash": "9603ecbfae9bfc1e07a3906dd59287b4"
+  },
+  "app.py": {
+    "mtime": 1785273452.643644,
+    "ast_hash": "6c0dfb1eba0cce07f9da00a30b714a98",
+    "semantic_hash": "6c0dfb1eba0cce07f9da00a30b714a98"
+  },
+  "pyproject.toml": {
+    "mtime": 1785273242.327111,
+    "ast_hash": "82da69464a6a5310606148807fef4a01",
+    "semantic_hash": "82da69464a6a5310606148807fef4a01"
+  },
+  "tests/fixtures/historic_regressions.json": {
+    "mtime": 1785271887.5343592,
+    "ast_hash": "0f0b97bc1702fe704a6233c14f3c26b1",
+    "semantic_hash": "0f0b97bc1702fe704a6233c14f3c26b1"
+  },
+  "tests/test_foundation.py": {
+    "mtime": 1785273452.6443574,
+    "ast_hash": "f05d39fbe2cfc88c07c000293b15f998",
+    "semantic_hash": "f05d39fbe2cfc88c07c000293b15f998"
+  },
+  "tests/test_graph_builder.py": {
+    "mtime": 1785273731.6286876,
+    "ast_hash": "30d08dd9c7fddb870e8d0513c7252c9c",
+    "semantic_hash": "30d08dd9c7fddb870e8d0513c7252c9c"
+  },
+  "travel_planner/__init__.py": {
+    "mtime": 1785273242.3273497,
+    "ast_hash": "ef0aefdeae9a5f201e587415c32b8a5b",
+    "semantic_hash": "ef0aefdeae9a5f201e587415c32b8a5b"
+  },
+  "travel_planner/actions.py": {
+    "mtime": 1785273242.328139,
+    "ast_hash": "869abe563e3e823a6553ed777b43c6c5",
+    "semantic_hash": "869abe563e3e823a6553ed777b43c6c5"
+  },
+  "travel_planner/core.py": {
+    "mtime": 1785273271.0880966,
+    "ast_hash": "b539401b927b4b8ab2932abaf19593cf",
+    "semantic_hash": "b539401b927b4b8ab2932abaf19593cf"
+  },
+  "travel_planner/store.py": {
+    "mtime": 1785273242.3279188,
+    "ast_hash": "1ffecae1bc71009cff49e52edc9681cf",
+    "semantic_hash": "1ffecae1bc71009cff49e52edc9681cf"
+  },
+  ".wayfinder/README.md": {
+    "mtime": 1785221670.9562733,
+    "ast_hash": "e95fbcf1f33044cd5b1f8e80e2151d03",
+    "semantic_hash": "e95fbcf1f33044cd5b1f8e80e2151d03"
+  },
+  ".wayfinder/map.md": {
+    "mtime": 1785272453.1818182,
+    "ast_hash": "f2ea224e665fdb844438af7de7eba063",
+    "semantic_hash": "f2ea224e665fdb844438af7de7eba063"
+  },
+  ".wayfinder/tickets/001-set-phase-1-destination-and-pilot-rules.md": {
+    "mtime": 1785221671.3295286,
+    "ast_hash": "92ddba5ddf2d773865b7f2298728e249",
+    "semantic_hash": "92ddba5ddf2d773865b7f2298728e249"
+  },
+  ".wayfinder/tickets/002-verify-permitted-live-travel-data-and-cost-limits.md": {
+    "mtime": 1785222309.6026385,
+    "ast_hash": "64cedc36a0700a6330e556146fb103f2",
+    "semantic_hash": "64cedc36a0700a6330e556146fb103f2"
+  },
+  ".wayfinder/tickets/003-establish-taipei-countdown-evidence-and-refresh-timing.md": {
+    "mtime": 1785222021.8262224,
+    "ast_hash": "7f5a5e15c989b8632ab50f50e68369da",
+    "semantic_hash": "7f5a5e15c989b8632ab50f50e68369da"
+  },
+  ".wayfinder/tickets/004-choose-the-phase-1-source-stack-and-evidence-policy.md": {
+    "mtime": 1785224623.6548064,
+    "ast_hash": "d35de6834797eae2314d8be515061a2b",
+    "semantic_hash": "d35de6834797eae2314d8be515061a2b"
+  },
+  ".wayfinder/tickets/005-define-trustworthy-attraction-coverage-and-card-ranking.md": {
+    "mtime": 1785256039.511534,
+    "ast_hash": "2077304a40196d5b94ca003be1925686",
+    "semantic_hash": "2077304a40196d5b94ca003be1925686"
+  },
+  ".wayfinder/tickets/006-define-the-strong-cross-day-optimization-contract.md": {
+    "mtime": 1785256885.0693872,
+    "ast_hash": "c33ac89c9e4a7c4f25e3fd0a76e8c91a",
+    "semantic_hash": "c33ac89c9e4a7c4f25e3fd0a76e8c91a"
+  },
+  ".wayfinder/tickets/007-prototype-the-owner-led-setup-and-confirmation-flow.md": {
+    "mtime": 1785266062.36924,
+    "ast_hash": "8b4c45c86ec6143cc86ffd797b7bda67",
+    "semantic_hash": "8b4c45c86ec6143cc86ffd797b7bda67"
+  },
+  ".wayfinder/tickets/008-inspect-the-reference-itinerary-workbooks.md": {
+    "mtime": 1785259318.2176626,
+    "ast_hash": "7a6baa450b04f27325b53e9f1f38e4c0",
+    "semantic_hash": "7a6baa450b04f27325b53e9f1f38e4c0"
+  },
+  ".wayfinder/tickets/009-prototype-the-daily-poster-timeline-map-pdf-and-excel.md": {
+    "mtime": 1785261232.6361697,
+    "ast_hash": "fdc4883aa083c4bd2d845a23e34f4fba",
+    "semantic_hash": "fdc4883aa083c4bd2d845a23e34f4fba"
+  },
+  ".wayfinder/tickets/010-turn-historic-trip-failures-into-regression-fixtures.md": {
+    "mtime": 1785272094.2750397,
+    "ast_hash": "4def6806ad08ee757afe6c3e13980ae5",
+    "semantic_hash": "4def6806ad08ee757afe6c3e13980ae5"
+  },
+  ".wayfinder/tickets/011-choose-the-minimal-phase-1-architecture-and-data-contracts.md": {
+    "mtime": 1785270659.686671,
+    "ast_hash": "8318c340479bc361780fc830d45ca535",
+    "semantic_hash": "8318c340479bc361780fc830d45ca535"
+  },
+  ".wayfinder/tickets/013-make-reference-workbook-inspection-available.md": {
+    "mtime": 1785257909.193544,
+    "ast_hash": "80f734684592a3332caf3837919cb371",
+    "semantic_hash": "80f734684592a3332caf3837919cb371"
+  },
+  ".wayfinder/tickets/014-provision-approved-phase-1-data-access.md": {
+    "mtime": 1785253364.2044358,
+    "ast_hash": "d763a513edeee39a203e8efcab59fde7",
+    "semantic_hash": "d763a513edeee39a203e8efcab59fde7"
+  },
+  ".wayfinder/tickets/015-verify-a-worldwide-core-and-local-enrichment-model.md": {
+    "mtime": 1785224400.766008,
+    "ast_hash": "34edc3af927314510ea50591502c8438",
+    "semantic_hash": "34edc3af927314510ea50591502c8438"
+  },
+  ".wayfinder/tickets/016-define-the-constrained-genai-plan-revision-assistant.md": {
+    "mtime": 1785264344.9363194,
+    "ast_hash": "3f12337df1708de82ed8d0c78f965c43",
+    "semantic_hash": "3f12337df1708de82ed8d0c78f965c43"
+  },
+  ".wayfinder/tickets/017-define-the-worldwide-pre-trip-readiness-checklist.md": {
+    "mtime": 1785258989.7675529,
+    "ast_hash": "8eb597e61207566090c77928cafd0113",
+    "semantic_hash": "8eb597e61207566090c77928cafd0113"
+  }
+}
