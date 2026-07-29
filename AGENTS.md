@@ -20,3 +20,12 @@
 - Keep Graphify fixes and guardrails in this file so future sessions loading
   this repository inherit the workflow; the installed `graphify` skill remains
   available globally for new sessions that trigger it.
+
+## Validation evidence belongs in bundles
+
+- Ticket 012 is an index. Put each validation run's numbers in
+  `artifacts/validation/<run-id>/manifest.json` and narrative in a notes file
+  beside it, then link them from the ticket in one line.
+- Appending long evidence prose to that ticket has twice starved its Graphify
+  extraction, which fails the build with `Extraction produced no node for WF-012`.
+  Keep the file short and the rebuild keeps working.
