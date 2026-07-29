@@ -422,6 +422,44 @@ TEXT = {
         "hours_usable": "Places with a verified window",
         "hours_cost": "One paid lookup per selected place, about US$0.025 each, cached for 3 days.",
         "hours_unusable": "Places with no usable window",
+        "revision": "Revise the plan",
+        "revision_help": "Quick actions change constraints, then the optimizer rebuilds the plan. Nothing is applied until you press Apply.",
+        "revision_needs_plan": "Activate a plan before revising it.",
+        "quick_action": "Quick action",
+        "run_action": "Preview this change",
+        "pending_revision": "Pending revision",
+        "revision_assumptions": "Assumptions",
+        "apply_revision": "Apply",
+        "cancel_revision": "Cancel",
+        "revision_applied": "Revision applied.",
+        "revision_discarded": "Pending revision discarded.",
+        "revision_blocked": "This revision cannot be applied yet: the rebuilt plan does not pass validation.",
+        "changed_days": "Changed days",
+        "no_changes": "No scheduled item changed.",
+        "before": "before",
+        "after": "after",
+        "delta": "change",
+        "moved_items": "Moved",
+        "added_items": "Added",
+        "removed_items": "Removed",
+        "shortened_items": "Shortened",
+        "lengthened_items": "Lengthened",
+        "displaced_items": "No longer fits",
+        "new_warnings": "New warnings",
+        "cleared_warnings": "Warnings cleared",
+        "revision_history": "Revision history",
+        "restore_version": "Restore this version",
+        "version_restored": "Earlier plan restored as a new version.",
+        "op_explain": "Explain why",
+        "op_fully_reoptimize": "Fully re-optimize",
+        "op_reduce_walking": "Reduce walking",
+        "op_reduce_daily_load": "Make the day easier",
+        "op_fix_meal_timing": "Fix meal timing",
+        "op_adjust_duration": "Adjust visit length",
+        "op_lock_item": "Lock",
+        "op_unlock_item": "Unlock",
+        "op_drop_place": "Drop this place",
+        "deterministic_reasons": "Deterministic reasons",
     },
     "th": {
         "title": "ตัวช่วยวางแผนท่องเที่ยวส่วนตัว",
@@ -806,6 +844,44 @@ TEXT = {
         "hours_usable": "สถานที่ที่มีช่วงเวลายืนยันแล้ว",
         "hours_cost": "เรียกแบบมีค่าใช้จ่ายหนึ่งครั้งต่อสถานที่ ประมาณ 0.025 ดอลลาร์ เก็บไว้ 3 วัน",
         "hours_unusable": "สถานที่ที่ยังไม่มีช่วงเวลาที่ใช้ได้",
+        "revision": "แก้ไขแผน",
+        "revision_help": "คำสั่งด่วนปรับเงื่อนไข แล้วระบบจัดแผนสร้างตารางใหม่ ยังไม่มีอะไรถูกใช้จนกดยืนยัน",
+        "revision_needs_plan": "เปิดใช้แผนก่อนจึงจะแก้ไขได้",
+        "quick_action": "คำสั่งด่วน",
+        "run_action": "ดูผลของการเปลี่ยนนี้",
+        "pending_revision": "การแก้ไขที่รออยู่",
+        "revision_assumptions": "ข้อสันนิษฐาน",
+        "apply_revision": "ยืนยันใช้",
+        "cancel_revision": "ยกเลิก",
+        "revision_applied": "ใช้การแก้ไขแล้ว",
+        "revision_discarded": "ยกเลิกการแก้ไขที่รออยู่แล้ว",
+        "revision_blocked": "ยังใช้การแก้ไขนี้ไม่ได้ เพราะแผนที่สร้างใหม่ไม่ผ่านการตรวจ",
+        "changed_days": "วันที่เปลี่ยน",
+        "no_changes": "ไม่มีรายการในตารางเปลี่ยน",
+        "before": "ก่อน",
+        "after": "หลัง",
+        "delta": "เปลี่ยนแปลง",
+        "moved_items": "ย้าย",
+        "added_items": "เพิ่ม",
+        "removed_items": "เอาออก",
+        "shortened_items": "ลดเวลา",
+        "lengthened_items": "เพิ่มเวลา",
+        "displaced_items": "จัดลงตารางไม่ได้แล้ว",
+        "new_warnings": "คำเตือนใหม่",
+        "cleared_warnings": "คำเตือนที่หมดไป",
+        "revision_history": "ประวัติการแก้ไข",
+        "restore_version": "ย้อนไปเวอร์ชันนี้",
+        "version_restored": "ย้อนแผนเดิมเป็นเวอร์ชันใหม่แล้ว",
+        "op_explain": "อธิบายเหตุผล",
+        "op_fully_reoptimize": "จัดแผนใหม่ทั้งทริป",
+        "op_reduce_walking": "ลดการเดิน",
+        "op_reduce_daily_load": "ทำให้วันสบายขึ้น",
+        "op_fix_meal_timing": "แก้เวลามื้ออาหาร",
+        "op_adjust_duration": "ปรับเวลาชม",
+        "op_lock_item": "ล็อก",
+        "op_unlock_item": "ปลดล็อก",
+        "op_drop_place": "เอาสถานที่นี้ออก",
+        "deterministic_reasons": "เหตุผลจากการคำนวณ",
     },
 }
 
@@ -2624,3 +2700,159 @@ with st.expander(copy["add_cost"]):
         else:
             st.session_state[cost_flash_key] = copy["cost_added"]
             st.rerun()
+
+st.subheader(copy["revision"])
+st.caption(copy["revision_help"])
+revision_flash_key = f"revision_flash_{trip.trip_id}"
+if revision_flash := st.session_state.pop(revision_flash_key, None):
+    st.success(revision_flash)
+
+if actions.get_active_plan(trip.trip_id) is None:
+    st.info(copy["revision_needs_plan"])
+else:
+    offered = actions.quick_actions(trip.trip_id)
+    labels = {
+        index: (
+            copy.get(f"op_{item['operation']}", item["operation"])
+            + (
+                f" · {str(item['arguments'].get('place_id'))[:14]}"
+                if item["arguments"].get("place_id")
+                else ""
+            )
+        )
+        for index, item in enumerate(offered)
+    }
+    chosen_index = st.selectbox(
+        copy["quick_action"],
+        options=list(labels),
+        format_func=lambda value: labels[value],
+        key=f"quick_action_{trip.trip_id}",
+    )
+    pending = actions.get_revision_draft(trip.trip_id)
+    if st.button(copy["run_action"], key=f"run_action_{trip.trip_id}", width="stretch"):
+        try:
+            actions.propose_revision(
+                trip_id=trip.trip_id,
+                operation=offered[chosen_index],
+                replace_pending=True,
+            )
+        except ValueError as error:
+            st.error(str(error))
+        else:
+            st.rerun()
+
+    if pending:
+        with st.container(border=True):
+            st.markdown(
+                f"**{copy['pending_revision']}: "
+                f"{copy.get('op_' + pending['operation'], pending['operation'])}**"
+            )
+            if pending.get("assumptions"):
+                st.caption(
+                    f"{copy['revision_assumptions']}: "
+                    + ", ".join(
+                        _optimizer_code(item, language) for item in pending["assumptions"]
+                    )
+                )
+            if pending.get("explanation"):
+                reasons = pending["explanation"]
+                st.markdown(f"#### {copy['deterministic_reasons']}")
+                st.caption(
+                    f"{copy['variant']}: {copy.get(reasons['variant_id'], reasons['variant_id'])} · "
+                    f"{copy[reasons['status']]}"
+                )
+                st.dataframe(
+                    [
+                        {copy["dimension"]: key, copy["points"]: value}
+                        for key, value in reasons["metrics"].items()
+                        if isinstance(value, (int, float))
+                    ],
+                    hide_index=True,
+                    width="stretch",
+                )
+                for item in reasons["unscheduled"]:
+                    st.markdown(
+                        f"- {item['place_id'][:16]} · "
+                        f"{_optimizer_code(item['reason'], language)}"
+                    )
+            change = pending.get("consequences")
+            if change:
+                if change["changed_dates"]:
+                    st.caption(
+                        f"{copy['changed_days']}: {', '.join(change['changed_dates'])}"
+                    )
+                else:
+                    st.caption(copy["no_changes"])
+                st.dataframe(
+                    [
+                        {
+                            copy["dimension"]: key,
+                            copy["before"]: item["before"],
+                            copy["after"]: item["after"],
+                            copy["delta"]: item["delta"],
+                        }
+                        for key, item in change["metrics"].items()
+                    ],
+                    hide_index=True,
+                    width="stretch",
+                )
+                for label, entries in (
+                    (copy["moved_items"], [f"{m['place_id'][:16]} {m['from']['date']} {m['from']['start']} → {m['to']['date']} {m['to']['start']}" for m in change["moved"]]),
+                    (copy["added_items"], [item[:16] for item in change["added"]]),
+                    (copy["removed_items"], [item[:16] for item in change["removed"]]),
+                    (copy["shortened_items"], [f"{m['place_id'][:16]} {m['from_minutes']}→{m['to_minutes']} {copy['minutes']}" for m in change["shortened"]]),
+                    (copy["lengthened_items"], [f"{m['place_id'][:16]} {m['from_minutes']}→{m['to_minutes']} {copy['minutes']}" for m in change["lengthened"]]),
+                    (copy["displaced_items"], [f"{m['place_id'][:16]} · {_optimizer_code(m['reason'], language)}" for m in change["displaced"]]),
+                    (copy["new_warnings"], [_optimizer_code(w, language) for w in change["warnings"]["new"]]),
+                    (copy["cleared_warnings"], [_optimizer_code(w, language) for w in change["warnings"]["cleared"]]),
+                ):
+                    if entries:
+                        st.markdown(f"**{label}**: " + " · ".join(entries))
+                if not change["can_apply"]:
+                    st.warning(copy["revision_blocked"])
+
+            apply_column, cancel_column = st.columns(2)
+            if apply_column.button(
+                copy["apply_revision"],
+                key=f"apply_revision_{trip.trip_id}",
+                disabled=not pending.get("can_apply"),
+                width="stretch",
+            ):
+                try:
+                    actions.apply_revision(trip.trip_id)
+                except ValueError as error:
+                    st.error(str(error))
+                else:
+                    st.session_state[revision_flash_key] = copy["revision_applied"]
+                    st.rerun()
+            if cancel_column.button(
+                copy["cancel_revision"],
+                key=f"cancel_revision_{trip.trip_id}",
+                width="stretch",
+            ):
+                actions.discard_revision_draft(trip.trip_id)
+                st.session_state[revision_flash_key] = copy["revision_discarded"]
+                st.rerun()
+
+    history = actions.list_revisions(trip.trip_id)
+    if history:
+        with st.expander(f"{copy['revision_history']} ({len(history)})"):
+            for record in reversed(history):
+                st.markdown(
+                    f"- {record['created_at'][:16]} · "
+                    f"{copy.get('op_' + record['operation'], record['operation'])} · "
+                    f"`{record['from_version_id'][5:17]}` → `{record['to_version_id'][5:17]}`"
+                )
+    versions = actions.list_plan_versions(trip.trip_id)
+    if len(versions) > 1:
+        with st.expander(f"{copy['active_plan']} ({len(versions)})"):
+            for version in versions:
+                if st.button(
+                    f"{copy['restore_version']} `{version.version_id[5:17]}` · {version.cause}",
+                    key=f"restore_{version.version_id}",
+                ):
+                    actions.restore_plan_version(
+                        trip_id=trip.trip_id, version_id=version.version_id
+                    )
+                    st.session_state[revision_flash_key] = copy["version_restored"]
+                    st.rerun()

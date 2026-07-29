@@ -234,6 +234,8 @@ class SchemaMigrationTest(unittest.TestCase):
                     "route_snapshots",
                     "trip_evidence",
                     "place_evidence",
+                    "revision_drafts",
+                    "plan_revisions",
                 }
                 <= tables
             )

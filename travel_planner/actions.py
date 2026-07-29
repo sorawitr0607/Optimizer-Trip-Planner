@@ -26,7 +26,7 @@ from .core import (
     new_setup_draft,
     new_trip,
 )
-from . import checklist, costs, exports, opening, usage
+from . import checklist, costs, exports, opening, revision, usage
 from .discovery import build_candidate_catalog
 from .optimizer import date_range, optimize_trip
 from .providers import (
@@ -1183,6 +1183,216 @@ class PlannerActions:
 
     def cost_totals(self, trip_id: str) -> dict[str, Any]:
         return costs.totals(self.list_cost_items(trip_id))
+
+    def quick_actions(self, trip_id: str) -> list[dict[str, Any]]:
+        """Actions offered for the active plan. None of them needs a model."""
+
+        active = self.store.get_active_plan(trip_id)
+        if active is None:
+            return []
+        variant = active.snapshot.as_dict().get("variant") or {}
+        planner_input = active.snapshot.as_dict().get("optimizer_input") or {}
+        scheduled = [
+            item["subject_id"]
+            for day in variant.get("days", [])
+            for item in day.get("items", [])
+            if item.get("type") == "visit"
+        ]
+        locked = {
+            str(lock.get("subject_id")) for lock in planner_input.get("locks", [])
+        }
+        offered: list[dict[str, Any]] = [
+            {"operation": "explain", "arguments": {}},
+            {"operation": "fully_reoptimize", "arguments": {}},
+        ]
+        metrics = variant.get("metrics") or {}
+        if metrics.get("walking_minutes"):
+            offered.append({"operation": "reduce_walking", "arguments": {"factor": 0.7}})
+        if metrics.get("scheduled_visits", 0) > 1:
+            offered.append(
+                {"operation": "reduce_daily_load", "arguments": {"factor": 0.7}}
+            )
+        if not (planner_input.get("thresholds") or {}).get("meal_window"):
+            offered.append(
+                {
+                    "operation": "fix_meal_timing",
+                    "arguments": {"start": "12:00", "end": "13:30"},
+                }
+            )
+        for place_id in scheduled:
+            if place_id in locked:
+                offered.append(
+                    {"operation": "unlock_item", "arguments": {"place_id": place_id}}
+                )
+            else:
+                offered.append(
+                    {"operation": "lock_item", "arguments": {"place_id": place_id}}
+                )
+        return offered
+
+    def propose_revision(
+        self,
+        *,
+        trip_id: str,
+        operation: Mapping[str, Any],
+        request_text: str = "",
+        replace_pending: bool = False,
+    ) -> dict[str, Any]:
+        """Build the one pending preview. The active plan is never touched here."""
+
+        active = self.store.get_active_plan(trip_id)
+        if active is None:
+            raise ValueError("Activate a plan before revising it")
+        pending = self.store.get_revision_draft(trip_id)
+        if pending and not replace_pending and pending["operation"] != str(
+            operation.get("operation")
+        ):
+            raise ValueError(
+                "A different revision is already pending; apply, discard, or confirm replacing it"
+            )
+
+        stored = active.snapshot.as_dict()
+        base_input = stored["optimizer_input"]
+        before_variant = stored["variant"]
+        applied = revision.apply_operation(base_input, dict(operation))
+        clean = revision.validate_operation(dict(operation))
+
+        if not clean["changes_plan"]:
+            draft = {
+                "schema_version": revision.SCHEMA_VERSION,
+                "operation": clean["operation"],
+                "arguments": clean["arguments"],
+                "request_text": str(request_text or ""),
+                "assumptions": applied["assumptions"],
+                "explanation": self._explain_plan(stored),
+                "consequences": None,
+                "proposal": None,
+                "can_apply": False,
+            }
+            return self.store.save_revision_draft(
+                trip_id=trip_id,
+                base_version_id=active.version_id,
+                draft=draft,
+                now=datetime.now(timezone.utc).isoformat(),
+            )
+
+        proposal = optimize_trip(applied["snapshot"])
+        after_variant = next(
+            (
+                item
+                for item in proposal["variants"]
+                if item["variant_id"] == before_variant["variant_id"]
+            ),
+            proposal["variants"][0] if proposal["variants"] else None,
+        )
+        if after_variant is None:
+            raise ValueError("The revision produced no plan variant")
+        change = revision.consequences(before_variant, after_variant)
+        draft = {
+            "schema_version": revision.SCHEMA_VERSION,
+            "operation": clean["operation"],
+            "arguments": clean["arguments"],
+            "request_text": str(request_text or ""),
+            "assumptions": applied["assumptions"],
+            "explanation": None,
+            "consequences": change,
+            "proposal": {
+                "optimizer_version": proposal["optimizer_version"],
+                "input_sha256": proposal["input_sha256"],
+                "optimizer_input": applied["snapshot"],
+                "variant": after_variant,
+            },
+            "can_apply": change["can_apply"],
+        }
+        return self.store.save_revision_draft(
+            trip_id=trip_id,
+            base_version_id=active.version_id,
+            draft=draft,
+            now=datetime.now(timezone.utc).isoformat(),
+        )
+
+    def get_revision_draft(self, trip_id: str) -> dict[str, Any] | None:
+        return self.store.get_revision_draft(trip_id)
+
+    def discard_revision_draft(self, trip_id: str) -> None:
+        self.store.delete_revision_draft(trip_id)
+
+    def apply_revision(self, trip_id: str) -> PlanVersion:
+        """Apply the pending preview as a new immutable version, with history."""
+
+        draft = self.store.get_revision_draft(trip_id)
+        if draft is None:
+            raise ValueError("There is no pending revision to apply")
+        if not draft.get("can_apply") or not draft.get("proposal"):
+            raise ValueError(
+                "This revision cannot be applied until it passes validation"
+            )
+        active = self.store.get_active_plan(trip_id)
+        if active is None or active.version_id != draft["base_version_id"]:
+            raise ValueError(
+                "The active plan changed after this preview; rebuild the revision"
+            )
+        proposal = draft["proposal"]
+        version = self.save_plan_version(
+            trip_id=trip_id,
+            snapshot={
+                "schema_version": 1,
+                "optimizer_version": proposal["optimizer_version"],
+                "input_sha256": proposal["input_sha256"],
+                "optimizer_input": proposal["optimizer_input"],
+                "variant": proposal["variant"],
+            },
+            cause=f"revision:{draft['operation']}",
+        )
+        self.store.add_plan_revision(
+            trip_id=trip_id,
+            record={
+                "schema_version": revision.SCHEMA_VERSION,
+                "operation": draft["operation"],
+                "arguments": draft["arguments"],
+                "request_text": draft.get("request_text") or "",
+                "assumptions": draft.get("assumptions") or [],
+                "consequences": draft["consequences"],
+                "from_version_id": draft["base_version_id"],
+                "to_version_id": version.version_id,
+                "interpreted_by": draft.get("interpreted_by") or "quick_action",
+            },
+            now=datetime.now(timezone.utc).isoformat(),
+        )
+        self.store.delete_revision_draft(trip_id)
+        return version
+
+    def list_revisions(self, trip_id: str) -> list[dict[str, Any]]:
+        return self.store.list_plan_revisions(trip_id)
+
+    def _explain_plan(self, stored: dict[str, Any]) -> dict[str, Any]:
+        """Deterministic reasons for the active plan. No model involved."""
+
+        variant = stored["variant"]
+        planner_input = stored["optimizer_input"]
+        return {
+            "variant_id": variant["variant_id"],
+            "status": variant["status"],
+            "metrics": variant.get("metrics", {}),
+            "warnings": sorted(set(variant.get("warnings", []))),
+            "objective": variant.get("objective", {}),
+            "beats_greedy_baseline": bool(
+                variant.get("objective_improved_or_equal_to_greedy")
+            ),
+            "thresholds": planner_input.get("thresholds", {}),
+            "locks": [
+                str(lock.get("subject_id")) for lock in planner_input.get("locks", [])
+            ],
+            "unscheduled": [
+                {
+                    "place_id": item["place_id"],
+                    "reason": item["reason"],
+                    "consequence": item["consequence"],
+                }
+                for item in variant.get("reconciliation", [])
+                if item["status"] == "cannot_currently_fit"
+            ],
+        }
 
     def build_export_snapshot(
         self, trip_id: str, *, version_id: str | None = None, language: str | None = None

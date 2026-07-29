@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 uv run streamlit run app.py                                          # run the app
-uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 149 tests, ~8s
+uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 174 tests, ~9s
 uv run --locked python -m unittest tests.test_optimizer.OptimizerCoreTest.test_safe_route_and_weather_fallback_are_selected  # one test
 python3 scripts/validate_regression_fixtures.py                      # fixture catalog structure
 uv run --locked python scripts/run_optimizer_regressions.py          # 27 historic cases through the real optimizer
@@ -89,6 +89,14 @@ Each stage is gated on the previous one having a matching hash (`_current_choice
    evidence state move independently, and `validate_item()` refuses a verified `required` item with no
    responsible authority type. Board items are the one mutable record type; readiness warnings are
    explicitly non-blocking (`blocks_itinerary` is always False).
+
+7. **Revision** — `revision.py` holds the whole typed operation set. An operation is a *constraint
+   change* on the optimizer input, never a schedule instruction, so nothing in it can write an opening
+   time, route, fare or closure; the deterministic optimizer rebuilds the plan and `consequences()`
+   reports the before/after. `propose_revision` keeps exactly one pending draft and leaves the active
+   plan untouched; `apply_revision` refuses unless the rebuilt variant is `ready` and valid, and
+   refuses again if the active plan moved behind the preview. Applying writes a new immutable version
+   plus an append-only history row; restore creates another version and deletes nothing.
 
 Plans are append-only: `plan_versions` and `discovery_runs` carry SQLite triggers that abort UPDATE
 and DELETE. Restoring an old plan creates a *new* version pointing at the old snapshot. `active_plans`

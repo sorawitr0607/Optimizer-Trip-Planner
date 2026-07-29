@@ -23,7 +23,7 @@ from .core import (
 )
 
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS trips (
     id TEXT PRIMARY KEY,
@@ -223,6 +223,40 @@ CREATE TABLE IF NOT EXISTS place_evidence (
     PRIMARY KEY (trip_id, place_id, kind),
     FOREIGN KEY (trip_id) REFERENCES trips(id)
 );
+
+-- Exactly one pending revision preview per trip, per the Phase 1 decision. The
+-- active plan is untouched until the owner applies it.
+CREATE TABLE IF NOT EXISTS revision_drafts (
+    trip_id TEXT PRIMARY KEY,
+    base_version_id TEXT,
+    snapshot_json TEXT NOT NULL,
+    snapshot_sha256 TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (trip_id) REFERENCES trips(id)
+);
+
+-- Applied revision history, append-only: the request, the typed intent, the
+-- consequences, and the plan versions either side of it.
+CREATE TABLE IF NOT EXISTS plan_revisions (
+    id TEXT PRIMARY KEY,
+    trip_id TEXT NOT NULL,
+    snapshot_json TEXT NOT NULL,
+    snapshot_sha256 TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (trip_id) REFERENCES trips(id)
+);
+
+CREATE TRIGGER IF NOT EXISTS plan_revisions_no_update
+BEFORE UPDATE ON plan_revisions
+BEGIN
+    SELECT RAISE(ABORT, 'revision history is immutable');
+END;
+
+CREATE TRIGGER IF NOT EXISTS plan_revisions_no_delete
+BEFORE DELETE ON plan_revisions
+BEGIN
+    SELECT RAISE(ABORT, 'revision history is immutable');
+END;
 
 CREATE TRIGGER IF NOT EXISTS plan_versions_no_update
 BEFORE UPDATE ON plan_versions
@@ -639,6 +673,80 @@ class SQLiteStore:
         return self._verified_snapshot(
             row["snapshot_json"], row["snapshot_sha256"], "Exchange-rate snapshot"
         ).as_dict()
+
+    def save_revision_draft(
+        self, *, trip_id: str, base_version_id: str | None, draft: dict[str, Any], now: str
+    ) -> dict[str, Any]:
+        snapshot = freeze_snapshot(draft)
+        with self.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO revision_drafts (
+                    trip_id, base_version_id, snapshot_json, snapshot_sha256, created_at
+                ) VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT (trip_id) DO UPDATE SET
+                    base_version_id = excluded.base_version_id,
+                    snapshot_json = excluded.snapshot_json,
+                    snapshot_sha256 = excluded.snapshot_sha256,
+                    created_at = excluded.created_at
+                """,
+                (trip_id, base_version_id, snapshot.canonical_json, snapshot.sha256, now),
+            )
+        return {**draft, "base_version_id": base_version_id, "created_at": now}
+
+    def get_revision_draft(self, trip_id: str) -> dict[str, Any] | None:
+        with self.connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM revision_drafts WHERE trip_id = ?", (trip_id,)
+            ).fetchone()
+        if row is None:
+            return None
+        return {
+            **self._verified_snapshot(
+                row["snapshot_json"], row["snapshot_sha256"], "Revision draft"
+            ).as_dict(),
+            "base_version_id": row["base_version_id"],
+            "created_at": row["created_at"],
+        }
+
+    def delete_revision_draft(self, trip_id: str) -> None:
+        with self.connect() as connection:
+            connection.execute(
+                "DELETE FROM revision_drafts WHERE trip_id = ?", (trip_id,)
+            )
+
+    def add_plan_revision(
+        self, *, trip_id: str, record: dict[str, Any], now: str
+    ) -> dict[str, Any]:
+        snapshot = freeze_snapshot(record)
+        row_id = f"revision_{uuid4().hex}"
+        with self.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO plan_revisions (
+                    id, trip_id, snapshot_json, snapshot_sha256, created_at
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (row_id, trip_id, snapshot.canonical_json, snapshot.sha256, now),
+            )
+        return {**record, "revision_id": row_id, "created_at": now}
+
+    def list_plan_revisions(self, trip_id: str) -> list[dict[str, Any]]:
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM plan_revisions WHERE trip_id = ? ORDER BY created_at, id",
+                (trip_id,),
+            ).fetchall()
+        return [
+            {
+                **self._verified_snapshot(
+                    row["snapshot_json"], row["snapshot_sha256"], "Revision record"
+                ).as_dict(),
+                "revision_id": row["id"],
+                "created_at": row["created_at"],
+            }
+            for row in rows
+        ]
 
     def upsert_place_evidence(
         self,
