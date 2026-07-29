@@ -353,12 +353,14 @@ class SetupUiTest(unittest.TestCase):
         with TemporaryDirectory() as directory:
             database_path = Path(directory) / "ui.sqlite3"
             with patch.dict(os.environ, {"TOURIST_DB_PATH": str(database_path)}):
-                app = AppTest.from_file(ROOT / "app.py", default_timeout=10).run()
+                app = AppTest.from_file(ROOT / "app.py", default_timeout=10)
+                app.switch_page("views/setup.py")
+                app.run()
                 app.text_input(key="trip_name").input("Taipei New Year")
                 app.text_input(key="destination").input("Taipei")
                 app.selectbox(key="planning_mode").select("ready_to_schedule")
                 app.button[0].click().run()
-                trip_id = app.selectbox(key="resume_trip").value
+                trip_id = app.sidebar.selectbox(key="selected_trip_id").value
 
                 app.number_input(key=f"member_count_{trip_id}").set_value(2).run()
                 app.multiselect(key=f"main_style_{trip_id}").set_value(

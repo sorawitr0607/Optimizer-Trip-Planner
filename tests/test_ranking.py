@@ -273,7 +273,9 @@ class RankingUiTest(unittest.TestCase):
             actions.discover_places(trip_id=trip.trip_id)
 
             with patch.dict(os.environ, {"TOURIST_DB_PATH": str(path)}):
-                app = AppTest.from_file(ROOT / "app.py", default_timeout=10).run()
+                app = AppTest.from_file(ROOT / "app.py", default_timeout=10)
+                app.switch_page("views/places.py")
+                app.run()
                 self.assertFalse(app.exception)
                 self.assertIn("Personalized place cards", [item.value for item in app.subheader])
                 card_widget = app.selectbox(key=f"ranking_card_{trip.trip_id}_main_queue")

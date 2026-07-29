@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 uv run streamlit run app.py                                          # run the app
-uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 202 tests, ~10s
+uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 202 tests, ~7s
 uv run --locked python -m unittest tests.test_optimizer.OptimizerCoreTest.test_safe_route_and_weather_fallback_are_selected  # one test
 python3 scripts/validate_regression_fixtures.py                      # fixture catalog structure
 uv run --locked python scripts/run_optimizer_regressions.py          # 27 historic cases through the real optimizer
@@ -38,8 +38,18 @@ app.py (Streamlit)  →  travel_planner/actions.py  →  core.py / optimizer.py 
   each state this. Adding such an import is the single easiest way to break the design.
 - `PlannerActions` (`actions.py`) is the only coordinator: it assembles snapshots, calls the core,
   and persists results. It holds no Streamlit session state and no presentation formatting.
-- `app.py` is a flat top-level Streamlit script (no `main()`), executed top to bottom, holding all UI
-  copy and all widget wiring.
+- The UI is split by journey stage. `app.py` (about 100 lines) owns only what every stage shares: the
+  language, the selected trip, the journey state, and `st.navigation`. Each stage is a script under
+  `views/`, all copy lives in `ui/text.py`, and shared state plus row renderers live in `ui/shared.py`.
+  A view never recomputes context: it calls `shared.actions()`, `shared.words()`, `shared.trip()`.
+- `shared.journey()` decides which stages are done and which is next; `shared.require(stage, trip)`
+  renders one clear next step and returns False when a stage is not reachable, so a view explains
+  itself instead of erroring. The landing page is the stage that needs attention, so a returning owner
+  sees the itinerary rather than the setup form.
+- A UI test must select its stage: `at = AppTest.from_file(ROOT / "app.py", ...)`, then
+  `at.switch_page("views/<stage>.py")`, then `at.run()`. Without the switch, the default landing stage
+  renders and assertions about another stage will fail. The trip selector is a sidebar widget keyed
+  `selected_trip_id`.
 
 ### Everything crossing a boundary is a frozen, hashed snapshot
 

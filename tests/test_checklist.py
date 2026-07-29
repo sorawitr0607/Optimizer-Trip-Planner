@@ -586,10 +586,9 @@ class ChecklistLocalizationTest(unittest.TestCase):
 
 
 def _app_text() -> dict:
-    source = (ROOT / "app.py").read_text(encoding="utf-8")
-    namespace: dict = {}
-    exec(source[source.index("TEXT = {"):source.index("TAG_TEXT = {")], namespace)
-    return namespace["TEXT"]
+    from ui.text import TEXT
+
+    return TEXT
 
 
 class ChecklistExportTest(unittest.TestCase):
@@ -752,7 +751,9 @@ class ChecklistViewTest(unittest.TestCase):
             )
 
             with patch.dict(os.environ, {"TOURIST_DB_PATH": str(path)}):
-                app = AppTest.from_file(ROOT / "app.py", default_timeout=30).run()
+                app = AppTest.from_file(ROOT / "app.py", default_timeout=30)
+                app.switch_page("views/readiness.py")
+                app.run()
                 self.assertFalse(app.exception)
                 self.assertIn("Trip readiness checklist", [i.value for i in app.subheader])
                 text = _text(app)
@@ -785,7 +786,9 @@ class ChecklistViewTest(unittest.TestCase):
             PlannerActions(path).create_trip(name="Blank", destination="Osaka")
 
             with patch.dict(os.environ, {"TOURIST_DB_PATH": str(path)}):
-                app = AppTest.from_file(ROOT / "app.py", default_timeout=30).run()
+                app = AppTest.from_file(ROOT / "app.py", default_timeout=30)
+                app.switch_page("views/readiness.py")
+                app.run()
 
             self.assertFalse(app.exception)
             self.assertIn("Save the trip setup first", _text(app))

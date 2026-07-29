@@ -412,7 +412,9 @@ class RevisionViewTest(unittest.TestCase):
             )
 
             with patch.dict(os.environ, {"TOURIST_DB_PATH": str(path)}):
-                app = AppTest.from_file(ROOT / "app.py", default_timeout=40).run()
+                app = AppTest.from_file(ROOT / "app.py", default_timeout=40)
+                app.switch_page("views/revise.py")
+                app.run()
                 self.assertFalse(app.exception)
                 self.assertIn("Revise the plan", [item.value for item in app.subheader])
 

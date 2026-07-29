@@ -548,7 +548,9 @@ class ActivePlanViewTest(unittest.TestCase):
             )
 
             with patch.dict(os.environ, {"TOURIST_DB_PATH": str(path)}):
-                app = AppTest.from_file(ROOT / "app.py", default_timeout=20).run()
+                app = AppTest.from_file(ROOT / "app.py", default_timeout=20)
+                app.switch_page("views/itinerary.py")
+                app.run()
                 self.assertFalse(app.exception)
                 self.assertIn("Active plan", [item.value for item in app.subheader])
                 english = _text(app)
@@ -580,7 +582,9 @@ class ActivePlanViewTest(unittest.TestCase):
             )
 
             with patch.dict(os.environ, {"TOURIST_DB_PATH": str(path)}):
-                app = AppTest.from_file(ROOT / "app.py", default_timeout=20).run()
+                app = AppTest.from_file(ROOT / "app.py", default_timeout=20)
+                app.switch_page("views/itinerary.py")
+                app.run()
                 self.assertFalse(app.exception)
                 english = _text(app)
                 self.assertIn("Fallback for this half-day", english)
@@ -590,17 +594,23 @@ class ActivePlanViewTest(unittest.TestCase):
                 self.assertFalse(app.exception)
                 self.assertIn("แผนสำรองของช่วงนี้", _text(app))
 
-    def test_trip_without_active_plan_says_so(self) -> None:
+    def test_a_trip_without_a_plan_is_told_which_stage_to_finish(self) -> None:
         with TemporaryDirectory() as directory:
             path = Path(directory) / "empty.sqlite3"
             actions = PlannerActions(path)
             actions.create_trip(name="No plan", destination="Osaka")
 
             with patch.dict(os.environ, {"TOURIST_DB_PATH": str(path)}):
-                app = AppTest.from_file(ROOT / "app.py", default_timeout=20).run()
+                app = AppTest.from_file(ROOT / "app.py", default_timeout=20)
+                app.switch_page("views/itinerary.py")
+                app.run()
 
             self.assertFalse(app.exception)
-            self.assertIn("No plan is active yet", _text(app))
+            # The itinerary names the blocking stage rather than dead-ending.
+            text = _text(app)
+            self.assertIn("Finish this first", text)
+            self.assertIn("Build the plan", text)
+            self.assertIn("Trip progress", text)
 
 
 def _text(app: AppTest) -> str:

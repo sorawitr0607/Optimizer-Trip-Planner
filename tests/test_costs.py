@@ -364,7 +364,9 @@ class CostViewTest(unittest.TestCase):
             )
 
             with patch.dict(os.environ, {"TOURIST_DB_PATH": str(path)}):
-                app = AppTest.from_file(ROOT / "app.py", default_timeout=30).run()
+                app = AppTest.from_file(ROOT / "app.py", default_timeout=30)
+                app.switch_page("views/costs.py")
+                app.run()
                 self.assertFalse(app.exception)
                 self.assertIn("Costs", [item.value for item in app.subheader])
                 text = "\n".join(

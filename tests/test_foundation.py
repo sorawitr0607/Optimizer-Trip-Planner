@@ -112,7 +112,7 @@ class FoundationTest(unittest.TestCase):
             app.button[0].click().run()
             self.assertFalse(app.exception)
             self.assertEqual("Trip saved.", app.success[0].value)
-            selected_id = app.selectbox(key="resume_trip").value
+            selected_id = app.sidebar.selectbox(key="selected_trip_id").value
             self.assertEqual("Taipei", self.actions.get_trip(selected_id).destination)
 
             app.radio[0].set_value("th").run()

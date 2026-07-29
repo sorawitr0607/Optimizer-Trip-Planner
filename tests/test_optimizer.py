@@ -197,7 +197,9 @@ class OptimizerActionsTest(unittest.TestCase):
             self.assertIsNone(resumed.get_active_plan(trip.trip_id))
 
             with patch.dict(os.environ, {"TOURIST_DB_PATH": str(path)}):
-                app = AppTest.from_file(ROOT / "app.py", default_timeout=10).run()
+                app = AppTest.from_file(ROOT / "app.py", default_timeout=10)
+                app.switch_page("views/optimize.py")
+                app.run()
                 self.assertFalse(app.exception)
                 self.assertIn(
                     "Whole-trip optimizer", [item.value for item in app.subheader]
