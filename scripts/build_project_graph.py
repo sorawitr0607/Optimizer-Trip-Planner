@@ -11,7 +11,7 @@ import re
 import shutil
 import subprocess
 import tempfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -123,15 +123,31 @@ def resolve_ticket_node(
     )
 
 
+def source_path(source: str) -> Path:
+    """The file in this checkout that a node's `source_file` refers to.
+
+    Nodes may carry an absolute path from the machine that built the graph. Such
+    a path is not `is_absolute()` on Windows, so joining it to the repository
+    root produced a drive-relative path that matched nothing and made `--check`
+    fail on every ticket except the one stored relatively. Match on the longest
+    trailing segments that exist here instead, which works for a POSIX-absolute
+    path, a Windows-absolute path, and a repo-relative one alike.
+    """
+
+    parts = PurePosixPath(str(source).replace("\\", "/")).parts
+    for start in range(len(parts)):
+        candidate = ROOT.joinpath(*parts[start:])
+        if candidate.exists():
+            return candidate.resolve()
+    return Path(str(source))
+
+
 def wayfinder_blocker_edges(nodes: list[dict]) -> list[dict]:
     nodes_by_source: dict[Path, list[dict]] = {}
     for node in nodes:
         source = node.get("source_file")
         if source:
-            path = Path(source)
-            nodes_by_source.setdefault(
-                (path if path.is_absolute() else ROOT / path).resolve(), []
-            ).append(node)
+            nodes_by_source.setdefault(source_path(source), []).append(node)
 
     tickets: dict[str, tuple[str, Path, list[str]]] = {}
     for path in sorted((ROOT / ".wayfinder" / "tickets").glob("*.md")):
