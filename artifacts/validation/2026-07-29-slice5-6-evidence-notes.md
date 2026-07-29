@@ -38,3 +38,21 @@ Revision and acceptance, non-AI first as the build order requires, then the one 
 - Reading the live replies found a defect: the model returned `factor: null` for a request with no magnitude and validation rejected it, so a reasonable request failed. The app now supplies a documented default and shows it as a visible assumption, and asks one clarification where the value is the point of the request.
 - Still open. The optional natural-language explanation call is priced and reserved but not wired; only the deterministic `explain` exists. Add, replace and swap operations, and the day/half-day cluster move, are not in the operation set yet.
 
+
+### UI split walkthrough on a reset database — 2026-07-29
+
+Walked the whole journey in a browser against an empty `data/tourist.sqlite3` (previous file kept as `data/tourist-backup-2026-07-29.sqlite3`). Every stage was reached and screenshotted. Defects found by looking rather than by testing:
+
+- `st.navigation` always renders at the top of the sidebar, so the app title and trip selector had landed *below* it with the language radio between them. The sidebar now reads stages → trip → progress → language, with the language read from session state before its widget is created.
+- Money was being parsed as LaTeX: `US$0.1300 / US$10.00` rendered as `US 0.1300/US10.00` in italic serif, because a pair of `$` in one markdown block is inline maths to Streamlit. `shared.plain()` now escapes it, and every rendered exception string goes through the same guard.
+- `st.metric` clipped word-valued metrics to `unavaila…` and `Not evaluate…`. Provider status and card feasibility are text lines now; provider statuses gained their own bilingual labels rather than borrowing the plan-variant vocabulary.
+- `views/setup.py` rendered `Trip setup` twice — a section header left over from the single-file layout.
+- An empty day left the owner on a dead-end screen, so `Selected but not scheduled` opens by default when a day schedules nothing.
+- Ranked place cards were about 1.5 screens each, pushing the decision buttons out of view; why/pros/gaps are collapsed so cards can be compared.
+
+Two findings left open, both about discovery rather than the UI:
+
+- **Overpass budget.** Taipei failed every attempt with `Query timed out after 27 seconds` against a declared `[timeout:25]`. Measured cost of the real query is about 34 s, so the declared budget is now 90 s and the socket 105 s; discovery then returned 494 candidates, status `verified`. The endpoint allows 2 concurrent slots and answers 504 immediately once they are spent, so rapid retries look like an outage that is really self-inflicted.
+- **Catalog is a quadtile slice, not a shortlist.** With `out center qt` and a 500-record limit over a 0.25-degree window, Taipei's catalog contained hundreds of unnamed hills, Carrefours and marketplaces and none of Taipei 101, Longshan Temple or the Chiang Kai-shek Memorial; the nearest sightseeing candidate was 4.3 km from the centre. The limit truncates in quadtile order, so it drops landmarks rather than long-tail entries. Not fixed here: ordering or filtering the catalog is a discovery-design decision, not a UI one.
+
+The journey ends at a plan that schedules nothing, correctly. `Best balance` came back `Unavailable` naming its gaps — accommodation base unconfirmed, destination timezone unverified, free-text hard constraint needs structured confirmation, route snapshot missing — the reconciliation table gave all six places `Cannot currently fit / Opening unverified / Verify dated opening hours`, and `Use this as active plan` stayed disabled. A scheduled timetable needs the paid dated opening hours, so it needs `GOOGLE_MAPS_SERVER_KEY` and `OPENROUTESERVICE_API_KEY`, which were not present in this environment. No paid call was made: the ledger still reads US$0.0000.

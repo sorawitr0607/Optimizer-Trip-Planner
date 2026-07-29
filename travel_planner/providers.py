@@ -152,7 +152,10 @@ class OpenStreetMapProvider:
 
     def _overpass_query(self, bbox: list[float]) -> str:
         bounds = ",".join(map(str, bbox))
-        return f"""[out:json][timeout:25];
+        # Taipei returned "Query timed out after 27 seconds" on every attempt at 25:
+        # a dense city over a 0.6-degree window needs a larger budget. Still one
+        # user-triggered request, so the endpoint sees no extra volume.
+        return f"""[out:json][timeout:90];
 (
   nwr[\"name\"][\"tourism\"~\"^(attraction|museum|gallery|viewpoint|artwork|theme_park|zoo|aquarium)$\"]({bounds});
   nwr[\"name\"][\"historic\"]({bounds});
@@ -222,7 +225,9 @@ out center qt {self.result_limit};"""
     @staticmethod
     def _request_json(request: Request) -> Any:
         try:
-            with urlopen(request, timeout=35) as response:  # noqa: S310 - fixed/configured API URLs
+            # Above the 90s the Overpass query itself declares, or the socket would
+            # abort a query the server is still willing to finish.
+            with urlopen(request, timeout=105) as response:  # noqa: S310 - fixed/configured API URLs
                 return json.load(response)
         except HTTPError as error:
             raise ProviderUnavailable(f"Provider HTTP {error.code}") from error

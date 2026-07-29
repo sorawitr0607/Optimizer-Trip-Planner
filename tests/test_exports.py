@@ -613,6 +613,30 @@ class ActivePlanViewTest(unittest.TestCase):
             self.assertIn("Trip progress", text)
 
 
+    def test_money_on_screen_is_not_read_as_maths(self) -> None:
+        # Two bare dollars in one block are inline LaTeX to Streamlit, which
+        # swallowed the amounts in "US$0.1300 / US$10.00" entirely.
+        plan = plan_payload(planner_input(with_names=True, with_coordinates=True))
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "money.sqlite3"
+            actions = PlannerActions(path)
+            trip = actions.create_trip(name="Tokyo day", destination="Tokyo")
+            actions.save_plan_version(
+                trip_id=trip.trip_id, snapshot=plan, cause="optimizer:best_balance"
+            )
+
+            with patch.dict(os.environ, {"TOURIST_DB_PATH": str(path)}):
+                app = AppTest.from_file(ROOT / "app.py", default_timeout=20)
+                app.switch_page("views/itinerary.py")
+                app.run()
+
+        self.assertFalse(app.exception)
+        rendered = _text(app)
+        self.assertIn(r"US\$", rendered)  # the spend caption is on screen at all
+        unescaped = re.search(r"(?<!\\)\$", rendered)
+        self.assertIsNone(unescaped, f"unescaped dollar in: {rendered!r}")
+
+
 def _text(app: AppTest) -> str:
     return "\n".join(
         str(item.value)

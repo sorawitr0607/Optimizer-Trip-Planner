@@ -66,7 +66,7 @@ with st.expander(copy["rate_snapshot"], expanded=not rate_snapshot):
                 buffer_percent=rate_buffer,
             )
         except ValueError as error:
-            st.error(str(error))
+            st.error(shared.plain(error))
         else:
             st.session_state[cost_flash_key] = copy["rates_saved"]
             st.rerun()
@@ -139,7 +139,7 @@ with st.expander(copy["add_cost"]):
                 },
             )
         except ValueError as error:
-            st.error(str(error))
+            st.error(shared.plain(error))
         else:
             st.session_state[cost_flash_key] = copy["cost_added"]
             st.rerun()

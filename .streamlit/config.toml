@@ -1,0 +1,4 @@
+# A personal app run locally: the Deploy button and the app menu are noise the
+# owner can never act on, so the toolbar is reduced to the running indicator.
+[client]
+toolbarMode = "minimal"

@@ -41,14 +41,14 @@ with st.expander(copy["new_trip"], expanded=trip is None):
                     language=language,
                 )
             except ValueError as error:
-                st.error(str(error))
+                st.error(shared.plain(error))
             else:
                 st.session_state[shared.TRIP_KEY] = created.trip_id
                 st.success(copy["created"])
                 st.rerun()
 
 if trip is None:
-    st.info(copy["empty"])
+    # The creation form above is the whole page; the sidebar already says so.
     st.stop()
 
 active_plan = actions.get_active_plan(trip.trip_id)
@@ -69,9 +69,6 @@ if actions.get_setup(trip.trip_id):
         st.info(
             f"{copy['due_soon']}: {display_title(item, copy)} · {item['due_date']}"
         )
-
-st.divider()
-st.subheader(copy["setup"])
 
 setup = actions.get_setup(trip.trip_id)
 setup_payload = setup.snapshot.as_dict() if setup else _empty_setup(trip.planning_mode)
@@ -269,7 +266,7 @@ if draft_submitted or confirm_submitted:
                 confirmed=confirm_submitted,
             )
         except ValueError as error:
-            st.error(str(error))
+            st.error(shared.plain(error))
         else:
             setup_payload = setup.snapshot.as_dict()
             st.success(copy["confirmed"] if setup.confirmed else copy["draft_saved"])

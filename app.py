@@ -23,18 +23,15 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Language first: every label below depends on the choice.
-language = st.sidebar.radio(
-    "Language / ภาษา",
-    options=("en", "th"),
-    format_func=lambda value: "English" if value == "en" else "ไทย",
-    horizontal=True,
-    key=shared.LANGUAGE_KEY,
-)
+# Every label below depends on the language, but its control belongs at the foot
+# of the sidebar: it is chosen once and then left alone. Reading the stored value
+# here lets the widget be created last, so it renders last.
+language = shared.language()
 copy = TEXT[language]
 actions = shared.actions()
 
-st.sidebar.title(copy["title"])
+# `st.navigation` always renders at the top of the sidebar, so the trip context
+# sits directly beneath the stages it applies to.
 trips = actions.list_trips()
 if trips:
     st.sidebar.selectbox(
@@ -72,9 +69,20 @@ if trip is not None:
             )
     spend = actions.paid_usage_status()
     st.sidebar.caption(
-        f"{copy['paid_usage']}: US${spend['estimated_usd']:.4f} / "
-        f"US${spend['cap_usd']:.2f}"
+        shared.plain(
+            f"{copy['paid_usage']}: US${spend['estimated_usd']:.4f} / "
+            f"US${spend['cap_usd']:.2f}"
+        )
     )
+
+st.sidebar.divider()
+st.sidebar.radio(
+    "Language / ภาษา",
+    options=("en", "th"),
+    format_func=lambda value: "English" if value == "en" else "ไทย",
+    horizontal=True,
+    key=shared.LANGUAGE_KEY,
+)
 
 # Land on the stage that needs attention, so a returning owner sees the plan
 # rather than the setup form.

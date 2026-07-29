@@ -120,7 +120,7 @@ else:
                     },
                 )
             except ValueError as error:
-                st.error(str(error))
+                st.error(shared.plain(error))
             else:
                 st.session_state[checklist_flash_key] = copy["task_added"]
                 st.rerun()

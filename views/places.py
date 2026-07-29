@@ -52,8 +52,13 @@ if latest:
     if latest.status in {"unavailable", "error", "stale"}:
         st.warning(copy["provider_gap"])
     st.markdown(f"#### {copy['coverage']}")
-    provider_status, candidate_count, duplicate_count, cell_count = st.columns(4)
-    provider_status.metric(copy["provider_status"], latest.status)
+    # The status is a word, not a number: as a metric it rendered untranslated and
+    # clipped to "unavaila…" in a quarter-width column.
+    st.markdown(
+        f"**{copy['provider_status']}:** "
+        f"{copy.get('provider_' + latest.status, latest.status)}"
+    )
+    candidate_count, duplicate_count, cell_count = st.columns(3)
     candidate_count.metric(copy["candidates"], report["canonical_candidates"])
     duplicate_count.metric(copy["duplicates"], report["duplicates_merged"])
     cell_count.metric(copy["cells"], report["geographic_cells_with_candidates"])
@@ -170,14 +175,15 @@ if ranking:
                     f"{_candidate_name(compared, language)}"
                 )
 
-        score_column, duration_column, feasibility_column = st.columns(3)
+        score_column, duration_column = st.columns(2)
         score_column.metric(copy["score"], f"{card['total_score']:.1f}/100")
         duration = card["duration_estimate"]
         duration_column.metric(
             copy["duration"],
             f"{duration['minimum_minutes']}–{duration['maximum_minutes']} {copy['minutes']}",
         )
-        feasibility_column.metric(copy["feasibility"], copy["not_evaluated"])
+        # "Not evaluated yet" clipped to "Not evaluate…" as a metric value.
+        st.write(f"**{copy['feasibility']}:** {copy['not_evaluated']}")
         st.caption(copy["planner_estimate"])
 
         if card["matched_tags"]:
@@ -187,19 +193,22 @@ if ranking:
                     TAG_TEXT[language].get(tag, tag) for tag in card["matched_tags"]
                 )
             )
-        explanation_columns = st.columns(3)
-        with explanation_columns[0]:
-            st.markdown(f"**{copy['why']}**")
-            for code in card["why_shown"]:
-                st.markdown(f"- {_explain(code, language)}")
-        with explanation_columns[1]:
-            st.markdown(f"**{copy['pros']}**")
-            for code in card["pros"]:
-                st.markdown(f"- {_explain(code, language)}")
-        with explanation_columns[2]:
-            st.markdown(f"**{copy['cons']}**")
-            for code in card["cons"]:
-                st.markdown(f"- {_explain(code, language)}")
+        # Collapsed by default: three columns of prose per card pushed the decision
+        # buttons a screen and a half down, so cards could not be compared.
+        with st.expander(copy["card_detail"]):
+            explanation_columns = st.columns(3)
+            with explanation_columns[0]:
+                st.markdown(f"**{copy['why']}**")
+                for code in card["why_shown"]:
+                    st.markdown(f"- {_explain(code, language)}")
+            with explanation_columns[1]:
+                st.markdown(f"**{copy['pros']}**")
+                for code in card["pros"]:
+                    st.markdown(f"- {_explain(code, language)}")
+            with explanation_columns[2]:
+                st.markdown(f"**{copy['cons']}**")
+                for code in card["cons"]:
+                    st.markdown(f"- {_explain(code, language)}")
 
         with st.expander(copy["breakdown"]):
             st.dataframe(
@@ -272,7 +281,7 @@ if ranking:
                     reason=rejection_reason if clicked_action == "not_for_trip" else None,
                 )
             except ValueError as error:
-                st.error(str(error))
+                st.error(shared.plain(error))
             else:
                 st.session_state[flash_key] = "choice_saved"
                 st.rerun()

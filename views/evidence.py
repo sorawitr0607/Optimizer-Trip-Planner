@@ -29,12 +29,12 @@ if zone_evidence and zone_evidence.get("status") == "verified":
     )
 else:
     st.info(copy["no_timezone"])
-    st.caption(copy["timezone_cost"])
+    st.caption(shared.plain(copy["timezone_cost"]))
     if st.button(copy["fetch_timezone"], key=f"fetch_tz_{trip.trip_id}", width="stretch"):
         try:
             result = actions.refresh_timezone(trip.trip_id)
         except (ProviderBudgetExceeded, ProviderUnavailable, ValueError) as error:
-            st.error(str(error))
+            st.error(shared.plain(error))
         else:
             st.session_state[route_flash_key] = (
                 f"{copy['timezone_fetched']} {result['timezone']}"
@@ -45,9 +45,11 @@ stored_routes = actions.list_routes(trip.trip_id)
 verified_routes = [item for item in stored_routes if item["status"] == "verified"]
 usage_status = actions.paid_usage_status()
 st.caption(
-    f"{copy['paid_usage']}: US${usage_status['estimated_usd']:.4f} / "
-    f"US${usage_status['cap_usd']:.2f} {copy['paid_cap']} · "
-    f"{usage_status['requests']} {copy['paid_requests']}"
+    shared.plain(
+        f"{copy['paid_usage']}: US${usage_status['estimated_usd']:.4f} / "
+        f"US${usage_status['cap_usd']:.2f} {copy['paid_cap']} · "
+        f"{usage_status['requests']} {copy['paid_requests']}"
+    )
 )
 if usage_status["state"] == "stopped":
     st.error(copy["paid_stopped"])
@@ -67,12 +69,12 @@ if unusable:
         f"{copy['hours_unusable']}: "
         + ", ".join(f"{_optimizer_code(reason, language)}" for reason in sorted(set(unusable.values())))
     )
-st.caption(copy["hours_cost"])
+st.caption(shared.plain(copy["hours_cost"]))
 if st.button(copy["fetch_hours"], key=f"fetch_hours_{trip.trip_id}", width="stretch"):
     try:
         hours_report = actions.refresh_opening_hours(trip.trip_id)
     except (ProviderBudgetExceeded, ProviderUnavailable, ValueError) as error:
-        st.error(str(error))
+        st.error(shared.plain(error))
     else:
         st.session_state[route_flash_key] = (
             f"{copy['hours_fetched']} {copy['hours_usable']} "
@@ -84,9 +86,9 @@ if st.button(copy["fetch_routes"], key=f"fetch_routes_{trip.trip_id}", width="st
     try:
         report = actions.refresh_routes(trip.trip_id)
     except ProviderBudgetExceeded as error:
-        st.error(str(error))
+        st.error(shared.plain(error))
     except ValueError as error:
-        st.error(str(error))
+        st.error(shared.plain(error))
     else:
         message = (
             f"{copy['routes_fetched']} {copy['routes_available']} "

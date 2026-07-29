@@ -46,6 +46,11 @@ app.py (Streamlit)  →  travel_planner/actions.py  →  core.py / optimizer.py 
   renders one clear next step and returns False when a stage is not reachable, so a view explains
   itself instead of erroring. The landing page is the stage that needs attention, so a returning owner
   sees the itinerary rather than the setup form.
+- `st.navigation` always renders at the top of the sidebar, so `app.py` cannot put anything above it;
+  the trip context sits directly under the stages and the language control at the foot. The language is
+  read with `shared.language()` before its widget is created, which is what lets that widget render last.
+- Any string built from numbers or exception text goes through `shared.plain()`. Streamlit markdown reads
+  a pair of `$` as inline LaTeX, which silently swallowed the amounts in `US$0.1300 / US$10.00`.
 - A UI test must select its stage: `at = AppTest.from_file(ROOT / "app.py", ...)`, then
   `at.switch_page("views/<stage>.py")`, then `at.run()`. Without the switch, the default landing stage
   renders and assertions about another stage will fail. The trip selector is a sidebar widget keyed
@@ -74,6 +79,12 @@ Each stage is gated on the previous one having a matching hash (`_current_choice
    `_optimizer_input` translates at the boundary; before it did, hotel-area recommendations silently
    never fired for any app-created trip.
 2. **Discovery** — `providers.OpenStreetMapProvider` (Nominatim + Overpass, free) → `discovery.build_candidate_catalog()`
+   A dense city takes about 34 s of Overpass time, so the query declares `[timeout:90]` and the socket
+   allows 105 s; the earlier 25 s budget failed every Taipei attempt. The endpoint grants 2 concurrent
+   slots and answers 504 immediately once they are spent, so a burst of retries reads as an outage that
+   is really self-inflicted — space them. `out center qt` with a 500-record limit truncates in quadtile
+   order, so a big city's catalog can miss its landmarks; see the walkthrough notes in
+   `artifacts/validation/2026-07-29-slice5-6-evidence-notes.md`.
    normalizes and dedupes into provider-neutral candidates with an explicit status
    (`verified` / `stale` / `unavailable` / `error`). Raw responses live in the `provider_cache` table
    (7-day TTL, keyed by provider + request fingerprint); an expired entry may back a visibly `stale`

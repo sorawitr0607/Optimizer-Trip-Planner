@@ -38,7 +38,7 @@ if generate_plan:
         with st.spinner(copy["optimizing"]):
             actions.generate_plan_preview(trip.trip_id)
     except ValueError as error:
-        st.error(str(error))
+        st.error(shared.plain(error))
     else:
         st.session_state[optimizer_flash_key] = "preview_saved"
         st.rerun()
@@ -156,7 +156,7 @@ if preview:
                     trip_id=trip.trip_id, variant_id=variant_id
                 )
             except ValueError as error:
-                st.error(str(error))
+                st.error(shared.plain(error))
             else:
                 st.session_state[optimizer_flash_key] = "plan_activated"
                 st.rerun()

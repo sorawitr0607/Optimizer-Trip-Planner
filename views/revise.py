@@ -51,7 +51,7 @@ else:
                 replace_pending=True,
             )
         except ValueError as error:
-            st.error(str(error))
+            st.error(shared.plain(error))
         else:
             st.rerun()
 
@@ -135,7 +135,7 @@ else:
                 try:
                     actions.apply_revision(trip.trip_id)
                 except ValueError as error:
-                    st.error(str(error))
+                    st.error(shared.plain(error))
                 else:
                     st.session_state[revision_flash_key] = copy["revision_applied"]
                     st.rerun()
@@ -154,7 +154,7 @@ else:
     if not ai_enabled:
         st.caption(copy["ai_disabled_note"])
     else:
-        st.caption(copy["ai_cost"])
+        st.caption(shared.plain(copy["ai_cost"]))
         st.caption(copy["ai_disclosure"])
         request_text = st.text_area(
             copy["free_text"], key=f"free_text_{trip.trip_id}", height=80
@@ -169,9 +169,9 @@ else:
                     replace_pending=True,
                 )
             except RevisionInterpretationUnavailable as error:
-                st.error(copy.get(f"ai_{error.cause}", str(error)))
+                st.error(shared.plain(copy.get(f"ai_{error.cause}", str(error))))
             except (ProviderBudgetExceeded, ValueError) as error:
-                st.error(str(error))
+                st.error(shared.plain(error))
             else:
                 if not outcome["supported"]:
                     st.warning(

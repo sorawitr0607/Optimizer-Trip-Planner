@@ -131,7 +131,7 @@ else:
         documents = _plan_documents(export, export_snapshot.sha256, language)
         poster = _day_poster(export, export_snapshot.sha256, language, day["date"])
     except ValueError as error:
-        st.error(str(error))
+        st.error(shared.plain(error))
     else:
         st.download_button(
             copy["poster"],
@@ -170,7 +170,12 @@ else:
             st.caption(copy["checklist_pending"])
 
     if export["unscheduled"]:
-        with st.expander(f"{copy['unscheduled_choices']} ({len(export['unscheduled'])})"):
+        # When the chosen day schedules nothing, the reasons are the content:
+        # a collapsed panel would leave the owner on a dead-end screen.
+        with st.expander(
+            f"{copy['unscheduled_choices']} ({len(export['unscheduled'])})",
+            expanded=not day["items"],
+        ):
             st.dataframe(
                 [
                     {

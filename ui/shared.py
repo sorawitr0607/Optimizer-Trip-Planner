@@ -54,6 +54,18 @@ def actions() -> PlannerActions:
     return existing
 
 
+def plain(value: object) -> str:
+    """Text that must survive Streamlit's markdown, e.g. money and error text.
+
+    A pair of dollar signs in one block is read as inline LaTeX, which silently
+    swallowed the amounts in `US$0.1300 / US$10.00`. Nothing in this app is ever
+    meant as maths, so any string built from numbers or exception text goes
+    through here.
+    """
+
+    return str(value).replace("$", r"\$")
+
+
 def language() -> str:
     return st.session_state.get(LANGUAGE_KEY, "en")
 
