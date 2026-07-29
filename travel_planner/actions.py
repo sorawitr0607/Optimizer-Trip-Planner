@@ -30,6 +30,7 @@ from . import checklist, costs, exports, usage
 from .discovery import build_candidate_catalog
 from .optimizer import date_range, optimize_trip
 from .providers import (
+    OpenRouteServiceProvider,
     OpenStreetMapProvider,
     ProviderBudgetExceeded,
     ProviderUnavailable,
@@ -61,10 +62,22 @@ CHECKLIST_TEMPLATE_FIELDS = (
 )
 
 
+# ponytail: a sparse matrix, capped. Every skipped pair is reported, never
+# silently dropped, so a thin route set is visible rather than assumed complete.
+MAX_ROUTE_REQUESTS = 60
+
+
 class PlannerActions:
-    def __init__(self, database_path: str | Path, *, place_provider: Any = None) -> None:
+    def __init__(
+        self,
+        database_path: str | Path,
+        *,
+        place_provider: Any = None,
+        route_provider: Any = None,
+    ) -> None:
         self.store = SQLiteStore(database_path)
         self.place_provider = place_provider
+        self.route_provider = route_provider
 
     def create_trip(
         self,
@@ -447,7 +460,12 @@ class PlannerActions:
             }
             for member in setup_payload.get("travellers", [])
         )
-        capability_gaps = ["ROUTE_SNAPSHOT_MISSING", "DESTINATION_TIMEZONE_UNVERIFIED"]
+        routes = [
+            route for route in self.list_routes(trip_id) if route.get("status") == "verified"
+        ]
+        capability_gaps = ["DESTINATION_TIMEZONE_UNVERIFIED"]
+        if not routes:
+            capability_gaps.append("ROUTE_SNAPSHOT_MISSING")
         if basics.get("accommodation_status") != "booked":
             capability_gaps.append("ACCOMMODATION_BASE_UNCONFIRMED")
         if any(person.get("constraints") for person in travellers):
@@ -478,7 +496,7 @@ class PlannerActions:
             "travellers": travellers,
             "candidates": candidates,
             "facts": facts,
-            "routes": [],
+            "routes": routes,
             "locks": [],
             "weights": setup_payload.get("group_preference_weights", {}),
             "thresholds": _comfort_thresholds(owner),
@@ -694,6 +712,114 @@ class PlannerActions:
         if not isinstance(planner_input, dict):
             return []
         return list(planner_input.get("facts", []))
+
+    def refresh_routes(self, trip_id: str, *, force: bool = False) -> dict[str, Any]:
+        """Fetch walking routes between the selected places, sparsely and capped."""
+
+        trip = self.store.get_trip(trip_id)
+        if trip is None:
+            raise ValueError(f"Unknown trip: {trip_id}")
+        points = self._route_points(trip_id)
+        if len(points) < 2:
+            raise ValueError("Choose at least two places with coordinates before routing")
+
+        provider = self.route_provider or OpenRouteServiceProvider()
+        now = datetime.now(timezone.utc)
+        existing = {
+            (route["origin_id"], route["destination_id"], route["mode"]): route
+            for route in self.store.list_route_snapshots(trip_id)
+        }
+        pairs = [
+            (origin, destination)
+            for origin in points
+            for destination in points
+            if origin["place_id"] != destination["place_id"]
+        ]
+        pairs.sort(key=lambda pair: (pair[0]["place_id"], pair[1]["place_id"]))
+        attempted, skipped = pairs[:MAX_ROUTE_REQUESTS], pairs[MAX_ROUTE_REQUESTS:]
+
+        fetched = cached = failed = 0
+        errors: list[str] = []
+        for origin, destination in attempted:
+            key = (origin["place_id"], destination["place_id"], provider.mode)
+            if not force and key in existing and existing[key]["expires_at"] > now.isoformat():
+                cached += 1
+                continue
+            try:
+                self._spend(
+                    operation=provider.operation,
+                    count=1,
+                    trip_id=trip_id,
+                    detail={"origin": key[0], "destination": key[1], "mode": key[2]},
+                )
+                route = provider.route(origin, destination)
+            except ProviderBudgetExceeded:
+                raise
+            except ProviderUnavailable as error:
+                failed += 1
+                message = str(error)[:160]
+                if message not in errors:
+                    errors.append(message)
+                continue
+            self.store.upsert_route_snapshot(
+                trip_id=trip_id,
+                route=route,
+                provider=str(provider.name),
+                retrieved_at=now.isoformat(),
+                expires_at=(
+                    now + timedelta(days=int(getattr(provider, "cache_ttl_days", 14)))
+                ).isoformat(),
+            )
+            fetched += 1
+
+        return {
+            "places": len(points),
+            "pairs_needed": len(pairs),
+            "fetched": fetched,
+            "from_cache": cached,
+            "failed": failed,
+            "skipped_over_cap": len(skipped),
+            "request_cap": MAX_ROUTE_REQUESTS,
+            "provider_errors": errors,
+            "routes_available": len(self.store.list_route_snapshots(trip_id)),
+        }
+
+    def list_routes(self, trip_id: str) -> list[dict[str, Any]]:
+        """Unexpired normalized routes; an expired leg is no longer verified."""
+
+        now = datetime.now(timezone.utc).isoformat()
+        routes = []
+        for route in self.store.list_route_snapshots(trip_id):
+            fresh = route["expires_at"] > now
+            routes.append(
+                {
+                    **{k: v for k, v in route.items() if k not in {"expires_at", "retrieved_at"}},
+                    "status": route.get("status") if fresh else "stale",
+                    "retrieved_at": route["retrieved_at"],
+                    "expires_at": route["expires_at"],
+                }
+            )
+        return routes
+
+    def _route_points(self, trip_id: str) -> list[dict[str, Any]]:
+        """Selected places that carry coordinates, deterministically ordered."""
+
+        points = []
+        for choice in self.store.list_candidate_choices(trip_id):
+            if choice.action not in {"must_do", "interested", "maybe"}:
+                continue
+            candidate = choice.candidate.as_dict()
+            latitude, longitude = candidate.get("latitude"), candidate.get("longitude")
+            if latitude is None or longitude is None:
+                continue
+            points.append(
+                {
+                    "place_id": choice.place_id,
+                    "latitude": float(latitude),
+                    "longitude": float(longitude),
+                }
+            )
+        return sorted(points, key=lambda item: item["place_id"])
 
     def paid_usage_status(self, *, month: str | None = None) -> dict[str, Any]:
         """This month's paid spend against the cap, with per-operation counts."""

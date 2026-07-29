@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from math import ceil
 import os
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -254,3 +255,105 @@ def _address(tags: dict[str, Any]) -> str | None:
     ]
     address = ", ".join(str(part) for part in parts if part)
     return address or None
+
+
+class OpenRouteServiceProvider:
+    """Foot-walking routes from OpenRouteService, normalized for the planner.
+
+    A route from here is a plain transfer: it carries no experience evidence, so
+    the optimizer counts it as plain walking rather than a rewarding walk.
+    """
+
+    name = "openrouteservice"
+    operation = "openrouteservice:directions"
+    cache_version = "ors-foot-v1"
+    cache_ttl_days = 14
+    mode = "walk"
+
+    def __init__(self) -> None:
+        self.directions_url = os.environ.get(
+            "TOURIST_ORS_URL",
+            "https://api.openrouteservice.org/v2/directions/foot-walking",
+        )
+        self.user_agent = os.environ.get(
+            "TOURIST_USER_AGENT", "TouristPlannerPersonalPOC/0.2 (local personal use)"
+        )
+
+    def cache_descriptor(self, origin: dict[str, Any], destination: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "operation": "walking_route",
+            "provider": self.name,
+            "version": self.cache_version,
+            "mode": self.mode,
+            "origin": _point_key(origin),
+            "destination": _point_key(destination),
+            "url": self.directions_url,
+        }
+
+    def route(self, origin: dict[str, Any], destination: dict[str, Any]) -> dict[str, Any]:
+        key = os.environ.get("OPENROUTESERVICE_API_KEY", "").strip()
+        if not key:
+            raise ProviderUnavailable("OPENROUTESERVICE_API_KEY is not configured")
+        query = urlencode(
+            {
+                "start": f"{float(origin['longitude'])},{float(origin['latitude'])}",
+                "end": f"{float(destination['longitude'])},{float(destination['latitude'])}",
+            }
+        )
+        request = Request(
+            f"{self.directions_url}?{query}",
+            headers={"Authorization": key, "User-Agent": self.user_agent},
+        )
+        try:
+            with urlopen(request, timeout=30) as response:
+                payload = json.load(response)
+        except HTTPError as error:
+            # Never let a URL or header carrying the key reach the message.
+            raise ProviderUnavailable(
+                f"OpenRouteService returned HTTP {error.code}"
+            ) from None
+        except (URLError, TimeoutError) as error:
+            raise ProviderUnavailable(
+                f"OpenRouteService is unreachable: {type(error).__name__}"
+            ) from None
+        except json.JSONDecodeError:
+            raise ProviderUnavailable("OpenRouteService returned invalid JSON") from None
+        return self.normalize(payload, origin=origin, destination=destination)
+
+    def normalize(
+        self, payload: dict[str, Any], *, origin: dict[str, Any], destination: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Provider payload to one normalized route record, or a refusal."""
+
+        features = payload.get("features") or []
+        if not features:
+            raise ProviderUnavailable("OpenRouteService returned no route")
+        summary = (features[0].get("properties") or {}).get("summary") or {}
+        seconds = summary.get("duration")
+        metres = summary.get("distance")
+        if seconds is None or metres is None:
+            raise ProviderUnavailable("OpenRouteService route has no duration or distance")
+        minutes = max(1, int(ceil(float(seconds) / 60)))
+        return {
+            "origin_id": str(origin["place_id"]),
+            "destination_id": str(destination["place_id"]),
+            "mode": self.mode,
+            "duration_minutes": minutes,
+            # A foot route is walking end to end.
+            "walking_minutes": minutes,
+            "distance_m": int(round(float(metres))),
+            "transfers": 0,
+            "boarding_buffer_minutes": 0,
+            # Plain transfer: no evidence that the walk is worth doing for itself.
+            "experience_evidence": [],
+            "status": "verified",
+            "provider": self.name,
+        }
+
+
+def _point_key(point: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "place_id": str(point["place_id"]),
+        "latitude": round(float(point["latitude"]), 5),
+        "longitude": round(float(point["longitude"]), 5),
+    }

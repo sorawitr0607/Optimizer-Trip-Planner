@@ -23,7 +23,7 @@ from .core import (
 )
 
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS trips (
     id TEXT PRIMARY KEY,
@@ -177,6 +177,23 @@ BEFORE DELETE ON paid_usage
 BEGIN
     SELECT RAISE(ABORT, 'paid usage entries are immutable');
 END;
+
+-- Normalized route snapshots per trip. Refreshing one replaces that leg; a plan
+-- version keeps the exact routes it was built from inside its own snapshot.
+CREATE TABLE IF NOT EXISTS route_snapshots (
+    id TEXT PRIMARY KEY,
+    trip_id TEXT NOT NULL,
+    origin_id TEXT NOT NULL,
+    destination_id TEXT NOT NULL,
+    mode TEXT NOT NULL,
+    snapshot_json TEXT NOT NULL,
+    snapshot_sha256 TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    retrieved_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    UNIQUE (trip_id, origin_id, destination_id, mode),
+    FOREIGN KEY (trip_id) REFERENCES trips(id)
+);
 
 CREATE TRIGGER IF NOT EXISTS plan_versions_no_update
 BEFORE UPDATE ON plan_versions
@@ -593,6 +610,63 @@ class SQLiteStore:
         return self._verified_snapshot(
             row["snapshot_json"], row["snapshot_sha256"], "Exchange-rate snapshot"
         ).as_dict()
+
+    def upsert_route_snapshot(
+        self,
+        *,
+        trip_id: str,
+        route: dict[str, Any],
+        provider: str,
+        retrieved_at: str,
+        expires_at: str,
+    ) -> dict[str, Any]:
+        snapshot = freeze_snapshot(route)
+        with self.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO route_snapshots (
+                    id, trip_id, origin_id, destination_id, mode, snapshot_json,
+                    snapshot_sha256, provider, retrieved_at, expires_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (trip_id, origin_id, destination_id, mode) DO UPDATE SET
+                    snapshot_json = excluded.snapshot_json,
+                    snapshot_sha256 = excluded.snapshot_sha256,
+                    provider = excluded.provider,
+                    retrieved_at = excluded.retrieved_at,
+                    expires_at = excluded.expires_at
+                """,
+                (
+                    f"route_{uuid4().hex}",
+                    trip_id,
+                    route["origin_id"],
+                    route["destination_id"],
+                    route["mode"],
+                    snapshot.canonical_json,
+                    snapshot.sha256,
+                    provider,
+                    retrieved_at,
+                    expires_at,
+                ),
+            )
+        return route
+
+    def list_route_snapshots(self, trip_id: str) -> list[dict[str, Any]]:
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM route_snapshots WHERE trip_id = ?"
+                " ORDER BY origin_id, destination_id, mode",
+                (trip_id,),
+            ).fetchall()
+        return [
+            {
+                **self._verified_snapshot(
+                    row["snapshot_json"], row["snapshot_sha256"], "Route snapshot"
+                ).as_dict(),
+                "retrieved_at": row["retrieved_at"],
+                "expires_at": row["expires_at"],
+            }
+            for row in rows
+        ]
 
     def add_paid_usage(self, entry: dict[str, Any]) -> dict[str, Any]:
         row_id = f"usage_{uuid4().hex}"

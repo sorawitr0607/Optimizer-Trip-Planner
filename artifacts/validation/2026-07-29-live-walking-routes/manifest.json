@@ -1,0 +1,61 @@
+{
+  "run_id": "2026-07-29-live-walking-routes",
+  "timestamp": "2026-07-29T00:00:00+00:00",
+  "application_version": "0.1.0",
+  "schema_version": 8,
+  "source_revision": "3ac40f3",
+  "recorded_at_revision": "3ac40f3",
+  "operating_system": "Darwin 25.5.0",
+  "python_version": "3.12.13",
+  "language": "en",
+  "configuration": {
+    "provider": "openrouteservice foot-walking",
+    "database": "copy of the live SQLite file, so live data was not modified",
+    "request_cap": 60
+  },
+  "deterministic_seed": null,
+  "fixture_catalog_sha256": "82b654159978df0e2c1a7861f62f79d11bd403de9b80fa41d2d40718a0faba26",
+  "scorecard_gate": "Cost and provider failure",
+  "action": "Fetched real walking routes between the selected places of the live trip and re-read the optimizer input",
+  "result": "pass",
+  "measurements": {
+    "single_route_check": {
+      "from": "Taipei 101",
+      "to": "Sun Yat-sen Memorial Hall",
+      "routed_distance_m": 1210,
+      "straight_line_m": 810,
+      "ratio": 1.49,
+      "duration_minutes": 15,
+      "note": "routed distance exceeds straight line, as a street route must"
+    },
+    "live_trip_run": {
+      "places": 5,
+      "pairs_needed": 20,
+      "fetched": 20,
+      "failed": 0,
+      "skipped_over_cap": 0,
+      "routes_available": 20
+    },
+    "capability_gaps_before": [
+      "DESTINATION_TIMEZONE_UNVERIFIED",
+      "ROUTE_SNAPSHOT_MISSING",
+      "ACCOMMODATION_BASE_UNCONFIRMED"
+    ],
+    "capability_gaps_after": [
+      "DESTINATION_TIMEZONE_UNVERIFIED",
+      "ACCOMMODATION_BASE_UNCONFIRMED"
+    ],
+    "observation": "One returned leg was 31 km of walking, a correct provider answer for a country-level destination and one the comfort thresholds should reject"
+  },
+  "request_counts": {
+    "provider_requests": 20,
+    "paid_requests": 0
+  },
+  "estimated_paid_cost_usd": 0.0,
+  "failure_details": null,
+  "retained_files": [],
+  "snapshot_sources": {
+    "input": "live trip copy",
+    "plan_versions": "none activated in this run"
+  }
+}

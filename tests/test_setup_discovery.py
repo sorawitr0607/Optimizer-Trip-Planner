@@ -231,6 +231,7 @@ class SchemaMigrationTest(unittest.TestCase):
                     "exchange_rate_snapshots",
                     "paid_usage",
                     "paid_usage_cap",
+                    "route_snapshots",
                 }
                 <= tables
             )

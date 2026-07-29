@@ -9,6 +9,7 @@ from urllib.parse import quote
 import streamlit as st
 
 from travel_planner import PlannerActions
+from travel_planner.providers import ProviderBudgetExceeded
 from travel_planner.costs import (
     CATEGORIES as COST_CATEGORIES,
     PAYMENT_STATES as COST_STATES,
@@ -392,6 +393,24 @@ TEXT = {
         "fees": "Fees",
         "shopping_cost": "Shopping",
         "other": "Other",
+        "routes": "Walking routes",
+        "routes_help": "OpenRouteService foot routes between your selected places. Free tier, still counted in the ledger.",
+        "fetch_routes": "Fetch walking routes",
+        "routes_fetched": "Routes updated.",
+        "routes_available": "Routes stored",
+        "routes_needed": "Legs needed",
+        "routes_skipped": "Skipped over the request cap",
+        "routes_failed": "Legs the provider could not return",
+        "no_routes": "No verified routes yet. The optimizer cannot confirm travel time without them.",
+        "routes_need_places": "Choose at least two places with coordinates first.",
+        "paid_usage": "Paid provider usage this month",
+        "paid_requests": "requests",
+        "paid_cap": "cap",
+        "paid_stopped": "The monthly paid cap is reached; new paid calls are stopped until you raise it.",
+        "paid_warning": "Paid spend has passed the warning line.",
+        "raise_cap": "Raise the monthly cap (USD)",
+        "save_cap": "Save cap",
+        "cap_saved": "Monthly cap updated.",
     },
     "th": {
         "title": "ตัวช่วยวางแผนท่องเที่ยวส่วนตัว",
@@ -747,6 +766,24 @@ TEXT = {
         "fees": "ค่าธรรมเนียม",
         "shopping_cost": "ช้อปปิ้ง",
         "other": "อื่นๆ",
+        "routes": "เส้นทางเดิน",
+        "routes_help": "เส้นทางเดินจาก OpenRouteService ระหว่างสถานที่ที่เลือก ใช้ฟรีแต่ยังนับในบัญชีการใช้งาน",
+        "fetch_routes": "ดึงเส้นทางเดิน",
+        "routes_fetched": "อัปเดตเส้นทางแล้ว",
+        "routes_available": "เส้นทางที่เก็บไว้",
+        "routes_needed": "ช่วงเดินทางที่ต้องมี",
+        "routes_skipped": "ข้ามเพราะเกินโควตาการเรียก",
+        "routes_failed": "ช่วงที่ผู้ให้บริการตอบไม่ได้",
+        "no_routes": "ยังไม่มีเส้นทางที่ยืนยัน ระบบจัดแผนจึงยืนยันเวลาเดินทางไม่ได้",
+        "routes_need_places": "เลือกสถานที่ที่มีพิกัดอย่างน้อยสองแห่งก่อน",
+        "paid_usage": "การใช้บริการแบบมีค่าใช้จ่ายเดือนนี้",
+        "paid_requests": "ครั้ง",
+        "paid_cap": "เพดาน",
+        "paid_stopped": "ถึงเพดานค่าใช้จ่ายรายเดือนแล้ว ระบบหยุดเรียกบริการแบบมีค่าใช้จ่ายจนกว่าจะเพิ่มเพดาน",
+        "paid_warning": "ค่าใช้จ่ายเกินเส้นเตือนแล้ว",
+        "raise_cap": "เพิ่มเพดานรายเดือน (USD)",
+        "save_cap": "บันทึกเพดาน",
+        "cap_saved": "อัปเดตเพดานแล้ว",
     },
 }
 
@@ -1897,6 +1934,58 @@ if ranking:
         st.info(copy["no_selected"])
 
 st.divider()
+st.subheader(copy["routes"])
+st.caption(copy["routes_help"])
+route_flash_key = f"route_flash_{trip.trip_id}"
+if route_flash := st.session_state.pop(route_flash_key, None):
+    st.success(route_flash)
+
+stored_routes = actions.list_routes(trip.trip_id)
+verified_routes = [item for item in stored_routes if item["status"] == "verified"]
+usage_status = actions.paid_usage_status()
+st.caption(
+    f"{copy['paid_usage']}: US${usage_status['estimated_usd']:.4f} / "
+    f"US${usage_status['cap_usd']:.2f} {copy['paid_cap']} · "
+    f"{usage_status['requests']} {copy['paid_requests']}"
+)
+if usage_status["state"] == "stopped":
+    st.error(copy["paid_stopped"])
+elif usage_status["state"] == "warning":
+    st.warning(copy["paid_warning"])
+
+if verified_routes:
+    st.markdown(f"**{copy['routes_available']}: {len(verified_routes)}**")
+else:
+    st.info(copy["no_routes"])
+if st.button(copy["fetch_routes"], key=f"fetch_routes_{trip.trip_id}", width="stretch"):
+    try:
+        report = actions.refresh_routes(trip.trip_id)
+    except ProviderBudgetExceeded as error:
+        st.error(str(error))
+    except ValueError as error:
+        st.error(str(error))
+    else:
+        message = (
+            f"{copy['routes_fetched']} {copy['routes_available']} "
+            f"{report['routes_available']} / {copy['routes_needed']} "
+            f"{report['pairs_needed']}"
+        )
+        if report["skipped_over_cap"]:
+            message = f"{message} · {copy['routes_skipped']} {report['skipped_over_cap']}"
+        if report["failed"]:
+            message = f"{message} · {copy['routes_failed']} {report['failed']}"
+        st.session_state[route_flash_key] = message
+        st.rerun()
+with st.expander(copy["raise_cap"]):
+    new_cap = st.number_input(
+        copy["raise_cap"], min_value=0.0, value=float(usage_status["cap_usd"]), step=1.0,
+        key=f"cap_{trip.trip_id}",
+    )
+    if st.button(copy["save_cap"], key=f"save_cap_{trip.trip_id}"):
+        actions.set_paid_cap(new_cap)
+        st.session_state[route_flash_key] = copy["cap_saved"]
+        st.rerun()
+
 st.subheader(copy["optimizer_title"])
 st.caption(copy["optimizer_help"])
 optimizer_flash_key = f"optimizer_flash_{trip.trip_id}"
