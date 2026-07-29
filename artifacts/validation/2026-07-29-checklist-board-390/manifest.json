@@ -1,0 +1,41 @@
+{
+  "run_id": "2026-07-29-checklist-board-390",
+  "timestamp": "2026-07-29T00:00:00+00:00",
+  "application_version": "0.1.0",
+  "schema_version": 5,
+  "source_revision": "df67206",
+  "recorded_at_revision": "d319251",
+  "operating_system": "Darwin 25.5.0",
+  "python_version": "3.12.13",
+  "language": "en",
+  "configuration": {
+    "database": "temporary per-run SQLite",
+    "providers": "none called"
+  },
+  "deterministic_seed": null,
+  "fixture_catalog_sha256": "82b654159978df0e2c1a7861f62f79d11bd403de9b80fa41d2d40718a0faba26",
+  "scorecard_gate": "Checklist and privacy",
+  "action": "Measured a 390-pixel viewport in Chrome with the readiness board fully rendered",
+  "result": "pass",
+  "measurements": {
+    "viewport_width_px": 390,
+    "document_scroll_width_px": 390,
+    "horizontal_overflow_px": 0,
+    "page_scrolls_sideways": false,
+    "elements_past_right_edge": 0,
+    "timing_groups_rendered": 5,
+    "selectboxes": 31,
+    "controls": 83
+  },
+  "request_counts": {
+    "provider_requests": 0,
+    "paid_requests": 0
+  },
+  "estimated_paid_cost_usd": 0.0,
+  "failure_details": null,
+  "retained_files": [],
+  "snapshot_sources": {
+    "input": "tests/fixtures/historic_regressions.json",
+    "plan_versions": "generated in-run from the fixture; not a live Taipei plan"
+  }
+}

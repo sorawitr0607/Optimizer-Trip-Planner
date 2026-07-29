@@ -91,6 +91,38 @@ def annotate_report_cost() -> None:
     report_path.write_text(report, encoding="utf-8")
 
 
+def resolve_ticket_node(
+    ticket_id: str, title: str, candidates: list[dict]
+) -> dict:
+    """Pick the canonical graph node for one Wayfinder ticket.
+
+    Node ids and labels come from an LLM extraction and drift between runs, so
+    requiring one exact title match made a paid rebuild fail on wording alone.
+    Prefer the exact title, then a node carrying the ticket number, then a lone
+    candidate; only genuine ambiguity or an empty extraction blocks the build.
+    """
+
+    if not candidates:
+        raise RuntimeError(f"Extraction produced no node for {ticket_id}")
+    titled = [
+        node
+        for node in candidates
+        if str(node.get("label", "")).casefold() == title.casefold()
+    ]
+    if titled:
+        return min(titled, key=lambda node: str(node["id"]))
+    number = ticket_id.split("-")[-1]
+    numbered = [node for node in candidates if number in str(node.get("id", ""))]
+    if numbered:
+        return min(numbered, key=lambda node: str(node["id"]))
+    if len(candidates) == 1:
+        return candidates[0]
+    raise RuntimeError(
+        f"Could not resolve graph node for {ticket_id} among "
+        f"{len(candidates)} candidates"
+    )
+
+
 def wayfinder_blocker_edges(nodes: list[dict]) -> list[dict]:
     nodes_by_source: dict[Path, list[dict]] = {}
     for node in nodes:
@@ -112,12 +144,9 @@ def wayfinder_blocker_edges(nodes: list[dict]) -> list[dict]:
         if not ticket_match or not title_match:
             continue
         title = title_match.group(1).strip('"')
-        matches = [
-            node for node in nodes_by_source.get(path.resolve(), [])
-            if str(node.get("label", "")).casefold() == title.casefold()
-        ]
-        if len(matches) != 1:
-            raise RuntimeError(f"Could not resolve graph node for {ticket_match.group(1)}")
+        chosen = resolve_ticket_node(
+            ticket_match.group(1), title, nodes_by_source.get(path.resolve(), [])
+        )
 
         blocked_by: list[str] = []
         in_blocked_by = False
@@ -133,7 +162,7 @@ def wayfinder_blocker_edges(nodes: list[dict]) -> list[dict]:
             elif line and not line[0].isspace():
                 in_blocked_by = False
 
-        tickets[ticket_match.group(1)] = (matches[0]["id"], path.resolve(), blocked_by)
+        tickets[ticket_match.group(1)] = (chosen["id"], path.resolve(), blocked_by)
 
     result: list[dict] = []
     for ticket_id, (source, path, blockers) in tickets.items():
@@ -249,8 +278,14 @@ def validate(expected: set[tuple[str, str, str]] | None = None) -> tuple[int, in
     if expected:
         missing_pairs, changed_relations = extracted_edge_issues(expected, actual)
         if missing_pairs:
+            # Name them: a count alone cannot be judged, and the failure path
+            # deletes the raw extraction that would have explained it.
+            listed = ", ".join(
+                f"{source} -> {target}" for source, target in sorted(missing_pairs)[:5]
+            )
             raise RuntimeError(
-                f"Graph lost {len(missing_pairs)} valid extracted endpoint pairs"
+                f"Graph lost {len(missing_pairs)} valid extracted endpoint pairs: "
+                f"{listed}"
             )
         if changed_relations:
             raise RuntimeError(
@@ -305,10 +340,10 @@ def build() -> tuple[int, int]:
                     # PDF while it still said "Data".
                     "data",
                     "--exclude",
-                    # Retained validation screenshots: images cost vision
-                    # tokens and add no structure. The tickets beside them
-                    # stay in the graph.
-                    ".wayfinder/evidence",
+                    # Retained validation bundles. Their manifests are evidence,
+                    # not architecture: ingesting them turns every manifest key
+                    # into a node and invents edges from code to those keys.
+                    "artifacts",
                     env=env,
                 )
             finally:

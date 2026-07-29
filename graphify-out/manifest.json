@@ -1,8 +1,8 @@
 {
   "app.py": {
-    "mtime": 1785300472.5727594,
-    "ast_hash": "bec46d3d591922747af635d1381a923f",
-    "semantic_hash": "bec46d3d591922747af635d1381a923f"
+    "mtime": 1785316339.5959876,
+    "ast_hash": "b5bf2fbba17bdebe25d702fe41fa0573",
+    "semantic_hash": "b5bf2fbba17bdebe25d702fe41fa0573"
   },
   "pyproject.toml": {
     "mtime": 1785300241.8179274,
@@ -10,9 +10,9 @@
     "semantic_hash": "31a30bde8e102bc15d99371f9d2fe34e"
   },
   "scripts/build_project_graph.py": {
-    "mtime": 1785273731.0,
-    "ast_hash": "0c54461478b5bd47a2f46a72b554aa27",
-    "semantic_hash": "0c54461478b5bd47a2f46a72b554aa27"
+    "mtime": 1785317142.9119532,
+    "ast_hash": "3165bd040884a39ed0f5f49056f58fb7",
+    "semantic_hash": "3165bd040884a39ed0f5f49056f58fb7"
   },
   "scripts/check_provider_access.py": {
     "mtime": 1785251698.0,
@@ -34,10 +34,15 @@
     "ast_hash": "0f0b97bc1702fe704a6233c14f3c26b1",
     "semantic_hash": "0f0b97bc1702fe704a6233c14f3c26b1"
   },
+  "tests/test_checklist.py": {
+    "mtime": 1785316362.0269547,
+    "ast_hash": "d46417ed41ffe6e55bca77b95a0fd523",
+    "semantic_hash": "d46417ed41ffe6e55bca77b95a0fd523"
+  },
   "tests/test_exports.py": {
-    "mtime": 1785300694.822677,
-    "ast_hash": "f3cc2de078ab1a5cfc05d03515045b2b",
-    "semantic_hash": "f3cc2de078ab1a5cfc05d03515045b2b"
+    "mtime": 1785315419.8472526,
+    "ast_hash": "e601e8d8650d13a2a717b903b6da83de",
+    "semantic_hash": "e601e8d8650d13a2a717b903b6da83de"
   },
   "tests/test_foundation.py": {
     "mtime": 1785273452.0,
@@ -45,9 +50,9 @@
     "semantic_hash": "f05d39fbe2cfc88c07c000293b15f998"
   },
   "tests/test_graph_builder.py": {
-    "mtime": 1785296758.4439576,
-    "ast_hash": "ad8c53cc2fef9b9c6bdb3804458460eb",
-    "semantic_hash": "ad8c53cc2fef9b9c6bdb3804458460eb"
+    "mtime": 1785316934.376932,
+    "ast_hash": "fa02e7e2d2df20e8c400eab68f9b9ee3",
+    "semantic_hash": "fa02e7e2d2df20e8c400eab68f9b9ee3"
   },
   "tests/test_optimizer.py": {
     "mtime": 1785296758.4450653,
@@ -60,9 +65,9 @@
     "semantic_hash": "6b3fad9be3d3862abea56bcbbb0a7b68"
   },
   "tests/test_setup_discovery.py": {
-    "mtime": 1785295328.0,
-    "ast_hash": "5120b9f00aac3b12e3e3671838cafda0",
-    "semantic_hash": "5120b9f00aac3b12e3e3671838cafda0"
+    "mtime": 1785311509.9640641,
+    "ast_hash": "165fab013675895d7a937102a0d8768f",
+    "semantic_hash": "165fab013675895d7a937102a0d8768f"
   },
   "travel_planner/__init__.py": {
     "mtime": 1785273242.0,
@@ -70,14 +75,19 @@
     "semantic_hash": "ef0aefdeae9a5f201e587415c32b8a5b"
   },
   "travel_planner/actions.py": {
-    "mtime": 1785299498.2556508,
-    "ast_hash": "bdfc3a825bc2098bda3fd60fa0ca35fb",
-    "semantic_hash": "bdfc3a825bc2098bda3fd60fa0ca35fb"
+    "mtime": 1785316269.0379598,
+    "ast_hash": "65f14ed6e0903d934dbb5a636e561ac5",
+    "semantic_hash": "65f14ed6e0903d934dbb5a636e561ac5"
+  },
+  "travel_planner/checklist.py": {
+    "mtime": 1785316030.1684666,
+    "ast_hash": "7de1311a33e06152b0c6597a62fef969",
+    "semantic_hash": "7de1311a33e06152b0c6597a62fef969"
   },
   "travel_planner/core.py": {
-    "mtime": 1785295185.0,
-    "ast_hash": "6f9ab78bae3c21b00f212822a6faa2f9",
-    "semantic_hash": "6f9ab78bae3c21b00f212822a6faa2f9"
+    "mtime": 1785311372.4402485,
+    "ast_hash": "516c8d3a9dd88ba021cc8e9a5db3c166",
+    "semantic_hash": "516c8d3a9dd88ba021cc8e9a5db3c166"
   },
   "travel_planner/discovery.py": {
     "mtime": 1785290727.0,
@@ -85,14 +95,14 @@
     "semantic_hash": "6a4b2254e1f142f16de12aa5390ec703"
   },
   "travel_planner/exporters.py": {
-    "mtime": 1785300677.5096662,
-    "ast_hash": "ec048afa249ae8eb7535d4a2d231eaba",
-    "semantic_hash": "ec048afa249ae8eb7535d4a2d231eaba"
+    "mtime": 1785316052.203114,
+    "ast_hash": "e21d79906195e416bbef4a363dd8214d",
+    "semantic_hash": "e21d79906195e416bbef4a363dd8214d"
   },
   "travel_planner/exports.py": {
-    "mtime": 1785300538.008571,
-    "ast_hash": "cd63b5f601d631eb78b349f1aad17613",
-    "semantic_hash": "cd63b5f601d631eb78b349f1aad17613"
+    "mtime": 1785316052.2024086,
+    "ast_hash": "5be53bb08a6e51dceef281fc76356533",
+    "semantic_hash": "5be53bb08a6e51dceef281fc76356533"
   },
   "travel_planner/optimizer.py": {
     "mtime": 1785295625.0,
@@ -110,13 +120,118 @@
     "semantic_hash": "a7e6d5a1fb71ee59117cb1bedc2cd64e"
   },
   "travel_planner/setup.py": {
-    "mtime": 1785290727.0,
-    "ast_hash": "fdc18e8c0c435a6124f810866438f1e8",
-    "semantic_hash": "fdc18e8c0c435a6124f810866438f1e8"
+    "mtime": 1785311331.3830209,
+    "ast_hash": "2ae63616343cd2772625c1cc43a6f376",
+    "semantic_hash": "2ae63616343cd2772625c1cc43a6f376"
   },
   "travel_planner/store.py": {
-    "mtime": 1785295214.0,
-    "ast_hash": "c18a6072ce55df66ced71b9cbe96863d",
-    "semantic_hash": "c18a6072ce55df66ced71b9cbe96863d"
+    "mtime": 1785311404.3654523,
+    "ast_hash": "2418649b58502a9ef90ed42148907776",
+    "semantic_hash": "2418649b58502a9ef90ed42148907776"
+  },
+  ".wayfinder/README.md": {
+    "mtime": 1785221670.0,
+    "ast_hash": "e95fbcf1f33044cd5b1f8e80e2151d03",
+    "semantic_hash": "e95fbcf1f33044cd5b1f8e80e2151d03"
+  },
+  ".wayfinder/map.md": {
+    "mtime": 1785272453.0,
+    "ast_hash": "f2ea224e665fdb844438af7de7eba063",
+    "semantic_hash": "f2ea224e665fdb844438af7de7eba063"
+  },
+  ".wayfinder/tickets/001-set-phase-1-destination-and-pilot-rules.md": {
+    "mtime": 1785221671.0,
+    "ast_hash": "92ddba5ddf2d773865b7f2298728e249",
+    "semantic_hash": "92ddba5ddf2d773865b7f2298728e249"
+  },
+  ".wayfinder/tickets/002-verify-permitted-live-travel-data-and-cost-limits.md": {
+    "mtime": 1785222309.0,
+    "ast_hash": "64cedc36a0700a6330e556146fb103f2",
+    "semantic_hash": "64cedc36a0700a6330e556146fb103f2"
+  },
+  ".wayfinder/tickets/003-establish-taipei-countdown-evidence-and-refresh-timing.md": {
+    "mtime": 1785222021.0,
+    "ast_hash": "7f5a5e15c989b8632ab50f50e68369da",
+    "semantic_hash": "7f5a5e15c989b8632ab50f50e68369da"
+  },
+  ".wayfinder/tickets/004-choose-the-phase-1-source-stack-and-evidence-policy.md": {
+    "mtime": 1785224623.0,
+    "ast_hash": "d35de6834797eae2314d8be515061a2b",
+    "semantic_hash": "d35de6834797eae2314d8be515061a2b"
+  },
+  ".wayfinder/tickets/005-define-trustworthy-attraction-coverage-and-card-ranking.md": {
+    "mtime": 1785256039.0,
+    "ast_hash": "2077304a40196d5b94ca003be1925686",
+    "semantic_hash": "2077304a40196d5b94ca003be1925686"
+  },
+  ".wayfinder/tickets/006-define-the-strong-cross-day-optimization-contract.md": {
+    "mtime": 1785256885.0,
+    "ast_hash": "c33ac89c9e4a7c4f25e3fd0a76e8c91a",
+    "semantic_hash": "c33ac89c9e4a7c4f25e3fd0a76e8c91a"
+  },
+  ".wayfinder/tickets/007-prototype-the-owner-led-setup-and-confirmation-flow.md": {
+    "mtime": 1785266062.0,
+    "ast_hash": "8b4c45c86ec6143cc86ffd797b7bda67",
+    "semantic_hash": "8b4c45c86ec6143cc86ffd797b7bda67"
+  },
+  ".wayfinder/tickets/008-inspect-the-reference-itinerary-workbooks.md": {
+    "mtime": 1785296644.9726362,
+    "ast_hash": "63f05e8208375fdee92e3b6d936e42a3",
+    "semantic_hash": "63f05e8208375fdee92e3b6d936e42a3"
+  },
+  ".wayfinder/tickets/009-prototype-the-daily-poster-timeline-map-pdf-and-excel.md": {
+    "mtime": 1785261232.0,
+    "ast_hash": "fdc4883aa083c4bd2d845a23e34f4fba",
+    "semantic_hash": "fdc4883aa083c4bd2d845a23e34f4fba"
+  },
+  ".wayfinder/tickets/010-turn-historic-trip-failures-into-regression-fixtures.md": {
+    "mtime": 1785296644.951753,
+    "ast_hash": "dcd655099067cbf04439c887caf618e3",
+    "semantic_hash": "dcd655099067cbf04439c887caf618e3"
+  },
+  ".wayfinder/tickets/011-choose-the-minimal-phase-1-architecture-and-data-contracts.md": {
+    "mtime": 1785270659.0,
+    "ast_hash": "8318c340479bc361780fc830d45ca535",
+    "semantic_hash": "8318c340479bc361780fc830d45ca535"
+  },
+  ".wayfinder/tickets/012-lock-the-validation-scorecard-and-implementation-handoff.md": {
+    "mtime": 1785317031.9700217,
+    "ast_hash": "60cb93edaac3a4f80af72ded2826b104",
+    "semantic_hash": "60cb93edaac3a4f80af72ded2826b104"
+  },
+  ".wayfinder/tickets/013-make-reference-workbook-inspection-available.md": {
+    "mtime": 1785257909.0,
+    "ast_hash": "80f734684592a3332caf3837919cb371",
+    "semantic_hash": "80f734684592a3332caf3837919cb371"
+  },
+  ".wayfinder/tickets/014-provision-approved-phase-1-data-access.md": {
+    "mtime": 1785296644.943907,
+    "ast_hash": "56db8f1aa9e4c57c0d17e1915960c5c6",
+    "semantic_hash": "56db8f1aa9e4c57c0d17e1915960c5c6"
+  },
+  ".wayfinder/tickets/015-verify-a-worldwide-core-and-local-enrichment-model.md": {
+    "mtime": 1785224400.0,
+    "ast_hash": "34edc3af927314510ea50591502c8438",
+    "semantic_hash": "34edc3af927314510ea50591502c8438"
+  },
+  ".wayfinder/tickets/016-define-the-constrained-genai-plan-revision-assistant.md": {
+    "mtime": 1785264344.0,
+    "ast_hash": "3f12337df1708de82ed8d0c78f965c43",
+    "semantic_hash": "3f12337df1708de82ed8d0c78f965c43"
+  },
+  ".wayfinder/tickets/017-define-the-worldwide-pre-trip-readiness-checklist.md": {
+    "mtime": 1785258989.0,
+    "ast_hash": "8eb597e61207566090c77928cafd0113",
+    "semantic_hash": "8eb597e61207566090c77928cafd0113"
+  },
+  "AGENTS.md": {
+    "mtime": 1785297259.266756,
+    "ast_hash": "0513afd7ab371b72d8e4adc0398f9f86",
+    "semantic_hash": "0513afd7ab371b72d8e4adc0398f9f86"
+  },
+  "README.md": {
+    "mtime": 1785296737.2987602,
+    "ast_hash": "3863d117c9ed7cf0af37be2449dec55c",
+    "semantic_hash": "3863d117c9ed7cf0af37be2449dec55c"
   }
 }

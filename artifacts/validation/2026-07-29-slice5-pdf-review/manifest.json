@@ -1,0 +1,45 @@
+{
+  "run_id": "2026-07-29-slice5-pdf-review",
+  "timestamp": "2026-07-29T00:00:00+00:00",
+  "application_version": "0.1.0",
+  "schema_version": 5,
+  "source_revision": "29f7388",
+  "recorded_at_revision": "d319251",
+  "operating_system": "Darwin 25.5.0",
+  "python_version": "3.12.13",
+  "language": "th",
+  "configuration": {
+    "database": "temporary per-run SQLite",
+    "providers": "none called"
+  },
+  "deterministic_seed": null,
+  "fixture_catalog_sha256": "82b654159978df0e2c1a7861f62f79d11bd403de9b80fa41d2d40718a0faba26",
+  "scorecard_gate": "Poster, PDF and Excel",
+  "action": "Rendered every PDF page at A4 100 dpi in English and Thai and read them",
+  "result": "pass_after_fix",
+  "measurements": {
+    "pages": 5,
+    "text_is_extractable": true,
+    "local_script_preserved": true,
+    "defects_found": [
+      "poster text clipped by 78px (en) and 162px (th)",
+      "raw optimizer codes printed where the app localizes"
+    ],
+    "defects_fixed_in": "29f7388"
+  },
+  "request_counts": {
+    "provider_requests": 0,
+    "paid_requests": 0
+  },
+  "estimated_paid_cost_usd": 0.0,
+  "failure_details": null,
+  "retained_files": [
+    "slice5-pdf-th-day-page.png",
+    "slice5-pdf-th-unscheduled-page.png",
+    "slice5-poster-th-wrapped.png"
+  ],
+  "snapshot_sources": {
+    "input": "tests/fixtures/historic_regressions.json",
+    "plan_versions": "generated in-run from the fixture; not a live Taipei plan"
+  }
+}
