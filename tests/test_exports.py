@@ -4,6 +4,7 @@ from io import BytesIO
 import json
 import os
 from pathlib import Path
+import re
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
@@ -499,6 +500,26 @@ class ArtifactTest(unittest.TestCase):
         self.assertEqual("", exporters._code(words, None))
         # A supplied code table survives into the document build.
         self.assertTrue(plan_pdf(export, {"PLAIN_WALK_THRESHOLD": thai}).startswith(b"%PDF-"))
+
+    def test_every_formula_ships_with_a_cached_value(self) -> None:
+        """A formula with no cached value reads blank until the app recalculates."""
+
+        archive = zipfile.ZipFile(BytesIO(plan_workbook_xlsx(self.export)))
+        sheets = [
+            name for name in archive.namelist() if "worksheets/sheet" in name
+        ]
+        formula_sheets, bare = [], []
+        for name in sorted(sheets):
+            xml = archive.read(name).decode("utf-8")
+            cells = re.findall(r"<c [^>]*>(.*?)</c>", xml)
+            formulas = [cell for cell in cells if "<f>" in cell]
+            if formulas:
+                formula_sheets.append(name)
+            bare.extend(cell for cell in formulas if "<v>" not in cell)
+
+        # Formulas live only on Summary (sheet1), so no other sheet can error.
+        self.assertEqual(["xl/worksheets/sheet1.xml"], formula_sheets)
+        self.assertEqual([], bare)
 
     def test_missing_export_font_is_a_precise_error(self) -> None:
         with patch.dict(os.environ, {"TOURIST_EXPORT_FONT": "/nowhere/none.ttf"}):
