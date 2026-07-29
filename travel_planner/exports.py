@@ -70,7 +70,16 @@ def build_export_snapshot(
         ),
     }
 
+    context["reconciliation_by_id"] = {
+        item["place_id"]: item for item in variant.get("reconciliation", [])
+    }
     days = [_day(day, context) for day in variant["days"]]
+    fallbacks = _fallbacks(variant, days, context)
+    for day in days:
+        # A fallback belongs beneath the half-day its replacement lands in.
+        day["fallbacks"] = [
+            item for item in fallbacks if item["date"] == day["date"]
+        ]
     totals = _trip_totals(days)
     _reconcile_with_optimizer(totals, variant["metrics"])
     return {
@@ -128,8 +137,8 @@ def build_export_snapshot(
             }
             for fact in planner_input.get("facts", [])
         ],
-        "fallbacks": variant.get("fallbacks", []),
-        "hotel_recommendation": variant.get("hotel_recommendation"),
+        "fallbacks": fallbacks,
+        "accommodation": _accommodation(variant, planner_input, context),
         "warnings": sorted(set(variant.get("warnings", []))),
         # ponytail: costs stay empty until a provider supplies fare/ticket
         # evidence; the Costs sheet and rate snapshot land with that evidence.
@@ -154,6 +163,76 @@ def display_name(
         or fallback
         or ""
     )
+
+
+def half_day(start: str) -> str:
+    """Morning or afternoon, the grouping fallbacks and day summaries hang off."""
+
+    return "morning" if start < "12:00" else "afternoon"
+
+
+def _accommodation(
+    variant: dict[str, Any], planner_input: dict[str, Any], context: dict[str, Any]
+) -> dict[str, Any]:
+    """Booking state plus the map anchor for the recommended hotel area."""
+
+    recommendation = variant.get("hotel_recommendation")
+    anchor = None
+    if recommendation:
+        area_id = str(recommendation.get("default_area_id") or "")
+        card = context["cards"].get(area_id, {})
+        anchor = {
+            "subject_id": area_id,
+            "display_name": _leg_name(area_id, context),
+            "latitude": card.get("latitude"),
+            "longitude": card.get("longitude"),
+        }
+    return {
+        "status": planner_input["trip"].get("accommodation_status"),
+        "anchor": anchor,
+        "recommendation": recommendation,
+    }
+
+
+def _fallbacks(
+    variant: dict[str, Any], days: list[dict[str, Any]], context: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Locate each fallback by the scheduled visit that replaced its primary."""
+
+    visits = [
+        (day, item)
+        for day in days
+        for item in day["items"]
+        if item["type"] == "visit"
+    ]
+    records = []
+    for fallback in variant.get("fallbacks", []):
+        primary_id = str(fallback.get("primary_id") or "")
+        replacement_id = str(fallback.get("fallback_id") or "")
+        match = next(
+            (
+                (day, item)
+                for day, item in visits
+                if item["subject_id"] == replacement_id
+                or item.get("replaces") == primary_id
+            ),
+            None,
+        )
+        displaced = context["reconciliation_by_id"].get(primary_id, {})
+        records.append(
+            {
+                **fallback,
+                "date": match[0]["date"] if match else None,
+                "half_day": half_day(match[1]["start"]) if match else None,
+                "primary_name": _leg_name(primary_id, context),
+                "replacement_name": _leg_name(replacement_id, context),
+                "replacement_item_id": match[1]["item_id"] if match else None,
+                "replacement_start": match[1]["start"] if match else None,
+                "displaced_reason": displaced.get("reason"),
+                "displaced_consequence": displaced.get("consequence"),
+            }
+        )
+    return records
 
 
 def _day(day: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:

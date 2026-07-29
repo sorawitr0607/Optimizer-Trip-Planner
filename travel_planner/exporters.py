@@ -198,18 +198,29 @@ def plan_pdf(snapshot: dict[str, Any], labels: dict[str, str] | None = None) -> 
         _pdf_heading(pdf, words["timeline"], size=13)
         for item in day["items"]:
             _pdf_line(pdf, _item_line(item, words))
+        if day["fallbacks"]:
+            _pdf_heading(pdf, words["fallback"], size=13)
+            for fallback in day["fallbacks"]:
+                _pdf_line(pdf, _fallback_line(fallback, words))
         if day["stops"]:
             _pdf_heading(pdf, words["tab_map"], size=13)
+            anchor = snapshot["accommodation"]["anchor"]
+            if anchor:
+                _pdf_line(
+                    pdf,
+                    f"{words['hotel_anchor']} · {anchor['display_name']}"
+                    f"{_coordinates(anchor)}",
+                )
             for stop in day["stops"]:
-                coordinates = (
-                    f" · {stop['latitude']:.5f}, {stop['longitude']:.5f}"
-                    if stop["latitude"] is not None and stop["longitude"] is not None
+                marker = (
+                    f" · {words['state_locked']}"
+                    if stop["status"] == "locked"
                     else ""
                 )
                 _pdf_line(
                     pdf,
                     f"{words['stop']} {stop['stop_number']} · {stop['display_name']}"
-                    f"{coordinates}",
+                    f"{_coordinates(stop)}{marker}",
                 )
 
     if snapshot["unscheduled"]:
@@ -463,11 +474,34 @@ def _write_choices(sheet: Any, snapshot: dict[str, Any], header: Any, wrap: Any)
 
     offset = len(snapshot["reconciliation"]) + 3
     sheet.write(offset, 0, "Linked fallbacks", header)
-    for row, fallback in enumerate(snapshot["fallbacks"], start=offset + 1):
+    fallback_columns = (
+        "Date",
+        "Half-day",
+        "Trigger",
+        "Status",
+        "Replaced place",
+        "Replacement",
+        "Day re-optimized",
+        "Displaced reason",
+        "Displaced consequence",
+    )
+    for index, name in enumerate(fallback_columns):
+        sheet.write(offset + 1, index, name, header)
+    for row, fallback in enumerate(snapshot["fallbacks"], start=offset + 2):
         sheet.write_row(
             row,
             0,
-            [str(value) for value in (fallback or {}).values()],
+            [
+                fallback.get("date") or "",
+                fallback.get("half_day") or "",
+                fallback.get("trigger") or "",
+                fallback.get("status") or "",
+                fallback.get("primary_name") or "",
+                fallback.get("replacement_name") or "",
+                "yes" if fallback.get("day_reoptimized") else "",
+                fallback.get("displaced_reason") or "",
+                fallback.get("displaced_consequence") or "",
+            ],
             wrap,
         )
 
@@ -593,6 +627,26 @@ def _item_line(item: dict[str, Any], words: dict[str, str]) -> str:
     return f"{clock}  [{item.get('reason') or 'buffer'}] ({item['duration_minutes']} {words['minutes']})"
 
 
+def _coordinates(point: dict[str, Any]) -> str:
+    if point.get("latitude") is None or point.get("longitude") is None:
+        return ""
+    return f" · {point['latitude']:.5f}, {point['longitude']:.5f}"
+
+
+def _fallback_line(fallback: dict[str, Any], words: dict[str, str]) -> str:
+    parts = [
+        f"{words['fallback_trigger']}: {fallback.get('trigger') or '?'}",
+        f"{fallback.get('primary_name')} > {fallback.get('replacement_name')}",
+    ]
+    if fallback.get("half_day"):
+        parts.insert(0, words.get(fallback["half_day"], fallback["half_day"]))
+    if fallback.get("day_reoptimized"):
+        parts.append(words["day_reoptimized"])
+    if fallback.get("displaced_consequence"):
+        parts.append(str(fallback["displaced_consequence"]))
+    return "- " + " · ".join(parts)
+
+
 def _stamp_line(snapshot: dict[str, Any]) -> str:
     stamp = snapshot["stamp"]
     return (
@@ -650,4 +704,11 @@ DEFAULT_LABELS = {
     "sources": "Evidence and sources",
     "no_sources": "No governed fact reached this plan.",
     "no_costs": "No cost evidence is available yet.",
+    "fallback": "Fallback for this half-day",
+    "fallback_trigger": "Trigger",
+    "day_reoptimized": "day re-optimized",
+    "hotel_anchor": "Hotel area",
+    "morning": "Morning",
+    "afternoon": "Afternoon",
+    "state_locked": "Locked",
 }

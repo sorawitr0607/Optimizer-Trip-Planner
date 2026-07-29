@@ -59,6 +59,10 @@ Each stage is gated on the previous one having a matching hash (`_current_choice
 
 1. **Setup** — `setup.build_setup_payload()` normalizes owner/member preferences into a draft;
    nothing downstream runs until `confirmed`.
+   Setup and the optimizer use different accommodation vocabularies — `unknown`/`not_booked`/`booked`
+   versus the `unbooked` that `optimizer._hotel_recommendation()` and the frozen fixtures test for.
+   `_optimizer_input` translates at the boundary; before it did, hotel-area recommendations silently
+   never fired for any app-created trip.
 2. **Discovery** — `providers.OpenStreetMapProvider` (Nominatim + Overpass, free) → `discovery.build_candidate_catalog()`
    normalizes and dedupes into provider-neutral candidates with an explicit status
    (`verified` / `stale` / `unavailable` / `error`). Raw responses live in the `provider_cache` table

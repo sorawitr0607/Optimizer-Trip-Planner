@@ -434,7 +434,14 @@ class PlannerActions:
                 "timezone": None,
                 "local_dates": local_dates,
                 "usable_windows": usable_windows,
-                "accommodation_status": basics.get("accommodation_status"),
+                # Setup speaks unknown/not_booked/booked; the optimizer and the
+                # frozen fixtures speak unbooked.  Translate at this boundary so
+                # hotel-area recommendations actually fire.
+                "accommodation_status": (
+                    "unbooked"
+                    if basics.get("accommodation_status") == "not_booked"
+                    else basics.get("accommodation_status")
+                ),
                 "provisional": True,
                 "requires_route_evidence": True,
                 "capability_gaps": capability_gaps,

@@ -10,6 +10,7 @@ import streamlit as st
 
 from travel_planner import PlannerActions
 from travel_planner.exporters import day_poster_png, plan_pdf, plan_workbook_xlsx
+from travel_planner.exports import half_day
 from travel_planner.setup import (
     ALSO_ENJOY_TAGS,
     AVOID_TAGS,
@@ -236,6 +237,12 @@ TEXT = {
         "sources": "Evidence and sources",
         "no_sources": "No governed fact reached this plan.",
         "no_costs": "No cost evidence is available yet.",
+        "fallback": "Fallback for this half-day",
+        "fallback_trigger": "Trigger",
+        "day_reoptimized": "day re-optimized",
+        "hotel_anchor": "Hotel area",
+        "morning": "Morning",
+        "afternoon": "Afternoon",
     },
     "th": {
         "title": "ตัวช่วยวางแผนท่องเที่ยวส่วนตัว",
@@ -454,6 +461,12 @@ TEXT = {
         "sources": "หลักฐานและแหล่งข้อมูล",
         "no_sources": "ยังไม่มีข้อมูลที่ตรวจสอบแล้วเข้าสู่แผนนี้",
         "no_costs": "ยังไม่มีข้อมูลค่าใช้จ่าย",
+        "fallback": "แผนสำรองของช่วงนี้",
+        "fallback_trigger": "เงื่อนไขที่ทำให้ใช้แผนสำรอง",
+        "day_reoptimized": "จัดตารางวันนี้ใหม่แล้ว",
+        "hotel_anchor": "ย่านที่พัก",
+        "morning": "ช่วงเช้า",
+        "afternoon": "ช่วงบ่าย",
     },
 }
 
@@ -756,6 +769,27 @@ def _plan_documents(_snapshot: dict, sha256: str, language: str) -> dict[str, by
 @st.cache_data(show_spinner=False)
 def _day_poster(_snapshot: dict, sha256: str, language: str, date: str) -> bytes:
     return day_poster_png(_snapshot, date, TEXT[language])
+
+
+def _render_fallback(fallback: dict, language: str) -> None:
+    """The half-day's fallback, with its trigger, swap, and displaced selection."""
+
+    words = TEXT[language]
+    with st.container(border=True):
+        st.markdown(
+            f"**{words['fallback']}** · {words['fallback_trigger']}: "
+            f"{_optimizer_code(fallback.get('trigger') or 'unknown', language)}"
+        )
+        st.caption(
+            f"{fallback['primary_name']} → {fallback['replacement_name']}"
+            + (f" · {fallback['replacement_start']}" if fallback.get("replacement_start") else "")
+            + (f" · {words['day_reoptimized']}" if fallback.get("day_reoptimized") else "")
+        )
+        if fallback.get("displaced_consequence"):
+            st.caption(
+                f"{words['consequence']}: "
+                f"{_optimizer_code(fallback['displaced_consequence'], language)}"
+            )
 
 
 def _render_plan_item(item: dict, language: str) -> None:
@@ -1661,29 +1695,56 @@ else:
 
     timeline_tab, map_tab = st.tabs([copy["timeline"], copy["tab_map"]])
     with timeline_tab:
-        if day["items"]:
-            for plan_item in day["items"]:
-                _render_plan_item(plan_item, language)
-        else:
+        if not day["items"]:
             st.warning(copy["no_schedule"])
+        for part in ("morning", "afternoon"):
+            part_items = [
+                item for item in day["items"] if half_day(item["start"]) == part
+            ]
+            if not part_items:
+                continue
+            for plan_item in part_items:
+                _render_plan_item(plan_item, language)
+            for fallback in day["fallbacks"]:
+                if fallback["half_day"] == part:
+                    _render_fallback(fallback, language)
+        for fallback in day["fallbacks"]:
+            if fallback["half_day"] not in ("morning", "afternoon"):
+                _render_fallback(fallback, language)
     with map_tab:
-        located = [
-            stop
+        anchor = export["accommodation"]["anchor"]
+        points = [
+            {
+                "latitude": stop["latitude"],
+                "longitude": stop["longitude"],
+                "colour": "#B4532A" if stop["status"] == "locked" else "#2A6FB4",
+                "radius": 90 if stop["status"] == "locked" else 60,
+            }
             for stop in day["stops"]
             if stop["latitude"] is not None and stop["longitude"] is not None
         ]
-        if located:
-            st.map(
+        if anchor and anchor["latitude"] is not None and anchor["longitude"] is not None:
+            points.append(
                 {
-                    "latitude": [stop["latitude"] for stop in located],
-                    "longitude": [stop["longitude"] for stop in located],
-                },
+                    "latitude": anchor["latitude"],
+                    "longitude": anchor["longitude"],
+                    "colour": "#E0A32E",
+                    "radius": 120,
+                }
+            )
+        if points:
+            st.map(
+                {key: [point[key] for point in points] for key in points[0]},
                 latitude="latitude",
                 longitude="longitude",
-                size=60,
+                color="colour",
+                size="radius",
             )
         else:
             st.info(copy["map_no_coordinates"])
+        # Text labels carry the same distinctions as the marker colours.
+        if anchor:
+            st.markdown(f"**{copy['hotel_anchor']}** · {anchor['display_name']}")
         for stop in day["stops"]:
             st.markdown(
                 f"{copy['stop']} {stop['stop_number']} · {stop['display_name']} · "
