@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from streamlit.testing.v1 import AppTest
 
-from Main.run_optimizer_regressions import run_catalog
+from scripts.run_optimizer_regressions import run_catalog
 from travel_planner.actions import PlannerActions
 from travel_planner.core import new_optimization_preview
 from travel_planner.optimizer import optimize_trip, validate_variant

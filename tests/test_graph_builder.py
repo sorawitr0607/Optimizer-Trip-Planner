@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from Main.build_project_graph import extracted_edge_issues
+from scripts.build_project_graph import extracted_edge_issues
 
 
 class GraphBuilderEdgeValidationTest(unittest.TestCase):

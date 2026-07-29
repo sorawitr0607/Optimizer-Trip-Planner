@@ -50,12 +50,12 @@ Convert the Japan, Fukuoka, Kunming/Dali, and Shanghai failure reports plus work
 ## Regression assets
 
 - [Historic regression catalog](../../tests/fixtures/historic_regressions.json) — 24 worldwide rule definitions, 20 atomic fixtures, and 7 interaction fixtures.
-- [Catalog validator](../../Main/validate_regression_fixtures.py) — dependency-free schema, coverage, reference, status, outcome, and forbidden-key checks.
+- [Catalog validator](../../scripts/validate_regression_fixtures.py) — dependency-free schema, coverage, reference, status, outcome, and forbidden-key checks.
 
 Run:
 
 ```bash
-python3 Main/validate_regression_fixtures.py
+python3 scripts/validate_regression_fixtures.py
 ```
 
 Expected result:

@@ -14,13 +14,13 @@ blocked_by:
 
 ## Question
 
-Inspect all four workbooks in `Data/` with the required spreadsheet workflow, recording their sheets, timetable fields, visual patterns, useful content, and every structure implicated by the reported trip failures so later output and regression decisions use the actual examples rather than guesses.
+Inspect all four workbooks in `data/reference-itineraries/` with the required spreadsheet workflow, recording their sheets, timetable fields, visual patterns, useful content, and every structure implicated by the reported trip failures so later output and regression decisions use the actual examples rather than guesses.
 
 The required spreadsheet runtime was unavailable during map charting; resolving that access is part of this prerequisite task.
 
 ## Inspected source set
 
-All four `.xlsx` files and the user-provided timetable PDF exports in `Data/` were inspected read-only. The PDFs cover six rendered pages: Japan and Kunming use two pages each; Fukuoka and Shanghai use one page each.
+All four `.xlsx` files and the user-provided timetable PDF exports in `data/reference-itineraries/` were inspected read-only. The PDFs cover six rendered pages: Japan and Kunming use two pages each; Fukuoka and Shanghai use one page each.
 
 ## Sheet inventory
 

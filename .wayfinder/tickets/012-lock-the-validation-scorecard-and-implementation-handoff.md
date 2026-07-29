@@ -93,7 +93,7 @@ Never retain secret values, passport data, booking documents, unrelated member d
 - Trip-specific group weights default to 50/25/25 for this three-person pilot, omit members without preference input and renormalize the remaining weights. Ages do not influence ranking. `Must do`, `Interested`, `Maybe`, and `Not for trip` choices persist in SQLite schema version 3 with candidate snapshots and optional rejection reasons; positive choices add a small, capped category signal without filtering other places.
 - The bilingual Streamlit card shows name, local name, available open-data photo, category, score breakdown, duration estimate, evidence gaps, pros/cons, choice actions, complete Browse All, group-weight explanation, and reconciliation. Selected candidates missing from a later discovery snapshot remain visible from their stored snapshot.
 - Reconciliation deliberately reports `Pending optimizer` rather than `Fits`, `Fits with tradeoff`, or `Cannot currently fit`. Route, opening-time, cross-day, and timetable feasibility become valid only in Slice 4.
-- `uv run --locked python -m unittest discover -s tests -p 'test_*.py' -v` passes 17 tests. `python3 Main/validate_regression_fixtures.py` still passes with 24 rules, 20 atomic cases, and 7 interaction cases.
+- `uv run --locked python -m unittest discover -s tests -p 'test_*.py' -v` passes 17 tests. `python3 scripts/validate_regression_fixtures.py` still passes with 24 rules, 20 atomic cases, and 7 interaction cases.
 - A local Streamlit `AppTest` rendered the retained 494-candidate Taipei catalog and ranking in 0.506 seconds with no exception. A real headless server returned `ok` from `/_stcore/health` and HTTP 200 for `/`; no paid API was called for this slice.
 
 ### Slice 4 implementation evidence — 2026-07-29
@@ -104,7 +104,7 @@ Never retain secret values, passport data, booking documents, unrelated member d
 - Every solve retains its lexicographic objective, deterministic signature, bounded-runtime state, and deterministic day-greedy baseline. A forced-limit test exposes only a validated incumbent or an unavailable result and offers the `optimize_longer` action; it never promotes an invalid partial schedule.
 - SQLite schema version 4 adds one replaceable, hash-verified optimizer preview per trip. Activation reassembles and hashes the current input to reject stale choices, accepts only a fully validated `Ready` variant, and stores the exact optimizer input and result in a new immutable active plan version.
 - The bilingual Streamlit section generates or resumes a preview, recommends Minimum/Balanced/Relaxed stay length when dates are unknown, compares the three dated variants, shows load/travel/buffer metrics, warnings, the complete reconciliation and timeline, and disables activation for provisional or unavailable results.
-- `uv run --locked python Main/run_optimizer_regressions.py` passes all 20 atomic and 7 interaction fixtures through the real optimizer, three variants each, without provider, UI, database, GenAI, or paid calls. The structural fixture validator still passes 24 rules, 20 atomic fixtures, and 7 interactions.
+- `uv run --locked python scripts/run_optimizer_regressions.py` passes all 20 atomic and 7 interaction fixtures through the real optimizer, three variants each, without provider, UI, database, GenAI, or paid calls. The structural fixture validator still passes 24 rules, 20 atomic fixtures, and 7 interactions.
 - `uv run --locked python -m unittest discover -s tests -p 'test_*.py' -v` passes 25 tests. Coverage includes deterministic equality, lock preservation, safe-route selection, rain fallback reoptimization, independent corruption rejection, forced limits, preview persistence, stale/unverified activation blocking, Ready activation, exact-input retention, unknown-date stay recommendations, and English/Thai optimizer UI.
 - A synthetic 12-place, four-day route-complete solve produced three independently valid Ready variants in 8.365 seconds on the current laptop, below the 30-second initial target, and each equalled or improved its greedy baseline. The retained 494-candidate Taipei app rendered in 0.721 seconds; a headless server returned `ok` and HTTP 200.
 - The current live Taipei catalog still lacks the selected-place route snapshot, destination timezone, confirmed accommodation base, and dated official opening/access facts required for a Ready timetable. Slice 4 reports those exact gaps and refuses activation rather than inventing a subway leg, transfer time, opening hour, or usable schedule.
@@ -132,10 +132,10 @@ Phase 1 is done only when:
 
 ## Specification checkpoint evidence
 
-- `python3 Main/validate_regression_fixtures.py` passes with 24 rules, 20 atomic cases and 7 interaction cases.
+- `python3 scripts/validate_regression_fixtures.py` passes with 24 rules, 20 atomic cases and 7 interaction cases.
 - All dependent Wayfinder tickets are closed and their decisions are linked from the map.
-- `python3 Main/build_project_graph.py --check` passes; the multigraph diagnostic reports zero dangling endpoints, self-loops, duplicate edges, or same-endpoint collapses.
-- `python3 Main/check_provider_access.py --self-test` passes without exposing a secret. A 2026-07-29 no-paid-call capability check found openrouteservice reachable and the Google/OpenAI keys configured, while Open-Meteo returned HTTP 503 and public Overpass returned HTTP 504. This is retained as an expected provider-unavailable implementation case, not misreported as current verified evidence.
+- `python3 scripts/build_project_graph.py --check` passes; the multigraph diagnostic reports zero dangling endpoints, self-loops, duplicate edges, or same-endpoint collapses.
+- `python3 scripts/check_provider_access.py --self-test` passes without exposing a secret. A 2026-07-29 no-paid-call capability check found openrouteservice reachable and the Google/OpenAI keys configured, while Open-Meteo returned HTTP 503 and public Overpass returned HTTP 504. This is retained as an expected provider-unavailable implementation case, not misreported as current verified evidence.
 
 ## Resolution
 
