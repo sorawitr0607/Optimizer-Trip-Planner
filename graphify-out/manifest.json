@@ -1,15 +1,15 @@
 {
-  "Main/build_project_graph.py": {
+  "scripts/build_project_graph.py": {
     "mtime": 1785273731.6280773,
     "ast_hash": "0c54461478b5bd47a2f46a72b554aa27",
     "semantic_hash": "0c54461478b5bd47a2f46a72b554aa27"
   },
-  "Main/check_provider_access.py": {
+  "scripts/check_provider_access.py": {
     "mtime": 1785251698.0189724,
     "ast_hash": "cb23394124d77b1d29d27c498439ab94",
     "semantic_hash": "cb23394124d77b1d29d27c498439ab94"
   },
-  "Main/validate_regression_fixtures.py": {
+  "scripts/validate_regression_fixtures.py": {
     "mtime": 1785272061.300913,
     "ast_hash": "9603ecbfae9bfc1e07a3906dd59287b4",
     "semantic_hash": "9603ecbfae9bfc1e07a3906dd59287b4"
