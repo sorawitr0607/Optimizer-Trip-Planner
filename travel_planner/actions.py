@@ -687,6 +687,8 @@ class PlannerActions:
                 active_version_id=active.version_id if active else None,
                 language=language or trip.language,
                 exported_at=datetime.now(timezone.utc).isoformat(),
+                checklist_items=self.list_checklist_items(trip_id),
+                checklist_readiness=self.checklist_readiness(trip_id),
             )
         )
 

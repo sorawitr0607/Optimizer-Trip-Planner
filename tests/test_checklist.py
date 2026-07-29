@@ -1,16 +1,21 @@
 from __future__ import annotations
 
+from io import BytesIO
+import json
 import os
 from pathlib import Path
 import sqlite3
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
+import zipfile
 
 from streamlit.testing.v1 import AppTest
 
 from travel_planner import checklist
 from travel_planner.actions import PlannerActions
+from travel_planner.exporters import checklist_ics, plan_pdf, plan_workbook_xlsx
+from travel_planner.optimizer import optimize_trip
 
 ROOT = Path(__file__).resolve().parents[1]
 TODAY = "2026-11-01"
@@ -441,6 +446,147 @@ class ChecklistPersistenceTest(unittest.TestCase):
 
         with self.assertRaisesRegex(RuntimeError, "Checklist item"):
             self.actions.list_checklist_items(self.trip.trip_id)
+
+
+class ChecklistExportTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.directory = TemporaryDirectory()
+        path = Path(self.directory.name) / "export.sqlite3"
+        catalog = json.loads(
+            (ROOT / "tests" / "fixtures" / "historic_regressions.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        planner_input = json.loads(
+            json.dumps(
+                next(
+                    item
+                    for item in catalog["fixtures"]
+                    if item["metadata"]["id"] == "ix-dali-hotel-whole-trip"
+                )["planner_input"]
+            )
+        )
+        proposal = optimize_trip(planner_input)
+        self.actions = PlannerActions(path)
+        self.trip = self.actions.create_trip(name="Dali", destination="Dali")
+        self.actions.save_setup(
+            trip_id=self.trip.trip_id,
+            main_style=["sightseeing"],
+            owner_nationality="Thailand",
+            start_date=planner_input["trip"]["local_dates"][0],
+            end_date=planner_input["trip"]["local_dates"][-1],
+            accommodation_status="not_booked",
+            confirmed=True,
+        )
+        self.actions.save_plan_version(
+            trip_id=self.trip.trip_id,
+            snapshot={
+                "schema_version": 1,
+                "optimizer_version": proposal["optimizer_version"],
+                "input_sha256": proposal["input_sha256"],
+                "optimizer_input": planner_input,
+                "variant": proposal["variants"][0],
+            },
+            cause="optimizer:best_balance",
+        )
+        self.actions.apply_checklist_proposal(self.trip.trip_id)
+        self.export = self.actions.build_export_snapshot(self.trip.trip_id).as_dict()
+
+    def tearDown(self) -> None:
+        self.directory.cleanup()
+
+    def test_snapshot_carries_the_board_and_only_that_day_s_tasks(self) -> None:
+        board = self.export["checklist"]
+        self.assertTrue(board["items"])
+        self.assertEqual(
+            checklist.VERIFICATION_NEEDED, board["readiness"]["state"]
+        )
+        for day in self.export["days"]:
+            for task in day["tasks"]:
+                self.assertEqual(day["date"], task["due_date"])
+        # A task due outside the trip window belongs to no day.
+        early = [
+            item
+            for item in board["items"]
+            if item["due_date"]
+            and item["due_date"] < self.export["days"][0]["date"]
+        ]
+        self.assertTrue(early)
+        placed = {task["item_id"] for day in self.export["days"] for task in day["tasks"]}
+        self.assertTrue(placed.isdisjoint({item["item_id"] for item in early}))
+
+    def test_workbook_checklist_sheet_holds_the_agreed_columns_and_rows(self) -> None:
+        archive = zipfile.ZipFile(BytesIO(plan_workbook_xlsx(self.export)))
+        # Checklist is the fourth agreed sheet.
+        sheet = archive.read("xl/worksheets/sheet4.xml").decode("utf-8")
+        strings = archive.read("xl/sharedStrings.xml").decode("utf-8")
+
+        rows = self.export["checklist"]["items"] + self.export["checklist"]["dismissed"]
+        self.assertEqual(len(rows) + 1, sheet.count("<row "))
+        self.assertIn("autoFilter", sheet)
+        for text in ("Requirement level", "Evidence state", "Authority type"):
+            self.assertIn(text, strings)
+        self.assertIn("Verify entry requirements for Dali", strings)
+        self.assertNotIn("The readiness checklist is not generated yet.", strings)
+
+    def test_pdf_carries_the_appendix_and_a_cover_summary(self) -> None:
+        pdf = plan_pdf(self.export)
+        self.assertTrue(pdf.startswith(b"%PDF-"))
+        # Cover, one page per day, unscheduled if any, appendix.
+        self.assertGreaterEqual(
+            pdf.count(b"/Type /Page\n"), 2 + len(self.export["days"])
+        )
+
+    def test_ics_is_well_formed_and_only_dated_tasks_appear(self) -> None:
+        data = checklist_ics(self.export).decode("utf-8")
+        dated = [
+            item for item in self.export["checklist"]["items"] if item["due_date"]
+        ]
+        undated = [
+            item for item in self.export["checklist"]["items"] if not item["due_date"]
+        ]
+
+        self.assertTrue(dated)
+        self.assertTrue(undated)
+        self.assertTrue(data.startswith("BEGIN:VCALENDAR\r\n"))
+        self.assertTrue(data.rstrip("\r\n").endswith("END:VCALENDAR"))
+        self.assertEqual(len(dated), data.count("BEGIN:VEVENT"))
+        self.assertEqual(len(dated), data.count("END:VEVENT"))
+        self.assertEqual(len(dated), data.count("UID:"))
+        for item in undated:
+            self.assertNotIn(f"SUMMARY:{item['title']}", data)
+
+        # Every line stays inside the 75-octet limit once folded.
+        for line in data.split("\r\n"):
+            self.assertLessEqual(len(line.encode("utf-8")), 75, line)
+
+        # Dates are all-day values spanning one day.
+        first = next(item for item in dated)
+        self.assertIn(f"DTSTART;VALUE=DATE:{first['due_date'].replace('-', '')}", data)
+
+    def test_ics_escapes_separators_that_would_truncate_a_field(self) -> None:
+        self.actions.save_checklist_item(
+            trip_id=self.trip.trip_id,
+            item={
+                "title": "Buy tickets, passes; and adapters",
+                "category": "packing",
+                "requirement_level": "optional",
+                "timing": "7_days_before",
+                "consequence": "Missing gear, and queues",
+            },
+        )
+        export = self.actions.build_export_snapshot(self.trip.trip_id).as_dict()
+        data = checklist_ics(export).decode("utf-8")
+        unfolded = data.replace("\r\n ", "")
+
+        self.assertIn("SUMMARY:Buy tickets\\, passes\\; and adapters", unfolded)
+        self.assertIn("Missing gear\\, and queues", unfolded)
+
+    def test_thai_labels_reach_the_calendar_description(self) -> None:
+        data = checklist_ics(
+            self.export, {"requirement_level": "ระดับความจำเป็น", "required": "จำเป็น"}
+        ).decode("utf-8")
+        self.assertIn("ระดับความจำเป็น", data.replace("\r\n ", ""))
 
 
 class ChecklistViewTest(unittest.TestCase):

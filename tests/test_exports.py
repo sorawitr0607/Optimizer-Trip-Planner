@@ -521,6 +521,14 @@ class ArtifactTest(unittest.TestCase):
         self.assertEqual(["xl/worksheets/sheet1.xml"], formula_sheets)
         self.assertEqual([], bare)
 
+    def test_every_directly_indexed_label_has_a_default(self) -> None:
+        """words['x'] with no default raises when a caller passes no labels."""
+
+        source = Path(exporters.__file__).read_text(encoding="utf-8")
+        indexed = set(re.findall(r"""words\[['\"]([a-z_0-9]+)['\"]\]""", source))
+        self.assertTrue(indexed)
+        self.assertEqual(set(), indexed - set(exporters.DEFAULT_LABELS))
+
     def test_missing_export_font_is_a_precise_error(self) -> None:
         with patch.dict(os.environ, {"TOURIST_EXPORT_FONT": "/nowhere/none.ttf"}):
             with patch.object(exporters, "FONT_CANDIDATES", ()):

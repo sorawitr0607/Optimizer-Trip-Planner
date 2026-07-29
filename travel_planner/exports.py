@@ -36,6 +36,8 @@ def build_export_snapshot(
     active_version_id: str | None,
     language: str,
     exported_at: str,
+    checklist_items: list[dict[str, Any]] | None = None,
+    checklist_readiness: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Return the display-ready snapshot for one active plan version."""
 
@@ -75,10 +77,15 @@ def build_export_snapshot(
     }
     days = [_day(day, context) for day in variant["days"]]
     fallbacks = _fallbacks(variant, days, context)
+    board = [item for item in (checklist_items or []) if not item.get("dismissed")]
     for day in days:
         # A fallback belongs beneath the half-day its replacement lands in.
         day["fallbacks"] = [
             item for item in fallbacks if item["date"] == day["date"]
+        ]
+        # A poster shows only the tasks needed on its own day.
+        day["tasks"] = [
+            _task(item) for item in board if item.get("due_date") == day["date"]
         ]
     totals = _trip_totals(days)
     _reconcile_with_optimizer(totals, variant["metrics"])
@@ -127,6 +134,16 @@ def build_export_snapshot(
             for item in variant.get("reconciliation", [])
             if item["status"] == "cannot_currently_fit"
         ],
+        # The readiness board travels with the plan; it never gates it.
+        "checklist": {
+            "readiness": checklist_readiness,
+            "items": [_task(item) for item in board],
+            "dismissed": [
+                _task(item)
+                for item in (checklist_items or [])
+                if item.get("dismissed")
+            ],
+        },
         "sources": [
             {
                 "subject_id": fact.get("subject_id"),
@@ -163,6 +180,32 @@ def display_name(
         or fallback
         or ""
     )
+
+
+def _task(item: dict[str, Any]) -> dict[str, Any]:
+    """The agreed checklist columns, kept separate rather than merged for display."""
+
+    return {
+        "item_id": item.get("item_id"),
+        "title": item.get("title"),
+        "category": item.get("category"),
+        "requirement_level": item.get("requirement_level"),
+        "progress": item.get("progress"),
+        "timing": item.get("timing"),
+        "due_date": item.get("due_date"),
+        "owner": item.get("owner"),
+        "applies_to": list(item.get("applies_to") or []),
+        "related_component": item.get("related_component"),
+        "consequence": item.get("consequence"),
+        "source_url": item.get("source_url"),
+        "authority_type": item.get("authority_type"),
+        "expected_authority": item.get("expected_authority"),
+        "evidence_state": item.get("evidence_state"),
+        "last_checked_at": item.get("last_checked_at"),
+        "note": item.get("note"),
+        "origin": item.get("origin"),
+        "dismissed": bool(item.get("dismissed")),
+    }
 
 
 def half_day(start: str) -> str:

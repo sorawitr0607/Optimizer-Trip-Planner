@@ -7,6 +7,7 @@ invent no missing value; a missing required field raises a precise error.
 
 from __future__ import annotations
 
+from datetime import date, timedelta
 from io import BytesIO
 import os
 from pathlib import Path
@@ -22,6 +23,14 @@ import xlsxwriter
 POSTER_SIZE = (1080, 1920)  # 9:16
 PICTOGRAPHS = re.compile(r"[\U0001F000-\U0001FAFF←-⯿️]")
 POSTER_HIGHLIGHTS = 5
+POSTER_TASKS = 3
+CHECKLIST_TIMING = (
+    "do_now",
+    "30_days_before",
+    "7_days_before",
+    "24_hours_before",
+    "departure_arrival_day",
+)
 SHEETS = ("Summary", "Timeline", "Choices & Backups", "Checklist", "Costs", "Sources")
 TIMELINE_COLUMNS = (
     ("Date", 12),
@@ -214,6 +223,28 @@ def day_poster_png(
         max_lines=2,
         line_height=44,
     )
+    # Only the tasks needed on this day.
+    tasks = day.get("tasks", [])[:POSTER_TASKS]
+    if tasks:
+        task_top = footer - 40 - len(tasks) * 44
+        _draw_block(
+            draw,
+            (margin, task_top - 46),
+            words["today_tasks"],
+            body_font,
+            "#8FB8D8",
+            full_width,
+        )
+        for offset, task in enumerate(tasks):
+            _draw_block(
+                draw,
+                (margin, task_top + offset * 44),
+                f"• {task['title']}",
+                body_font,
+                "#A9BECD",
+                full_width,
+            )
+
     if day["highest_risk"]:
         risk = words.get(
             f"state_{day['highest_risk']['status']}", day["highest_risk"]["status"]
@@ -271,6 +302,16 @@ def plan_pdf(snapshot: dict[str, Any], labels: dict[str, str] | None = None) -> 
         f"({words['rewarding_walking_minutes']} {totals['rewarding_walking_minutes']} / "
         f"{words['plain_walking_minutes']} {totals['plain_walking_minutes']})",
     )
+    board_readiness = snapshot["checklist"]["readiness"]
+    if board_readiness:
+        counts = board_readiness["counts"]
+        _pdf_line(
+            pdf,
+            f"{words['checklist']}: "
+            f"{words.get(board_readiness['state'], board_readiness['state'])} · "
+            f"{counts['open']} {words['open_tasks']} · "
+            f"{counts['overdue']} {words['overdue']}",
+        )
     if snapshot["readiness"]["capability_gaps"]:
         _pdf_heading(pdf, words["capability_gaps"], size=13)
         for gap in snapshot["readiness"]["capability_gaps"]:
@@ -326,7 +367,21 @@ def plan_pdf(snapshot: dict[str, Any], labels: dict[str, str] | None = None) -> 
 
     pdf.add_page()
     _pdf_heading(pdf, words["checklist"], size=18)
-    _pdf_line(pdf, words["checklist_pending"])
+    board = snapshot["checklist"]
+    if not board["items"] and not board["dismissed"]:
+        _pdf_line(pdf, words["checklist_pending"])
+    else:
+        for bucket in CHECKLIST_TIMING:
+            bucket_items = [item for item in board["items"] if item["timing"] == bucket]
+            if not bucket_items:
+                continue
+            _pdf_heading(pdf, words.get(bucket, bucket), size=13)
+            for item in bucket_items:
+                _pdf_line(pdf, _task_line(item, words))
+        if board["dismissed"]:
+            _pdf_heading(pdf, words["dismissed_history"], size=13)
+            for item in board["dismissed"]:
+                _pdf_line(pdf, f"- {item['title']}")
     _pdf_heading(pdf, words["sources"], size=18)
     if snapshot["sources"]:
         for source in snapshot["sources"]:
@@ -338,6 +393,97 @@ def plan_pdf(snapshot: dict[str, Any], labels: dict[str, str] | None = None) -> 
     else:
         _pdf_line(pdf, words["no_sources"])
     return bytes(pdf.output())
+
+
+def checklist_ics(
+    snapshot: dict[str, Any], labels: dict[str, str] | None = None
+) -> bytes:
+    """All-day calendar entries for every dated readiness task.
+
+    All-day VEVENTs rather than VTODOs: every calendar app shows them, while
+    VTODO support is uneven.
+    """
+
+    words = _labels(labels)
+    stamp = snapshot["stamp"]
+    when = "".join(char for char in str(stamp["exported_at"])[:19] if char.isdigit())
+    dtstamp = f"{when[:8]}T{when[8:14]}Z" if len(when) >= 14 else f"{when[:8]}T000000Z"
+    lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//Optimizer Trip Planner//Readiness//EN",
+        "CALSCALE:GREGORIAN",
+        "METHOD:PUBLISH",
+    ]
+    dated = [
+        item for item in snapshot["checklist"]["items"] if item.get("due_date")
+    ]
+    for index, item in enumerate(dated):
+        due = str(item["due_date"]).replace("-", "")
+        end = (
+            date.fromisoformat(str(item["due_date"])) + timedelta(days=1)
+        ).strftime("%Y%m%d")
+        # Real newlines: _ics_text escapes them, and calendars show separate lines.
+        description = "\n".join(
+            part
+            for part in (
+                f"{words['requirement_level']}: "
+                f"{words.get(item['requirement_level'], item['requirement_level'])}",
+                f"{words['progress']}: "
+                f"{words.get('progress_' + str(item['progress']), item['progress'])}",
+                f"{words['evidence']}: "
+                f"{words.get('evidence_' + str(item['evidence_state']), item['evidence_state'])}",
+                f"{words['consequence']}: {item['consequence']}" if item.get("consequence") else "",
+                item.get("source_url") or "",
+            )
+            if part
+        )
+        lines.extend(
+            [
+                "BEGIN:VEVENT",
+                f"UID:{stamp['trip_id']}-{item.get('item_id') or index}@optimizer-trip-planner",
+                f"DTSTAMP:{dtstamp}",
+                f"DTSTART;VALUE=DATE:{due}",
+                f"DTEND;VALUE=DATE:{end}",
+                f"SUMMARY:{_ics_text(item['title'])}",
+                f"DESCRIPTION:{_ics_text(description)}",
+                f"CATEGORIES:{_ics_text(str(item.get('category') or ''))}",
+                "TRANSP:TRANSPARENT",
+                "END:VEVENT",
+            ]
+        )
+    lines.append("END:VCALENDAR")
+    return "\r\n".join(_ics_fold(line) for line in lines).encode("utf-8") + b"\r\n"
+
+
+def _ics_text(value: str) -> str:
+    """Escape per RFC 5545; an unescaped comma silently truncates a field."""
+
+    return (
+        str(value or "")
+        .replace("\\", "\\\\")
+        .replace(";", "\\;")
+        .replace(",", "\\,")
+        .replace("\n", "\\n")
+    )
+
+
+def _ics_fold(line: str) -> str:
+    """Fold to 75 octets; a long unfolded line makes some importers reject the file."""
+
+    raw = line.encode("utf-8")
+    if len(raw) <= 75:
+        return line
+    chunks, current = [], b""
+    for char in line:
+        encoded = char.encode("utf-8")
+        limit = 75 if not chunks else 74
+        if len(current) + len(encoded) > limit:
+            chunks.append(current)
+            current = b""
+        current += encoded
+    chunks.append(current)
+    return "\r\n ".join(chunk.decode("utf-8") for chunk in chunks)
 
 
 def plan_workbook_xlsx(
@@ -356,7 +502,7 @@ def plan_workbook_xlsx(
     timeline_rows = _write_timeline(sheets["Timeline"], snapshot, header, wrap)
     _write_summary(sheets["Summary"], snapshot, workbook, header, title, timeline_rows)
     _write_choices(sheets["Choices & Backups"], snapshot, header, wrap)
-    _write_checklist(sheets["Checklist"], words, header)
+    _write_checklist(sheets["Checklist"], snapshot, words, header, wrap)
     _write_costs(sheets["Costs"], snapshot, words, header)
     _write_sources(sheets["Sources"], snapshot, header)
     workbook.close()
@@ -598,7 +744,9 @@ def _write_choices(sheet: Any, snapshot: dict[str, Any], header: Any, wrap: Any)
         )
 
 
-def _write_checklist(sheet: Any, words: dict[str, str], header: Any) -> None:
+def _write_checklist(
+    sheet: Any, snapshot: dict[str, Any], words: dict[str, str], header: Any, wrap: Any
+) -> None:
     columns = (
         ("Title", 34),
         ("Category", 16),
@@ -619,9 +767,35 @@ def _write_checklist(sheet: Any, words: dict[str, str], header: Any) -> None:
         sheet.write(0, index, name, header)
         sheet.set_column(index, index, width)
     sheet.freeze_panes(1, 0)
-    # ponytail: the readiness board is a separate slice; the agreed sheet and its
-    # columns exist so the workbook contract stays stable when it lands.
-    sheet.write(1, 0, words["checklist_pending"])
+
+    board = snapshot["checklist"]
+    rows = board["items"] + board["dismissed"]
+    if not rows:
+        sheet.write(1, 0, words["checklist_pending"])
+        return
+    for row, item in enumerate(rows, start=1):
+        sheet.write_row(
+            row,
+            0,
+            [
+                item["title"] or "",
+                item["category"] or "",
+                item["requirement_level"] or "",
+                item["progress"] or "",
+                item["owner"] or "",
+                ", ".join(item["applies_to"]),
+                item["due_date"] or (item["timing"] or ""),
+                item["related_component"] or "",
+                item["consequence"] or "",
+                item["source_url"] or "",
+                item["authority_type"] or (item["expected_authority"] or ""),
+                item["evidence_state"] or "",
+                item["last_checked_at"] or "",
+                item["note"] or ("dismissed" if item["dismissed"] else ""),
+            ],
+            wrap,
+        )
+    sheet.autofilter(0, 0, len(rows), len(columns) - 1)
 
 
 def _write_costs(
@@ -769,6 +943,22 @@ def _fallback_line(fallback: dict[str, Any], words: dict[str, str]) -> str:
     return "- " + " · ".join(parts)
 
 
+def _task_line(item: dict[str, Any], words: dict[str, str]) -> str:
+    parts = [
+        words.get(item["requirement_level"], item["requirement_level"]),
+        words.get(f"progress_{item['progress']}", item["progress"]),
+        words.get(f"evidence_{item['evidence_state']}", item["evidence_state"]),
+    ]
+    if item.get("due_date"):
+        parts.append(f"{words['due']} {item['due_date']}")
+    line = f"- {item['title']}  ({' · '.join(str(p) for p in parts)})"
+    if item.get("consequence"):
+        line = f"{line}\n  {words['consequence']}: {item['consequence']}"
+    if item.get("source_url"):
+        line = f"{line}\n  {item['source_url']}"
+    return line
+
+
 def _stamp_line(snapshot: dict[str, Any]) -> str:
     stamp = snapshot["stamp"]
     return (
@@ -833,4 +1023,16 @@ DEFAULT_LABELS = {
     "morning": "Morning",
     "afternoon": "Afternoon",
     "state_locked": "Locked",
+    "consequence": "If skipped",
+    "today_tasks": "Needed today",
+    "open_tasks": "open",
+    "overdue": "overdue",
+    "due": "due",
+    "requirement_level": "Requirement",
+    "progress": "Progress",
+    "evidence": "Evidence",
+    "dismissed_history": "Dismissed history",
+    "ready": "Ready",
+    "action_needed": "Action needed",
+    "verification_needed": "Verification needed",
 }

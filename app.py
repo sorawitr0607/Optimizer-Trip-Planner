@@ -16,7 +16,12 @@ from travel_planner.checklist import (
     REQUIREMENT_LEVELS as CHECKLIST_LEVELS,
     TIMING_BUCKETS as CHECKLIST_TIMING,
 )
-from travel_planner.exporters import day_poster_png, plan_pdf, plan_workbook_xlsx
+from travel_planner.exporters import (
+    checklist_ics,
+    day_poster_png,
+    plan_pdf,
+    plan_workbook_xlsx,
+)
 from travel_planner.exports import half_day
 from travel_planner.setup import (
     ALSO_ENJOY_TAGS,
@@ -252,6 +257,8 @@ TEXT = {
         "afternoon": "Afternoon",
         "checklist_help": "Generated from your trip, fully editable. Warnings never block the itinerary or its exports.",
         "checklist_needs_setup": "Save the trip setup first; the board is generated from it.",
+        "calendar": "Readiness calendar (.ics)",
+        "today_tasks": "Needed today",
         "checklist_preview": "Proposed checklist changes",
         "checklist_applied": "Checklist updated:",
         "checklist_current": "The board matches the current trip.",
@@ -541,6 +548,8 @@ TEXT = {
         "afternoon": "ช่วงบ่าย",
         "checklist_help": "สร้างจากข้อมูลทริปและแก้ไขได้ทั้งหมด คำเตือนไม่ปิดกั้นตารางเดินทางหรือไฟล์ส่งออก",
         "checklist_needs_setup": "บันทึกการตั้งค่าทริปก่อน ระบบจะสร้างรายการจากข้อมูลนั้น",
+        "calendar": "ปฏิทินเตรียมตัว (.ics)",
+        "today_tasks": "ต้องทำวันนี้",
         "checklist_preview": "การเปลี่ยนแปลงที่เสนอ",
         "checklist_applied": "อัปเดตรายการแล้ว:",
         "checklist_current": "รายการตรงกับข้อมูลทริปปัจจุบันแล้ว",
@@ -906,6 +915,7 @@ def _plan_documents(_snapshot: dict, sha256: str, language: str) -> dict[str, by
     return {
         "pdf": plan_pdf(_snapshot, labels),
         "xlsx": plan_workbook_xlsx(_snapshot, labels),
+        "ics": checklist_ics(_snapshot, labels),
     }
 
 
@@ -2037,7 +2047,17 @@ else:
             key=f"excel_{trip.trip_id}",
             width="stretch",
         )
-        st.caption(copy["checklist_pending"])
+        if export["checklist"]["items"]:
+            st.download_button(
+                copy["calendar"],
+                data=documents["ics"],
+                file_name=f"plan-{version_tag}-readiness.ics",
+                mime="text/calendar",
+                key=f"ics_{trip.trip_id}",
+                width="stretch",
+            )
+        else:
+            st.caption(copy["checklist_pending"])
 
     if export["unscheduled"]:
         with st.expander(f"{copy['unscheduled_choices']} ({len(export['unscheduled'])})"):
