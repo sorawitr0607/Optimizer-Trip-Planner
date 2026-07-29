@@ -9,7 +9,11 @@ from urllib.parse import quote
 import streamlit as st
 
 from travel_planner import PlannerActions
-from travel_planner.providers import ProviderBudgetExceeded, ProviderUnavailable
+from travel_planner.providers import (
+    ProviderBudgetExceeded,
+    ProviderUnavailable,
+    RevisionInterpretationUnavailable,
+)
 from travel_planner.costs import (
     CATEGORIES as COST_CATEGORIES,
     PAYMENT_STATES as COST_STATES,
@@ -460,6 +464,22 @@ TEXT = {
         "op_unlock_item": "Unlock",
         "op_drop_place": "Drop this place",
         "deterministic_reasons": "Deterministic reasons",
+        "free_text": "Describe the change",
+        "free_text_help": "One AI call turns your words into one supported change, then the optimizer rebuilds the plan. The model never sets an opening time, route, fare or closure.",
+        "interpret": "Interpret this request",
+        "ai_enabled": "Use AI to interpret free text",
+        "ai_disabled_note": "AI is off. Quick actions, the optimizer, exports and everything else keep working.",
+        "ai_cost": "About US$0.002 per interpretation, from the same monthly cap.",
+        "interpreted_as": "Interpreted as",
+        "clarification": "The assistant asks",
+        "unsupported_request": "This request is not supported",
+        "ai_missing_credentials": "No OpenAI key is configured, so free text cannot be interpreted. Quick actions still work.",
+        "ai_offline": "The interpretation service could not be reached. Try again, or use a quick action.",
+        "ai_refused": "The model declined this request. Rephrase it, or use a quick action.",
+        "ai_invalid_reply": "The interpretation came back unusable, so nothing was changed.",
+        "ai_rate_limited": "The interpretation service is rate limited. Try again shortly.",
+        "ai_api_error": "The interpretation service returned an error, so nothing was changed.",
+        "ai_disclosure": "Requests are sent without storage on the provider side; standard abuse-monitoring retention may still apply. Only the plan slice and your request are sent.",
     },
     "th": {
         "title": "ตัวช่วยวางแผนท่องเที่ยวส่วนตัว",
@@ -882,6 +902,22 @@ TEXT = {
         "op_unlock_item": "ปลดล็อก",
         "op_drop_place": "เอาสถานที่นี้ออก",
         "deterministic_reasons": "เหตุผลจากการคำนวณ",
+        "free_text": "อธิบายการเปลี่ยนที่ต้องการ",
+        "free_text_help": "เรียก AI หนึ่งครั้งเพื่อแปลงข้อความเป็นการเปลี่ยนที่รองรับหนึ่งอย่าง แล้วระบบจัดแผนสร้างตารางใหม่ โมเดลไม่กำหนดเวลาเปิด เส้นทาง ค่าโดยสาร หรือการปิดให้บริการ",
+        "interpret": "ตีความคำขอนี้",
+        "ai_enabled": "ใช้ AI ตีความข้อความอิสระ",
+        "ai_disabled_note": "ปิด AI อยู่ คำสั่งด่วน ระบบจัดแผน การส่งออก และส่วนอื่นยังใช้งานได้ปกติ",
+        "ai_cost": "ประมาณ 0.002 ดอลลาร์ต่อการตีความ ใช้เพดานรายเดือนเดียวกัน",
+        "interpreted_as": "ตีความเป็น",
+        "clarification": "ผู้ช่วยขอความชัดเจน",
+        "unsupported_request": "ยังไม่รองรับคำขอนี้",
+        "ai_missing_credentials": "ยังไม่ได้ตั้งค่าคีย์ OpenAI จึงตีความข้อความอิสระไม่ได้ คำสั่งด่วนยังใช้ได้",
+        "ai_offline": "ติดต่อบริการตีความไม่ได้ ลองอีกครั้งหรือใช้คำสั่งด่วน",
+        "ai_refused": "โมเดลปฏิเสธคำขอนี้ ลองเรียบเรียงใหม่หรือใช้คำสั่งด่วน",
+        "ai_invalid_reply": "ผลการตีความใช้ไม่ได้ จึงไม่มีการเปลี่ยนแปลง",
+        "ai_rate_limited": "บริการตีความถูกจำกัดอัตราการเรียก ลองอีกครั้งในไม่ช้า",
+        "ai_api_error": "บริการตีความแจ้งข้อผิดพลาด จึงไม่มีการเปลี่ยนแปลง",
+        "ai_disclosure": "ส่งคำขอโดยไม่ให้ผู้ให้บริการจัดเก็บ แต่การเก็บเพื่อตรวจสอบการใช้งานผิดวัตถุประสงค์อาจยังมีผล ส่งเฉพาะข้อมูลแผนส่วนที่เกี่ยวข้องและคำขอของคุณ",
     },
 }
 
@@ -2833,6 +2869,44 @@ else:
                 actions.discard_revision_draft(trip.trip_id)
                 st.session_state[revision_flash_key] = copy["revision_discarded"]
                 st.rerun()
+
+    ai_enabled = st.checkbox(
+        copy["ai_enabled"], value=False, key=f"ai_enabled_{trip.trip_id}"
+    )
+    if not ai_enabled:
+        st.caption(copy["ai_disabled_note"])
+    else:
+        st.caption(copy["ai_cost"])
+        st.caption(copy["ai_disclosure"])
+        request_text = st.text_area(
+            copy["free_text"], key=f"free_text_{trip.trip_id}", height=80
+        )
+        st.caption(copy["free_text_help"])
+        if st.button(copy["interpret"], key=f"interpret_{trip.trip_id}", width="stretch"):
+            try:
+                outcome = actions.interpret_revision(
+                    trip_id=trip.trip_id,
+                    request_text=request_text,
+                    language=language,
+                    replace_pending=True,
+                )
+            except RevisionInterpretationUnavailable as error:
+                st.error(copy.get(f"ai_{error.cause}", str(error)))
+            except (ProviderBudgetExceeded, ValueError) as error:
+                st.error(str(error))
+            else:
+                if not outcome["supported"]:
+                    st.warning(
+                        f"{copy['unsupported_request']}: {outcome['unsupported_reason']}"
+                    )
+                    if outcome["clarification"]:
+                        st.info(f"{copy['clarification']}: {outcome['clarification']}")
+                else:
+                    st.session_state[revision_flash_key] = (
+                        f"{copy['interpreted_as']} "
+                        f"{copy.get('op_' + outcome['operation'], outcome['operation'])}"
+                    )
+                    st.rerun()
 
     history = actions.list_revisions(trip.trip_id)
     if history:

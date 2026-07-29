@@ -33,6 +33,10 @@ PRICES_USD = {
     "google_places:search_text": 0.025,
     "google_routes:compute": 0.005,
     "google_timezone:lookup": 0.005,
+    # One small structured-output call. Priced conservatively above the
+    # token cost of a short request and reply.
+    "openai:interpret_revision": 0.002,
+    "openai:explain_revision": 0.004,
 }
 
 

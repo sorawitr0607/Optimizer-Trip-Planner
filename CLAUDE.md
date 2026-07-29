@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 uv run streamlit run app.py                                          # run the app
-uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 174 tests, ~9s
+uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 202 tests, ~10s
 uv run --locked python -m unittest tests.test_optimizer.OptimizerCoreTest.test_safe_route_and_weather_fallback_are_selected  # one test
 python3 scripts/validate_regression_fixtures.py                      # fixture catalog structure
 uv run --locked python scripts/run_optimizer_regressions.py          # 27 historic cases through the real optimizer
@@ -97,6 +97,17 @@ Each stage is gated on the previous one having a matching hash (`_current_choice
    plan untouched; `apply_revision` refuses unless the rebuilt variant is `ready` and valid, and
    refuses again if the active plan moved behind the preview. Applying writes a new immutable version
    plus an append-only history row; restore creates another version and deletes nothing.
+
+8. **Free-text revision** — `interpret.py` builds the strict structured-output schema *from*
+   `revision.OPERATIONS`, so the model can only choose a supported operation and may name only a
+   `place_id` it was actually sent. It cannot return an opening time, route, fare or closure because no
+   operation carries such a field. `build_payload` sends the plan slice and the request and nothing
+   else; `_assert_clean` refuses a payload carrying travellers, documents or credentials. One call per
+   request, `store: false`, one retry at most on a transient failure, and every failure names its cause
+   (`missing_credentials`, `offline`, `refused`, `invalid_reply`, `rate_limited`, `api_error`) while
+   leaving the plan and history untouched. Where the model omits a magnitude the app supplies a
+   documented default and shows it as a visible assumption; where the value is the point of the request
+   it asks one clarification instead. GenAI is off by default and everything else works without it.
 
 Plans are append-only: `plan_versions` and `discovery_runs` carry SQLite triggers that abort UPDATE
 and DELETE. Restoring an old plan creates a *new* version pointing at the old snapshot. `active_plans`

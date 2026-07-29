@@ -26,11 +26,13 @@ from .core import (
     new_setup_draft,
     new_trip,
 )
-from . import checklist, costs, exports, opening, revision, usage
+from . import checklist, costs, exports, interpret, opening, revision, usage
 from .discovery import build_candidate_catalog
 from .optimizer import date_range, optimize_trip
 from .providers import (
     GooglePlacesOpeningHoursProvider,
+    OpenAIRevisionInterpreter,
+    RevisionInterpretationUnavailable,
     GoogleTimeZoneProvider,
     OpenRouteServiceProvider,
     OpenStreetMapProvider,
@@ -78,12 +80,14 @@ class PlannerActions:
         route_provider: Any = None,
         timezone_provider: Any = None,
         hours_provider: Any = None,
+        interpreter: Any = None,
     ) -> None:
         self.store = SQLiteStore(database_path)
         self.place_provider = place_provider
         self.route_provider = route_provider
         self.timezone_provider = timezone_provider
         self.hours_provider = hours_provider
+        self.interpreter = interpreter
 
     def create_trip(
         self,
@@ -1237,6 +1241,8 @@ class PlannerActions:
         operation: Mapping[str, Any],
         request_text: str = "",
         replace_pending: bool = False,
+        interpreted_by: str = "quick_action",
+        interpretation: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Build the one pending preview. The active plan is never touched here."""
 
@@ -1256,6 +1262,10 @@ class PlannerActions:
         before_variant = stored["variant"]
         applied = revision.apply_operation(base_input, dict(operation))
         clean = revision.validate_operation(dict(operation))
+        # Model-supplied defaults are shown beside the operation's own assumptions.
+        applied["assumptions"] = list(
+            (interpretation or {}).get("assumed_defaults") or []
+        ) + applied["assumptions"]
 
         if not clean["changes_plan"]:
             draft = {
@@ -1268,6 +1278,8 @@ class PlannerActions:
                 "consequences": None,
                 "proposal": None,
                 "can_apply": False,
+                "interpreted_by": interpreted_by,
+                "interpretation": dict(interpretation or {}),
             }
             return self.store.save_revision_draft(
                 trip_id=trip_id,
@@ -1303,6 +1315,8 @@ class PlannerActions:
                 "variant": after_variant,
             },
             "can_apply": change["can_apply"],
+            "interpreted_by": interpreted_by,
+            "interpretation": dict(interpretation or {}),
         }
         return self.store.save_revision_draft(
             trip_id=trip_id,
@@ -1310,6 +1324,93 @@ class PlannerActions:
             draft=draft,
             now=datetime.now(timezone.utc).isoformat(),
         )
+
+    def interpret_revision(
+        self,
+        *,
+        trip_id: str,
+        request_text: str,
+        language: str = "en",
+        replace_pending: bool = False,
+    ) -> dict[str, Any]:
+        """One model call turns free text into a typed operation, then previews it.
+
+        Every failure path leaves the active plan and the revision history
+        untouched, and names why interpretation was unavailable.
+        """
+
+        active = self.store.get_active_plan(trip_id)
+        if active is None:
+            raise ValueError("Activate a plan before revising it")
+        payload = interpret.build_payload(
+            plan=active.snapshot.as_dict(),
+            request_text=request_text,
+            language=language,
+        )
+        provider = self.interpreter or OpenAIRevisionInterpreter()
+        decision = self.check_paid_call(operation=provider.operation, count=1)
+        if not decision["allowed"]:
+            raise ProviderBudgetExceeded(decision["reason"])
+
+        try:
+            result = provider.interpret(payload)
+        except RevisionInterpretationUnavailable as error:
+            # Record the attempt so the ledger reconciles, then report the cause.
+            self.record_paid_call(
+                operation=provider.operation,
+                count=1,
+                trip_id=trip_id,
+                outcome="error",
+                detail={"cause": error.cause},
+            )
+            raise
+        self.record_paid_call(
+            operation=provider.operation,
+            count=1,
+            trip_id=trip_id,
+            detail={"model": str(result.get("model") or "")},
+        )
+
+        try:
+            typed = interpret.interpret_response(result["response"], payload=payload)
+        except ValueError as error:
+            raise RevisionInterpretationUnavailable(
+                str(error), cause="invalid_reply"
+            ) from None
+
+        if not typed["supported"]:
+            return {
+                "supported": False,
+                "operation": None,
+                "clarification": typed["clarification"],
+                "unsupported_reason": typed["unsupported_reason"],
+                "model": result.get("model"),
+                "draft": None,
+            }
+        draft = self.propose_revision(
+            trip_id=trip_id,
+            operation={
+                "operation": typed["operation"],
+                "arguments": typed["arguments"],
+            },
+            request_text=request_text,
+            replace_pending=replace_pending,
+            interpreted_by="ai",
+            interpretation={
+                "model": result.get("model"),
+                "intent_schema_version": result.get("schema_version"),
+                "clarification": typed["clarification"],
+                "assumed_defaults": typed.get("assumptions") or [],
+            },
+        )
+        return {
+            "supported": True,
+            "operation": typed["operation"],
+            "clarification": typed["clarification"],
+            "unsupported_reason": None,
+            "model": result.get("model"),
+            "draft": draft,
+        }
 
     def get_revision_draft(self, trip_id: str) -> dict[str, Any] | None:
         return self.store.get_revision_draft(trip_id)
@@ -1356,6 +1457,7 @@ class PlannerActions:
                 "from_version_id": draft["base_version_id"],
                 "to_version_id": version.version_id,
                 "interpreted_by": draft.get("interpreted_by") or "quick_action",
+                "interpretation": draft.get("interpretation") or {},
             },
             now=datetime.now(timezone.utc).isoformat(),
         )

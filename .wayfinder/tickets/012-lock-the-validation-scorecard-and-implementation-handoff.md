@@ -134,6 +134,17 @@ The three capability gaps that kept every plan provisional are now closed from r
 - Real-world data gaps this exposed, honestly reported rather than filled: three of five selected places publish no opening hours at all, and one is closed on a trip date. Only one place could be scheduled. Coverage of opening evidence, not the pipeline, is now the limit.
 - Still open. The optimizer's fact model carries no applicable date, so a per-date opening window cannot be expressed and the conservative intersection stands in. Transit routes, fares, crowd and best-time evidence remain unsourced.
 
+### Slice 6 implementation evidence — 2026-07-29
+
+Revision and acceptance, non-AI first as the build order requires, then the one interpretation call. Bundle: [`live-revision-interpretation`](../../artifacts/validation/2026-07-29-live-revision-interpretation/manifest.json).
+
+- [`travel_planner/revision.py`](../../travel_planner/revision.py) holds the whole typed operation set. Every operation is a constraint change on the optimizer input, never a schedule instruction, so nothing in the revision path can write an opening time, route, fare or closure. The deterministic optimizer rebuilds the plan and `consequences()` reports added, removed, moved, shortened and lengthened items, every affected date including cross-day moves, metric deltas, new and cleared warnings, and displaced selections with the optimizer's own reason.
+- Exactly one pending preview per trip. `Apply` stays closed unless the rebuilt variant is `ready` and valid, and refuses again if the active plan moved behind the preview. Applying writes a new immutable version plus an append-only history row; restore creates another version and deletes nothing.
+- [`travel_planner/interpret.py`](../../travel_planner/interpret.py) builds the strict structured-output schema from the operation set itself, so a model can only choose a supported operation and may name only a `place_id` it was sent. The outbound payload carries the plan slice and the request; a payload holding travellers, documents or credentials is refused before it is sent. One call per request, `store: false`, one retry at most, and each failure names its cause while leaving the plan and history untouched. GenAI is off by default and every other function works without it.
+- Verified live in English and Thai. `please cut down the walking on this trip` and `ลดการเดินให้น้อยลง` produced the identical typed operation; `lock harajuku so it cannot move` bound to the real place id; `why is this plan like this?` became `explain`; `make lunch happen between 11:30 and 13:00` carried the exact times; `book me a flight to Paris` came back unsupported with a reason. Eight interpretation calls for about US$0.016.
+- Reading the live replies found a defect: the model returned `factor: null` for a request with no magnitude and validation rejected it, so a reasonable request failed. The app now supplies a documented default and shows it as a visible assumption, and asks one clarification where the value is the point of the request.
+- Still open. The optional natural-language explanation call is priced and reserved but not wired; only the deterministic `explain` exists. Add, replace and swap operations, and the day/half-day cluster move, are not in the operation set yet.
+
 ### Smallest build order
 
 1. **Foundation:** one Python 3.12/Streamlit project, SQLite schema, environment settings, stable domain records, immutable snapshot/version storage, and no extra web service.

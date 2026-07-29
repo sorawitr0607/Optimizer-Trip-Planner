@@ -10,6 +10,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+from . import interpret
+
 
 class ProviderUnavailable(RuntimeError):
     pass
@@ -548,3 +550,138 @@ def _weekly_periods(periods: list[dict[str, Any]]) -> list[dict[str, Any]]:
             }
         )
     return sorted(result, key=lambda item: (item["day"], item["start"]))
+
+
+class RevisionInterpretationUnavailable(RuntimeError):
+    """Free-text interpretation is unavailable, with the reason named.
+
+    `cause` is one of missing_credentials, offline, refused, invalid_reply,
+    rate_limited or api_error, so the app can say which it is and offer the
+    right path instead of a generic failure.
+    """
+
+    def __init__(self, message: str, *, cause: str) -> None:
+        super().__init__(message)
+        self.cause = cause
+
+
+class OpenAIRevisionInterpreter:
+    """One structured-output call that chooses a typed revision operation.
+
+    The model never sees a key beyond the header, never gets stored context
+    (`store: false`), and returns only a choice among the supported operations.
+    """
+
+    name = "openai"
+    operation = "openai:interpret_revision"
+    schema_version = 1
+    SYSTEM_PROMPT = (
+        "You convert a traveller's revision request into exactly one supported "
+        "operation. Understand English, Thai and mixed text. Choose only from "
+        "supported_operations and use only place_id values present in the plan. "
+        "Never state an opening time, route, fare, closure or crowd level. If the "
+        "request does not map onto a supported operation, answer with operation "
+        "'unsupported' and a short reason. Ask for clarification only when two "
+        "readings would change different days, locks or bookings."
+    )
+
+    def __init__(self) -> None:
+        self.url = os.environ.get(
+            "TOURIST_OPENAI_URL", "https://api.openai.com/v1/responses"
+        )
+        # Configurable, and recorded with every revision; never silently changed.
+        self.model = os.environ.get("TOURIST_OPENAI_MODEL", "gpt-4.1-mini")
+
+    def interpret(self, payload: dict[str, Any], *, retry: bool = True) -> dict[str, Any]:
+        key = os.environ.get("OPENAI_API_KEY", "").strip()
+        if not key:
+            raise RevisionInterpretationUnavailable(
+                "OPENAI_API_KEY is not configured", cause="missing_credentials"
+            )
+        body = json.dumps(
+            {
+                "model": self.model,
+                "store": False,
+                "input": [
+                    {"role": "system", "content": self.SYSTEM_PROMPT},
+                    {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+                ],
+                "text": {
+                    "format": {
+                        "type": "json_schema",
+                        "name": "revision_operation",
+                        "strict": True,
+                        "schema": interpret.response_schema(),
+                    }
+                },
+            }
+        ).encode("utf-8")
+        request = Request(
+            self.url,
+            data=body,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {key}",
+            },
+        )
+        try:
+            with urlopen(request, timeout=45) as response:
+                raw = json.load(response)
+        except HTTPError as error:
+            if error.code == 429 and retry:
+                # One retry for a transient limit, then stop. Never loop.
+                return self.interpret(payload, retry=False)
+            cause = "rate_limited" if error.code == 429 else "api_error"
+            raise RevisionInterpretationUnavailable(
+                f"Interpretation returned HTTP {error.code}", cause=cause
+            ) from None
+        except (URLError, TimeoutError) as error:
+            if retry:
+                return self.interpret(payload, retry=False)
+            raise RevisionInterpretationUnavailable(
+                f"Interpretation service is unreachable: {type(error).__name__}",
+                cause="offline",
+            ) from None
+        except json.JSONDecodeError:
+            raise RevisionInterpretationUnavailable(
+                "Interpretation returned invalid JSON", cause="invalid_reply"
+            ) from None
+        return {
+            "response": self.extract(raw),
+            "model": self.model,
+            "schema_version": self.schema_version,
+        }
+
+    def extract(self, raw: dict[str, Any]) -> dict[str, Any]:
+        """Pull the structured object out of a Responses API reply."""
+
+        if raw.get("status") == "incomplete":
+            raise RevisionInterpretationUnavailable(
+                "Interpretation was cut short", cause="invalid_reply"
+            )
+        for item in raw.get("output") or []:
+            if item.get("type") == "refusal" or item.get("refusal"):
+                raise RevisionInterpretationUnavailable(
+                    "The model refused this request", cause="refused"
+                )
+            for part in item.get("content") or []:
+                if part.get("type") == "refusal":
+                    raise RevisionInterpretationUnavailable(
+                        "The model refused this request", cause="refused"
+                    )
+                text = part.get("text")
+                if text:
+                    try:
+                        parsed = json.loads(text)
+                    except json.JSONDecodeError:
+                        raise RevisionInterpretationUnavailable(
+                            "Interpretation was not valid JSON", cause="invalid_reply"
+                        ) from None
+                    if not isinstance(parsed, dict):
+                        raise RevisionInterpretationUnavailable(
+                            "Interpretation was not an object", cause="invalid_reply"
+                        )
+                    return parsed
+        raise RevisionInterpretationUnavailable(
+            "Interpretation returned no content", cause="invalid_reply"
+        )
