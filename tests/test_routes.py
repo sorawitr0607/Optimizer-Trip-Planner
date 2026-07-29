@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from travel_planner.actions import MAX_ROUTE_REQUESTS, PlannerActions
 from travel_planner.providers import (
+    GoogleTimeZoneProvider,
     OpenRouteServiceProvider,
     ProviderBudgetExceeded,
     ProviderUnavailable,
@@ -262,3 +263,140 @@ class RouteRefreshTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FakeTimeZoneProvider:
+    name = "google_timezone"
+    operation = "google_timezone:lookup"
+    cache_ttl_days = 180
+    kind = "destination_timezone"
+
+    def __init__(self, *, payload: dict | None = None) -> None:
+        self.calls: list[tuple[float, float]] = []
+        self.payload = payload or {
+            "status": "OK",
+            "timeZoneId": "Asia/Taipei",
+            "timeZoneName": "Taiwan Standard Time",
+            "rawOffset": 28800,
+            "dstOffset": 0,
+        }
+
+    def lookup(self, *, latitude: float, longitude: float, timestamp: int) -> dict:
+        self.calls.append((latitude, longitude))
+        return GoogleTimeZoneProvider().normalize(
+            self.payload, latitude=latitude, longitude=longitude
+        )
+
+
+class TimeZoneTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.directory = TemporaryDirectory()
+        self.path = Path(self.directory.name) / "tz.sqlite3"
+        self.provider = FakeTimeZoneProvider()
+        self.actions = PlannerActions(
+            self.path,
+            place_provider=FakePlaceProvider(),
+            timezone_provider=self.provider,
+        )
+        self.trip = self.actions.create_trip(
+            name="Taipei", destination="Taipei", planning_mode="ready_to_schedule"
+        )
+        self.actions.save_setup(
+            trip_id=self.trip.trip_id,
+            main_style=["sightseeing"],
+            start_date="2030-01-01",
+            end_date="2030-01-03",
+            accommodation_status="booked",
+            confirmed=True,
+        )
+        self.actions.discover_places(trip_id=self.trip.trip_id)
+
+    def tearDown(self) -> None:
+        self.directory.cleanup()
+
+    def test_a_status_other_than_ok_is_never_a_fallback_zone(self) -> None:
+        provider = GoogleTimeZoneProvider()
+        for payload in (
+            {"status": "ZERO_RESULTS"},
+            {"status": "REQUEST_DENIED"},
+            {},
+            {"status": "OK", "timeZoneId": ""},
+        ):
+            with self.assertRaises(ProviderUnavailable):
+                provider.normalize(payload, latitude=25.0, longitude=121.0)
+
+    def test_the_zone_is_recorded_with_its_provenance(self) -> None:
+        result = self.actions.refresh_timezone(self.trip.trip_id)
+
+        self.assertEqual("Asia/Taipei", result["timezone"])
+        self.assertEqual("google_timezone", result["provider"])
+        self.assertEqual("verified", result["status"])
+        self.assertEqual(28800, result["raw_offset_seconds"])
+        self.assertFalse(result["from_cache"])
+        # Queried at the centre of the discovered coverage box.
+        latitude, longitude = self.provider.calls[0]
+        self.assertAlmostEqual(25.05, latitude, places=2)
+        self.assertAlmostEqual(121.55, longitude, places=2)
+
+    def test_a_second_lookup_is_served_from_evidence_at_no_cost(self) -> None:
+        self.actions.refresh_timezone(self.trip.trip_id)
+        again = self.actions.refresh_timezone(self.trip.trip_id)
+
+        self.assertTrue(again["from_cache"])
+        self.assertEqual(1, len(self.provider.calls))
+        bucket = self.actions.paid_usage_status()["by_operation"]["google_timezone:lookup"]
+        # One paid request, one cached read recorded at zero.
+        self.assertEqual(1, bucket["requests"])
+        self.assertEqual(0.005, bucket["estimated_usd"])
+
+    def test_the_zone_clears_its_capability_gap_and_reaches_the_optimizer(self) -> None:
+        for place_id in [
+            item["place_id"]
+            for item in self.actions.get_latest_discovery(
+                self.trip.trip_id
+            ).candidates.as_dict()["candidates"]
+        ]:
+            self.actions.save_candidate_choice(
+                trip_id=self.trip.trip_id, place_id=place_id, action="must_do"
+            )
+
+        before = self.actions._optimizer_input(self.trip.trip_id)
+        self.assertIn("DESTINATION_TIMEZONE_UNVERIFIED", before["trip"]["capability_gaps"])
+        self.assertIsNone(before["trip"]["timezone"])
+
+        self.actions.refresh_timezone(self.trip.trip_id)
+        after = self.actions._optimizer_input(self.trip.trip_id)
+
+        self.assertNotIn("DESTINATION_TIMEZONE_UNVERIFIED", after["trip"]["capability_gaps"])
+        self.assertEqual("Asia/Taipei", after["trip"]["timezone"])
+
+    def test_an_expired_zone_stops_counting_as_verified(self) -> None:
+        self.actions.refresh_timezone(self.trip.trip_id)
+        with self.actions.store.connect() as connection:
+            connection.execute(
+                "UPDATE trip_evidence SET expires_at = '2000-01-01T00:00:00+00:00'"
+            )
+
+        self.assertEqual("stale", self.actions.get_timezone_evidence(self.trip.trip_id)["status"])
+        self.actions.save_candidate_choice(
+            trip_id=self.trip.trip_id,
+            place_id=self.actions.get_latest_discovery(self.trip.trip_id)
+            .candidates.as_dict()["candidates"][0]["place_id"],
+            action="must_do",
+        )
+        gaps = self.actions._optimizer_input(self.trip.trip_id)["trip"]["capability_gaps"]
+        self.assertIn("DESTINATION_TIMEZONE_UNVERIFIED", gaps)
+
+    def test_a_lookup_needs_a_discovered_destination(self) -> None:
+        bare = PlannerActions(
+            Path(self.directory.name) / "bare.sqlite3", timezone_provider=self.provider
+        )
+        trip = bare.create_trip(name="Bare", destination="Nowhere")
+        with self.assertRaisesRegex(ValueError, "Discover places"):
+            bare.refresh_timezone(trip.trip_id)
+
+    def test_the_cap_stops_the_paid_lookup(self) -> None:
+        self.actions.record_paid_call(operation="google_places:details", count=600)
+        with self.assertRaises(ProviderBudgetExceeded):
+            self.actions.refresh_timezone(self.trip.trip_id)
+        self.assertEqual([], self.provider.calls)

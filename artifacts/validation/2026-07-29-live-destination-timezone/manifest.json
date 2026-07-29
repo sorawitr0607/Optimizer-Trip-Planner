@@ -1,0 +1,62 @@
+{
+  "run_id": "2026-07-29-live-destination-timezone",
+  "timestamp": "2026-07-29T00:00:00+00:00",
+  "application_version": "0.1.0",
+  "schema_version": 9,
+  "source_revision": "80ce07b",
+  "recorded_at_revision": "80ce07b",
+  "operating_system": "Darwin 25.5.0",
+  "python_version": "3.12.13",
+  "language": "en",
+  "configuration": {
+    "provider": "google time zone api",
+    "database": "copy of the live SQLite file",
+    "cache_ttl_days": 180
+  },
+  "deterministic_seed": null,
+  "fixture_catalog_sha256": "82b654159978df0e2c1a7861f62f79d11bd403de9b80fa41d2d40718a0faba26",
+  "scorecard_gate": "Source and operational evidence",
+  "action": "Looked up the destination time zone from the discovered coverage centre and re-read the optimizer input",
+  "result": "pass",
+  "measurements": {
+    "probe": {
+      "coordinates": "25.0339,121.5645",
+      "returned": "Asia/Taipei",
+      "note": "verified the API is enabled before wiring it"
+    },
+    "live_trip": {
+      "destination": "thailand",
+      "queried_centre": [
+        14.89719,
+        100.83273
+      ],
+      "returned": "Asia/Bangkok",
+      "raw_offset_seconds": 25200,
+      "second_call_from_cache": true
+    },
+    "capability_gaps_before": [
+      "DESTINATION_TIMEZONE_UNVERIFIED",
+      "ACCOMMODATION_BASE_UNCONFIRMED"
+    ],
+    "capability_gaps_after": [
+      "ACCOMMODATION_BASE_UNCONFIRMED"
+    ],
+    "ledger_after": {
+      "requests": 21,
+      "estimated_usd": 0.005,
+      "state": "ok",
+      "cap_usd": 10.0
+    }
+  },
+  "request_counts": {
+    "provider_requests": 21,
+    "paid_requests": 1
+  },
+  "estimated_paid_cost_usd": 0.005,
+  "failure_details": null,
+  "retained_files": [],
+  "snapshot_sources": {
+    "input": "live trip copy",
+    "plan_versions": "none activated in this run"
+  }
+}

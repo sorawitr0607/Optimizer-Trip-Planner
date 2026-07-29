@@ -23,7 +23,7 @@ from .core import (
 )
 
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS trips (
     id TEXT PRIMARY KEY,
@@ -192,6 +192,20 @@ CREATE TABLE IF NOT EXISTS route_snapshots (
     retrieved_at TEXT NOT NULL,
     expires_at TEXT NOT NULL,
     UNIQUE (trip_id, origin_id, destination_id, mode),
+    FOREIGN KEY (trip_id) REFERENCES trips(id)
+);
+
+-- Destination-level evidence keyed by kind, so a new governed fact needs no new
+-- table. Each row carries its provider, retrieval time, and expiry.
+CREATE TABLE IF NOT EXISTS trip_evidence (
+    trip_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    snapshot_json TEXT NOT NULL,
+    snapshot_sha256 TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    retrieved_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    PRIMARY KEY (trip_id, kind),
     FOREIGN KEY (trip_id) REFERENCES trips(id)
 );
 
@@ -610,6 +624,59 @@ class SQLiteStore:
         return self._verified_snapshot(
             row["snapshot_json"], row["snapshot_sha256"], "Exchange-rate snapshot"
         ).as_dict()
+
+    def upsert_trip_evidence(
+        self,
+        *,
+        trip_id: str,
+        kind: str,
+        value: dict[str, Any],
+        provider: str,
+        retrieved_at: str,
+        expires_at: str,
+    ) -> dict[str, Any]:
+        snapshot = freeze_snapshot(value)
+        with self.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO trip_evidence (
+                    trip_id, kind, snapshot_json, snapshot_sha256, provider,
+                    retrieved_at, expires_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (trip_id, kind) DO UPDATE SET
+                    snapshot_json = excluded.snapshot_json,
+                    snapshot_sha256 = excluded.snapshot_sha256,
+                    provider = excluded.provider,
+                    retrieved_at = excluded.retrieved_at,
+                    expires_at = excluded.expires_at
+                """,
+                (
+                    trip_id,
+                    kind,
+                    snapshot.canonical_json,
+                    snapshot.sha256,
+                    provider,
+                    retrieved_at,
+                    expires_at,
+                ),
+            )
+        return value
+
+    def get_trip_evidence(self, trip_id: str, kind: str) -> dict[str, Any] | None:
+        with self.connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM trip_evidence WHERE trip_id = ? AND kind = ?",
+                (trip_id, kind),
+            ).fetchone()
+        if row is None:
+            return None
+        return {
+            **self._verified_snapshot(
+                row["snapshot_json"], row["snapshot_sha256"], "Trip evidence"
+            ).as_dict(),
+            "retrieved_at": row["retrieved_at"],
+            "expires_at": row["expires_at"],
+        }
 
     def upsert_route_snapshot(
         self,

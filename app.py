@@ -9,7 +9,7 @@ from urllib.parse import quote
 import streamlit as st
 
 from travel_planner import PlannerActions
-from travel_planner.providers import ProviderBudgetExceeded
+from travel_planner.providers import ProviderBudgetExceeded, ProviderUnavailable
 from travel_planner.costs import (
     CATEGORIES as COST_CATEGORIES,
     PAYMENT_STATES as COST_STATES,
@@ -411,6 +411,11 @@ TEXT = {
         "raise_cap": "Raise the monthly cap (USD)",
         "save_cap": "Save cap",
         "cap_saved": "Monthly cap updated.",
+        "timezone_evidence": "Destination time zone",
+        "fetch_timezone": "Look up the time zone",
+        "timezone_fetched": "Time zone recorded.",
+        "no_timezone": "The destination time zone is not verified yet.",
+        "timezone_cost": "One paid lookup, about US$0.005, cached for 180 days.",
     },
     "th": {
         "title": "ตัวช่วยวางแผนท่องเที่ยวส่วนตัว",
@@ -784,6 +789,11 @@ TEXT = {
         "raise_cap": "เพิ่มเพดานรายเดือน (USD)",
         "save_cap": "บันทึกเพดาน",
         "cap_saved": "อัปเดตเพดานแล้ว",
+        "timezone_evidence": "เขตเวลาของปลายทาง",
+        "fetch_timezone": "ตรวจเขตเวลา",
+        "timezone_fetched": "บันทึกเขตเวลาแล้ว",
+        "no_timezone": "ยังไม่ได้ยืนยันเขตเวลาของปลายทาง",
+        "timezone_cost": "เรียกแบบมีค่าใช้จ่ายหนึ่งครั้ง ประมาณ 0.005 ดอลลาร์ เก็บไว้ 180 วัน",
     },
 }
 
@@ -1939,6 +1949,26 @@ st.caption(copy["routes_help"])
 route_flash_key = f"route_flash_{trip.trip_id}"
 if route_flash := st.session_state.pop(route_flash_key, None):
     st.success(route_flash)
+
+zone_evidence = actions.get_timezone_evidence(trip.trip_id)
+if zone_evidence and zone_evidence.get("status") == "verified":
+    st.markdown(
+        f"**{copy['timezone_evidence']}: {zone_evidence['timezone']}** · "
+        f"{zone_evidence['retrieved_at'][:10]}"
+    )
+else:
+    st.info(copy["no_timezone"])
+    st.caption(copy["timezone_cost"])
+    if st.button(copy["fetch_timezone"], key=f"fetch_tz_{trip.trip_id}", width="stretch"):
+        try:
+            result = actions.refresh_timezone(trip.trip_id)
+        except (ProviderBudgetExceeded, ProviderUnavailable, ValueError) as error:
+            st.error(str(error))
+        else:
+            st.session_state[route_flash_key] = (
+                f"{copy['timezone_fetched']} {result['timezone']}"
+            )
+            st.rerun()
 
 stored_routes = actions.list_routes(trip.trip_id)
 verified_routes = [item for item in stored_routes if item["status"] == "verified"]

@@ -357,3 +357,70 @@ def _point_key(point: dict[str, Any]) -> dict[str, Any]:
         "latitude": round(float(point["latitude"]), 5),
         "longitude": round(float(point["longitude"]), 5),
     }
+
+
+class GoogleTimeZoneProvider:
+    """The destination's IANA time zone, from coordinates.
+
+    A paid, single-value lookup: one request per destination, cached for a long
+    window because zone boundaries move rarely. The zone is recorded as evidence
+    with its provider and retrieval time; it is never guessed from a country.
+    """
+
+    name = "google_timezone"
+    operation = "google_timezone:lookup"
+    cache_version = "google-tz-v1"
+    cache_ttl_days = 180
+    kind = "destination_timezone"
+
+    def __init__(self) -> None:
+        self.url = os.environ.get(
+            "TOURIST_TIMEZONE_URL", "https://maps.googleapis.com/maps/api/timezone/json"
+        )
+
+    def lookup(self, *, latitude: float, longitude: float, timestamp: int) -> dict[str, Any]:
+        key = os.environ.get("GOOGLE_MAPS_SERVER_KEY", "").strip()
+        if not key:
+            raise ProviderUnavailable("GOOGLE_MAPS_SERVER_KEY is not configured")
+        query = urlencode(
+            {
+                "location": f"{float(latitude)},{float(longitude)}",
+                "timestamp": int(timestamp),
+                "key": key,
+            }
+        )
+        try:
+            with urlopen(f"{self.url}?{query}", timeout=20) as response:
+                payload = json.load(response)
+        except HTTPError as error:
+            raise ProviderUnavailable(f"Time zone lookup returned HTTP {error.code}") from None
+        except (URLError, TimeoutError) as error:
+            raise ProviderUnavailable(
+                f"Time zone service is unreachable: {type(error).__name__}"
+            ) from None
+        except json.JSONDecodeError:
+            raise ProviderUnavailable("Time zone service returned invalid JSON") from None
+        return self.normalize(payload, latitude=latitude, longitude=longitude)
+
+    def normalize(
+        self, payload: dict[str, Any], *, latitude: float, longitude: float
+    ) -> dict[str, Any]:
+        status = str(payload.get("status") or "")
+        if status != "OK":
+            # ZERO_RESULTS, REQUEST_DENIED and the rest are all "unverified",
+            # never a fallback zone.
+            raise ProviderUnavailable(f"Time zone lookup returned {status or 'no status'}")
+        zone = str(payload.get("timeZoneId") or "").strip()
+        if not zone:
+            raise ProviderUnavailable("Time zone lookup returned no zone id")
+        return {
+            "kind": self.kind,
+            "timezone": zone,
+            "timezone_name": str(payload.get("timeZoneName") or "") or None,
+            "raw_offset_seconds": int(payload.get("rawOffset") or 0),
+            "dst_offset_seconds": int(payload.get("dstOffset") or 0),
+            "queried_latitude": round(float(latitude), 5),
+            "queried_longitude": round(float(longitude), 5),
+            "provider": self.name,
+            "status": "verified",
+        }

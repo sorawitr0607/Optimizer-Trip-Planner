@@ -30,6 +30,7 @@ from . import checklist, costs, exports, usage
 from .discovery import build_candidate_catalog
 from .optimizer import date_range, optimize_trip
 from .providers import (
+    GoogleTimeZoneProvider,
     OpenRouteServiceProvider,
     OpenStreetMapProvider,
     ProviderBudgetExceeded,
@@ -74,10 +75,12 @@ class PlannerActions:
         *,
         place_provider: Any = None,
         route_provider: Any = None,
+        timezone_provider: Any = None,
     ) -> None:
         self.store = SQLiteStore(database_path)
         self.place_provider = place_provider
         self.route_provider = route_provider
+        self.timezone_provider = timezone_provider
 
     def create_trip(
         self,
@@ -463,7 +466,11 @@ class PlannerActions:
         routes = [
             route for route in self.list_routes(trip_id) if route.get("status") == "verified"
         ]
-        capability_gaps = ["DESTINATION_TIMEZONE_UNVERIFIED"]
+        zone = self.get_timezone_evidence(trip_id)
+        verified_zone = zone["timezone"] if zone and zone.get("status") == "verified" else None
+        capability_gaps = []
+        if not verified_zone:
+            capability_gaps.append("DESTINATION_TIMEZONE_UNVERIFIED")
         if not routes:
             capability_gaps.append("ROUTE_SNAPSHOT_MISSING")
         if basics.get("accommodation_status") != "booked":
@@ -478,7 +485,7 @@ class PlannerActions:
                 "discovery_status": discovery.status,
             },
             "trip": {
-                "timezone": None,
+                "timezone": verified_zone,
                 "local_dates": local_dates,
                 "usable_windows": usable_windows,
                 # Setup speaks unknown/not_booked/booked; the optimizer and the
@@ -712,6 +719,79 @@ class PlannerActions:
         if not isinstance(planner_input, dict):
             return []
         return list(planner_input.get("facts", []))
+
+    def refresh_timezone(self, trip_id: str, *, force: bool = False) -> dict[str, Any]:
+        """Look up the destination's IANA zone once, from its discovered centre."""
+
+        trip = self.store.get_trip(trip_id)
+        if trip is None:
+            raise ValueError(f"Unknown trip: {trip_id}")
+        provider = self.timezone_provider or GoogleTimeZoneProvider()
+        now = datetime.now(timezone.utc)
+        existing = self.store.get_trip_evidence(trip_id, provider.kind)
+        if not force and existing and existing["expires_at"] > now.isoformat():
+            self.record_paid_call(
+                operation=provider.operation, count=1, trip_id=trip_id, outcome="cached"
+            )
+            return {**existing, "from_cache": True}
+
+        centre = self._destination_centre(trip_id)
+        self._spend(
+            operation=provider.operation,
+            count=1,
+            trip_id=trip_id,
+            detail={"latitude": centre["latitude"], "longitude": centre["longitude"]},
+        )
+        value = provider.lookup(
+            latitude=centre["latitude"],
+            longitude=centre["longitude"],
+            timestamp=int(now.timestamp()),
+        )
+        self.store.upsert_trip_evidence(
+            trip_id=trip_id,
+            kind=provider.kind,
+            value=value,
+            provider=str(provider.name),
+            retrieved_at=now.isoformat(),
+            expires_at=(
+                now + timedelta(days=int(getattr(provider, "cache_ttl_days", 180)))
+            ).isoformat(),
+        )
+        return {**value, "from_cache": False, "retrieved_at": now.isoformat()}
+
+    def get_timezone_evidence(self, trip_id: str) -> dict[str, Any] | None:
+        """Unexpired zone evidence, or None. An expired zone is not verified."""
+
+        evidence = self.store.get_trip_evidence(trip_id, GoogleTimeZoneProvider.kind)
+        if evidence is None:
+            return None
+        if evidence["expires_at"] <= datetime.now(timezone.utc).isoformat():
+            return {**evidence, "status": "stale"}
+        return evidence
+
+    def _destination_centre(self, trip_id: str) -> dict[str, float]:
+        """The centre of the discovered coverage box, or a selected place."""
+
+        discovery = self.store.get_latest_discovery(trip_id)
+        if discovery is not None:
+            # The discovery report records the searched window as query_boundary,
+            # in the provider's [south, west, north, east] order.
+            bbox = discovery.report.as_dict().get("query_boundary")
+            if isinstance(bbox, list) and len(bbox) == 4:
+                south, west, north, east = (float(value) for value in bbox)
+                return {
+                    "latitude": round((south + north) / 2, 6),
+                    "longitude": round((west + east) / 2, 6),
+                }
+        points = self._route_points(trip_id)
+        if points:
+            return {
+                "latitude": points[0]["latitude"],
+                "longitude": points[0]["longitude"],
+            }
+        raise ValueError(
+            "Discover places before looking up the destination time zone"
+        )
 
     def refresh_routes(self, trip_id: str, *, force: bool = False) -> dict[str, Any]:
         """Fetch walking routes between the selected places, sparsely and capped."""

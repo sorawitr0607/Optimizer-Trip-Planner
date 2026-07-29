@@ -232,6 +232,7 @@ class SchemaMigrationTest(unittest.TestCase):
                     "paid_usage",
                     "paid_usage_cap",
                     "route_snapshots",
+                    "trip_evidence",
                 }
                 <= tables
             )
