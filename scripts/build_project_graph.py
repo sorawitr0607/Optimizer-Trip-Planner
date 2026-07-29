@@ -299,7 +299,11 @@ def build() -> tuple[int, int]:
                     "120",
                     "--no-cluster",
                     "--exclude",
-                    "Data",
+                    # Reference itinerary workbooks and PDFs. Matched as a
+                    # case-sensitive gitignore line anchored at the root, so
+                    # this must track the real directory name; it read every
+                    # PDF while it still said "Data".
+                    "data",
                     env=env,
                 )
             finally:
