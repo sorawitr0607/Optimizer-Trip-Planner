@@ -11,6 +11,7 @@ from typing import Any
 from .core import (
     CandidateChoice,
     DiscoveryRun,
+    FrozenSnapshot,
     OptimizationPreview,
     PlanVersion,
     ProviderCacheEntry,
@@ -24,6 +25,7 @@ from .core import (
     new_setup_draft,
     new_trip,
 )
+from . import exports
 from .discovery import build_candidate_catalog
 from .optimizer import date_range, optimize_trip
 from .providers import OpenStreetMapProvider, ProviderUnavailable
@@ -477,6 +479,33 @@ class PlannerActions:
 
     def get_active_plan(self, trip_id: str) -> PlanVersion | None:
         return self.store.get_active_plan(trip_id)
+
+    def build_export_snapshot(
+        self, trip_id: str, *, version_id: str | None = None, language: str | None = None
+    ) -> FrozenSnapshot:
+        trip = self.store.get_trip(trip_id)
+        if trip is None:
+            raise ValueError(f"Unknown trip: {trip_id}")
+        active = self.store.get_active_plan(trip_id)
+        version = (
+            self.store.get_plan_version(version_id) if version_id else active
+        )
+        if version is None or version.trip_id != trip_id:
+            raise ValueError("Activate a plan before exporting")
+        return freeze_snapshot(
+            exports.build_export_snapshot(
+                trip={
+                    "trip_id": trip.trip_id,
+                    "name": trip.name,
+                    "destination": trip.destination,
+                },
+                plan=version.snapshot.as_dict(),
+                version_id=version.version_id,
+                active_version_id=active.version_id if active else None,
+                language=language or trip.language,
+                exported_at=datetime.now(timezone.utc).isoformat(),
+            )
+        )
 
     def list_plan_versions(self, trip_id: str) -> list[PlanVersion]:
         return self.store.list_plan_versions(trip_id)

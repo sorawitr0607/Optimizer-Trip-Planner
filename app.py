@@ -9,6 +9,7 @@ from urllib.parse import quote
 import streamlit as st
 
 from travel_planner import PlannerActions
+from travel_planner.exporters import day_poster_png, plan_pdf, plan_workbook_xlsx
 from travel_planner.setup import (
     ALSO_ENJOY_TAGS,
     AVOID_TAGS,
@@ -197,6 +198,44 @@ TEXT = {
         "no_schedule": "No selected visit can be scheduled safely with the current evidence.",
         "greedy_check": "Whole-trip result equals or improves the day-greedy baseline",
         "optimizer_limit": "Optimization stopped at its safe limit; only the validated incumbent is shown.",
+        "use_title": "Active plan",
+        "use_help": "One export snapshot feeds this view; posters, PDF, and Excel will read the same numbers.",
+        "no_active_plan": "No plan is active yet. Activate a validated variant above.",
+        "superseded_plan": "This is an older plan version. The active plan has moved on.",
+        "exported_at": "Snapshot built",
+        "readiness": "Readiness",
+        "action_needed": "Action needed",
+        "verification_needed": "Verification needed",
+        "state_confirmed": "✅ Confirmed",
+        "state_recheck": "🕒 Recheck",
+        "state_tradeoff_accepted": "⚖️ Tradeoff accepted",
+        "state_unverified_conflict": "⚠️ Unverified / conflict",
+        "state_locked": "🔒 Locked",
+        "highest_risk": "Highest risk today",
+        "tab_map": "Map",
+        "visit_minutes": "At places",
+        "rewarding_walking_minutes": "Rewarding walking",
+        "stop": "Stop",
+        "travel_mode": "Mode",
+        "walk_portion": "Walking portion",
+        "distance": "Distance",
+        "transfers": "Transfers",
+        "boarding_buffer": "Boarding buffer",
+        "sightseeing_walk": "Evidenced sightseeing walk",
+        "plain_transfer": "Plain transfer",
+        "opening_unverified": "Opening hours not officially verified",
+        "map_no_coordinates": "This day has no stop coordinates yet.",
+        "unscheduled_choices": "Selected but not scheduled",
+        "capability_gaps": "Evidence still missing",
+        "downloads": "Offline snapshots",
+        "poster": "Day poster (PNG)",
+        "pdf": "Trip PDF",
+        "excel": "Excel workbook",
+        "checklist": "Trip readiness checklist",
+        "checklist_pending": "The readiness checklist is not generated yet.",
+        "sources": "Evidence and sources",
+        "no_sources": "No governed fact reached this plan.",
+        "no_costs": "No cost evidence is available yet.",
     },
     "th": {
         "title": "ตัวช่วยวางแผนท่องเที่ยวส่วนตัว",
@@ -377,6 +416,44 @@ TEXT = {
         "no_schedule": "ยังจัดสถานที่ที่เลือกอย่างปลอดภัยไม่ได้ด้วยข้อมูลปัจจุบัน",
         "greedy_check": "ผลทั้งทริปเท่ากับหรือดีกว่าแผนแบบจัดทีละวัน",
         "optimizer_limit": "ระบบหยุดเมื่อถึงขีดจำกัดและแสดงเฉพาะผลที่ตรวจแล้ว",
+        "use_title": "แผนที่ใช้งาน",
+        "use_help": "หน้านี้อ่านสแนปช็อตส่งออกชุดเดียว โพสเตอร์ PDF และ Excel จะอ่านตัวเลขชุดเดียวกัน",
+        "no_active_plan": "ยังไม่มีแผนที่ใช้งาน กรุณาเปิดใช้แผนที่ผ่านการตรวจด้านบน",
+        "superseded_plan": "นี่คือแผนเวอร์ชันเก่า แผนที่ใช้งานเปลี่ยนไปแล้ว",
+        "exported_at": "สร้างสแนปช็อตเมื่อ",
+        "readiness": "ความพร้อม",
+        "action_needed": "ต้องดำเนินการ",
+        "verification_needed": "ต้องตรวจสอบหลักฐาน",
+        "state_confirmed": "✅ ยืนยันแล้ว",
+        "state_recheck": "🕒 ต้องตรวจซ้ำ",
+        "state_tradeoff_accepted": "⚖️ ยอมรับผลกระทบแล้ว",
+        "state_unverified_conflict": "⚠️ ยังไม่ยืนยัน / ข้อมูลขัดแย้ง",
+        "state_locked": "🔒 ล็อกไว้",
+        "highest_risk": "ความเสี่ยงสูงสุดของวันนี้",
+        "tab_map": "แผนที่",
+        "visit_minutes": "เวลาอยู่ในสถานที่",
+        "rewarding_walking_minutes": "การเดินที่คุ้มค่า",
+        "stop": "จุดที่",
+        "travel_mode": "รูปแบบเดินทาง",
+        "walk_portion": "ช่วงที่ต้องเดิน",
+        "distance": "ระยะทาง",
+        "transfers": "จำนวนต่อรถ",
+        "boarding_buffer": "เวลาสำรองก่อนขึ้นรถ",
+        "sightseeing_walk": "เส้นทางเดินชมเมืองที่มีหลักฐาน",
+        "plain_transfer": "การเดินทางธรรมดา",
+        "opening_unverified": "เวลาเปิดยังไม่ได้ยืนยันจากแหล่งทางการ",
+        "map_no_coordinates": "วันนี้ยังไม่มีพิกัดของจุดหมาย",
+        "unscheduled_choices": "เลือกไว้แต่ยังจัดลงตารางไม่ได้",
+        "capability_gaps": "หลักฐานที่ยังขาด",
+        "downloads": "ไฟล์สำหรับใช้ออฟไลน์",
+        "poster": "โพสเตอร์รายวัน (PNG)",
+        "pdf": "PDF ทั้งทริป",
+        "excel": "ไฟล์ Excel",
+        "checklist": "รายการเตรียมตัวก่อนเดินทาง",
+        "checklist_pending": "ยังไม่ได้สร้างรายการเตรียมตัว",
+        "sources": "หลักฐานและแหล่งข้อมูล",
+        "no_sources": "ยังไม่มีข้อมูลที่ตรวจสอบแล้วเข้าสู่แผนนี้",
+        "no_costs": "ยังไม่มีข้อมูลค่าใช้จ่าย",
     },
 }
 
@@ -663,6 +740,72 @@ def _date_value(value: str | None) -> date:
 
 def _time_value(value: str | None, fallback: time) -> time:
     return time.fromisoformat(value) if value else fallback
+
+
+@st.cache_data(show_spinner=False)
+def _plan_documents(_snapshot: dict, sha256: str, language: str) -> dict[str, bytes]:
+    """Cached per plan-version snapshot and language; exporters are pure."""
+
+    labels = TEXT[language]
+    return {
+        "pdf": plan_pdf(_snapshot, labels),
+        "xlsx": plan_workbook_xlsx(_snapshot, labels),
+    }
+
+
+@st.cache_data(show_spinner=False)
+def _day_poster(_snapshot: dict, sha256: str, language: str, date: str) -> bytes:
+    return day_poster_png(_snapshot, date, TEXT[language])
+
+
+def _render_plan_item(item: dict, language: str) -> None:
+    """One compact export-snapshot row; details stay behind progressive disclosure."""
+
+    words = TEXT[language]
+    clock = f"{item['start']}–{item['end']}"
+    length = f"{item['duration_minutes']} {words['minutes']}"
+    state = words[f"state_{item['status']}"]
+    if item["type"] == "visit":
+        st.markdown(
+            f"**{clock}** · {words['stop']} {item['stop_number']} · {item['display_name']}"
+        )
+        local = f" · {item['local_name']}" if item.get("local_name") else ""
+        st.caption(f"{state} · {length}{local}")
+        with st.expander(words["details"]):
+            st.markdown(
+                f"- {words['choice']}: {words.get(item['priority'], item['priority'])}"
+            )
+            if item.get("address"):
+                st.markdown(f"- {item['address']}")
+            if not item["opening_verified"]:
+                st.markdown(f"- {words['opening_unverified']}")
+    elif item["type"] == "travel":
+        st.markdown(f"{clock} · {item['origin_name']} → {item['destination_name']}")
+        st.caption(
+            f"{state} · {words['travel_mode']} {item.get('mode') or '?'} · {length} · "
+            f"{words['walk_portion']} {item['walking_minutes']} {words['minutes']}"
+        )
+        with st.expander(words["details"]):
+            st.markdown(
+                "- "
+                + (
+                    words["sightseeing_walk"]
+                    if item["sightseeing_walk"]
+                    else words["plain_transfer"]
+                )
+            )
+            if item.get("distance_m"):
+                st.markdown(f"- {words['distance']}: {item['distance_m']} m")
+            if item.get("transfers") is not None:
+                st.markdown(f"- {words['transfers']}: {item['transfers']}")
+            if item["boarding_buffer_minutes"]:
+                st.markdown(
+                    f"- {words['boarding_buffer']}: "
+                    f"{item['boarding_buffer_minutes']} {words['minutes']}"
+                )
+    else:
+        reason = _optimizer_code(item.get("reason") or "buffer", language)
+        st.caption(f"{clock} · {reason} · {length}")
 
 
 st.set_page_config(page_title="Personal Travel Planner", page_icon="🧭", layout="centered")
@@ -1463,3 +1606,138 @@ if preview:
             else:
                 st.session_state[optimizer_flash_key] = "plan_activated"
                 st.rerun()
+
+st.subheader(copy["use_title"])
+st.caption(copy["use_help"])
+
+if actions.get_active_plan(trip.trip_id) is None:
+    st.info(copy["no_active_plan"])
+else:
+    export_snapshot = actions.build_export_snapshot(trip.trip_id, language=language)
+    export = export_snapshot.as_dict()
+    stamp = export["stamp"]
+    readiness = export["readiness"]
+
+    st.markdown(
+        f"**{copy[stamp['variant_id']]}** · {copy['readiness']}: "
+        f"{copy[readiness['state']]}"
+    )
+    st.caption(
+        f"{copy['active_plan']} `{stamp['plan_version_id'][5:17]}` · "
+        f"{copy['exported_at']} {stamp['exported_at'][:16]} · "
+        f"{stamp['base_currency']} · {stamp['language'].upper()}"
+    )
+    if not stamp["is_active_plan"]:
+        st.warning(copy["superseded_plan"])
+    if readiness["capability_gaps"]:
+        with st.expander(copy["capability_gaps"]):
+            for gap in readiness["capability_gaps"]:
+                st.markdown(f"- {_optimizer_code(gap, language)}")
+
+    chosen_date = st.selectbox(
+        copy["days"],
+        options=[value["date"] for value in export["days"]],
+        key=f"plan_day_{trip.trip_id}",
+    )
+    day = next(item for item in export["days"] if item["date"] == chosen_date)
+    totals = day["totals"]
+    st.markdown(
+        f"**{day['start']}–{day['end']}** · {copy['scheduled_visits']} "
+        f"{totals['scheduled_visits']} · {copy['visit_minutes']} "
+        f"{totals['visit_minutes']} {copy['minutes']} · {copy['travel_minutes']} "
+        f"{totals['travel_minutes']} {copy['minutes']}"
+    )
+    st.caption(
+        f"{copy['walking_minutes']} {totals['walking_minutes']} {copy['minutes']} "
+        f"({copy['rewarding_walking_minutes']} {totals['rewarding_walking_minutes']} · "
+        f"{copy['plain_walking_minutes']} {totals['plain_walking_minutes']}) · "
+        f"{copy['buffer_minutes']} {totals['buffer_minutes']} {copy['minutes']}"
+    )
+    if day["highest_risk"]:
+        st.warning(
+            f"{copy['highest_risk']}: "
+            f"{copy['state_' + day['highest_risk']['status']]}"
+        )
+
+    timeline_tab, map_tab = st.tabs([copy["timeline"], copy["tab_map"]])
+    with timeline_tab:
+        if day["items"]:
+            for plan_item in day["items"]:
+                _render_plan_item(plan_item, language)
+        else:
+            st.warning(copy["no_schedule"])
+    with map_tab:
+        located = [
+            stop
+            for stop in day["stops"]
+            if stop["latitude"] is not None and stop["longitude"] is not None
+        ]
+        if located:
+            st.map(
+                {
+                    "latitude": [stop["latitude"] for stop in located],
+                    "longitude": [stop["longitude"] for stop in located],
+                },
+                latitude="latitude",
+                longitude="longitude",
+                size=60,
+            )
+        else:
+            st.info(copy["map_no_coordinates"])
+        for stop in day["stops"]:
+            st.markdown(
+                f"{copy['stop']} {stop['stop_number']} · {stop['display_name']} · "
+                f"{copy['state_' + stop['status']]}"
+            )
+
+    st.markdown(f"#### {copy['downloads']}")
+    version_tag = stamp["plan_version_id"][5:17]
+    try:
+        documents = _plan_documents(export, export_snapshot.sha256, language)
+        poster = _day_poster(export, export_snapshot.sha256, language, day["date"])
+    except ValueError as error:
+        st.error(str(error))
+    else:
+        st.download_button(
+            copy["poster"],
+            data=poster,
+            file_name=f"plan-{version_tag}-{day['date']}-poster.png",
+            mime="image/png",
+            key=f"poster_{trip.trip_id}",
+            width="stretch",
+        )
+        st.download_button(
+            copy["pdf"],
+            data=documents["pdf"],
+            file_name=f"plan-{version_tag}.pdf",
+            mime="application/pdf",
+            key=f"pdf_{trip.trip_id}",
+            width="stretch",
+        )
+        st.download_button(
+            copy["excel"],
+            data=documents["xlsx"],
+            file_name=f"plan-{version_tag}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key=f"excel_{trip.trip_id}",
+            width="stretch",
+        )
+        st.caption(copy["checklist_pending"])
+
+    if export["unscheduled"]:
+        with st.expander(f"{copy['unscheduled_choices']} ({len(export['unscheduled'])})"):
+            st.dataframe(
+                [
+                    {
+                        copy["name"]: item["display_name"],
+                        copy["choice"]: copy.get(item["priority"], item["priority"]),
+                        copy["reason"]: _optimizer_code(item["reason"], language),
+                        copy["consequence"]: _optimizer_code(
+                            item["consequence"], language
+                        ),
+                    }
+                    for item in export["unscheduled"]
+                ],
+                hide_index=True,
+                width="stretch",
+            )

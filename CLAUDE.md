@@ -124,11 +124,22 @@ change, `--check` must pass before committing. See `AGENTS.md`.
 scoring weights, optimizer rules, schema, or provider policy, read the relevant ticket — the "why" is
 there, not in the code. Reference tickets by linked title, never bare ID.
 
-Slices 1–4 are built and evidenced (foundation, setup+discovery, ranking, optimization). **Not yet
-built:** slice 5 (timeline/map/poster/PDF/six-sheet Excel exports from one export snapshot, readiness
-checklist) and slice 6 (non-AI quick actions, then optional constrained GenAI revision, then the live
-Taipei pilot). Exporters and revision code do not exist — don't go looking for them. Complete a slice
-vertically with its own runnable check before starting the next.
+Slices 1–4 are built and evidenced (foundation, setup+discovery, ranking, optimization). Slice 5 is
+**in progress**: `exports.py` builds the one shared export snapshot; `app.py` renders the active-plan
+day summary, timeline, and numbered map; `exporters.py` writes the 9:16 poster PNG, the trip PDF, and
+the six-sheet Excel workbook — all three snapshot-in, bytes-out. **Not yet built:** cost/currency rows
+(no upstream fare or ticket evidence exists yet, so the `Costs` sheet is headers-only), the readiness
+checklist board (ticket 017, deliberately its own slice — the `Checklist` sheet exists with its agreed
+columns so the workbook contract stays stable), and all of slice 6 (non-AI quick actions, then optional
+constrained GenAI revision, then the live Taipei pilot). Every new output must read
+`build_export_snapshot()` rather than the raw variant — that is what keeps their times, totals, and
+statuses from diverging. Complete a slice vertically with its own runnable check before starting the next.
+
+PDF and poster rendering needs a Unicode TTF covering Latin + Thai + local script (CJK for the Taipei
+pilot). `exporters.resolve_font()` checks `TOURIST_EXPORT_FONT` first, then a small candidate list
+(macOS `Arial Unicode.ttf` is the one that covers all three here); with no font it raises rather than
+rendering tofu. The app's status labels carry emoji that no such font has, so `_labels()` strips
+pictographs — the wording alone still carries the state.
 
 Explicitly out of scope for Phase 1: FastAPI, React, Docker, Redis, background workers, remote
 collaboration, hosted notifications. `streamlit` is the only runtime dependency in `pyproject.toml`;

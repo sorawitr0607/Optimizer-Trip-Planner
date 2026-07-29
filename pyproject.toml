@@ -4,7 +4,10 @@ version = "0.1.0"
 description = "Local, evidence-aware personal travel planner"
 requires-python = ">=3.12"
 dependencies = [
+    "fpdf2>=2.8.7",
+    "pillow>=12.3.0",
     "streamlit>=1.54,<2",
+    "xlsxwriter>=3.2.9",
 ]
 
 [tool.uv]
