@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 uv run streamlit run app.py                                          # run the app
-uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 25 tests, ~2s
+uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 96 tests, ~7s
 uv run --locked python -m unittest tests.test_optimizer.OptimizerCoreTest.test_safe_route_and_weather_fallback_are_selected  # one test
 python3 scripts/validate_regression_fixtures.py                      # fixture catalog structure
 uv run --locked python scripts/run_optimizer_regressions.py          # 27 historic cases through the real optimizer
@@ -142,12 +142,12 @@ scoring weights, optimizer rules, schema, or provider policy, read the relevant 
 there, not in the code. Reference tickets by linked title, never bare ID.
 
 Slices 1–4 are built and evidenced (foundation, setup+discovery, ranking, optimization). Slice 5 is
-**in progress**: `exports.py` builds the one shared export snapshot; `app.py` renders the active-plan
+**complete**, including the readiness checklist and owner-recorded costs: `exports.py` builds the one shared export snapshot; `app.py` renders the active-plan
 day summary, timeline, and numbered map; `exporters.py` writes the 9:16 poster PNG, the trip PDF, and
-the six-sheet Excel workbook — all three snapshot-in, bytes-out. **Not yet built:** cost/currency rows
-(no upstream fare or ticket evidence exists yet, so the `Costs` sheet is headers-only), the readiness
-checklist board (ticket 017, deliberately its own slice — the `Checklist` sheet exists with its agreed
-columns so the workbook contract stays stable), and all of slice 6 (non-AI quick actions, then optional
+the six-sheet Excel workbook — all three snapshot-in, bytes-out. `checklist.py` generates the readiness board and `costs.py` converts owner-recorded
+expenses into THB against an owner-editable, timestamped rate snapshot; a paid charge locks its actual
+THB so a later rate cannot rewrite it, and a missing rate stays a visible gap rather than a guess.
+**Not yet built:** all of slice 6 (non-AI quick actions, then optional
 constrained GenAI revision, then the live Taipei pilot). Every new output must read
 `build_export_snapshot()` rather than the raw variant — that is what keeps their times, totals, and
 statuses from diverging. Complete a slice vertically with its own runnable check before starting the next.

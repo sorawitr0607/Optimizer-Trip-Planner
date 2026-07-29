@@ -26,7 +26,7 @@ from .core import (
     new_setup_draft,
     new_trip,
 )
-from . import checklist, exports
+from . import checklist, costs, exports
 from .discovery import build_candidate_catalog
 from .optimizer import date_range, optimize_trip
 from .providers import OpenStreetMapProvider, ProviderUnavailable
@@ -691,6 +691,72 @@ class PlannerActions:
             return []
         return list(planner_input.get("facts", []))
 
+    def save_rate_snapshot(
+        self,
+        *,
+        trip_id: str,
+        rates: Mapping[str, Any],
+        as_of: str,
+        source: str,
+        buffer_percent: float = 0.0,
+    ) -> dict[str, Any]:
+        """Record the sourced, timestamped rates costs convert against."""
+
+        if self.store.get_trip(trip_id) is None:
+            raise ValueError(f"Unknown trip: {trip_id}")
+        snapshot = costs.new_rate_snapshot(
+            rates=dict(rates), as_of=as_of, source=source, buffer_percent=buffer_percent
+        )
+        return self.store.save_rate_snapshot(
+            trip_id=trip_id,
+            snapshot=freeze_snapshot(snapshot),
+            now=datetime.now(timezone.utc).isoformat(),
+        )
+
+    def get_rate_snapshot(self, trip_id: str) -> dict[str, Any] | None:
+        return self.store.get_rate_snapshot(trip_id)
+
+    def save_cost_item(
+        self, *, trip_id: str, item: Mapping[str, Any], cost_id: str | None = None
+    ) -> dict[str, Any]:
+        if self.store.get_trip(trip_id) is None:
+            raise ValueError(f"Unknown trip: {trip_id}")
+        payload = {
+            "label": "",
+            "category": "other",
+            "original_amount": 0,
+            "original_currency": costs.BASE_CURRENCY,
+            "payment_state": "estimate",
+            "actual_thb": None,
+            "payer": "owner",
+            "share": None,
+            "related_item_id": None,
+            "note": None,
+            **dict(item),
+        }
+        clean = costs.validate_cost(payload)
+        return self.store.upsert_cost_item(
+            item_id=cost_id or clean.get("cost_id"),
+            trip_id=trip_id,
+            snapshot=freeze_snapshot(
+                {k: v for k, v in clean.items() if k not in {"cost_id", "updated_at"}}
+            ),
+            now=datetime.now(timezone.utc).isoformat(),
+        )
+
+    def list_cost_items(self, trip_id: str) -> list[dict[str, Any]]:
+        """Cost rows with their THB value resolved against the rate snapshot."""
+
+        return costs.apply_rates(
+            self.store.list_cost_items(trip_id), self.store.get_rate_snapshot(trip_id)
+        )
+
+    def delete_cost_item(self, *, trip_id: str, cost_id: str) -> None:
+        self.store.delete_cost_item(trip_id, cost_id)
+
+    def cost_totals(self, trip_id: str) -> dict[str, Any]:
+        return costs.totals(self.list_cost_items(trip_id))
+
     def build_export_snapshot(
         self, trip_id: str, *, version_id: str | None = None, language: str | None = None
     ) -> FrozenSnapshot:
@@ -717,6 +783,9 @@ class PlannerActions:
                 exported_at=datetime.now(timezone.utc).isoformat(),
                 checklist_items=self.list_checklist_items(trip_id),
                 checklist_readiness=self.checklist_readiness(trip_id),
+                cost_items=self.list_cost_items(trip_id),
+                cost_totals=self.cost_totals(trip_id),
+                rate_snapshot=self.store.get_rate_snapshot(trip_id),
             )
         )
 

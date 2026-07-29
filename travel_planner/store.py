@@ -6,7 +6,8 @@ from contextlib import contextmanager
 from hashlib import sha256
 from pathlib import Path
 import sqlite3
-from typing import Iterator
+from uuid import uuid4
+from typing import Any, Iterator
 
 from .core import (
     CandidateChoice,
@@ -21,7 +22,7 @@ from .core import (
 )
 
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS trips (
     id TEXT PRIMARY KEY,
@@ -121,6 +122,26 @@ CREATE TABLE IF NOT EXISTS checklist_items (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     UNIQUE (trip_id, generated_key),
+    FOREIGN KEY (trip_id) REFERENCES trips(id)
+);
+
+-- Owner-recorded costs and the rate snapshot they convert against. Editable,
+-- like the readiness board; a paid row keeps its locked THB charge.
+CREATE TABLE IF NOT EXISTS cost_items (
+    id TEXT PRIMARY KEY,
+    trip_id TEXT NOT NULL,
+    snapshot_json TEXT NOT NULL,
+    snapshot_sha256 TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (trip_id) REFERENCES trips(id)
+);
+
+CREATE TABLE IF NOT EXISTS exchange_rate_snapshots (
+    trip_id TEXT PRIMARY KEY,
+    snapshot_json TEXT NOT NULL,
+    snapshot_sha256 TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
     FOREIGN KEY (trip_id) REFERENCES trips(id)
 );
 
@@ -459,6 +480,86 @@ class SQLiteStore:
                 "SELECT * FROM checklist_items WHERE id = ?", (item_id,)
             ).fetchone()
         return self._checklist_item(row) if row else None
+
+    def upsert_cost_item(
+        self, *, item_id: str | None, trip_id: str, snapshot: FrozenSnapshot, now: str
+    ) -> dict[str, Any]:
+        with self.connect() as connection:
+            existing = (
+                connection.execute(
+                    "SELECT id, created_at FROM cost_items WHERE id = ? AND trip_id = ?",
+                    (item_id, trip_id),
+                ).fetchone()
+                if item_id
+                else None
+            )
+            resolved = existing["id"] if existing else (item_id or f"cost_{uuid4().hex}")
+            created = existing["created_at"] if existing else now
+            connection.execute(
+                """
+                INSERT INTO cost_items (
+                    id, trip_id, snapshot_json, snapshot_sha256, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT (id) DO UPDATE SET
+                    snapshot_json = excluded.snapshot_json,
+                    snapshot_sha256 = excluded.snapshot_sha256,
+                    updated_at = excluded.updated_at
+                """,
+                (resolved, trip_id, snapshot.canonical_json, snapshot.sha256, created, now),
+            )
+        return {**snapshot.as_dict(), "cost_id": resolved, "updated_at": now}
+
+    def list_cost_items(self, trip_id: str) -> list[dict[str, Any]]:
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM cost_items WHERE trip_id = ? ORDER BY created_at, id",
+                (trip_id,),
+            ).fetchall()
+        return [
+            {
+                **self._verified_snapshot(
+                    row["snapshot_json"], row["snapshot_sha256"], "Cost item"
+                ).as_dict(),
+                "cost_id": row["id"],
+                "updated_at": row["updated_at"],
+            }
+            for row in rows
+        ]
+
+    def delete_cost_item(self, trip_id: str, item_id: str) -> None:
+        with self.connect() as connection:
+            connection.execute(
+                "DELETE FROM cost_items WHERE trip_id = ? AND id = ?", (trip_id, item_id)
+            )
+
+    def save_rate_snapshot(
+        self, *, trip_id: str, snapshot: FrozenSnapshot, now: str
+    ) -> dict[str, Any]:
+        with self.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO exchange_rate_snapshots (
+                    trip_id, snapshot_json, snapshot_sha256, updated_at
+                ) VALUES (?, ?, ?, ?)
+                ON CONFLICT (trip_id) DO UPDATE SET
+                    snapshot_json = excluded.snapshot_json,
+                    snapshot_sha256 = excluded.snapshot_sha256,
+                    updated_at = excluded.updated_at
+                """,
+                (trip_id, snapshot.canonical_json, snapshot.sha256, now),
+            )
+        return snapshot.as_dict()
+
+    def get_rate_snapshot(self, trip_id: str) -> dict[str, Any] | None:
+        with self.connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM exchange_rate_snapshots WHERE trip_id = ?", (trip_id,)
+            ).fetchone()
+        if row is None:
+            return None
+        return self._verified_snapshot(
+            row["snapshot_json"], row["snapshot_sha256"], "Exchange-rate snapshot"
+        ).as_dict()
 
     def save_optimization_preview(
         self, preview: OptimizationPreview

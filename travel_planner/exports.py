@@ -38,6 +38,9 @@ def build_export_snapshot(
     exported_at: str,
     checklist_items: list[dict[str, Any]] | None = None,
     checklist_readiness: dict[str, Any] | None = None,
+    cost_items: list[dict[str, Any]] | None = None,
+    cost_totals: dict[str, Any] | None = None,
+    rate_snapshot: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Return the display-ready snapshot for one active plan version."""
 
@@ -157,12 +160,13 @@ def build_export_snapshot(
         "fallbacks": fallbacks,
         "accommodation": _accommodation(variant, planner_input, context),
         "warnings": sorted(set(variant.get("warnings", []))),
-        # ponytail: costs stay empty until a provider supplies fare/ticket
-        # evidence; the Costs sheet and rate snapshot land with that evidence.
+        # Owner-recorded costs in THB plus their original currency. A provider
+        # fare would add rows here; it is not required for the sheet to work.
         "costs": {
             "base_currency": BASE_CURRENCY,
-            "exchange_rate_snapshot": None,
-            "items": [],
+            "exchange_rate_snapshot": rate_snapshot,
+            "items": list(cost_items or []),
+            "totals": cost_totals,
         },
     }
 

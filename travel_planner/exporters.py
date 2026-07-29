@@ -590,7 +590,12 @@ def _write_summary(
         ("Input sha256", stamp["input_sha256"]),
         ("Language", stamp["language"]),
         ("Base currency", stamp["base_currency"]),
-        ("Exchange-rate snapshot", snapshot["costs"]["exchange_rate_snapshot"] or "none"),
+        (
+            "Exchange-rate snapshot",
+            _rate_summary(snapshot["costs"]["exchange_rate_snapshot"]),
+        ),
+        ("Estimated THB", (snapshot["costs"].get("totals") or {}).get("estimated_thb", 0)),
+        ("Paid THB", (snapshot["costs"].get("totals") or {}).get("paid_thb", 0)),
         ("Exported at", stamp["exported_at"]),
         ("Timezone", stamp["timezone"] or "unverified"),
         ("Discovery status", stamp["discovery_status"]),
@@ -806,38 +811,64 @@ def _write_costs(
     sheet: Any, snapshot: dict[str, Any], words: dict[str, str], header: Any
 ) -> None:
     columns = (
+        ("Cost", 30),
         ("Original amount", 16),
         ("Original currency", 17),
-        ("Estimate or actual", 18),
+        ("Payment state", 15),
         ("Applied rate", 13),
         ("Rate date", 13),
         ("Converted THB", 15),
         ("Actual THB", 13),
+        ("Reported THB", 14),
         ("Category", 16),
         ("Payer / share", 16),
-        ("Payment state", 15),
         ("Related plan item", 24),
+        ("Note", 24),
     )
     for index, (name, width) in enumerate(columns):
         sheet.write(0, index, name, header)
         sheet.set_column(index, index, width)
     sheet.freeze_panes(1, 0)
-    for row, item in enumerate(snapshot["costs"]["items"], start=1):
-        sheet.write_row(row, 0, [item.get(key) or "" for key in (
-            "original_amount",
-            "original_currency",
-            "estimate_or_actual",
-            "applied_rate",
-            "rate_date",
-            "converted_thb",
-            "actual_thb",
-            "category",
-            "payer_share",
-            "payment_state",
-            "related_item_id",
-        )])
-    if not snapshot["costs"]["items"]:
+    board = snapshot["costs"]
+    for row, item in enumerate(board["items"], start=1):
+        share = " / ".join(
+            str(part) for part in (item.get("payer"), item.get("share")) if part
+        )
+        sheet.write_row(
+            row,
+            0,
+            [
+                item.get("label") or "",
+                item.get("original_amount") if item.get("original_amount") is not None else "",
+                item.get("original_currency") or "",
+                item.get("payment_state") or "",
+                item.get("applied_rate") if item.get("applied_rate") is not None else "",
+                item.get("applied_rate_date") or "",
+                item.get("converted_thb") if item.get("converted_thb") is not None else "",
+                item.get("actual_thb") if item.get("actual_thb") is not None else "",
+                item.get("reported_thb") if item.get("reported_thb") is not None else "",
+                item.get("category") or "",
+                share,
+                item.get("related_item_id") or "",
+                item.get("note") or ("rate missing" if item.get("rate_missing") else ""),
+            ],
+        )
+    if not board["items"]:
         sheet.write(1, 0, words["no_costs"])
+        return
+    totals = board.get("totals") or {}
+    offset = len(board["items"]) + 2
+    for index, (name, value) in enumerate(
+        (
+            ("Estimated THB", totals.get("estimated_thb")),
+            ("Paid THB", totals.get("paid_thb")),
+            ("Total THB", totals.get("total_thb")),
+            ("Rows without a rate", totals.get("unconvertible_rows")),
+        )
+    ):
+        sheet.write(offset + index, 0, name, header)
+        sheet.write(offset + index, 1, value if value is not None else "")
+    sheet.autofilter(0, 0, len(board["items"]), len(columns) - 1)
 
 
 def _write_sources(sheet: Any, snapshot: dict[str, Any], header: Any) -> None:
@@ -925,6 +956,26 @@ def _code(words: dict[str, str], code: Any) -> str:
     if not text:
         return ""
     return words.get(text) or text.replace("_", " ").capitalize()
+
+
+def _rate_summary(snapshot: dict[str, Any] | None) -> str:
+    if not snapshot:
+        return "none"
+    rates = ", ".join(
+        f"{code} {rate}" for code, rate in (snapshot.get("rates") or {}).items()
+        if code != "THB"
+    )
+    buffer_percent = snapshot.get("buffer_percent") or 0
+    return " · ".join(
+        part
+        for part in (
+            snapshot.get("as_of"),
+            snapshot.get("source"),
+            rates,
+            f"+{buffer_percent}% buffer" if buffer_percent else "",
+        )
+        if part
+    )
 
 
 def _coordinates(point: dict[str, Any]) -> str:
