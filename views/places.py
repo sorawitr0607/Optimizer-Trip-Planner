@@ -2,8 +2,15 @@
 
 from __future__ import annotations
 
+from urllib.parse import urlencode
+
 import streamlit as st
 
+from travel_planner.providers import (
+    CARD_PHOTO_LIMIT,
+    ProviderBudgetExceeded,
+    ProviderUnavailable,
+)
 from ui import shared
 from ui.shared import _empty_setup
 from ui.shared import _candidate_name, _category_text, _explain, _photo_url
@@ -161,10 +168,71 @@ if ranking:
         if local_name and local_name != _candidate_name(candidate, language):
             st.caption(local_name)
         st.caption(_category_text(candidate["category"], language))
-        if photo_url := _photo_url(candidate.get("photo_reference")):
+        best_for = card["matched_tags"] or card["candidate_tags"]
+        st.markdown(f"**{copy['place_summary']}**")
+        st.write(
+            copy["place_summary_template"].format(
+                name=_candidate_name(candidate, language),
+                category=_category_text(candidate["category"], language),
+                best_for=" · ".join(
+                    TAG_TEXT[language].get(tag, tag) for tag in best_for[:4]
+                ),
+                reason=_explain(card["why_shown"][0], language),
+                caution=" · ".join(
+                    _explain(code, language) for code in card["cons"][:2]
+                ),
+            )
+        )
+        insight_key = f"place_insight_{trip.trip_id}_{card_id}"
+        insight = st.session_state.get(insight_key)
+        gallery = list((insight or {}).get("photo_gallery") or [])
+        if not gallery and insight and insight.get("photo_uri"):
+            gallery = [{**(insight.get("photo") or {}), "uri": insight["photo_uri"]}]
+        if gallery:
+            photo_index_key = f"photo_index_{trip.trip_id}_{card_id}"
+            photo_index = int(st.session_state.get(photo_index_key, 0)) % len(gallery)
+            photo = gallery[photo_index]
+            credit = ", ".join(
+                f"[{item['name']}]({item['uri']})"
+                if item.get("name") and item.get("uri")
+                else item.get("name") or ""
+                for item in photo.get("authors") or []
+            ).strip(", ")
+            caption = copy["google_photo"] + (f" · {credit}" if credit else "")
+            st.image(photo["uri"], caption=caption, width="stretch")
+            if len(gallery) > 1:
+                previous_column, count_column, next_column = st.columns([1, 2, 1])
+                if previous_column.button(
+                    f"← {copy['previous_photo']}",
+                    key=f"previous_photo_{trip.trip_id}_{card_id}",
+                    width="stretch",
+                ):
+                    st.session_state[photo_index_key] = (photo_index - 1) % len(gallery)
+                    st.rerun()
+                count_column.caption(
+                    copy["photo_count"].format(
+                        current=photo_index + 1, total=len(gallery)
+                    )
+                )
+                if next_column.button(
+                    f"{copy['next_photo']} →",
+                    key=f"next_photo_{trip.trip_id}_{card_id}",
+                    width="stretch",
+                ):
+                    st.session_state[photo_index_key] = (photo_index + 1) % len(gallery)
+                    st.rerun()
+        elif photo_url := _photo_url(candidate.get("photo_reference")):
             st.image(photo_url, caption=copy["photo_source"], width="stretch")
         else:
             st.caption(copy["photo_unavailable"])
+            st.map(
+                {
+                    "lat": [candidate["latitude"]],
+                    "lon": [candidate["longitude"]],
+                },
+                zoom=14,
+                height=220,
+            )
         if entry["role"] == "protected_exploration":
             st.info(copy["exploration_card"])
         if card["is_city_icon"]:
@@ -188,12 +256,25 @@ if ranking:
         st.write(f"**{copy['feasibility']}:** {copy['not_evaluated']}")
         st.caption(copy["planner_estimate"])
 
-        if card["matched_tags"]:
-            st.write(
-                f"**{copy['matched_tags']}:** "
-                + " · ".join(
-                    TAG_TEXT[language].get(tag, tag) for tag in card["matched_tags"]
-                )
+        st.markdown(f"**{copy['tourist_take']}**")
+        st.write(
+            f"**{copy['best_for']}:** "
+            + " · ".join(
+                TAG_TEXT[language].get(tag, tag) for tag in best_for[:4]
+            )
+        )
+        st.caption(
+            f"{copy['experience_fit']}: "
+            f"{card['dimensions']['experience_value']['score']}/20 · "
+            f"{copy['group_fit']}: "
+            f"{card['dimensions']['group_preference_fit']['score']}/30"
+        )
+        for code in card["why_shown"][:2]:
+            st.markdown(f"- {_explain(code, language)}")
+        if card["cons"]:
+            st.caption(
+                f"{copy['check_before_going']}: "
+                + " · ".join(_explain(code, language) for code in card["cons"][:2])
             )
         # Collapsed by default: three columns of prose per card pushed the decision
         # buttons a screen and a half down, so cards could not be compared.
@@ -239,10 +320,86 @@ if ranking:
         opening_state = candidate["operational_evidence"]["opening_hours"]["state"]
         evidence_column.write(f"**{copy['opening']}:** {opening_state}")
         evidence_column.write(f"**{copy['route_effort']}:** {copy['not_routed']}")
-        rating_column.write(f"**{copy['source_rating']}:** {copy['not_enriched']}")
+        if insight and insight.get("rating") is not None:
+            rating_column.write(
+                f"**{copy['source_rating']}:** {insight['rating']:.1f}/5 · "
+                f"{insight.get('user_rating_count', 0):,} {copy['ratings']}"
+            )
+        else:
+            rating_column.write(f"**{copy['source_rating']}:** {copy['not_enriched']}")
         alias = candidate["provider_aliases"][0]
         if alias.get("source_url"):
             st.markdown(f"[{copy['source']}]({alias['source_url']})")
+        tripadvisor_url = "https://www.tripadvisor.com/Search?" + urlencode(
+            {"q": f"{_candidate_name(candidate, 'en')} {trip.destination}"}
+        )
+        st.markdown(f"[{copy['open_tripadvisor']}]({tripadvisor_url})")
+
+        if insight:
+            summary = insight.get("review_summary") or {}
+            if summary.get("text"):
+                st.markdown(f"**{copy['review_summary']}**")
+                st.write(summary["text"])
+                if summary.get("disclosure"):
+                    st.caption(summary["disclosure"])
+                if summary.get("reviews_uri"):
+                    st.markdown(f"[{copy['see_all_reviews']}]({summary['reviews_uri']})")
+                if summary.get("flag_uri"):
+                    st.markdown(f"[{copy['report_summary']}]({summary['flag_uri']})")
+            if insight.get("reviews"):
+                st.markdown(f"**{copy['visitor_reviews']}**")
+                for review in insight["reviews"][:2]:
+                    author = review.get("author") or copy["google_reviewer"]
+                    if review.get("author_uri"):
+                        author = f"[{author}]({review['author_uri']})"
+                    context = " · ".join(
+                        item
+                        for item in (
+                            f"{review['rating']:.0f}/5"
+                            if review.get("rating") is not None
+                            else None,
+                            review.get("published"),
+                        )
+                        if item
+                    )
+                    st.markdown(f"{author}" + (f" · {context}" if context else ""))
+                    st.write(review["text"])
+            elif not summary.get("text"):
+                st.caption(copy["no_reviews_returned"])
+            if insight.get("google_maps_uri"):
+                st.markdown(
+                    f"[{copy['open_google_maps']}]({insight['google_maps_uri']})"
+                )
+            st.caption(copy["live_details_session_only"])
+        else:
+            details_cost = actions.check_paid_call(
+                operation="google_places:card_details"
+            )
+            photo_cost = actions.check_paid_call(
+                operation="google_places:photo", count=CARD_PHOTO_LIMIT
+            )
+            st.caption(
+                shared.plain(
+                    copy["live_details_cost"].format(
+                        cost=details_cost["estimate_usd"] + photo_cost["estimate_usd"],
+                        count=CARD_PHOTO_LIMIT,
+                    )
+                )
+            )
+            if st.button(
+                copy["load_live_details"],
+                key=f"enrich_card_{trip.trip_id}_{card_id}",
+                width="stretch",
+                disabled=not details_cost["allowed"],
+            ):
+                try:
+                    st.session_state[insight_key] = actions.enrich_place_card(
+                        trip.trip_id, card_id, language=language
+                    )
+                except (ProviderBudgetExceeded, ProviderUnavailable, ValueError) as error:
+                    st.error(shared.plain(error))
+                else:
+                    st.rerun()
 
         existing_choice = saved_choices.get(card_id)
         if existing_choice:
@@ -372,6 +529,19 @@ if ranking:
         )
     else:
         st.caption(copy["no_selected"])
+
+    selected_choices = [
+        choice
+        for choice in saved_choices.values()
+        if choice.action in {"must_do", "interested", "maybe"}
+    ]
+    if selected_choices and st.button(
+        f"{copy['next_step']}: {copy['stage_evidence']}",
+        key=f"continue_evidence_{trip.trip_id}",
+        type="primary",
+        width="stretch",
+    ):
+        st.switch_page("views/evidence.py")
 
     st.markdown(f"#### {copy['reconciliation']}")
     st.caption(copy["reconciliation_help"])

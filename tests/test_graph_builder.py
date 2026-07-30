@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import unittest
 
-from scripts.build_project_graph import extracted_edge_issues, resolve_ticket_node
+from scripts.build_project_graph import (
+    deduplicate_nodes,
+    extracted_edge_issues,
+    resolve_ticket_node,
+)
 
 
 class TicketNodeResolutionTest(unittest.TestCase):
@@ -51,6 +55,20 @@ class TicketNodeResolutionTest(unittest.TestCase):
 
 
 class GraphBuilderEdgeValidationTest(unittest.TestCase):
+    def test_duplicate_node_ids_follow_networkx_last_attributes_win(self) -> None:
+        nodes = deduplicate_nodes(
+            [
+                {"id": "same", "label": "old", "source_file": "one.py"},
+                {"id": "same", "label": "new"},
+                {"id": "other", "label": "Other"},
+            ]
+        )
+
+        self.assertEqual(2, len(nodes))
+        self.assertEqual(
+            {"id": "same", "label": "new", "source_file": "one.py"}, nodes[0]
+        )
+
     def test_digraph_may_retain_one_extracted_relation_variant(self) -> None:
         expected = {
             ("caller", "target", "calls"),

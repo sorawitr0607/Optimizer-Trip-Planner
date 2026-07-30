@@ -40,6 +40,8 @@ from ui.text import (
 
 LANGUAGE_KEY = "language"
 TRIP_KEY = "selected_trip_id"
+NEW_TRIP_KEY = "creating_trip_slot"
+PENDING_TRIP_KEY = "_select_trip_on_next_run"
 
 
 def actions() -> PlannerActions:
@@ -180,7 +182,20 @@ def journey(current_trip) -> dict:
     gaps: list[str] = []
     if setup is not None and setup.confirmed and discovery is not None and choices:
         try:
-            gaps = planner._optimizer_input(trip_id)["trip"]["capability_gaps"]
+            optimizer_input = planner._optimizer_input(trip_id)
+            gaps = list(optimizer_input["trip"]["capability_gaps"])
+            verified_openings = {
+                fact["subject_id"]
+                for fact in optimizer_input["facts"]
+                if fact.get("fact_type") == "opening_interval"
+                and fact.get("status") == "verified"
+            }
+            if optimizer_input["trip"]["local_dates"] and any(
+                candidate.get("requires_opening_evidence")
+                and candidate["id"] not in verified_openings
+                for candidate in optimizer_input["candidates"]
+            ) and "OPENING_EVIDENCE_MISSING" not in gaps:
+                gaps.append("OPENING_EVIDENCE_MISSING")
         except ValueError:
             gaps = ["INPUT_NOT_READY"]
     stages = [
@@ -192,7 +207,9 @@ def journey(current_trip) -> dict:
         },
         {
             "key": "evidence",
-            "done": bool(choices and not gaps),
+            "done": bool(
+                choices and (not gaps or current_trip.planning_mode == "explore_first")
+            ),
             "blocked_by": None if discovery is not None and choices else "places",
         },
         {
@@ -496,4 +513,3 @@ def _render_plan_item(item: dict, language: str) -> None:
     else:
         reason = _optimizer_code(item.get("reason") or "buffer", language)
         st.caption(f"{clock} · {reason} · {length}")
-

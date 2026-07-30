@@ -27,6 +27,10 @@ PRICES_USD = {
     "openrouteservice:directions": 0.0,
     "openrouteservice:matrix": 0.0,
     "google_places:details": 0.017,
+    # Current Text Search Enterprise + Atmosphere and Place Photo list prices,
+    # conservatively tracked even when the account is still inside its free cap.
+    "google_places:card_details": 0.040,
+    "google_places:photo": 0.007,
     # Text search carrying opening hours falls in the dearer field tier. Priced
     # high rather than low: an over-estimate protects the cap, an
     # under-estimate spends past it.

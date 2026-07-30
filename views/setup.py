@@ -41,7 +41,11 @@ STEP_COUNT = 5
 st.title(copy["title"])
 st.caption(copy["caption"])
 
-with st.expander(copy["new_trip"], expanded=trip is None):
+creating_trip_slot = bool(st.session_state.get(shared.NEW_TRIP_KEY))
+with st.expander(
+    copy["new_trip_slot"] if trip is not None else copy["new_trip"],
+    expanded=trip is None or creating_trip_slot,
+):
     # Outside a form: choosing a country must refresh the city list immediately,
     # and the resulting geocoder query is shown before the trip is created.
     # Both dropdowns accept a typed value, so every worldwide destination stays
@@ -98,7 +102,8 @@ with st.expander(copy["new_trip"], expanded=trip is None):
             except ValueError as error:
                 st.error(shared.plain(error))
             else:
-                st.session_state[shared.TRIP_KEY] = created.trip_id
+                st.session_state[shared.PENDING_TRIP_KEY] = created.trip_id
+                st.session_state.pop(shared.NEW_TRIP_KEY, None)
                 st.success(copy["created"])
                 st.rerun()
 
@@ -133,6 +138,9 @@ st.caption(copy["setup_help"])
 
 STEP_KEY = f"setup_step_{trip.trip_id}"
 FLASH_KEY = f"setup_flash_{trip.trip_id}"
+ADVANCE_KEY = f"setup_advance_{trip.trip_id}"
+if st.session_state.pop(ADVANCE_KEY, False):
+    st.switch_page("views/places.py")
 step = min(max(int(st.session_state.get(STEP_KEY, 1)), 1), STEP_COUNT)
 
 # A callback cannot draw anything, so it leaves its outcome here for this run.
@@ -266,6 +274,7 @@ def _confirm() -> None:
         return
     if _save(STEP_COUNT, confirmed=True):
         st.session_state[FLASH_KEY] = ("success", copy["confirmed"])
+        st.session_state[ADVANCE_KEY] = True
 
 
 def _save_here(step_number: int) -> None:

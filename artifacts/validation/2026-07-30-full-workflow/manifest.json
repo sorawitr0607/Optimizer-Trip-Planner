@@ -1,0 +1,114 @@
+{
+  "run_id": "2026-07-30-full-workflow",
+  "timestamp": "2026-07-30T05:09:46Z",
+  "application_version": "0.1.0",
+  "schema_version": 11,
+  "source_revision": "9560abc1bc5b9511b6d6e60a4678f97730c71506+working-tree",
+  "recorded_at_revision": "9560abc1bc5b9511b6d6e60a4678f97730c71506+working-tree",
+  "operating_system": "Darwin 25.5.0",
+  "python_version": "3.12.13",
+  "language": "en and th",
+  "configuration": {
+    "workflow_database": "temporary per-run SQLite",
+    "saved_trip_check": "disposable copy of data/tourist.sqlite3; live data was not modified",
+    "workflow_providers": "deterministic place, opening-hours, route and time-zone fakes",
+    "live_checks": "OpenStreetMap discovery plus one Google Places card-details and photo lookup",
+    "review_content_retained": false
+  },
+  "deterministic_seed": null,
+  "fixture_catalog_sha256": "82b654159978df0e2c1a7861f62f79d11bd403de9b80fa41d2d40718a0faba26",
+  "scorecard_gate": "Attraction coverage and card evidence; whole-trip optimizer validity; export integrity",
+  "action": "Exercised trip creation through discovery, choices, evidence, optimization, activation, readiness and all exports; rendered every application page; then verified live attraction coverage and one live place card",
+  "result": "pass",
+  "measurements": {
+    "full_suite": {
+      "tests": 225,
+      "failures": 0,
+      "errors": 0
+    },
+    "continuous_workflow": {
+      "stages": [
+        "create trip",
+        "confirm setup and travellers",
+        "discover and rank",
+        "choose places",
+        "refresh opening hours, routes and time zone",
+        "generate Ready preview",
+        "activate immutable plan version",
+        "apply readiness checklist",
+        "build export snapshot"
+      ],
+      "capability_gaps_before_activation": [],
+      "readiness": "ready",
+      "rendered_pages": 8,
+      "export_assertions": {
+        "poster_png": "1080x1920",
+        "pdf": "valid PDF signature",
+        "xlsx": "valid ZIP workbook container",
+        "ics": "valid VCALENDAR signature"
+      }
+    },
+    "historic_regressions": {
+      "rules": 24,
+      "atomic": 20,
+      "interaction": 7,
+      "variants_per_fixture": 3
+    },
+    "live_openstreetmap": {
+      "unique_provider_records": 838,
+      "canonical_candidates": 832,
+      "duplicates_merged": 6,
+      "photo_references": 14,
+      "wikipedia_references": 346,
+      "verified_landmarks": [
+        "Taipei 101",
+        "National Palace Museum",
+        "Chiang Kai-shek Memorial Hall",
+        "Lungshan Temple",
+        "Elephant Mountain"
+      ]
+    },
+    "live_google_card": {
+      "requested_candidate": "Taipei 101",
+      "matched_place": "Taipei 101 Observatory",
+      "match_distance_metres": 53,
+      "rating": 4.5,
+      "user_rating_count": 38724,
+      "reviews_returned": 3,
+      "photo_uri_returned": true,
+      "photo_attributions_returned": 1,
+      "persisted_to_trip_or_export": false
+    },
+    "saved_taipei_trip_copy": {
+      "selected_places": 6,
+      "verified_routes": 30,
+      "verified_opening_facts": 4,
+      "activation_result": "correctly gated",
+      "capability_gap": "ACCOMMODATION_BASE_UNCONFIRMED"
+    },
+    "runtime": {
+      "streamlit_health": 200,
+      "streamlit_root": 200,
+      "ui_driver": "Streamlit AppTest; in-app browser unavailable because its node_repl tool lacked sandboxPolicy metadata"
+    },
+    "project_graph": {
+      "nodes": 1064,
+      "directed_edges": 2672,
+      "check": "pass"
+    }
+  },
+  "request_counts": {
+    "accepted_live_validation_requests": 4,
+    "paid_requests": 2
+  },
+  "estimated_paid_cost_usd": 0.047,
+  "failure_details": null,
+  "retained_files": [
+    "artifacts/validation/2026-07-30-full-workflow/manifest.json"
+  ],
+  "snapshot_sources": {
+    "workflow": "tests/test_workflow.py",
+    "optimizer_regressions": "tests/fixtures/historic_regressions.json",
+    "saved_trip": "disposable copy only"
+  }
+}

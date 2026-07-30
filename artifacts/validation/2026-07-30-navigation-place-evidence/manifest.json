@@ -1,0 +1,83 @@
+{
+  "run_id": "2026-07-30-navigation-place-evidence",
+  "timestamp": "2026-07-30T06:35:33Z",
+  "application_version": "0.1.0",
+  "schema_version": 11,
+  "source_revision": "9560abc1bc5b9511b6d6e60a4678f97730c71506+working-tree",
+  "result": "pass",
+  "scope": "Automatic stage navigation, live place-card matching, opening-hours evidence, and the complete trip-to-export workflow",
+  "measurements": {
+    "full_suite": {
+      "tests": 230,
+      "failures": 0,
+      "errors": 0
+    },
+    "navigation": {
+      "transitions": [
+        "setup confirmation to places",
+        "place choices to evidence",
+        "complete evidence to optimizer",
+        "plan activation to itinerary"
+      ],
+      "result": "pass"
+    },
+    "continuous_workflow": {
+      "result": "ready plan activated and exported",
+      "poster_png": "1080x1920",
+      "pdf": "valid PDF signature",
+      "xlsx": "valid ZIP workbook container",
+      "ics": "valid VCALENDAR signature"
+    },
+    "live_google_card": {
+      "requested_candidate": "Dailaokengshan / 待老坑山",
+      "matched_place": "待老坑山",
+      "matched_primary_type": "mountain_peak",
+      "match_distance_metres": 2,
+      "rating": 4.1,
+      "user_rating_count": 21,
+      "reviews_returned": 3,
+      "photo_uri_returned": true,
+      "persisted_to_trip_or_export": false
+    },
+    "live_opening_hours": {
+      "selected_places": 4,
+      "verified_windows": 2,
+      "verified_24_7_windows": 2,
+      "unresolved_places": 2,
+      "owner_confirmation_controls": 2,
+      "known_closures_remain_blocking": true
+    },
+    "current_trip_blockers": [
+      "ACCOMMODATION_BASE_UNCONFIRMED",
+      "OPENING_EVIDENCE_MISSING"
+    ],
+    "runtime": {
+      "streamlit_health": 200,
+      "ui_driver": "Streamlit AppTest; the in-app browser connector was unavailable"
+    },
+    "historic_regressions": {
+      "rules": 24,
+      "atomic": 20,
+      "interaction": 7,
+      "variants_per_fixture": 3
+    },
+    "project_graph": {
+      "nodes": 1064,
+      "directed_edges": 2672,
+      "check": "pass"
+    }
+  },
+  "recorded_paid_usage": {
+    "requests_before": 25,
+    "requests_after": 37,
+    "estimated_usd_before": 0.347,
+    "estimated_usd_after": 0.644,
+    "estimated_usd_delta": 0.297,
+    "monthly_cap_usd": 10.0
+  },
+  "review_content_retained": false,
+  "failure_details": null,
+  "retained_files": [
+    "artifacts/validation/2026-07-30-navigation-place-evidence/manifest.json"
+  ]
+}

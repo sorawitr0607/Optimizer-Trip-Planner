@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from difflib import SequenceMatcher
 import json
-from math import ceil
+from math import asin, ceil, cos, radians, sin, sqrt
 import os
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 
 from . import interpret
@@ -21,9 +22,12 @@ class ProviderBudgetExceeded(RuntimeError):
     """The monthly paid cap would be crossed; this is a budget stop, not an outage."""
 
 
+CARD_PHOTO_LIMIT = 5
+
+
 class OpenStreetMapProvider:
     name = "openstreetmap"
-    cache_version = "osm-baseline-v3"
+    cache_version = "osm-baseline-v6"
     cache_ttl_days = 7
     result_limit = 500
 
@@ -55,6 +59,26 @@ class OpenStreetMapProvider:
             bbox, geocoded_name=str(location.get("display_name") or destination)
         )
 
+    def geocode(self, query: str) -> dict[str, Any]:
+        """Resolve one owner-entered accommodation name or address."""
+
+        location = self._find_destination(query)
+        try:
+            latitude = float(location["lat"])
+            longitude = float(location["lon"])
+        except (KeyError, TypeError, ValueError) as error:
+            raise ProviderUnavailable(
+                "Accommodation lookup returned no usable coordinates"
+            ) from error
+        return {
+            "name": query.strip(),
+            "address": str(location.get("display_name") or query).strip(),
+            "latitude": latitude,
+            "longitude": longitude,
+            "status": "owner_confirmed",
+            "provider": self.name,
+        }
+
     def refresh(self, destination: str, cached_payload: dict[str, Any]) -> dict[str, Any]:
         coverage = cached_payload.get("coverage", {})
         bbox = coverage.get("bbox") if isinstance(coverage, dict) else None
@@ -81,13 +105,23 @@ class OpenStreetMapProvider:
                 method="POST",
             )
         )
-        elements = payload.get("elements") if isinstance(payload, dict) else None
-        if not isinstance(elements, list):
+        returned_elements = payload.get("elements") if isinstance(payload, dict) else None
+        if not isinstance(returned_elements, list):
             raise ProviderUnavailable("OpenStreetMap discovery returned no element list")
         if payload.get("remark"):
             raise ProviderUnavailable(f"OpenStreetMap query incomplete: {payload['remark']}")
-        if not elements:
+        if not returned_elements:
             raise ProviderUnavailable("OpenStreetMap returned an empty baseline; retry later")
+        # The same referenced landmark can appear in both the priority and family
+        # query blocks. Keep one provider record instead of inflating coverage and
+        # candidate aliases with identical copies.
+        unique_elements: dict[tuple[Any, Any], Any] = {}
+        for index, element in enumerate(returned_elements):
+            if isinstance(element, dict):
+                provider_key = (element.get("type"), element.get("id"))
+                key = provider_key if all(value is not None for value in provider_key) else ("raw", index)
+                unique_elements.setdefault(key, element)
+        elements = list(unique_elements.values())
         items = [item for element in elements if (item := self._item(element))]
         return {
             "items": items,
@@ -111,7 +145,9 @@ class OpenStreetMapProvider:
                 "known_gaps": [
                     "OpenStreetMap is uneven and not an exhaustive attraction catalog.",
                     "This baseline does not verify live events, crowds, ratings, transit, best time, or holiday opening hours.",
+                    "Unreferenced attraction families have bounded quotas so one dense category cannot consume the whole catalog.",
                 ],
+                "query_strategy": "referenced_landmarks_then_balanced_families",
             },
             "attribution": "© OpenStreetMap contributors",
             "license": "ODbL",
@@ -152,20 +188,30 @@ class OpenStreetMapProvider:
 
     def _overpass_query(self, bbox: list[float]) -> str:
         bounds = ",".join(map(str, bbox))
-        # Taipei returned "Query timed out after 27 seconds" on every attempt at 25:
-        # a dense city over a 0.6-degree window needs a larger budget. Still one
-        # user-triggered request, so the endpoint sees no extra volume.
+        # One global `out ... 500` let dense minor peaks and temples consume the
+        # entire Taipei response before major landmarks appeared. Emit selective,
+        # indexed Wikipedia matches first, then one bounded balanced baseline.
         return f"""[out:json][timeout:90];
 (
-  nwr[\"name\"][\"tourism\"~\"^(attraction|museum|gallery|viewpoint|artwork|theme_park|zoo|aquarium)$\"]({bounds});
-  nwr[\"name\"][\"historic\"]({bounds});
-  nwr[\"name\"][\"amenity\"~\"^(place_of_worship|marketplace|theatre|arts_centre)$\"]({bounds});
-  nwr[\"name\"][\"leisure\"~\"^(park|garden|nature_reserve|water_park|sports_centre|spa)$\"]({bounds});
-  nwr[\"name\"][\"natural\"~\"^(beach|peak)$\"]({bounds});
-  nwr[\"name\"][\"shop\"~\"^(mall|department_store)$\"]({bounds});
-  nwr[\"name\"][\"man_made\"=\"tower\"]({bounds});
+  nwr[\"name\"][\"tourism\"~\"^(attraction|museum|gallery|viewpoint|artwork|theme_park|zoo|aquarium)$\"][\"wikipedia\"]({bounds});
+  nwr[\"name\"][\"historic\"][\"wikipedia\"]({bounds});
+  nwr[\"name\"][\"amenity\"~\"^(place_of_worship|marketplace|theatre|arts_centre)$\"][\"wikipedia\"]({bounds});
+  nwr[\"name\"][\"leisure\"~\"^(park|garden|nature_reserve|water_park|sports_centre|spa)$\"][\"wikipedia\"]({bounds});
+  nwr[\"name\"][\"natural\"~\"^(beach|peak)$\"][\"wikipedia\"]({bounds});
+  nwr[\"name\"][\"shop\"~\"^(mall|department_store)$\"][\"wikipedia\"]({bounds});
+  nwr[\"name\"][\"man_made\"=\"tower\"][\"wikipedia\"]({bounds});
 );
-out center qt {self.result_limit};"""
+out center qt;
+(
+nwr[\"name\"][\"tourism\"~\"^(attraction|museum|gallery|viewpoint|artwork|theme_park|zoo|aquarium)$\"]({bounds});
+nwr[\"name\"][\"historic\"]({bounds});
+nwr[\"name\"][\"amenity\"~\"^(place_of_worship|marketplace|theatre|arts_centre)$\"]({bounds});
+nwr[\"name\"][\"leisure\"~\"^(park|garden|nature_reserve|water_park|sports_centre|spa)$\"]({bounds});
+nwr[\"name\"][\"natural\"~\"^(beach|peak)$\"]({bounds});
+nwr[\"name\"][\"shop\"~\"^(mall|department_store)$\"]({bounds});
+nwr[\"name\"][\"man_made\"=\"tower\"]({bounds});
+);
+out center qt 500;"""
 
     @staticmethod
     def _item(element: Any) -> dict[str, Any] | None:
@@ -443,11 +489,13 @@ class GooglePlacesOpeningHoursProvider:
 
     name = "google_places"
     operation = "google_places:search_text"
-    cache_version = "google-places-hours-v1"
+    cache_version = "google-places-hours-v2"
+    normalizer_version = 2
     cache_ttl_days = 3
     kind = "opening_hours"
     FIELD_MASK = (
-        "places.id,places.displayName,places.location,places.regularOpeningHours"
+        "places.id,places.displayName,places.location,places.primaryType,"
+        "places.regularOpeningHours"
     )
 
     def __init__(self) -> None:
@@ -459,10 +507,17 @@ class GooglePlacesOpeningHoursProvider:
         key = os.environ.get("GOOGLE_MAPS_SERVER_KEY", "").strip()
         if not key:
             raise ProviderUnavailable("GOOGLE_MAPS_SERVER_KEY is not configured")
+        destination = str(place.get("destination") or "").strip()
+        query = (
+            f"{_place_search_name(place)} "
+            f"{str(place.get('category') or 'attraction').replace('_', ' ')}"
+        )
+        if destination:
+            query = f"{query}, {destination}"
         body = json.dumps(
             {
-                "textQuery": str(place["name"]),
-                "maxResultCount": 1,
+                "textQuery": query,
+                "pageSize": 5,
                 "locationBias": {
                     "circle": {
                         "center": {
@@ -502,21 +557,297 @@ class GooglePlacesOpeningHoursProvider:
         places = payload.get("places") or []
         if not places:
             raise ProviderUnavailable("Places returned no match for this place")
-        match = places[0]
+        hours_matches = [
+            match for match in places if "regularOpeningHours" in match
+        ]
+        try:
+            match, distance = _best_nearby_match(hours_matches, place)
+        except ProviderUnavailable:
+            # Preserve the more useful distinction between an exact place with
+            # no published schedule and no compatible place at all.
+            match, distance = _best_nearby_match(places, place)
         hours = match.get("regularOpeningHours") or {}
         periods = hours.get("periods") or []
         if not periods:
             raise ProviderUnavailable("Places returned no opening hours for this place")
         return {
             "kind": self.kind,
+            "normalizer_version": self.normalizer_version,
             "place_id": str(place["place_id"]),
             "provider_place_id": str(match.get("id") or ""),
             "matched_name": str((match.get("displayName") or {}).get("text") or ""),
+            "match_distance_metres": round(distance),
             "weekly_periods": _weekly_periods(periods),
             "weekday_descriptions": list(hours.get("weekdayDescriptions") or []),
             "provider": self.name,
             "status": "verified",
         }
+
+
+class GooglePlacesCardProvider:
+    """One owner-triggered live card overlay: photo, rating, and reviews.
+
+    The response is deliberately never cached or persisted. Google content is
+    displayed only in the current Streamlit session; ranking and exports keep
+    using the durable provider-neutral candidate record.
+    """
+
+    name = "google_places"
+    details_operation = "google_places:card_details"
+    photo_operation = "google_places:photo"
+    FIELD_MASK = (
+        "places.id,places.displayName,places.location,places.primaryType,places.googleMapsUri,"
+        "places.photos,places.rating,places.userRatingCount,places.reviews,"
+        "places.reviewSummary"
+    )
+
+    def __init__(self) -> None:
+        self.search_url = os.environ.get(
+            "TOURIST_PLACES_URL", "https://places.googleapis.com/v1/places:searchText"
+        )
+        self.photo_url_base = os.environ.get(
+            "TOURIST_PLACE_PHOTO_URL", "https://places.googleapis.com/v1"
+        ).rstrip("/")
+
+    def details(
+        self,
+        place: dict[str, Any],
+        *,
+        destination: str,
+        language: str,
+    ) -> dict[str, Any]:
+        key = os.environ.get("GOOGLE_MAPS_SERVER_KEY", "").strip()
+        if not key:
+            raise ProviderUnavailable("GOOGLE_MAPS_SERVER_KEY is not configured")
+        category = str(place.get("category") or "attraction")
+        qualifier = (
+            "tourist attraction" if category == "attraction" else category.replace("_", " ")
+        )
+        body = json.dumps(
+            {
+                "textQuery": f"{_place_search_name(place)} {qualifier}, {destination}",
+                "pageSize": 5,
+                "languageCode": language,
+                "locationBias": {
+                    "circle": {
+                        "center": {
+                            "latitude": float(place["latitude"]),
+                            "longitude": float(place["longitude"]),
+                        },
+                        "radius": 750.0,
+                    }
+                },
+            }
+        ).encode("utf-8")
+        request = Request(
+            self.search_url,
+            data=body,
+            headers={
+                "Content-Type": "application/json",
+                "X-Goog-Api-Key": key,
+                "X-Goog-FieldMask": self.FIELD_MASK,
+            },
+        )
+        try:
+            with urlopen(request, timeout=30) as response:
+                payload = json.load(response)
+        except HTTPError as error:
+            raise ProviderUnavailable(f"Places card details returned HTTP {error.code}") from None
+        except (URLError, TimeoutError) as error:
+            raise ProviderUnavailable(
+                f"Places card details are unreachable: {type(error).__name__}"
+            ) from None
+        except json.JSONDecodeError:
+            raise ProviderUnavailable("Places card details returned invalid JSON") from None
+        return self.normalize(payload, place=place)
+
+    def photo_uri(self, photo_name: str) -> str:
+        """Resolve one photo resource without exposing the server key to the UI."""
+
+        key = os.environ.get("GOOGLE_MAPS_SERVER_KEY", "").strip()
+        if not key:
+            raise ProviderUnavailable("GOOGLE_MAPS_SERVER_KEY is not configured")
+        if not photo_name.startswith("places/") or "/photos/" not in photo_name:
+            raise ProviderUnavailable("Places returned an invalid photo reference")
+        query = urlencode(
+            {"maxWidthPx": 1200, "skipHttpRedirect": "true", "key": key}
+        )
+        url = f"{self.photo_url_base}/{quote(photo_name, safe='/')}/media?{query}"
+        try:
+            with urlopen(url, timeout=30) as response:
+                payload = json.load(response)
+        except HTTPError as error:
+            raise ProviderUnavailable(f"Place photo returned HTTP {error.code}") from None
+        except (URLError, TimeoutError) as error:
+            raise ProviderUnavailable(
+                f"Place photo is unreachable: {type(error).__name__}"
+            ) from None
+        except json.JSONDecodeError:
+            raise ProviderUnavailable("Place photo returned invalid JSON") from None
+        uri = str(payload.get("photoUri") or "").strip()
+        if not uri.startswith("https://"):
+            raise ProviderUnavailable("Place photo returned no usable image")
+        return uri
+
+    @staticmethod
+    def normalize(payload: dict[str, Any], *, place: dict[str, Any]) -> dict[str, Any]:
+        matches = payload.get("places") or []
+        if not matches:
+            raise ProviderUnavailable("Places returned no live match for this place")
+        match, distance = _best_nearby_match(matches, place)
+
+        reviews = []
+        for raw in (match.get("reviews") or [])[:3]:
+            text = str(((raw.get("text") or {}).get("text")) or "").strip()
+            original = str(((raw.get("originalText") or {}).get("text")) or "").strip()
+            if not text and not original:
+                continue
+            author = raw.get("authorAttribution") or {}
+            reviews.append(
+                {
+                    "text": text or original,
+                    "original_text": original or None,
+                    "rating": float(raw["rating"]) if raw.get("rating") is not None else None,
+                    "published": str(raw.get("relativePublishTimeDescription") or "") or None,
+                    "author": str(author.get("displayName") or "") or None,
+                    "author_uri": str(author.get("uri") or "") or None,
+                    "review_uri": str(raw.get("googleMapsUri") or "") or None,
+                }
+            )
+
+        summary = match.get("reviewSummary") or {}
+        photos = [
+            {
+                "name": str(raw.get("name") or ""),
+                "authors": [
+                    {
+                        "name": str(item.get("displayName") or "") or None,
+                        "uri": str(item.get("uri") or "") or None,
+                    }
+                    for item in raw.get("authorAttributions") or []
+                ],
+            }
+            for raw in (match.get("photos") or [])[:CARD_PHOTO_LIMIT]
+            if raw.get("name")
+        ]
+        return {
+            "provider": "Google Maps",
+            "provider_place_id": str(match.get("id") or ""),
+            "matched_name": str((match.get("displayName") or {}).get("text") or ""),
+            "matched_primary_type": str(match.get("primaryType") or "") or None,
+            "match_distance_metres": round(distance),
+            "rating": float(match["rating"]) if match.get("rating") is not None else None,
+            "user_rating_count": int(match.get("userRatingCount") or 0),
+            "google_maps_uri": str(match.get("googleMapsUri") or "") or None,
+            "review_summary": {
+                "text": str(((summary.get("text") or {}).get("text")) or "").strip(),
+                "disclosure": str(
+                    ((summary.get("disclosureText") or {}).get("text")) or ""
+                ).strip(),
+                "reviews_uri": str(summary.get("reviewsUri") or "") or None,
+                "flag_uri": str(summary.get("flagContentUri") or "") or None,
+            }
+            if summary
+            else None,
+            "reviews": reviews,
+            "photos": photos,
+            "photo": photos[0] if photos else None,
+        }
+
+
+def _distance_metres(
+    left_latitude: float,
+    left_longitude: float,
+    right_latitude: float,
+    right_longitude: float,
+) -> float:
+    lat1, lon1 = radians(left_latitude), radians(left_longitude)
+    lat2, lon2 = radians(right_latitude), radians(right_longitude)
+    delta_lat = lat2 - lat1
+    delta_lon = lon2 - lon1
+    value = sin(delta_lat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(delta_lon / 2) ** 2
+    return 12_742_000 * asin(sqrt(value))
+
+
+def _name_similarity(left: str, right: str) -> float:
+    left_key = "".join(character for character in left.casefold() if character.isalnum())
+    right_key = "".join(character for character in right.casefold() if character.isalnum())
+    if not left_key or not right_key:
+        return 0.0
+    if min(len(left_key), len(right_key)) >= 5 and (
+        left_key in right_key or right_key in left_key
+    ):
+        return 0.8
+    return SequenceMatcher(None, left_key, right_key).ratio()
+
+
+def _category_accepts_primary_type(category: str, primary_type: str) -> bool:
+    conflicting_types = {
+        "buddhist_temple": {"place_of_worship"},
+        "cafe": set(),
+        "church": {"place_of_worship"},
+        "department_store": {"department_store", "mall"},
+        "hiking_area": {"attraction", "nature_reserve", "park", "peak", "viewpoint"},
+        "hotel": set(),
+        "hindu_temple": {"place_of_worship"},
+        "lodging": set(),
+        "mosque": {"place_of_worship"},
+        "mountain_peak": {"attraction", "nature_reserve", "peak", "viewpoint"},
+        "restaurant": set(),
+        "shopping_mall": {"department_store", "mall", "marketplace"},
+        "synagogue": {"place_of_worship"},
+    }
+    allowed_categories = conflicting_types.get(primary_type)
+    return allowed_categories is None or category in allowed_categories
+
+
+def _place_search_name(place: dict[str, Any]) -> str:
+    """Use the provider's local-script identity before a weak transliteration."""
+
+    names = place.get("names") or {}
+    return str(names.get("local") or place.get("name") or "").strip()
+
+
+def _best_nearby_match(
+    matches: list[dict[str, Any]], place: dict[str, Any]
+) -> tuple[dict[str, Any], float]:
+    """Select one name-, type-, and coordinate-compatible Google result."""
+
+    candidate_names = [str(place.get("name") or "")]
+    candidate_names.extend(str(value) for value in (place.get("names") or {}).values())
+    ranked = []
+    for match in matches:
+        location = match.get("location") or {}
+        matched_name = str((match.get("displayName") or {}).get("text") or "")
+        try:
+            distance = _distance_metres(
+                float(place["latitude"]),
+                float(place["longitude"]),
+                float(location["latitude"]),
+                float(location["longitude"]),
+            )
+        except (KeyError, TypeError, ValueError):
+            continue
+        similarity = max(
+            (_name_similarity(name, matched_name) for name in candidate_names),
+            default=0.0,
+        )
+        if (
+            distance <= 1_500
+            and similarity >= 0.46
+            and _category_accepts_primary_type(
+                str(place.get("category") or "attraction"),
+                str(match.get("primaryType") or ""),
+            )
+        ):
+            ranked.append((similarity, -distance, match, distance))
+    if not ranked:
+        raise ProviderUnavailable(
+            "No exact Google Maps match was found nearby; the location map and "
+            "open-data source are still available."
+        )
+    _, _, match, distance = max(ranked, key=lambda item: (item[0], item[1]))
+    return match, distance
 
 
 def _weekly_periods(periods: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -529,15 +860,24 @@ def _weekly_periods(periods: list[dict[str, Any]]) -> list[dict[str, Any]]:
             continue
         closes = period.get("close")
         if closes is None:
-            # No close means open around the clock from that day.
-            result.append(
+            # Places encodes 24/7 as Sunday 00:00 with no close. It describes
+            # the whole week, not only Sunday.
+            days = (
+                range(7)
+                if int(opens["day"]) == 0
+                and int(opens.get("hour", 0)) == 0
+                and int(opens.get("minute", 0)) == 0
+                else (int(opens["day"]),)
+            )
+            result.extend(
                 {
-                    "day": int(opens["day"]),
+                    "day": day,
                     "start": "00:00",
                     "end": "23:59",
                     "all_day": True,
                     "overnight": False,
                 }
+                for day in days
             )
             continue
         start = f"{int(opens.get('hour', 0)):02d}:{int(opens.get('minute', 0)):02d}"

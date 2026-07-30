@@ -466,7 +466,10 @@ def _learned_category_weights(choices: list[dict[str, Any]]) -> Counter[str]:
 
 def _city_icon(candidate: dict[str, Any]) -> tuple[bool, list[str]]:
     signals = candidate.get("signals", {})
-    basis = [key for key in ("wikidata", "wikipedia", "heritage", "unesco") if signals.get(key)]
+    # A Wikidata ID is common even for minor peaks and neighborhood temples; it
+    # proves identity, not global prominence. Wikipedia/heritage coverage is the
+    # smallest honest open-data signal available for the protected landmark lane.
+    basis = [key for key in ("wikipedia", "heritage", "unesco") if signals.get(key)]
     return bool(candidate["category"] in ICON_CATEGORIES and basis), basis
 
 

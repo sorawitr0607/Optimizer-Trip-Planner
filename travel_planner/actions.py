@@ -30,6 +30,8 @@ from . import checklist, costs, exports, interpret, opening, revision, usage
 from .discovery import build_candidate_catalog
 from .optimizer import date_range, optimize_trip
 from .providers import (
+    CARD_PHOTO_LIMIT,
+    GooglePlacesCardProvider,
     GooglePlacesOpeningHoursProvider,
     OpenAIRevisionInterpreter,
     RevisionInterpretationUnavailable,
@@ -80,6 +82,7 @@ class PlannerActions:
         route_provider: Any = None,
         timezone_provider: Any = None,
         hours_provider: Any = None,
+        card_provider: Any = None,
         interpreter: Any = None,
     ) -> None:
         self.store = SQLiteStore(database_path)
@@ -87,6 +90,7 @@ class PlannerActions:
         self.route_provider = route_provider
         self.timezone_provider = timezone_provider
         self.hours_provider = hours_provider
+        self.card_provider = card_provider
         self.interpreter = interpreter
 
     def create_trip(
@@ -111,6 +115,9 @@ class PlannerActions:
 
     def get_trip(self, trip_id: str) -> Trip | None:
         return self.store.get_trip(trip_id)
+
+    def delete_trip(self, trip_id: str) -> None:
+        self.store.delete_trip(trip_id)
 
     def save_setup(
         self,
@@ -317,6 +324,55 @@ class PlannerActions:
             discovery_status=discovery.status,
         )
 
+    def enrich_place_card(
+        self, trip_id: str, place_id: str, *, language: str = "en"
+    ) -> dict[str, Any]:
+        """Fetch a session-only photo/rating/review overlay for one visible card."""
+
+        trip = self.store.get_trip(trip_id)
+        if trip is None:
+            raise ValueError(f"Unknown trip: {trip_id}")
+        _, _, candidates = self._current_choice_inputs(trip_id)
+        candidate = next(
+            (item for item in candidates if item["place_id"] == place_id), None
+        )
+        if candidate is None:
+            raise ValueError(f"Unknown candidate in current discovery: {place_id}")
+
+        provider = self.card_provider or GooglePlacesCardProvider()
+        self._spend(
+            operation=provider.details_operation,
+            count=1,
+            trip_id=trip_id,
+            detail={"place_id": place_id},
+        )
+        details = provider.details(
+            candidate,
+            destination=trip.destination,
+            language="th" if language == "th" else "en",
+        )
+        details = {**details, "retrieved_at": datetime.now(timezone.utc).isoformat()}
+        photos = details.get("photos") or (
+            [details["photo"]] if details.get("photo") else []
+        )
+        gallery = []
+        for photo in photos[:CARD_PHOTO_LIMIT]:
+            try:
+                self._spend(
+                    operation=provider.photo_operation,
+                    count=1,
+                    trip_id=trip_id,
+                    detail={"place_id": place_id},
+                )
+                uri = provider.photo_uri(photo["name"])
+            except (ProviderBudgetExceeded, ProviderUnavailable) as error:
+                details["photo_error"] = str(error)[:160]
+                break
+            gallery.append({**photo, "uri": uri})
+        details["photo_gallery"] = gallery
+        details["photo_uri"] = gallery[0]["uri"] if gallery else None
+        return details
+
     def generate_plan_preview(
         self, trip_id: str, *, time_limit_seconds: float = 30.0
     ) -> OptimizationPreview:
@@ -351,7 +407,15 @@ class PlannerActions:
         )
         if variant is None:
             raise ValueError(f"Unknown plan variant: {variant_id}")
-        if variant["status"] != "ready" or not variant["validation"]["valid"]:
+        trip = self.store.get_trip(trip_id)
+        provisional_allowed = bool(
+            trip
+            and trip.planning_mode == "explore_first"
+            and variant["status"] == "provisional"
+        )
+        if not variant["validation"]["valid"] or (
+            variant["status"] != "ready" and not provisional_allowed
+        ):
             raise ValueError("Only a fully validated Ready variant can become active")
         version = self.save_plan_version(
             trip_id=trip_id,
@@ -386,6 +450,7 @@ class PlannerActions:
     def _optimizer_input(self, trip_id: str) -> dict[str, Any]:
         setup, discovery, current_candidates = self._current_choice_inputs(trip_id)
         setup_payload = setup.snapshot.as_dict()
+        allow_provisional_assumptions = setup_payload["planning_mode"] == "explore_first"
         choices = [
             choice
             for choice in self.store.list_candidate_choices(trip_id)
@@ -412,6 +477,7 @@ class PlannerActions:
 
         candidates = []
         facts = []
+        opening_missing = False
         opening_evidence = self.opening_intervals(trip_id)
         current_by_id = {item["place_id"]: item for item in current_candidates}
         for choice in choices:
@@ -469,6 +535,70 @@ class PlannerActions:
                         "source": "normalized_discovery",
                     }
                 )
+                continue
+            if local_dates:
+                opening_missing = True
+                if allow_provisional_assumptions and provider_hours.get("reason") in {
+                    "OPENING_NOT_FETCHED",
+                    "NO_PUBLISHED_HOURS",
+                    "EVIDENCE_EXPIRED",
+                    "EVIDENCE_NORMALIZER_OUTDATED",
+                }:
+                    facts.append(
+                        {
+                            "subject_id": choice.place_id,
+                            "fact_type": "opening_interval",
+                            "value": {"start": "09:00", "end": "21:00"},
+                            "status": "assumed",
+                            "source": "explore_first_planning_assumption",
+                            "applies_to_dates": local_dates,
+                        }
+                    )
+
+        accommodation_base = self.get_accommodation_base(trip_id)
+        if accommodation_base:
+            candidates.append(
+                {
+                    "id": "booked_accommodation_base",
+                    "name": accommodation_base["name"],
+                    "names": {"en": accommodation_base["name"]},
+                    "kind": "hotel_area",
+                    "priority": "alternative",
+                    "score": 0,
+                    "latitude": accommodation_base["latitude"],
+                    "longitude": accommodation_base["longitude"],
+                    "planning_basis": "booked_accommodation",
+                }
+            )
+        elif allow_provisional_assumptions and basics.get("accommodation_status") != "booked":
+            located = [
+                item
+                for item in candidates
+                if item.get("latitude") is not None and item.get("longitude") is not None
+            ]
+            if located:
+                candidates.append(
+                    {
+                        "id": "provisional_accommodation_base",
+                        "name": "Provisional base around the selected-place center",
+                        "names": {
+                            "en": "Provisional base around the selected-place center",
+                            "th": "ฐานที่พักชั่วคราวบริเวณกึ่งกลางสถานที่ที่เลือก",
+                        },
+                        "kind": "hotel_area",
+                        "priority": "alternative",
+                        "score": 0,
+                        "latitude": round(
+                            sum(float(item["latitude"]) for item in located) / len(located),
+                            6,
+                        ),
+                        "longitude": round(
+                            sum(float(item["longitude"]) for item in located) / len(located),
+                            6,
+                        ),
+                        "planning_basis": "selected_place_centroid",
+                    }
+                )
 
         owner = setup_payload["owner"]
         travellers = [
@@ -486,18 +616,42 @@ class PlannerActions:
             }
             for member in setup_payload.get("travellers", [])
         )
+        active_base_id = (
+            "booked_accommodation_base"
+            if accommodation_base
+            else (
+                "provisional_accommodation_base"
+                if any(item.get("id") == "provisional_accommodation_base" for item in candidates)
+                else None
+            )
+        )
+        accommodation_ids = {
+            "booked_accommodation_base",
+            "provisional_accommodation_base",
+        }
         routes = [
-            route for route in self.list_routes(trip_id) if route.get("status") == "verified"
+            route
+            for route in self.list_routes(trip_id)
+            if route.get("status") == "verified"
+            and all(
+                endpoint not in accommodation_ids or endpoint == active_base_id
+                for endpoint in (route.get("origin_id"), route.get("destination_id"))
+            )
         ]
         zone = self.get_timezone_evidence(trip_id)
         verified_zone = zone["timezone"] if zone and zone.get("status") == "verified" else None
+        accommodation_confirmed = bool(accommodation_base) or basics.get(
+            "accommodation_status"
+        ) == "booked"
         capability_gaps = []
         if not verified_zone:
             capability_gaps.append("DESTINATION_TIMEZONE_UNVERIFIED")
         if not routes:
             capability_gaps.append("ROUTE_SNAPSHOT_MISSING")
-        if basics.get("accommodation_status") != "booked":
+        if not accommodation_confirmed:
             capability_gaps.append("ACCOMMODATION_BASE_UNCONFIRMED")
+        if opening_missing:
+            capability_gaps.append("OPENING_EVIDENCE_MISSING")
         if any(person.get("constraints") for person in travellers):
             capability_gaps.append("FREE_TEXT_HARD_CONSTRAINT_NEEDS_STRUCTURED_CONFIRMATION")
         return {
@@ -508,6 +662,11 @@ class PlannerActions:
                 "discovery_status": discovery.status,
             },
             "trip": {
+                "planning_mode": setup_payload["planning_mode"],
+                "allow_provisional_assumptions": allow_provisional_assumptions,
+                "accommodation_base_id": (
+                    "booked_accommodation_base" if accommodation_base else None
+                ),
                 "timezone": verified_zone,
                 "local_dates": local_dates,
                 "usable_windows": usable_windows,
@@ -515,15 +674,13 @@ class PlannerActions:
                 # frozen fixtures speak unbooked.  Translate at this boundary so
                 # hotel-area recommendations actually fire.
                 "accommodation_status": (
-                    "unbooked"
-                    if basics.get("accommodation_status") == "not_booked"
-                    else basics.get("accommodation_status")
+                    "booked" if accommodation_confirmed else "unbooked"
                 ),
                 # Derived, not assumed: an approximate arrival or departure, or an
                 # unbooked base, keeps the plan provisional as decided. Once the
                 # owner confirms all three, a validated variant may become Ready.
                 "provisional": bool(
-                    basics.get("accommodation_status") != "booked"
+                    not accommodation_confirmed
                     or not basics.get("arrival_time")
                     or not basics.get("departure_time")
                 ),
@@ -773,7 +930,13 @@ class PlannerActions:
         errors: list[str] = []
         for place in places:
             current = existing.get(place["place_id"])
-            if not force and current and current["expires_at"] > now.isoformat():
+            if (
+                not force
+                and current
+                and current["expires_at"] > now.isoformat()
+                and int(current.get("normalizer_version") or 0)
+                >= GooglePlacesOpeningHoursProvider.normalizer_version
+            ):
                 cached += 1
                 self.record_paid_call(
                     operation=provider.operation,
@@ -836,10 +999,29 @@ class PlannerActions:
         start, end = basics.get("start_date"), basics.get("end_date")
         local_dates = date_range(start, end) if start and end else []
         now = datetime.now(timezone.utc).isoformat()
-        result: dict[str, Any] = {}
+        result: dict[str, Any] = {
+            place["place_id"]: {
+                "interval": None,
+                "reason": "OPENING_NOT_FETCHED",
+                "retrieved_at": None,
+                "provider": None,
+            }
+            for place in self._selected_places(trip_id)
+        }
         for evidence in self.store.list_place_evidence(
             trip_id, GooglePlacesOpeningHoursProvider.kind
         ):
+            if (
+                int(evidence.get("normalizer_version") or 0)
+                < GooglePlacesOpeningHoursProvider.normalizer_version
+            ):
+                result[evidence["place_id"]] = {
+                    "interval": None,
+                    "reason": "EVIDENCE_NORMALIZER_OUTDATED",
+                    "retrieved_at": evidence["retrieved_at"],
+                    "provider": evidence.get("provider"),
+                }
+                continue
             if evidence["expires_at"] <= now:
                 result[evidence["place_id"]] = {
                     "interval": None,
@@ -857,7 +1039,90 @@ class PlannerActions:
             }
         return result
 
+    def confirm_opening_window(
+        self,
+        trip_id: str,
+        place_id: str,
+        *,
+        start: str,
+        end: str,
+    ) -> dict[str, Any]:
+        """Store a planning window the owner says they independently checked."""
+
+        places = {item["place_id"]: item for item in self._selected_places(trip_id)}
+        place = places.get(place_id)
+        if place is None:
+            raise ValueError("Choose this place before confirming its opening window")
+        interval = _simple_interval(f"{start}-{end}")
+        if interval is None:
+            raise ValueError("Opening time must be a valid start before end")
+        now = datetime.now(timezone.utc)
+        value = {
+            "kind": GooglePlacesOpeningHoursProvider.kind,
+            "normalizer_version": GooglePlacesOpeningHoursProvider.normalizer_version,
+            "place_id": place_id,
+            "provider_place_id": None,
+            "matched_name": place["name"],
+            "weekly_periods": [
+                {
+                    "day": day,
+                    "start": interval["start"],
+                    "end": interval["end"],
+                    "all_day": False,
+                    "overnight": False,
+                }
+                for day in range(7)
+            ],
+            "weekday_descriptions": [],
+            "provider": "owner_confirmation",
+            "status": "owner_confirmed",
+        }
+        return self.store.upsert_place_evidence(
+            trip_id=trip_id,
+            place_id=place_id,
+            kind=GooglePlacesOpeningHoursProvider.kind,
+            value=value,
+            provider="owner_confirmation",
+            retrieved_at=now.isoformat(),
+            expires_at=(now + timedelta(days=365)).isoformat(),
+        )
+
+    def get_accommodation_base(self, trip_id: str) -> dict[str, Any] | None:
+        return self.store.get_trip_evidence(trip_id, "accommodation_base")
+
+    def confirm_accommodation_base(self, trip_id: str, query: str) -> dict[str, Any]:
+        """Geocode one owner-entered booked stay and keep it as the routing base."""
+
+        trip = self.store.get_trip(trip_id)
+        if trip is None:
+            raise ValueError(f"Unknown trip: {trip_id}")
+        name = query.strip()
+        if not name:
+            raise ValueError("Enter the booked accommodation name or address")
+        provider = (
+            self.place_provider
+            if self.place_provider is not None and hasattr(self.place_provider, "geocode")
+            else OpenStreetMapProvider()
+        )
+        search = (
+            name
+            if trip.destination.casefold() in name.casefold()
+            else f"{name}, {trip.destination}"
+        )
+        value = {**provider.geocode(search), "name": name}
+        now = datetime.now(timezone.utc)
+        self.store.upsert_trip_evidence(
+            trip_id=trip_id,
+            kind="accommodation_base",
+            value=value,
+            provider=str(provider.name),
+            retrieved_at=now.isoformat(),
+            expires_at=(now + timedelta(days=3650)).isoformat(),
+        )
+        return value
+
     def _selected_places(self, trip_id: str) -> list[dict[str, Any]]:
+        trip = self.store.get_trip(trip_id)
         places = []
         for choice in self.store.list_candidate_choices(trip_id):
             if choice.action not in {"must_do", "interested", "maybe"}:
@@ -869,6 +1134,9 @@ class PlannerActions:
                 {
                     "place_id": choice.place_id,
                     "name": candidate.get("name") or choice.place_id,
+                    "names": candidate.get("names") or {},
+                    "category": candidate.get("category") or "attraction",
+                    "destination": trip.destination if trip else "",
                     "latitude": float(candidate["latitude"]),
                     "longitude": float(candidate["longitude"]),
                 }
@@ -1052,6 +1320,35 @@ class PlannerActions:
                     "place_id": choice.place_id,
                     "latitude": float(latitude),
                     "longitude": float(longitude),
+                }
+            )
+        accommodation = self.get_accommodation_base(trip_id)
+        trip = self.store.get_trip(trip_id)
+        setup = self.store.get_setup(trip_id)
+        basics = setup.snapshot.as_dict().get("trip_basics", {}) if setup else {}
+        if accommodation:
+            points.append(
+                {
+                    "place_id": "booked_accommodation_base",
+                    "latitude": float(accommodation["latitude"]),
+                    "longitude": float(accommodation["longitude"]),
+                }
+            )
+        elif (
+            trip
+            and trip.planning_mode == "explore_first"
+            and basics.get("accommodation_status") != "booked"
+            and points
+        ):
+            points.append(
+                {
+                    "place_id": "provisional_accommodation_base",
+                    "latitude": round(
+                        sum(item["latitude"] for item in points) / len(points), 6
+                    ),
+                    "longitude": round(
+                        sum(item["longitude"] for item in points) / len(points), 6
+                    ),
                 }
             )
         return sorted(points, key=lambda item: item["place_id"])

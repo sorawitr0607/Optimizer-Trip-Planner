@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from io import BytesIO
+import json
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -9,6 +11,7 @@ from unittest.mock import patch
 from streamlit.testing.v1 import AppTest
 
 from travel_planner.actions import PlannerActions
+from travel_planner.providers import GooglePlacesCardProvider, ProviderUnavailable
 from travel_planner.ranking import FORMULA_WEIGHTS, build_ranking
 from travel_planner.setup import build_setup_payload
 
@@ -33,7 +36,12 @@ def candidate(
         "category": category,
         "address": None,
         "website": "https://example.test" if index % 2 == 0 else None,
-        "signals": {"wikidata": f"Q{index}"} if icon else {},
+        "signals": {
+            "wikidata": f"Q{index}",
+            "wikipedia": f"en:Place {index}",
+        }
+        if icon
+        else {},
         "photo_reference": None,
         "possible_duplicate": False,
         "provider_aliases": [
@@ -139,6 +147,16 @@ class RankingCoreTest(unittest.TestCase):
         self.assertEqual(set(first["cards"]), set(first["lanes"]["browse_all"]))
         self.assertEqual({"place_1", "place_7"}, set(first["lanes"]["city_icons"]))
 
+        wikidata_only = candidate("minor", "historic", 99)
+        wikidata_only["signals"] = {"wikidata": "Q99"}
+        minor = build_ranking(
+            setup=setup_payload(),
+            candidates=[wikidata_only],
+            choices=[],
+            discovery_status="verified",
+        )
+        self.assertFalse(minor["cards"]["minor"]["is_city_icon"])
+
         queue = first["lanes"]["main_queue"]
         self.assertEqual("protected_exploration", queue[4]["role"])
         self.assertEqual("protected_exploration", queue[9]["role"])
@@ -194,7 +212,12 @@ class RankingActionsTest(unittest.TestCase):
                         "latitude": 25 + index / 1000,
                         "longitude": 121.5 + index / 1000,
                         "category": category,
-                        "signals": {"wikidata": f"Q{index}"} if index == 1 else {},
+                        "signals": {
+                            "wikidata": f"Q{index}",
+                            "wikipedia": f"en:Candidate {index}",
+                        }
+                        if index == 1
+                        else {},
                         "photo_reference": f"File:Candidate {index}.jpg",
                         "source_url": f"https://example.test/{index}",
                     }
@@ -258,6 +281,179 @@ class RankingActionsTest(unittest.TestCase):
             self.assertEqual([], resumed.list_candidate_choices(trip.trip_id))
 
 
+class FakeCardProvider:
+    name = "google_places"
+    details_operation = "google_places:card_details"
+    photo_operation = "google_places:photo"
+
+    def details(self, place, *, destination, language):
+        return {
+            "provider": "Google Maps",
+            "provider_place_id": "ChIJcard",
+            "matched_name": place["name"],
+            "match_distance_metres": 12,
+            "rating": 4.7,
+            "user_rating_count": 321,
+            "google_maps_uri": "https://maps.example.test/place",
+            "review_summary": {
+                "text": "Visitors praise the skyline view and easy photo opportunities.",
+                "disclosure": "Summarized with Gemini",
+                "reviews_uri": "https://maps.example.test/reviews",
+                "flag_uri": "https://maps.example.test/report",
+            },
+            "reviews": [
+                {
+                    "text": "The sunset view was the highlight of our trip.",
+                    "original_text": None,
+                    "rating": 5.0,
+                    "published": "a month ago",
+                    "author": "Traveller",
+                    "author_uri": "https://maps.example.test/traveller",
+                    "review_uri": "https://maps.example.test/review",
+                }
+            ],
+            "photos": [
+                {"name": f"places/ChIJcard/photos/photo{index}", "authors": []}
+                for index in range(1, 7)
+            ],
+            "photo": {"name": "places/ChIJcard/photos/photo1", "authors": []},
+        }
+
+    def photo_uri(self, photo_name):
+        return f"https://images.example.test/{photo_name.rsplit('/', 1)[-1]}.jpg"
+
+
+class CardEnrichmentTest(unittest.TestCase):
+    def test_live_search_prefers_the_local_name(self) -> None:
+        captured = {}
+        place = {
+            "place_id": "p1",
+            "name": "Dailaokengshan",
+            "names": {"en": "Dailaokengshan", "local": "待老坑山"},
+            "category": "peak",
+            "latitude": 24.9668463,
+            "longitude": 121.5744771,
+        }
+        payload = {
+            "places": [
+                {
+                    "id": "mountain",
+                    "displayName": {"text": "待老坑山"},
+                    "primaryType": "mountain_peak",
+                    "location": {"latitude": 24.96685, "longitude": 121.57448},
+                }
+            ]
+        }
+
+        def response(request, timeout):
+            captured.update(json.loads(request.data))
+            return BytesIO(json.dumps(payload).encode("utf-8"))
+
+        with patch.dict(os.environ, {"GOOGLE_MAPS_SERVER_KEY": "test"}), patch(
+            "travel_planner.providers.urlopen", side_effect=response
+        ):
+            GooglePlacesCardProvider().details(
+                place, destination="Taipei, Taiwan", language="en"
+            )
+
+        self.assertEqual("待老坑山 peak, Taipei, Taiwan", captured["textQuery"])
+
+    def test_google_payload_is_normalized_and_a_distant_match_is_refused(self) -> None:
+        place = {"place_id": "p1", "name": "Tower", "latitude": 25.04, "longitude": 121.57}
+        payload = {
+            "places": [
+                {
+                    "id": "ChIJcard",
+                    "displayName": {"text": "Tower"},
+                    "location": {"latitude": 25.0401, "longitude": 121.5701},
+                    "rating": 4.6,
+                    "userRatingCount": 120,
+                    "reviews": [
+                        {
+                            "rating": 5,
+                            "text": {"text": "Excellent city view."},
+                            "authorAttribution": {"displayName": "A visitor"},
+                        }
+                    ],
+                    "photos": [
+                        {"name": f"places/ChIJcard/photos/p{index}"}
+                        for index in range(1, 7)
+                    ],
+                }
+            ]
+        }
+
+        result = GooglePlacesCardProvider.normalize(payload, place=place)
+        self.assertEqual(4.6, result["rating"])
+        self.assertEqual("Excellent city view.", result["reviews"][0]["text"])
+        self.assertEqual("places/ChIJcard/photos/p1", result["photo"]["name"])
+        self.assertEqual(5, len(result["photos"]))
+
+        payload["places"][0]["location"] = {"latitude": 25.2, "longitude": 121.7}
+        with self.assertRaisesRegex(ProviderUnavailable, "No exact Google Maps match"):
+            GooglePlacesCardProvider.normalize(payload, place=place)
+
+        payload["places"][0]["location"] = {"latitude": 25.0401, "longitude": 121.5701}
+        payload["places"][0]["displayName"] = {"text": "Different Library"}
+        with self.assertRaisesRegex(ProviderUnavailable, "No exact Google Maps match"):
+            GooglePlacesCardProvider.normalize(payload, place=place)
+
+    def test_google_match_avoids_a_wrong_subplace_category(self) -> None:
+        place = {
+            "place_id": "p1",
+            "name": "Taipei 101",
+            "category": "attraction",
+            "latitude": 25.034,
+            "longitude": 121.5645,
+        }
+        payload = {
+            "places": [
+                {
+                    "id": "mall",
+                    "displayName": {"text": "Taipei 101 Shopping Center"},
+                    "primaryType": "shopping_mall",
+                    "location": {"latitude": 25.0341, "longitude": 121.5645},
+                },
+                {
+                    "id": "observatory",
+                    "displayName": {"text": "Taipei 101 Observatory"},
+                    "primaryType": "tourist_attraction",
+                    "location": {"latitude": 25.0338, "longitude": 121.5646},
+                },
+            ]
+        }
+
+        result = GooglePlacesCardProvider.normalize(payload, place=place)
+
+        self.assertEqual("observatory", result["provider_place_id"])
+        self.assertEqual("tourist_attraction", result["matched_primary_type"])
+
+    def test_live_card_content_is_billed_but_never_persisted(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "card.sqlite3"
+            actions = PlannerActions(
+                path,
+                place_provider=RankingActionsTest.Provider(),
+                card_provider=FakeCardProvider(),
+            )
+            trip = actions.create_trip(name="Taipei", destination="Taipei")
+            actions.save_setup(
+                trip_id=trip.trip_id, main_style=["sightseeing"], confirmed=True
+            )
+            actions.discover_places(trip_id=trip.trip_id)
+            place_id = actions.rank_candidates(trip.trip_id)["lanes"]["browse_all"][0]
+
+            result = actions.enrich_place_card(trip.trip_id, place_id)
+
+            self.assertEqual(4.7, result["rating"])
+            self.assertEqual("https://images.example.test/photo1.jpg", result["photo_uri"])
+            self.assertEqual(5, len(result["photo_gallery"]))
+            usage = actions.paid_usage_status()["by_operation"]
+            self.assertEqual(1, usage["google_places:card_details"]["requests"])
+            self.assertEqual(5, usage["google_places:photo"]["requests"])
+            self.assertEqual([], actions.store.list_place_evidence(trip.trip_id, "card_details"))
+
+
 class RankingUiTest(unittest.TestCase):
     def test_interested_choice_persists_and_ranking_renders_in_thai(self) -> None:
         with TemporaryDirectory() as directory:
@@ -272,7 +468,10 @@ class RankingUiTest(unittest.TestCase):
             )
             actions.discover_places(trip_id=trip.trip_id)
 
-            with patch.dict(os.environ, {"TOURIST_DB_PATH": str(path)}):
+            with patch.dict(os.environ, {"TOURIST_DB_PATH": str(path)}), patch(
+                "travel_planner.actions.GooglePlacesCardProvider",
+                return_value=FakeCardProvider(),
+            ):
                 app = AppTest.from_file(ROOT / "app.py", default_timeout=10)
                 app.switch_page("views/places.py")
                 app.run()
@@ -282,6 +481,28 @@ class RankingUiTest(unittest.TestCase):
                     key=f"ranking_card_{trip.trip_id}_main_queue__en"
                 )
                 card_id = card_widget.value
+                self.assertTrue(
+                    any("Tourist take" in item.value for item in app.markdown)
+                )
+                rendered_before_enrichment = "\n".join(
+                    item.value for group in (app.markdown, app.caption) for item in group
+                )
+                self.assertIn("Why consider this place", rendered_before_enrichment)
+                self.assertIn("worth considering for", rendered_before_enrichment)
+                self.assertIn("Search this place on TripAdvisor", rendered_before_enrichment)
+
+                app.button(key=f"enrich_card_{trip.trip_id}_{card_id}").click().run()
+                rendered = "\n".join(
+                    item.value for group in (app.markdown, app.caption) for item in group
+                )
+                self.assertIn("Visitors praise the skyline view", rendered)
+                self.assertIn("The sunset view was the highlight", rendered)
+                self.assertIn("4.7/5", rendered)
+                self.assertIn("Report this review summary", rendered)
+                app.button(key=f"next_photo_{trip.trip_id}_{card_id}").click().run()
+                self.assertEqual(
+                    1, app.session_state[f"photo_index_{trip.trip_id}_{card_id}"]
+                )
 
                 app.button(key=f"choice_interested_{trip.trip_id}_{card_id}").click().run()
 
@@ -299,6 +520,13 @@ class RankingUiTest(unittest.TestCase):
                 self.assertIn(
                     "การ์ดสถานที่ที่เหมาะกับทริป", [item.value for item in app.subheader]
                 )
+                thai_rendered = "\n".join(item.value for item in app.markdown)
+                self.assertIn("เหตุผลที่ควรพิจารณาสถานที่นี้", thai_rendered)
+                self.assertIn("น่าพิจารณาสำหรับ", thai_rendered)
+
+                app.button(key=f"continue_evidence_{trip.trip_id}").click().run()
+                self.assertFalse(app.exception)
+                self.assertIn("Evidence", [item.value for item in app.subheader])
 
 
 if __name__ == "__main__":

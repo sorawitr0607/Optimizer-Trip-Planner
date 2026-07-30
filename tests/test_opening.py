@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+from io import BytesIO
+import json
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
+
+from streamlit.testing.v1 import AppTest
 
 from travel_planner import opening
 from travel_planner.actions import PlannerActions
@@ -11,7 +17,7 @@ from travel_planner.providers import (
     ProviderBudgetExceeded,
     ProviderUnavailable,
 )
-from tests.test_routes import FakePlaceProvider
+from tests.test_routes import FakePlaceProvider, FakeRouteProvider
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -61,8 +67,13 @@ class FakeHoursProvider:
         self.calls.append(place["place_id"])
         if place["place_id"] in self.fail_for:
             raise ProviderUnavailable("Places returned no opening hours for this place")
+        payload = google_payload(self.periods, name=place["name"])
+        payload["places"][0]["location"] = {
+            "latitude": place["latitude"],
+            "longitude": place["longitude"],
+        }
         return GooglePlacesOpeningHoursProvider().normalize(
-            google_payload(self.periods, name=place["name"]), place=place
+            payload, place=place
         )
 
 
@@ -84,13 +95,82 @@ class NormalizationTest(unittest.TestCase):
             value["weekly_periods"],
         )
 
-    def test_a_period_with_no_close_is_open_all_day(self) -> None:
+    def test_hours_search_uses_local_name_and_destination(self) -> None:
+        captured = {}
+        place = {
+            **self.place,
+            "name": "Dailaokengshan",
+            "names": {"local": "待老坑山"},
+            "category": "peak",
+            "destination": "Taipei, Taiwan",
+        }
+        payload = google_payload([period(0, (0, 0), None)], name="待老坑山")
+        payload["places"][0]["location"] = {
+            "latitude": place["latitude"],
+            "longitude": place["longitude"],
+        }
+
+        def response(request, timeout):
+            captured.update(json.loads(request.data))
+            return BytesIO(json.dumps(payload).encode("utf-8"))
+
+        with patch.dict(os.environ, {"GOOGLE_MAPS_SERVER_KEY": "test"}), patch(
+            "travel_planner.providers.urlopen", side_effect=response
+        ):
+            self.provider.opening_hours(place)
+
+        self.assertEqual("待老坑山 peak, Taipei, Taiwan", captured["textQuery"])
+        self.assertEqual(5, captured["pageSize"])
+
+    def test_hours_can_use_a_nearby_alias_but_not_a_different_venue_type(self) -> None:
+        place = {
+            **self.place,
+            "name": "Dailaokengshan",
+            "names": {"local": "待老坑山"},
+            "category": "peak",
+        }
+        always_open = {"periods": [period(0, (0, 0), None)]}
+        payload = {
+            "places": [
+                {
+                    "id": "trail",
+                    "displayName": {"text": "Dailaokeng Mountain"},
+                    "primaryType": "hiking_area",
+                    "location": {"latitude": 25.0401, "longitude": 121.5701},
+                    "regularOpeningHours": always_open,
+                },
+                {
+                    "id": "peak",
+                    "displayName": {"text": "待老坑山"},
+                    "primaryType": "mountain_peak",
+                    "location": {"latitude": 25.04, "longitude": 121.57},
+                },
+            ]
+        }
+
+        value = self.provider.normalize(payload, place=place)
+
+        self.assertEqual("trail", value["provider_place_id"])
+        self.assertEqual(7, len(value["weekly_periods"]))
+
+        payload["places"] = [
+            {
+                "id": "temple",
+                "displayName": {"text": "待老坑山 Temple"},
+                "primaryType": "buddhist_temple",
+                "location": {"latitude": 25.0401, "longitude": 121.5701},
+                "regularOpeningHours": always_open,
+            }
+        ]
+        with self.assertRaises(ProviderUnavailable):
+            self.provider.normalize(payload, place=place)
+
+    def test_a_period_with_no_close_is_open_all_week(self) -> None:
         value = self.provider.normalize(
             google_payload([period(0, (0, 0), None)]), place=self.place
         )
-        self.assertTrue(value["weekly_periods"][0]["all_day"])
-        self.assertEqual("00:00", value["weekly_periods"][0]["start"])
-        self.assertEqual("23:59", value["weekly_periods"][0]["end"])
+        self.assertEqual(set(range(7)), {item["day"] for item in value["weekly_periods"]})
+        self.assertTrue(all(item["all_day"] for item in value["weekly_periods"]))
 
     def test_an_overnight_close_is_clamped_to_the_same_day(self) -> None:
         value = self.provider.normalize(
@@ -257,6 +337,32 @@ class OpeningRefreshTest(unittest.TestCase):
         self.assertEqual(len(self.places) - 1, len(facts))
         self.assertNotIn(self.places[0], {fact["subject_id"] for fact in facts})
 
+    def test_owner_can_confirm_a_window_when_the_provider_has_none(self) -> None:
+        actions = PlannerActions(
+            self.path, hours_provider=FakeHoursProvider(fail_for={self.places[0]})
+        )
+        actions.refresh_opening_hours(self.trip.trip_id, force=True)
+
+        before = actions.opening_intervals(self.trip.trip_id)[self.places[0]]
+        self.assertEqual("OPENING_NOT_FETCHED", before["reason"])
+
+        actions.confirm_opening_window(
+            self.trip.trip_id,
+            self.places[0],
+            start="08:00",
+            end="18:00",
+        )
+
+        after = actions.opening_intervals(self.trip.trip_id)[self.places[0]]
+        self.assertEqual({"start": "08:00", "end": "18:00"}, after["interval"])
+        fact = next(
+            item
+            for item in actions._optimizer_input(self.trip.trip_id)["facts"]
+            if item["subject_id"] == self.places[0]
+            and item["fact_type"] == "opening_interval"
+        )
+        self.assertEqual("owner_confirmation", fact["source"])
+
     def test_expired_evidence_stops_producing_a_fact(self) -> None:
         self.actions.refresh_opening_hours(self.trip.trip_id)
         with self.actions.store.connect() as connection:
@@ -273,6 +379,32 @@ class OpeningRefreshTest(unittest.TestCase):
         ]
         self.assertEqual([], facts)
 
+    def test_pre_fix_evidence_is_not_used_after_the_24_7_parser_upgrade(self) -> None:
+        self.actions.refresh_opening_hours(self.trip.trip_id)
+        current = self.actions.store.list_place_evidence(
+            self.trip.trip_id, "opening_hours"
+        )[0]
+        value = {
+            key: value
+            for key, value in current.items()
+            if key not in {"normalizer_version", "retrieved_at", "expires_at"}
+        }
+        now = "2030-01-01T00:00:00+00:00"
+        self.actions.store.upsert_place_evidence(
+            trip_id=self.trip.trip_id,
+            place_id=current["place_id"],
+            kind="opening_hours",
+            value=value,
+            provider="google_places",
+            retrieved_at=now,
+            expires_at="2031-01-01T00:00:00+00:00",
+        )
+
+        interval = self.actions.opening_intervals(self.trip.trip_id)[current["place_id"]]
+
+        self.assertIsNone(interval["interval"])
+        self.assertEqual("EVIDENCE_NORMALIZER_OUTDATED", interval["reason"])
+
     def test_hours_need_a_selected_place(self) -> None:
         bare = PlannerActions(
             Path(self.directory.name) / "bare.sqlite3", hours_provider=self.provider
@@ -281,6 +413,158 @@ class OpeningRefreshTest(unittest.TestCase):
         bare.save_setup(trip_id=trip.trip_id, main_style=["sightseeing"], confirmed=True)
         with self.assertRaisesRegex(ValueError, "at least one place"):
             bare.refresh_opening_hours(trip.trip_id)
+
+
+class ExploreFirstEvidenceTest(unittest.TestCase):
+    class PlaceProvider(FakePlaceProvider):
+        def discover(self, destination: str) -> dict:
+            payload = super().discover(destination)
+            for item in payload["items"]:
+                item.pop("opening_hours", None)
+            return payload
+
+        def geocode(self, query: str) -> dict:
+            return {
+                "name": query,
+                "address": "1 Test Road, Taipei",
+                "latitude": 25.045,
+                "longitude": 121.515,
+                "status": "owner_confirmed",
+                "provider": self.name,
+            }
+
+    def setUp(self) -> None:
+        self.directory = TemporaryDirectory()
+        self.path = Path(self.directory.name) / "explore.sqlite3"
+        self.actions = PlannerActions(
+            self.path,
+            place_provider=self.PlaceProvider(),
+            route_provider=FakeRouteProvider(),
+        )
+        self.trip = self.actions.create_trip(
+            name="Explore Taipei", destination="Taipei", planning_mode="explore_first"
+        )
+        self.actions.save_setup(
+            trip_id=self.trip.trip_id,
+            main_style=["sightseeing"],
+            start_date=TRIP_DATES[0],
+            end_date=TRIP_DATES[-1],
+            accommodation_status="not_booked",
+            confirmed=True,
+        )
+        self.actions.discover_places(trip_id=self.trip.trip_id)
+        for item in self.actions.get_latest_discovery(
+            self.trip.trip_id
+        ).candidates.as_dict()["candidates"]:
+            self.actions.save_candidate_choice(
+                trip_id=self.trip.trip_id,
+                place_id=item["place_id"],
+                action="must_do",
+            )
+        self.actions.refresh_routes(self.trip.trip_id)
+
+    def tearDown(self) -> None:
+        self.directory.cleanup()
+
+    def test_missing_hours_and_hotel_create_a_visible_provisional_plan(self) -> None:
+        snapshot = self.actions._optimizer_input(self.trip.trip_id)
+        opening_facts = [
+            fact for fact in snapshot["facts"] if fact["fact_type"] == "opening_interval"
+        ]
+        selected = [
+            item for item in snapshot["candidates"] if item["kind"] != "hotel_area"
+        ]
+
+        self.assertEqual(len(selected), len(opening_facts))
+        self.assertEqual({"assumed"}, {fact["status"] for fact in opening_facts})
+        self.assertTrue(
+            all(
+                fact["value"] == {"start": "09:00", "end": "21:00"}
+                for fact in opening_facts
+            )
+        )
+        self.assertIn("OPENING_EVIDENCE_MISSING", snapshot["trip"]["capability_gaps"])
+        self.assertIn(
+            "provisional_accommodation_base",
+            {item["id"] for item in snapshot["candidates"]},
+        )
+
+        proposal = self.actions.generate_plan_preview(self.trip.trip_id).proposal.as_dict()
+        for variant in proposal["variants"]:
+            self.assertEqual("provisional", variant["status"])
+            self.assertTrue(variant["validation"]["valid"])
+            self.assertEqual(len(selected), variant["metrics"]["scheduled_visits"])
+            self.assertEqual(
+                "selected_place_centroid", variant["hotel_recommendation"]["basis"]
+            )
+
+        with patch.dict(os.environ, {"TOURIST_DB_PATH": str(self.path)}):
+            app = AppTest.from_file(ROOT / "app.py", default_timeout=10)
+            app.switch_page("views/evidence.py")
+            app.run()
+            self.assertFalse(app.exception)
+            button = app.button(key=f"continue_optimize_{self.trip.trip_id}")
+            self.assertEqual("Continue with provisional assumptions", button.label)
+            button.click().run()
+            self.assertIn("Whole-trip optimizer", [item.value for item in app.subheader])
+            activate = app.button(
+                key=f"activate_plan_{self.trip.trip_id}_best_balance"
+            )
+            self.assertFalse(activate.disabled)
+            self.assertEqual(
+                "Use and export this provisional itinerary", activate.label
+            )
+
+        self.actions.activate_plan_preview(
+            trip_id=self.trip.trip_id, variant_id="best_balance"
+        )
+        exported = self.actions.build_export_snapshot(self.trip.trip_id).as_dict()
+        self.assertEqual("action_needed", exported["readiness"]["state"])
+        self.assertEqual("provisional", exported["readiness"]["variant_status"])
+        self.assertEqual(
+            "provisional_accommodation_base",
+            exported["accommodation"]["anchor"]["subject_id"],
+        )
+
+    def test_a_booked_base_replaces_the_hypothesis_and_routes_from_it(self) -> None:
+        saved = self.actions.confirm_accommodation_base(
+            self.trip.trip_id, "Test Hotel"
+        )
+        self.actions.refresh_routes(self.trip.trip_id, force=True)
+        snapshot = self.actions._optimizer_input(self.trip.trip_id)
+
+        self.assertEqual("Test Hotel", saved["name"])
+        self.assertEqual("booked", snapshot["trip"]["accommodation_status"])
+        self.assertNotIn(
+            "ACCOMMODATION_BASE_UNCONFIRMED", snapshot["trip"]["capability_gaps"]
+        )
+        self.assertNotIn(
+            "provisional_accommodation_base",
+            {item["id"] for item in snapshot["candidates"]},
+        )
+        self.assertIn(
+            "booked_accommodation_base",
+            {item["id"] for item in snapshot["candidates"]},
+        )
+        self.assertTrue(
+            any(
+                "booked_accommodation_base"
+                in {route["origin_id"], route["destination_id"]}
+                for route in snapshot["routes"]
+            )
+        )
+        self.assertFalse(
+            any(
+                "provisional_accommodation_base"
+                in {route["origin_id"], route["destination_id"]}
+                for route in snapshot["routes"]
+            )
+        )
+        proposal = self.actions.generate_plan_preview(self.trip.trip_id).proposal.as_dict()
+        self.assertEqual(
+            "booked_accommodation",
+            proposal["variants"][0]["hotel_recommendation"]["basis"],
+        )
 
 
 if __name__ == "__main__":

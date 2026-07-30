@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import time
+
 import streamlit as st
 
 from ui import shared
@@ -22,6 +24,42 @@ st.caption(copy["evidence_help"])
 route_flash_key = f"route_flash_{trip.trip_id}"
 if route_flash := st.session_state.pop(route_flash_key, None):
     st.success(route_flash)
+hours_warning_key = f"hours_warning_{trip.trip_id}"
+if hours_warning := st.session_state.pop(hours_warning_key, None):
+    st.warning(hours_warning)
+
+accommodation_base = actions.get_accommodation_base(trip.trip_id)
+with st.container(border=True):
+    st.markdown(f"**{copy['accommodation_base_title']}**")
+    st.caption(copy["accommodation_base_help"])
+    if accommodation_base:
+        st.success(accommodation_base["name"])
+        st.caption(accommodation_base.get("address") or "")
+        st.map(
+            {
+                "latitude": [accommodation_base["latitude"]],
+                "longitude": [accommodation_base["longitude"]],
+            },
+            latitude="latitude",
+            longitude="longitude",
+        )
+    accommodation_query = st.text_input(
+        copy["accommodation_query"],
+        value=accommodation_base["name"] if accommodation_base else "",
+        key=f"accommodation_query_{trip.trip_id}",
+    )
+    if st.button(
+        copy["save_accommodation_base"],
+        key=f"save_accommodation_base_{trip.trip_id}",
+        width="stretch",
+    ):
+        try:
+            actions.confirm_accommodation_base(trip.trip_id, accommodation_query)
+        except (ProviderUnavailable, ValueError) as error:
+            st.error(shared.plain(error))
+        else:
+            st.session_state[route_flash_key] = copy["accommodation_base_saved"]
+            st.rerun()
 
 zone_evidence = actions.get_timezone_evidence(trip.trip_id)
 with st.container(border=True):
@@ -68,6 +106,11 @@ elif usage_status["state"] == "warning":
 intervals = actions.opening_intervals(trip.trip_id)
 usable = [item for item in intervals.values() if item.get("interval")]
 unusable = {pid: item["reason"] for pid, item in intervals.items() if not item.get("interval")}
+choice_names = {
+    choice.place_id: shared._candidate_name(choice.candidate.as_dict(), language)
+    for choice in actions.list_candidate_choices(trip.trip_id)
+    if choice.action in {"must_do", "interested", "maybe"}
+}
 
 with st.container(border=True):
     st.markdown(f"**{copy['opening_hours']}** · {copy['hours_usable']}: {len(usable)}")
@@ -90,7 +133,53 @@ with st.container(border=True):
                 f"{copy['hours_fetched']} {copy['hours_usable']} "
                 f"{hours_report['usable_intervals']} / {hours_report['places']}"
             )
+            if hours_report["provider_errors"]:
+                st.session_state[hours_warning_key] = " · ".join(
+                    hours_report["provider_errors"]
+                )
             st.rerun()
+
+    for place_id, reason in unusable.items():
+        if reason not in {
+            "OPENING_NOT_FETCHED",
+            "NO_PUBLISHED_HOURS",
+            "EVIDENCE_EXPIRED",
+            "EVIDENCE_NORMALIZER_OUTDATED",
+        }:
+            continue
+        with st.expander(
+            f"{choice_names.get(place_id, place_id)} · "
+            f"{_optimizer_code(reason, language)}"
+        ):
+            st.caption(copy["hours_owner_help"])
+            start_column, end_column = st.columns(2)
+            owner_start = start_column.time_input(
+                copy["start"],
+                value=time(8, 0),
+                key=f"owner_hours_start_{trip.trip_id}_{place_id}",
+            )
+            owner_end = end_column.time_input(
+                copy["end"],
+                value=time(18, 0),
+                key=f"owner_hours_end_{trip.trip_id}_{place_id}",
+            )
+            if st.button(
+                copy["confirm_hours"],
+                key=f"confirm_hours_{trip.trip_id}_{place_id}",
+                width="stretch",
+            ):
+                try:
+                    actions.confirm_opening_window(
+                        trip.trip_id,
+                        place_id,
+                        start=owner_start.strftime("%H:%M"),
+                        end=owner_end.strftime("%H:%M"),
+                    )
+                except ValueError as error:
+                    st.error(shared.plain(error))
+                else:
+                    st.session_state[route_flash_key] = copy["hours_confirmed"]
+                    st.rerun()
 
 with st.container(border=True):
     if verified_routes:
@@ -128,3 +217,40 @@ with st.expander(copy["raise_cap"]):
         st.session_state[route_flash_key] = copy["cap_saved"]
         st.rerun()
 
+st.divider()
+journey = shared.journey(trip)
+gaps = journey.get("capability_gaps", [])
+if gaps:
+    st.warning(copy["evidence_blockers"])
+    for gap in gaps:
+        st.markdown(f"- {_optimizer_code(gap, language)}")
+    if any(
+        gap
+        in {
+            "ACCOMMODATION_BASE_UNCONFIRMED",
+            "FREE_TEXT_HARD_CONSTRAINT_NEEDS_STRUCTURED_CONFIRMATION",
+        }
+        for gap in gaps
+    ) and st.button(
+        f"{copy['next_step']}: {copy['stage_setup']}",
+        key=f"return_setup_{trip.trip_id}",
+        width="stretch",
+    ):
+        st.switch_page("views/setup.py")
+    if trip.planning_mode == "explore_first":
+        st.info(copy["provisional_evidence_help"])
+        if st.button(
+            copy["continue_provisional"],
+            key=f"continue_optimize_{trip.trip_id}",
+            type="primary",
+            width="stretch",
+        ):
+            st.switch_page("views/optimize.py")
+else:
+    if st.button(
+        f"{copy['next_step']}: {copy['stage_optimize']}",
+        key=f"continue_optimize_{trip.trip_id}",
+        type="primary",
+        width="stretch",
+    ):
+        st.switch_page("views/optimize.py")

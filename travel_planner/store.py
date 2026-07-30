@@ -23,7 +23,7 @@ from .core import (
 )
 
 
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS trips (
     id TEXT PRIMARY KEY,
@@ -32,6 +32,12 @@ CREATE TABLE IF NOT EXISTS trips (
     planning_mode TEXT NOT NULL CHECK (planning_mode IN ('explore_first', 'ready_to_schedule')),
     language TEXT NOT NULL CHECK (language IN ('en', 'th')),
     created_at TEXT NOT NULL
+);
+
+-- A transaction-scoped marker lets an intentional whole-trip deletion remove
+-- otherwise immutable history without making ordinary row deletion possible.
+CREATE TABLE IF NOT EXISTS trip_deletions (
+    trip_id TEXT PRIMARY KEY
 );
 
 CREATE TABLE IF NOT EXISTS plan_versions (
@@ -252,8 +258,12 @@ BEGIN
     SELECT RAISE(ABORT, 'revision history is immutable');
 END;
 
-CREATE TRIGGER IF NOT EXISTS plan_revisions_no_delete
+DROP TRIGGER IF EXISTS plan_revisions_no_delete;
+CREATE TRIGGER plan_revisions_no_delete
 BEFORE DELETE ON plan_revisions
+WHEN NOT EXISTS (
+    SELECT 1 FROM trip_deletions WHERE trip_id = OLD.trip_id
+)
 BEGIN
     SELECT RAISE(ABORT, 'revision history is immutable');
 END;
@@ -264,8 +274,12 @@ BEGIN
     SELECT RAISE(ABORT, 'plan versions are immutable');
 END;
 
-CREATE TRIGGER IF NOT EXISTS plan_versions_no_delete
+DROP TRIGGER IF EXISTS plan_versions_no_delete;
+CREATE TRIGGER plan_versions_no_delete
 BEFORE DELETE ON plan_versions
+WHEN NOT EXISTS (
+    SELECT 1 FROM trip_deletions WHERE trip_id = OLD.trip_id
+)
 BEGIN
     SELECT RAISE(ABORT, 'plan versions are immutable');
 END;
@@ -276,8 +290,12 @@ BEGIN
     SELECT RAISE(ABORT, 'discovery runs are immutable');
 END;
 
-CREATE TRIGGER IF NOT EXISTS discovery_runs_no_delete
+DROP TRIGGER IF EXISTS discovery_runs_no_delete;
+CREATE TRIGGER discovery_runs_no_delete
 BEFORE DELETE ON discovery_runs
+WHEN NOT EXISTS (
+    SELECT 1 FROM trip_deletions WHERE trip_id = OLD.trip_id
+)
 BEGIN
     SELECT RAISE(ABORT, 'discovery runs are immutable');
 END;
@@ -347,6 +365,47 @@ class SQLiteStore:
         with self.connect() as connection:
             row = connection.execute("SELECT * FROM trips WHERE id = ?", (trip_id,)).fetchone()
         return self._trip(row) if row else None
+
+    def delete_trip(self, trip_id: str) -> None:
+        """Delete one trip and its saved planning data in one transaction.
+
+        Paid usage is deliberately retained: a completed provider charge stays
+        part of the monthly spend even when its trip is removed.
+        """
+
+        with self.connect() as connection:
+            if connection.execute(
+                "SELECT 1 FROM trips WHERE id = ?", (trip_id,)
+            ).fetchone() is None:
+                raise ValueError(f"Unknown trip: {trip_id}")
+            connection.execute(
+                "INSERT INTO trip_deletions (trip_id) VALUES (?)", (trip_id,)
+            )
+            # Children with cross-table foreign keys come first. A future
+            # trip-scoped table fails this transaction safely until added here.
+            for table in (
+                "active_plans",
+                "candidate_choices",
+                "optimization_previews",
+                "checklist_items",
+                "cost_items",
+                "exchange_rate_snapshots",
+                "route_snapshots",
+                "trip_evidence",
+                "place_evidence",
+                "revision_drafts",
+                "plan_revisions",
+                "plan_versions",
+                "discovery_runs",
+                "trip_setups",
+            ):
+                connection.execute(
+                    f"DELETE FROM {table} WHERE trip_id = ?", (trip_id,)
+                )
+            connection.execute("DELETE FROM trips WHERE id = ?", (trip_id,))
+            connection.execute(
+                "DELETE FROM trip_deletions WHERE trip_id = ?", (trip_id,)
+            )
 
     def save_setup(self, setup: SetupDraft) -> SetupDraft:
         with self.connect() as connection:

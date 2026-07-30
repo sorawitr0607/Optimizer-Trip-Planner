@@ -413,7 +413,11 @@ class EvidenceUiTest(unittest.TestCase):
             actions = PlannerActions(path, place_provider=FakePlaceProvider())
             trip = actions.create_trip(name="Taipei", destination="Taipei")
             actions.save_setup(
-                trip_id=trip.trip_id, main_style=["sightseeing"], confirmed=True
+                trip_id=trip.trip_id,
+                main_style=["sightseeing"],
+                start_date="2030-01-01",
+                end_date="2030-01-01",
+                confirmed=True,
             )
             actions.discover_places(trip_id=trip.trip_id)
             # The stage is only reachable once a place has been chosen.
@@ -423,6 +427,7 @@ class EvidenceUiTest(unittest.TestCase):
                 place_id=catalog["candidates"][0]["place_id"],
                 action="must_do",
             )
+            place_id = catalog["candidates"][0]["place_id"]
 
             with patch.dict(os.environ, {"TOURIST_DB_PATH": str(path)}):
                 app = AppTest.from_file(ROOT / "app.py", default_timeout=10)
@@ -437,6 +442,13 @@ class EvidenceUiTest(unittest.TestCase):
                     f"fetch_routes_{trip.trip_id}",
                 ):
                     self.assertIsNotNone(app.button(key=key))
+                app.button(key=f"confirm_hours_{trip.trip_id}_{place_id}").click().run()
+                self.assertEqual(
+                    {"start": "08:00", "end": "18:00"},
+                    PlannerActions(path).opening_intervals(trip.trip_id)[place_id][
+                        "interval"
+                    ],
+                )
                 # The cap control no longer reuses the expander's own label.
                 self.assertEqual(
                     "New monthly cap (US$)",

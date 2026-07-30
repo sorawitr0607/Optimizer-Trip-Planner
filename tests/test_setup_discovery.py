@@ -243,6 +243,14 @@ class SchemaMigrationTest(unittest.TestCase):
 
 
 class ConcreteProviderTest(unittest.TestCase):
+    def test_dense_city_query_protects_landmarks_and_balances_families(self) -> None:
+        query = OpenStreetMapProvider()._overpass_query([24.9, 121.4, 25.2, 121.7])
+
+        self.assertIn('["wikipedia"]', query)
+        self.assertEqual(2, query.count("out center qt"))
+        self.assertIn("out center qt;", query)
+        self.assertIn("out center qt 500", query)
+
     def test_osm_adapter_normalizes_local_names_without_network(self) -> None:
         provider = OpenStreetMapProvider()
         responses = iter(
@@ -316,6 +324,23 @@ class ConcreteProviderTest(unittest.TestCase):
         with self.assertRaisesRegex(ProviderUnavailable, "empty baseline"):
             provider.discover("Taipei")
 
+    def test_osm_adapter_deduplicates_landmarks_returned_by_priority_blocks(self) -> None:
+        provider = OpenStreetMapProvider()
+        landmark = {
+            "type": "way",
+            "id": 101,
+            "center": {"lat": 25.033, "lon": 121.565},
+            "tags": {"name": "Taipei 101", "tourism": "attraction"},
+        }
+        provider._request_json = lambda request: {"elements": [landmark, landmark.copy()]}
+
+        result = provider._discover_bbox(
+            [24.9, 121.4, 25.2, 121.7], geocoded_name="Taipei"
+        )
+
+        self.assertEqual(1, len(result["items"]))
+        self.assertEqual(1, result["coverage"]["raw_records"])
+
     def test_osm_refresh_reuses_cached_boundary(self) -> None:
         provider = OpenStreetMapProvider()
         requests = []
@@ -388,6 +413,10 @@ class SetupUiTest(unittest.TestCase):
                 app.button(key=f"confirm_{trip_id}").click().run()
 
                 self.assertFalse(app.exception)
+                self.assertIn(
+                    "Broad attraction discovery",
+                    [item.value for item in app.subheader],
+                )
                 setup = PlannerActions(database_path).get_setup(trip_id)
                 self.assertTrue(setup.confirmed)
                 self.assertEqual(
@@ -399,6 +428,8 @@ class SetupUiTest(unittest.TestCase):
                 self.assertEqual(26, saved_owner["age"])
                 self.assertEqual(["sightseeing", "culture"], saved_owner["main_style"])
 
+                app.switch_page("views/setup.py")
+                app.run()
                 app.radio[0].set_value("th").run()
                 self.assertFalse(app.exception)
                 self.assertEqual("ตัวช่วยวางแผนท่องเที่ยวส่วนตัว", app.title[0].value)

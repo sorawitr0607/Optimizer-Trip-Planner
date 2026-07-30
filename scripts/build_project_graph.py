@@ -199,9 +199,22 @@ def wayfinder_blocker_edges(nodes: list[dict]) -> list[dict]:
     return result
 
 
+def deduplicate_nodes(nodes: list[dict]) -> list[dict]:
+    """Mirror Graphify/NetworkX's last-attributes-win handling for duplicate IDs."""
+
+    unique: dict[str, dict] = {}
+    for node in nodes:
+        node_id = str(node.get("id") or "")
+        if not node_id:
+            raise RuntimeError("Graphify produced a node without an ID")
+        unique[node_id] = {**unique.get(node_id, {}), **node}
+    return list(unique.values())
+
+
 def normalize_raw_graph() -> set[tuple[str, str, str]]:
     data = json.loads(GRAPH.read_text(encoding="utf-8"))
-    nodes = data.get("nodes", [])
+    nodes = deduplicate_nodes(data.get("nodes", []))
+    data["nodes"] = nodes
     edges = data.get("edges", [])
     if not nodes or not isinstance(edges, list):
         raise RuntimeError("Graphify did not produce a raw extraction graph")

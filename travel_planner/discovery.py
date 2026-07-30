@@ -19,8 +19,8 @@ def build_candidate_catalog(
     rejected = Counter()
     duplicate_count = 0
 
-    # ponytail: the provider result is capped at 500, so a readable O(n²) match is
-    # cheaper than owning a spatial index; replace only if candidate caps grow.
+    # ponytail: discovery is bounded below roughly 1,000 records, so a readable
+    # O(n²) match is cheaper than owning a spatial index; replace only if caps grow.
     for raw in sorted(raw_items, key=lambda item: str(item.get("provider_place_id", ""))):
         candidate, reason = _candidate(raw, provider, retrieved_at, status)
         if candidate is None:

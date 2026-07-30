@@ -174,8 +174,15 @@ Behavior changes to the optimizer should be expressed there.
 ## Configuration
 
 `TOURIST_DB_PATH` (default `data/tourist.sqlite3`), `TOURIST_NOMINATIM_URL`, `TOURIST_OVERPASS_URL`,
-`TOURIST_USER_AGENT`. Keys are read from the environment only — `.env` / `secrets.local.json` are
-gitignored, `.env.example` / `secrets.example.json` hold names and placeholders. Paid usage is capped
+`TOURIST_USER_AGENT`. Providers still read keys from `os.environ` and nowhere else — that is what keeps
+a key out of every snapshot, export and log. `credentials.load_local_credentials()` (called once at the
+top of `app.py`) copies a flat `secrets.local.json` into the environment first, so the owner need not
+export four variables per shell; an already-set variable always wins, and the module never logs or
+returns a value. `.env` / `secrets.local.json` are gitignored, `.env.example` / `secrets.example.json`
+hold names and placeholders. `scripts/check_provider_access.py` reads the same file directly.
+`tests/__init__.py` sets `TOURIST_LOCAL_SECRETS=off` because `AppTest` imports `app.py`: without it the
+suite would run holding real keys, and a test reaching a real provider would bill rather than fail with
+"not configured". Do not remove that line. Paid usage is capped
 at US$10/month by decision (warn at $8). `usage.py` is that ledger: `PRICES_USD` holds the estimated
 unit price per `provider:operation`, `actions._spend()` refuses a call that would cross the cap and
 records what it cost, and free-tier operations are recorded at zero so call counts stay reconcilable.

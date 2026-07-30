@@ -46,6 +46,7 @@ if generate_plan:
 preview = actions.get_plan_preview(trip.trip_id)
 if preview:
     proposal = preview.proposal.as_dict()
+    optimizer_input = preview.optimizer_input.as_dict()
     if proposal["mode"] == "stay_recommendation":
         st.markdown(f"#### {copy['stay_recommendation']}")
         st.dataframe(
@@ -70,6 +71,35 @@ if preview:
         )
         variant = next(item for item in variants if item["variant_id"] == variant_id)
         st.markdown(f"#### {copy[variant_id]} · {copy[variant['status']]}")
+        if recommendation := variant.get("hotel_recommendation"):
+            area = next(
+                (
+                    item
+                    for item in optimizer_input["candidates"]
+                    if item.get("id") == recommendation["default_area_id"]
+                ),
+                {},
+            )
+            with st.container(border=True):
+                booked_base = recommendation.get("basis") == "booked_accommodation"
+                st.markdown(
+                    f"**{copy['booked_base' if booked_base else 'provisional_base']}**"
+                )
+                st.write(shared._candidate_name(area, language))
+                st.caption(
+                    copy["booked_base_help" if booked_base else "provisional_base_help"]
+                )
+                if not booked_base:
+                    st.caption(copy["provisional_base_basis"])
+                if area.get("latitude") is not None and area.get("longitude") is not None:
+                    st.map(
+                        {
+                            "latitude": [area["latitude"]],
+                            "longitude": [area["longitude"]],
+                        },
+                        latitude="latitude",
+                        longitude="longitude",
+                    )
         # Three per row, not five: at a fifth of a centered page these labels
         # clipped the same way "Not evaluated yet" and "unavailable" did.
         metric_labels = (
@@ -135,13 +165,21 @@ if preview:
         else:
             st.warning(copy["no_schedule"])
 
-        if variant["status"] != "ready":
+        provisional_allowed = bool(
+            trip.planning_mode == "explore_first"
+            and variant["status"] == "provisional"
+            and variant["validation"]["valid"]
+        )
+        activation_allowed = variant["status"] == "ready" or provisional_allowed
+        if provisional_allowed:
+            st.info(copy["provisional_activation_help"])
+        elif variant["status"] != "ready":
             st.caption(copy["activation_disabled"])
         activate = st.button(
-            copy["activate_plan"],
+            copy["use_provisional_plan" if provisional_allowed else "activate_plan"],
             key=f"activate_plan_{trip.trip_id}_{variant_id}",
             width="stretch",
-            disabled=variant["status"] != "ready",
+            disabled=not activation_allowed,
         )
         if activate:
             try:
@@ -152,5 +190,4 @@ if preview:
                 st.error(shared.plain(error))
             else:
                 st.session_state[optimizer_flash_key] = "plan_activated"
-                st.rerun()
-
+                st.switch_page("views/itinerary.py")

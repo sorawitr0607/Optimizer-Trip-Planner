@@ -70,7 +70,7 @@ else:
     timeline_tab, map_tab = st.tabs([copy["timeline"], copy["tab_map"]])
     with timeline_tab:
         if not day["items"]:
-            st.warning(copy["no_schedule"])
+            st.info(copy["no_schedule_day"])
         for part in ("morning", "afternoon"):
             part_items = [
                 item for item in day["items"] if half_day(item["start"]) == part
@@ -194,4 +194,3 @@ else:
                 hide_index=True,
                 width="stretch",
             )
-

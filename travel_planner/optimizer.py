@@ -122,7 +122,7 @@ def validate_variant(snapshot: dict[str, Any], variant: dict[str, Any]) -> dict[
                 if subject in visits:
                     errors.append({"code": "DUPLICATE_VISIT", "subject_id": subject})
                 visits[subject] = item
-                opening = _verified_fact(snapshot, subject, "opening_interval")
+                opening = _planning_fact(snapshot, subject, "opening_interval")
                 if opening and not _inside(item, opening["value"]):
                     errors.append({"code": "CLOSED_DURING_VISIT", "subject_id": subject})
                 show = _verified_fact(snapshot, subject, "show_intervals")
@@ -391,7 +391,7 @@ def _prepare_candidates(
             )
             continue
 
-        if candidate.get("requires_opening_evidence") and not _verified_fact(
+        if candidate.get("requires_opening_evidence") and not _planning_fact(
             snapshot, place_id, "opening_interval"
         ):
             reconciliation[place_id] = _reconciliation(
@@ -913,9 +913,13 @@ def _apply_physical_load_limit(
 def _hotel_recommendation(
     snapshot: dict[str, Any], candidates: dict[str, dict[str, Any]]
 ) -> dict[str, Any] | None:
-    if snapshot["trip"].get("accommodation_status") != "unbooked":
+    accommodation_status = snapshot["trip"].get("accommodation_status")
+    fixed_base_id = snapshot["trip"].get("accommodation_base_id")
+    if accommodation_status not in {"unbooked", "booked"}:
         return None
     hotels = [item for item in candidates.values() if item.get("kind") == "hotel_area"]
+    if accommodation_status == "booked":
+        hotels = [item for item in hotels if _candidate_id(item) == fixed_base_id]
     destinations = [
         item
         for item in _selected_candidates(snapshot)
@@ -940,13 +944,22 @@ def _hotel_recommendation(
     runner = scored[1] if len(scored) > 1 else None
     return {
         "default_area_id": winner[2],
+        "basis": candidates[winner[2]].get("planning_basis", "known_route_matrix"),
         "total_known_travel_minutes": winner[1],
         "missing_route_count": winner[0],
         "runner_up_area_id": runner[2] if runner else None,
         "runner_up_total_known_travel_minutes": runner[1] if runner else None,
         "travel_delta_minutes": (runner[1] - winner[1]) if runner else None,
-        "pros": ["lower_whole_trip_known_travel"],
-        "cons": ["hotel_quality_price_and_room_fit_not_evaluated"],
+        "pros": (
+            ["booked_accommodation_used_as_base"]
+            if accommodation_status == "booked"
+            else ["lower_whole_trip_known_travel"]
+        ),
+        "cons": (
+            []
+            if accommodation_status == "booked"
+            else ["hotel_quality_price_and_room_fit_not_evaluated"]
+        ),
     }
 
 
@@ -1000,7 +1013,9 @@ def _candidate_id(candidate: dict[str, Any]) -> str:
 
 def _candidate_sort_key(snapshot: dict[str, Any], candidate: dict[str, Any]) -> tuple[Any, ...]:
     place_id = _candidate_id(candidate)
-    preferred = _verified_fact(snapshot, place_id, "best_time_interval") or _verified_fact(
+    preferred = _verified_fact(
+        snapshot, place_id, "best_time_interval"
+    ) or _planning_fact(
         snapshot, place_id, "opening_interval"
     )
     start = _minutes(preferred["value"]["start"]) if preferred else 0
@@ -1023,7 +1038,7 @@ def _duration(candidate: dict[str, Any], choice: str) -> int:
 def _opening_overlaps_trip(
     snapshot: dict[str, Any], candidate: dict[str, Any], config: dict[str, Any]
 ) -> bool:
-    fact = _verified_fact(snapshot, _candidate_id(candidate), "opening_interval")
+    fact = _planning_fact(snapshot, _candidate_id(candidate), "opening_interval")
     if not fact:
         return True
     duration = _duration(candidate, config["duration"])
@@ -1058,7 +1073,7 @@ def _earliest_visit_start(
     window = _window_for(snapshot, day)
     latest = _minutes(window["end"])
     start = current
-    opening = _verified_fact(snapshot, place_id, "opening_interval")
+    opening = _planning_fact(snapshot, place_id, "opening_interval")
     if opening:
         start = max(start, _minutes(opening["value"]["start"]))
         latest = min(latest, _minutes(opening["value"]["end"]))
@@ -1105,6 +1120,27 @@ def _verified_fact(
             if fact.get("subject_id") == subject_id
             and fact.get("fact_type") == fact_type
             and fact.get("status") == "verified"
+            and fact.get("value") is not None
+        ),
+        None,
+    )
+
+
+def _planning_fact(
+    snapshot: dict[str, Any], subject_id: str, fact_type: str
+) -> dict[str, Any] | None:
+    """Verified fact, or a visible assumption allowed only for an Explore preview."""
+
+    verified = _verified_fact(snapshot, subject_id, fact_type)
+    if verified or not snapshot.get("trip", {}).get("allow_provisional_assumptions"):
+        return verified
+    return next(
+        (
+            fact
+            for fact in snapshot.get("facts", [])
+            if fact.get("subject_id") == subject_id
+            and fact.get("fact_type") == fact_type
+            and fact.get("status") == "assumed"
             and fact.get("value") is not None
         ),
         None,
