@@ -209,9 +209,15 @@ Diagnose a `--check` failure by counting the wayfinder-sourced nodes before assu
 
 ## Wayfinder: decisions live in tickets
 
-`.wayfinder/map.md` indexes 17 closed decision tickets in `.wayfinder/tickets/`. Before changing
-scoring weights, optimizer rules, schema, or provider policy, read the relevant ticket — the "why" is
-there, not in the code. Reference tickets by linked title, never bare ID.
+There are **two maps**, and tickets are numbered continuously across both in `.wayfinder/tickets/`; a
+ticket's `parent:` field says which map it belongs to.
+
+- `.wayfinder/map.md` (`WF-MAP-001`, **closed**) indexes the 17 closed Phase 1 decision tickets.
+- `.wayfinder/map-002-splitter-merge-and-webapp.md` (`WF-MAP-002`, **open**) is Phase 2: merging
+  `Auto-Bill-Splitter` in as a group split ledger and replacing Streamlit with a local React webapp.
+
+Before changing scoring weights, optimizer rules, schema, or provider policy, read the relevant ticket —
+the "why" is there, not in the code. Reference tickets by linked title, never bare ID.
 
 Slices 1–4 are built and evidenced (foundation, setup+discovery, ranking, optimization). Slice 5 is
 **complete**, including the readiness checklist and owner-recorded costs: `exports.py` builds the one shared export snapshot; `app.py` renders the active-plan
@@ -233,3 +239,42 @@ pictographs — the wording alone still carries the state.
 Explicitly out of scope for Phase 1: FastAPI, React, Docker, Redis, background workers, remote
 collaboration, hosted notifications. `streamlit` is the only runtime dependency in `pyproject.toml`;
 keep it that way.
+
+## Phase 2 is being planned, not built — do not implement it yet
+
+`WF-MAP-002` is **open and unfinished**: 19 tickets, **3 closed, 16 open**, 7 of those on the frontier.
+The destination is a decision-complete specification, exactly as Phase 1's was, so **no Phase 2 code gets
+written until the map has no unresolved decisions**. Until then the Phase 1 out-of-scope rule above still
+binds: today `streamlit` remains the only runtime dependency, and there is no `api/` and no `web/`.
+
+Read the map before touching anything in this area. Work it one ticket per session — claim a ticket by
+setting its `assignee:` before doing any work, and only research tickets may be resolved more than one
+per session.
+
+Locked by the destination interview, so not open for re-litigation inside a ticket:
+
+- The planning core, `actions.py`, and `store.py` stay as they are behind a thin local HTTP layer. React
+  replaces `views/` and `app.py` only. The deterministic optimizer, the hash gates, the append-only plan
+  history, and the 202 tests all survive the redesign.
+- **Two linked ledgers**, not one merged record: cost rows stay the budget and estimate truth, the split
+  ledger records actual group spend. Reconciling them is an open ticket, not a detail.
+- Everything lands in this repository (`api/` + `web/`). `Auto-Bill-Splitter` is a read-only donor, then
+  archived.
+- Tokens are **rebuilt** in Tailwind, so visual parity with Auto-Bill is a hard gated requirement rather
+  than an aspiration — same palette, same zero-blur hard offset shadows, same fonts, same elements.
+- Bilingual `en`/`th` stays mandatory, and the key-parity test keeps running.
+- Local-only and owner-led: `localhost`, SQLite on disk, no accounts, no auth.
+- Streamlit is frozen at slices 1–5 as the fallback Taipei pilot vehicle. **Slice 6 is built only in
+  React** — never twice. So the "not yet built" note above is now a Phase 2 obligation, not a Streamlit one.
+
+Already decided, and binding on any future implementation:
+
+- Split math lives in a new pure `travel_planner/split.py` beside `costs.py`, under the same no-Streamlit,
+  no-SQLite, no-HTTP rule. The API returns resolved shares, balances, and settlement; the frontend renders
+  numbers it was given. One rounding implementation, so the screen, the workbook, and the PDF cannot
+  disagree by a satang.
+- Settlement is a star through the main cardholder with fronted cash netted off. Rows are editable and
+  void rather than delete, so the split ledger takes **no** append-only triggers.
+- `.wayfinder/artifacts/` holds the extracted Auto-Bill token contract and the element inventory matrix.
+  Consult them instead of re-reading 2458 lines of `index.css` — and note the token contract is known to be
+  incomplete for the ~18 classes that exist only as inline styles.

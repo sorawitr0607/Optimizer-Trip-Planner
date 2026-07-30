@@ -21,6 +21,21 @@
   this repository inherit the workflow; the installed `graphify` skill remains
   available globally for new sessions that trigger it.
 
+## The checked-in graph predates the Phase 2 map
+
+- `python3 scripts/build_project_graph.py --check` currently **fails** with
+  `Extraction produced no node for WF-018`. This is not the 2026-07-29 corruption:
+  no data was lost. `WF-MAP-002` and tickets `018`–`036` were charted after the
+  last rebuild, so the graph simply has no nodes for them yet.
+- Fixing it needs the paid rebuild (`OPENAI_API_KEY`), so it waits for an explicit
+  request or the next topology milestone — most sensibly once the Phase 2 map is
+  decision-complete, rather than once per resolved ticket.
+- Diagnose as the CLAUDE.md note says: count the wayfinder-sourced nodes first. A
+  missing *new* ticket is staleness; a missing *old* ticket is corruption.
+- The Phase 2 tickets carry long resolution prose, which is exactly what starved
+  ticket 012's extraction twice. Keep long findings in `.wayfinder/artifacts/` and
+  link them in one line from the ticket.
+
 ## Validation evidence belongs in bundles
 
 - Ticket 012 is an index. Put each validation run's numbers in
