@@ -132,6 +132,9 @@ def translated_multiselect(label: str, options, *, key: str, default=(), **kwarg
     values = list(options)
     saved = _seed(key, values, accept_new=bool(kwargs.get("accept_new_options")))
     start = [item for item in (default if saved is None else saved) if item in values]
+    # Streamlit's built-in placeholder is English, so an empty multiselect read
+    # "Choose options" next to a Thai label. Every translated one passes here.
+    kwargs.setdefault("placeholder", words()["choose_options"])
     return _remember(
         key, st.multiselect(label, values, default=start, key=_language_key(key), **kwargs)
     )

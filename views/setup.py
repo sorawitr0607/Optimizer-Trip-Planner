@@ -425,11 +425,13 @@ elif step == 4:
     )
 
 else:
-    setup_state, people, preference_count = st.columns(3)
-    setup_state.metric(
-        copy["setup_state"],
-        copy["confirmed_setup"] if already_confirmed else copy["draft_setup"],
+    # Third time this pattern has clipped: "Confirmed for discovery" became
+    # "Confirmed f…" in a third-width metric. A word-valued state is a text line.
+    st.write(
+        f"**{copy['setup_state']}:** "
+        f"{copy['confirmed_setup'] if already_confirmed else copy['draft_setup']}"
     )
+    people, preference_count = st.columns(2)
     people.metric(copy["people"], 1 + len(saved_members))
     preference_count.metric(
         copy["preferences"],

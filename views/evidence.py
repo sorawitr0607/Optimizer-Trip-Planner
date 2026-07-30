@@ -15,8 +15,10 @@ trip = shared.trip()
 if not shared.require("evidence", trip):
     st.stop()
 
-st.subheader(copy["routes"])
-st.caption(copy["routes_help"])
+# The stage holds three kinds of evidence, and one of its own cards is already
+# titled "Walking routes"; naming the stage after that card described neither.
+st.subheader(copy["stage_evidence"])
+st.caption(copy["evidence_help"])
 route_flash_key = f"route_flash_{trip.trip_id}"
 if route_flash := st.session_state.pop(route_flash_key, None):
     st.success(route_flash)
