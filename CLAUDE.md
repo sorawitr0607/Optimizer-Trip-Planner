@@ -253,7 +253,11 @@ and `streamlit` is the only one for the *interface*. Keep it that way.
 
 ## Phase 2 is being planned, not built — do not implement it yet
 
-`WF-MAP-002` is **open and unfinished**: 19 tickets, **8 closed, 11 open**, 8 of those on the frontier.
+`WF-MAP-002` is **open and unfinished**: 19 tickets, **7 closed, 12 open**, 7 of those on the frontier.
+`Extract the Auto-Bill design token contract` was **reopened** on 2026-07-31: the parity gate made it the
+target the rebuild is measured against, and it is incomplete for 39 inline-only classes and 114 inline style
+sites. Its ambiguities are already ruled on — do not re-litigate them; the remaining scope and its
+definition of done are written into the ticket.
 The destination is a decision-complete specification, exactly as Phase 1's was, so **no Phase 2 code gets
 written until the map has no unresolved decisions**. Until then the Phase 1 out-of-scope rule above still
 binds: today those four remain the only runtime dependencies, and there is no `api/` and no `web/`. The

@@ -1,11 +1,11 @@
 ---
 id: WF-020
 title: Extract the Auto-Bill design token contract
-status: closed
+status: open
 labels:
   - "wayfinder:research"
 parent: WF-MAP-002
-assignee: research-agent
+assignee:
 blocked_by: []
 ---
 
@@ -140,3 +140,53 @@ values a rebuild silently loses.
   and `.glassmorphic-card`'s only declaration is `box-shadow: var(--shadow-lg)`. Keep the hook —
   it is the documented off-switch — but do not assume it does anything.
 - Full contract: [`020-auto-bill-token-contract.md`](../artifacts/020-auto-bill-token-contract.md)
+
+### 2026-07-31 — Reopened: the contract is incomplete and the parity gate is blocked on it
+
+[Define the visual parity gate for the Tailwind rebuild](025-define-the-visual-parity-gate-for-the-tailwind-rebuild.md)
+made this contract the **target** the rebuild is measured against, then re-measured its blind spot against
+the sources. The extraction above is sound; it is not finished.
+
+Measured, and reproducible — every hyphenated token inside a `className` across `src/**/*.jsx`, minus every
+`.class` selector anywhere in `src/index.css`:
+
+| Measure | Said above | Measured |
+|---|---|---|
+| JSX classes with no CSS rule | ~28 styled only inline | **39** |
+| Inline `style={{…}}` sites | — | **114** (88 Dashboard / 16 Modal / 10 Wizard) |
+| Distinct class selectors in `index.css` | — | **250** |
+
+**Remaining work, and what "done" means this time:**
+
+1. **The 39 classes with no CSS rule.** Grouped in §"The 39" of
+   [`025-visual-parity-gate.md`](../artifacts/025-visual-parity-gate.md). Three groups carry real weight: the
+   six filter-dimming classes; the five split-allocation-mode classes plus three settlement classes and
+   `.main-cardholder-select`, which together are **`/split`'s entire layout with no stylesheet to lift from**;
+   and the four `*-tab-view` classes, which mean **Auto-Bill does have tabs** — inline-styled, which is why
+   the element inventory reported none. Seven of the 39 are Tailwind-shaped names that were never written
+   (`.flex-between`, `.flex-column`, `.grid-2-columns`, `.padding-y-4`, `.text-bold`, `.text-amber`,
+   `.text-purple`) and dissolve into real Tailwind v4 utilities, so they need recording but not designing.
+2. **The 114 inline `style={{…}}` sites**, whose values exist nowhere in the stylesheet.
+3. **The off-token literals** already listed in §9d–9e of the artifact, promoted from prose into the token
+   table so the allowlist can lint against them.
+4. **Three hardcoded hexes in the planner**, which the element inventory asked this ticket to absorb:
+   `views/itinerary.py:94,104` (`#2A6FB4` flexible, `#B4532A` locked) and `#E0A32E` (hotel anchor).
+5. **The eight export hexes**, for the same reason — `exporters.py` carries `#F2F5F7`, `#A9BECD`, `#8FB8D8`,
+   `#2A3B49`, `#101820`, `#F2C14E`, `#E8EEF3`, `#6C8598` across 17 occurrences, a cool blue-grey palette
+   matching nothing in Auto-Bill. `WF-025` decided colour gets one machine-readable source both renderers
+   read, and this table is that source.
+
+**Not in scope for the reopen:** the seven ambiguities are already **ruled on** — do not re-litigate them.
+Radius unifies on `2px`; the dead dark accent, blue fallback, stale blue, untokenised `#8b5cf6` and the
+divergent country tables are fixed as deviations D1–D6; faux bold monospace belongs to `Decide the offline
+asset policy for the webapp`; `.landing-wizard-side`'s duplicate declaration is cleanup. The drafted
+Tailwind **v3** JS config in the artifact is reference material only — `WF-026` chose v4 with CSS-first
+`@theme`, so the contract's output shape is custom properties, not a JS object.
+
+**Nothing in the map is blocked on this.** It blocks *running* the parity gate, which is implementation, not
+a decision — so no `blocked_by` edges were added. `WF-025` stays closed: the gate is defined, and completing
+its target is the first of its five ordered prerequisites.
+
+**One ordering constraint carries over:** `WF-025` also requires the 41 lifted elements to be captured from
+the donor **before `Auto-Bill-Splitter` is archived**. That capture and this extraction both need the donor
+runnable, so they should happen together.

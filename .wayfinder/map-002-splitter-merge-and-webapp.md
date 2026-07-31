@@ -57,7 +57,12 @@ resolving tickets are throwaway artifacts, not the build.
 <!-- Closed-ticket index. The detailed decision belongs in its ticket. -->
 
 - [Extract the Auto-Bill design token contract](tickets/020-extract-the-auto-bill-design-token-contract.md) —
-  The visual language is captured exactly in [`020-auto-bill-token-contract.md`](artifacts/020-auto-bill-token-contract.md):
+  **REOPENED 2026-07-31.** The extraction below stands and its ambiguities are now ruled on, but the parity
+  gate made this contract the *target* the rebuild is measured against, and re-measuring found the blind spot
+  larger than stated: **39** JSX classes have no CSS rule (not ~28) across **114** inline style sites. The gate
+  cannot run until they are absorbed, so the ticket is back on the frontier with the remaining work and its
+  definition of done written into it. Its output shape is now custom properties, not the drafted v3 JS config.
+  The visual language is captured in [`020-auto-bill-token-contract.md`](artifacts/020-auto-bill-token-contract.md):
   23 light / 21 dark custom properties, a zero-blur hard-offset shadow scale that must **replace** Tailwind's
   soft default rather than extend it, 5 desktop-first max-width breakpoints, and a 13-country inline accent
   override — plus 7 unresolved ambiguities (the dark accent triple is dead code, two radius systems coexist,
