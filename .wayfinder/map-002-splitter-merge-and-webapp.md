@@ -159,6 +159,22 @@ resolving tickets are throwaway artifacts, not the build.
   pilot-ready gate — look like a different product; colour therefore gets one machine-readable source both
   renderers read, on `WF-018`'s precedent. Radius unifies on `2px`, finishing what the contract reads as an
   unfinished sharp restyle.
+- [Decide cost-and-split reconciliation rules](tickets/023-decide-cost-and-split-reconciliation-rules.md) —
+  **A split row may claim a cost row via one optional `cost_id`, and the claimed row defers its actual.**
+  Nothing is added to the cost row and `payment_state` is untouched, because claimed-ness is derived — so
+  `planned` is every cost row and `actual` is non-voided split rows **plus unclaimed paid cost rows**, which
+  makes double counting structurally impossible rather than merely discouraged. Arithmetic and model
+  additions in [`023-cost-and-split-reconciliation.md`](artifacts/023-cost-and-split-reconciliation.md).
+  Three findings shape it. **`costs.totals()`' `estimated_thb` sums non-paid rows only**, so a row later
+  marked paid drops out of it — correct for "still to pay", wrong as the plan figure, so `planned_thb` and
+  `actual_thb` are **added** while no existing key is redefined. **The category mapping is nearly free**: the
+  two vocabularies differ by two plurals and `fees`, so the seven become the default tag vocabulary and most
+  trips need no mapping. And **`group_preference_weights` is a trap** — `setup.py` already computes
+  per-traveller weights, but they are a *taste* weight feeding only `ranking.py`, and using them for money
+  would charge the owner half the trip; estimated per-person is `planned_thb / headcount`, actual comes from
+  `split.py`'s shares. Split rows inherit the cost snapshot with the buffer skipped, gaps warn without ever
+  blocking export, and a per-traveller **settled marker** closes this map's fog item without reversing
+  WF-018 — cleared automatically whenever that traveller's balance changes.
 
 ## Not yet specified
 
@@ -167,14 +183,15 @@ resolving tickets are throwaway artifacts, not the build.
 - Whether the 45-site `PlannerRefusal` migration is its own ticket. The 26-code vocabulary is locked by
   the API contract, but the migration fixes a *Phase 1* bilingual defect and is therefore **not** gated by
   this map's decision gate. Sharp enough to ticket as soon as the owner wants it sequenced.
-- Whether a trip that is fully settled in real life gets any marker at all, given that settlement payments
-  are deliberately not recorded — and whether that matters once the trip is over rather than mid-trip.
 - Whether voided split rows appear in the PDF and Excel exports, or only in the app where the owner can see
   why a total moved.
 - How slice 6's free-text GenAI revision presents itself in the new design, and whether its typed-intent
   preview survives as a modal, a diff panel, or something else.
-- Whether per-person cost data should feed anything upstream (affordability in ranking, budget caps in
-  optimization) or stay strictly downstream reporting.
+- Whether per-person cost data should feed anything **upstream** — affordability in ranking, budget caps in
+  optimization. Narrowed by the reconciliation ticket, which settled the downstream half: estimated
+  per-person is `planned_thb / headcount` on the cost overview, actual per-person comes from `split.py`'s
+  resolved shares, and neither touches `group_preference_weights`. Whether either figure should influence
+  scoring or scheduling is still open, and would be a Phase 1 contract change rather than a UI decision.
 - Whether the donut and vertical bar charts have any planner use at all. The element inventory found no
   distribution the planner charts today; the only candidate is the ranking dimension breakdown, which is
   already a table with an explicit per-dimension maximum.

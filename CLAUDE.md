@@ -253,7 +253,7 @@ and `streamlit` is the only one for the *interface*. Keep it that way.
 
 ## Phase 2 is being planned, not built — do not implement it yet
 
-`WF-MAP-002` is **open and unfinished**: 19 tickets, **7 closed, 12 open**, 8 of those on the frontier.
+`WF-MAP-002` is **open and unfinished**: 19 tickets, **8 closed, 11 open**, 8 of those on the frontier.
 `Extract the Auto-Bill design token contract` was **reopened** on 2026-07-31: the parity gate made it the
 target the rebuild is measured against, and it is incomplete for 39 inline-only classes and 114 inline style
 sites. Its ambiguities are already ruled on — do not re-litigate them; the remaining scope and its
@@ -342,6 +342,18 @@ Already decided, and binding on any future implementation:
   ancestor. Auto-Bill's defects are **fixed and recorded as deviations D1–D7** — without that register every
   fix reads as a parity failure. Radius unifies on `2px`. See
   `.wayfinder/artifacts/025-visual-parity-gate.md`.
+- Cost/split reconciliation: **a split row may claim a cost row via one optional `cost_id`, and the claimed
+  row defers its actual.** Nothing is added to the cost row and `payment_state` is untouched — claimed-ness is
+  derived — so `planned` is every cost row and `actual` is non-voided split rows **plus unclaimed paid cost
+  rows**, making double counting structurally impossible. `costs.totals()` **gains** `planned_thb` and
+  `actual_thb` and redefines nothing, because its `estimated_thb` sums non-paid rows only and so is not the
+  plan figure. The seven categories become the default tag vocabulary. Split rows inherit the cost rate
+  snapshot with **`buffer_percent` skipped**. Gaps warn and never block. See
+  `.wayfinder/artifacts/023-cost-and-split-reconciliation.md`.
+- **`group_preference_weights` is not a cost weight.** `setup.py:93`–`97` gives the owner 0.5 and members
+  0.5 between them, it feeds only `ranking.py`, and it expresses *taste*. Using it for money would charge the
+  owner half the trip. Estimated per-person is `planned_thb / headcount`; actual per-person comes from
+  `split.py`'s resolved shares.
 - **Colour gets one machine-readable source that both renderers read.** `exporters.py` hardcodes 8 hexes
   across 17 occurrences in a cool blue-grey palette matching nothing in Auto-Bill, and
   `views/itinerary.py:94,104` adds three pin hexes — so the poster, PDF and workbook currently look like a

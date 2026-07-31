@@ -1,11 +1,11 @@
 ---
 id: WF-023
 title: Decide cost-and-split reconciliation rules
-status: open
+status: closed
 labels:
   - "wayfinder:grilling"
 parent: WF-MAP-002
-assignee:
+assignee: user-and-root
 blocked_by:
   - WF-018
 ---
@@ -58,3 +58,53 @@ Decide at least: whether a split transaction may claim a cost row and, if so, wh
 payment state; which number is headline in the UI and in exports; how a partially settled trip is reported;
 whether an unreconciled difference is a visible gap, a warning, or an error; and whether the split ledger
 inherits the cost ledger's rate snapshot or keeps its own.
+
+## Resolution comments
+
+### 2026-07-31 — Decided through the reconciliation interview
+
+The arithmetic, the model additions and what is left open are in
+[`023-cost-and-split-reconciliation.md`](../artifacts/023-cost-and-split-reconciliation.md).
+
+- **A split row may claim a cost row, and the claimed row defers its actual.** The split row gains one
+  optional `cost_id`, alongside the `plan_day` and `place_id` links WF-018 already gave it. **Nothing is
+  added to the cost row and `payment_state` is untouched** — "claimed" is derived from whether any non-voided
+  split row references it, so there is no second state to keep in sync. The arithmetic:
+  `planned` = every cost row; `actual` = non-voided split rows **plus unclaimed paid cost rows**. Double
+  counting is then structurally impossible, because a paid cost row either defers to a split row or supplies
+  its own actual, never both. This also keeps `paid` useful for the case it is good at — an expense the owner
+  paid that nobody splits, which would otherwise need a one-participant split row. Several split rows may
+  claim one cost row and their THB sums; a claimed row's own `actual_thb` becomes inert and the UI must say
+  why; unclaiming is just clearing `cost_id`.
+- **`costs.totals()` gains two keys and redefines none.** Reading it closely turned up a mismatch:
+  `estimated_thb` sums **non-paid rows only** (`unpaid = [not in LOCKED_STATES]`), so a row estimated at 1,200
+  and later marked paid drops out of it entirely. That is right for "what is still to pay" but it is not the
+  plan figure, and plan-versus-actual per category needs every row's estimate. So `planned_thb` and
+  `actual_thb` are added, with a parallel per-category breakdown, while `estimated_thb`, `paid_thb`,
+  `total_thb` and `by_category` keep their current meanings — a redefinition would land identically in the
+  app, the PDF and the workbook, wrong in three places at once.
+- **The comparison is read on the cost screen, per category** — planned, actual, difference — because the
+  owner described the cost plan *as* the overview breakdown. `/split` stays transactions plus Auto-Bill's
+  aggregates. The cost screen therefore reads from both ledgers, which is the price of putting the comparison
+  somewhere useful.
+- **The seven categories are the default tag vocabulary.** The two vocabularies are almost identical — two
+  differ only by plural and `fees` is the only category with no counterpart — so **most trips need no mapping
+  at all** and lifted Auto-Bill rows land correctly. Owner additions are assigned to one of the seven,
+  defaulting to `other`. The map lives at one boundary, for the reason WF-018 gave: the accommodation
+  vocabulary that silently killed hotel-area recommendations.
+- **Cost per person uses two mechanisms deliberately:** estimated is `planned_thb / headcount`
+  (owner + members); actual comes from `split.py`'s resolved shares, inheriting WF-018's single rounding
+  implementation. **The trap named and avoided:** `setup.py:93`–`97` already computes per-traveller weights
+  where the owner gets 0.5 and members share 0.5 — but the field is `group_preference_weights`, it feeds only
+  `ranking.py`, and it is a *taste* weight. Using it for money would charge the owner half the trip
+  regardless of headcount.
+- **Split rows inherit the cost ledger's timestamped snapshot**, including its refusal to invent a missing
+  rate, with **one documented exception: `buffer_percent` is skipped for split rows**, since the buffer pads
+  estimates and applying it to money already spent would inflate history.
+- **An unreconciled difference is a visible, non-blocking gap**, following the readiness board
+  (`blocks_itinerary` always False) and `totals()`' existing behaviour. Blocking export was rejected outright:
+  `WF-022` made the exports a pilot-ready gate and they are what the owner carries in Taipei.
+- **A per-traveller settled marker**, which closes the map's own fog item without reversing WF-018 — it
+  records that the owner considers a balance done, not an amount or a transfer. **Staleness rule decided
+  rather than left open: any change to a marked traveller's balance clears their marker**, because a marker
+  that survives new debt is a lie. Balance wording stays a *suggestion* regardless, as WF-031 requires.
