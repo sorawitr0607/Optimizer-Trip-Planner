@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 uv run streamlit run app.py                                          # run the app
-uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 202 tests, ~7s
+uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 235 tests, ~13s
 uv run --locked python -m unittest tests.test_optimizer.OptimizerCoreTest.test_safe_route_and_weather_fallback_are_selected  # one test
 python3 scripts/validate_regression_fixtures.py                      # fixture catalog structure
 uv run --locked python scripts/run_optimizer_regressions.py          # 27 historic cases through the real optimizer
@@ -232,8 +232,11 @@ day summary, timeline, and numbered map; `exporters.py` writes the 9:16 poster P
 the six-sheet Excel workbook — all three snapshot-in, bytes-out. `checklist.py` generates the readiness board and `costs.py` converts owner-recorded
 expenses into THB against an owner-editable, timestamped rate snapshot; a paid charge locks its actual
 THB so a later rate cannot rewrite it, and a missing rate stays a visible gap rather than a guess.
-**Not yet built:** all of slice 6 (non-AI quick actions, then optional
-constrained GenAI revision, then the live Taipei pilot). Every new output must read
+**Slice 6's core exists but only behind the POC UI:** `revision.py`'s non-AI quick actions (`a7ad537`) and
+`interpret.py`'s constrained GenAI revision (`a2d59f6`) landed 2026-07-29 with tests, wired into
+`views/revise.py`. The pure modules survive the redesign; their Streamlit surfaces are POC code awaiting
+deletion, so **slice 6 still has to be built in the webapp** and the live pilot remains unbuilt. Every new
+output must read
 `build_export_snapshot()` rather than the raw variant — that is what keeps their times, totals, and
 statuses from diverging. Complete a slice vertically with its own runnable check before starting the next.
 
@@ -250,7 +253,7 @@ and `streamlit` is the only one for the *interface*. Keep it that way.
 
 ## Phase 2 is being planned, not built — do not implement it yet
 
-`WF-MAP-002` is **open and unfinished**: 19 tickets, **4 closed, 15 open**, 8 of those on the frontier.
+`WF-MAP-002` is **open and unfinished**: 19 tickets, **5 closed, 14 open**, 7 of those on the frontier.
 The destination is a decision-complete specification, exactly as Phase 1's was, so **no Phase 2 code gets
 written until the map has no unresolved decisions**. Until then the Phase 1 out-of-scope rule above still
 binds: today those four remain the only runtime dependencies, and there is no `api/` and no `web/`. The
@@ -264,7 +267,7 @@ Locked by the destination interview, so not open for re-litigation inside a tick
 
 - The planning core, `actions.py`, and `store.py` stay as they are behind a thin local HTTP layer. React
   replaces `views/` and `app.py` only. The deterministic optimizer, the hash gates, the append-only plan
-  history, and the 202 tests all survive the redesign.
+  history, and the 235 tests all survive the redesign.
 - **Two linked ledgers**, not one merged record: cost rows stay the budget and estimate truth, the split
   ledger records actual group spend. Reconciling them is an open ticket, not a detail.
 - Everything lands in this repository (`api/` + `web/`). `Auto-Bill-Splitter` is a read-only donor, then
@@ -273,8 +276,19 @@ Locked by the destination interview, so not open for re-litigation inside a tick
   than an aspiration — same palette, same zero-blur hard offset shadows, same fonts, same elements.
 - Bilingual `en`/`th` stays mandatory, and the key-parity test keeps running.
 - Local-only and owner-led: `localhost`, SQLite on disk, no accounts, no auth.
-- Streamlit is frozen at slices 1–5 as the fallback Taipei pilot vehicle. **Slice 6 is built only in
-  React** — never twice. So the "not yet built" note above is now a Phase 2 obligation, not a Streamlit one.
+- **Streamlit is the POC that proved the core works — not a product, not a pilot fallback.** It stays in
+  the tree unmaintained (`views/` need not stay green) and `views/`, `app.py` and `ui/` are deleted once
+  the webapp reaches parity across all 8 stages. Slice 6 is built as part of the webapp. Schema is fully
+  unconstrained — there is no tag, no downgrade path, no restorable old checkout. The webapp is the
+  **committed** vehicle for the pilot with a **1 November 2026** checkpoint; not on track means Taipei is
+  planned by hand in Excel, as the four reference trips were.
+- **Validation compares generated output against the four reference workbooks in
+  `data/reference-itineraries/`, programmatically — never against Streamlit's output.** Their four
+  recurring sheets (`ตารางเวลา`, `ค่าใช้จ่าย`, `♢ To-Do List`, `☺ Things to Bring`) are the merged app's
+  entire output surface, so they validate the merge itself. Comparison asserts structural coverage, not
+  cell equality: the workbooks are hand-made and inconsistent. Reading them needs `openpyxl` as a **dev**
+  dependency; the four runtime dependencies stay untouched. See
+  `.wayfinder/artifacts/022-streamlit-poc-retirement-and-pilot-commitment.md`.
 
 Already decided, and binding on any future implementation:
 

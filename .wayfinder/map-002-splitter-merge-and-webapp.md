@@ -24,7 +24,7 @@ resolving tickets are throwaway artifacts, not the build.
 - Locked by the destination interview (2026-07-31), not open for re-litigation inside tickets:
   - The Python planning core, `actions.py`, and `store.py` stay as they are. A thin local HTTP layer
     exposes `PlannerActions`. React replaces `views/*.py` and `app.py` only. The deterministic
-    optimizer, hash gates, append-only history, and the 202 tests survive the redesign.
+    optimizer, hash gates, append-only history, and the 235 tests survive the redesign.
   - **Two linked ledgers.** Planner cost rows stay the budget/estimate truth; the split ledger records
     actual group spend keyed to the trip. Reconciliation between them is an explicit open problem with
     its own ticket, not a detail.
@@ -38,8 +38,14 @@ resolving tickets are throwaway artifacts, not the build.
     stable codes, and the key-parity test keeps running. Auto-Bill-derived elements gain Thai strings
     they never had.
   - Local-only, single owner: `localhost` API plus local frontend, SQLite on disk, no accounts, no auth.
-  - Streamlit is frozen at slices 1–5 as the fallback Taipei pilot vehicle. Slice 6 (non-AI quick
-    actions, constrained GenAI revision, live pilot) is built **only** in React — never twice.
+  - **Streamlit is the POC that proved the core works — not a product and not a pilot fallback.** It stays
+    in the tree unmaintained while the webapp is built, and `views/`, `app.py` and `ui/` are deleted once
+    the webapp reaches parity across all 8 stages. Slice 6 is built as part of the webapp, so the earlier
+    "never twice" concern is spent rather than traded away. **The webapp is the committed vehicle for the
+    pilot**, with a 1 November 2026 checkpoint; if it is not on track, Taipei is planned by hand in Excel
+    as the four reference trips were. Superseded the original freeze-and-fallback framing by owner
+    decision on 2026-07-31 — see [Decide the Streamlit freeze and pilot fallback
+    rules](tickets/022-decide-the-streamlit-freeze-and-pilot-fallback-rules.md).
 - The Phase 1 "why" lives in [`map.md`](map.md) and its 17 closed tickets. Read the relevant ticket
   before contradicting a scoring weight, optimizer rule, schema choice, or provider policy. This map
   may re-decide the UI; it may not silently re-decide Phase 1's planning contracts.
@@ -86,6 +92,18 @@ resolving tickets are throwaway artifacts, not the build.
   hygiene, since `set_paid_cap` and `delete_trip` are exposed RPCs. Hashes are **exposed and never
   accepted**; long operations block behind a persisted in-flight marker and never invent a progress
   percentage, because Overpass emits no signal to report.
+- [Decide the Streamlit freeze and pilot fallback rules](tickets/022-decide-the-streamlit-freeze-and-pilot-fallback-rules.md) —
+  **The ticket's question was voided by an owner reframing**: Streamlit is the POC that proved the core
+  works, not a pilot vehicle, so there is no tag, no downgrade path and no schema constraint. It stays
+  unmaintained in the tree — `views/` need not stay green — and is deleted at 8-stage parity. Slice 6 is
+  built as part of the webapp. The webapp is the **committed** pilot vehicle with a **1 November 2026**
+  checkpoint; not on track means Taipei is planned by hand in Excel, as the four reference trips were.
+  The finding that outlives the ticket: the reference workbooks' four recurring sheets — `ตารางเวลา`,
+  `ค่าใช้จ่าย`, `♢ To-Do List`, `☺ Things to Bring` — **are the merged app's entire output surface**, so
+  they validate the merge itself rather than only the itinerary, and `ค่าใช้จ่าย` sharing a workbook with
+  `ตารางเวลา` is the owner's own four-trip precedent for merging the splitter in. Validation is
+  programmatic against all four sheet types; details and the accepted consequence in
+  [`022-streamlit-poc-retirement-and-pilot-commitment.md`](artifacts/022-streamlit-poc-retirement-and-pilot-commitment.md).
 
 ## Not yet specified
 

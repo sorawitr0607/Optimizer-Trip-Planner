@@ -20,7 +20,7 @@ cover, and what is the one command that says the project is green?
 
 ## Context
 
-- The suite today is `unittest` only, no fixtures framework, no network, no paid API: 202 tests in about 7
+- The suite today is `unittest` only, no fixtures framework, no network, no paid API: 235 tests in about 13
   seconds, run as
   `uv run --locked python -m unittest discover -s tests -p 'test_*.py'`. Alongside it,
   `scripts/run_optimizer_regressions.py` replays 27 historic cases — 20 atomic plus 7 interaction failures
