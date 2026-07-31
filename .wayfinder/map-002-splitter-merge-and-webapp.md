@@ -175,6 +175,21 @@ resolving tickets are throwaway artifacts, not the build.
   `split.py`'s shares. Split rows inherit the cost snapshot with the buffer skipped, gaps warn without ever
   blocking export, and a per-traveller **settled marker** closes this map's fog item without reversing
   WF-018 — cleared automatically whenever that traveller's balance changes.
+- [Decide which exporter survives, Python or JavaScript](tickets/030-decide-which-exporter-survives.md) —
+  **Python survives; `excelExporter.js` is deleted and `exceljs`/`file-saver` never join `web/`.** Decided on
+  `CLAUDE.md`'s one-snapshot rule (one generator is the only way it can hold), on **25 tests against 0**, and
+  on the fact that only Python has PDF, poster and ICS at all. Contract in
+  [`030-exporter-and-download-contract.md`](artifacts/030-exporter-and-download-contract.md). Downloads use
+  dedicated `GET` routes with `Content-Disposition`, because phone download behaviour decides it and these
+  files are the Taipei artifact — **a deliberate exception to the RPC convention that weakens one guard**,
+  since a `GET` carries no `Content-Type` and so rests on the `Host` allowlist alone, with the written rule
+  that bare `GET` reaches downloads and nothing else. Auto-Bill's **backup JSON is the migration channel**,
+  because a file survives archiving where `localStorage` does not — so one dated pre-archive action now covers
+  this and WF-025's 41 element captures. **The split ledger gets its own workbook**, for a purpose the exports
+  never had: a money file can be handed to a traveller without handing over the itinerary. That collided with
+  WF-023, resolved explicitly: planned-versus-actual lands in the plan workbook's Costs sheet as **values, not
+  formulas**, since there is nothing in the same file to point at — so an export is a snapshot of a plan
+  version, not a live document, and the sheet must say so.
 
 ## Not yet specified
 

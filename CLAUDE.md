@@ -253,7 +253,7 @@ and `streamlit` is the only one for the *interface*. Keep it that way.
 
 ## Phase 2 is being planned, not built — do not implement it yet
 
-`WF-MAP-002` is **open and unfinished**: 19 tickets, **8 closed, 11 open**, 8 of those on the frontier.
+`WF-MAP-002` is **open and unfinished**: 19 tickets, **9 closed, 10 open**, 7 of those on the frontier.
 `Extract the Auto-Bill design token contract` was **reopened** on 2026-07-31: the parity gate made it the
 target the rebuild is measured against, and it is incomplete for 39 inline-only classes and 114 inline style
 sites. Its ambiguities are already ruled on — do not re-litigate them; the remaining scope and its
@@ -342,6 +342,19 @@ Already decided, and binding on any future implementation:
   ancestor. Auto-Bill's defects are **fixed and recorded as deviations D1–D7** — without that register every
   fix reads as a parity failure. Radius unifies on `2px`. See
   `.wayfinder/artifacts/025-visual-parity-gate.md`.
+- **The Python exporters survive; `excelExporter.js` is deleted and `exceljs`/`file-saver` never join `web/`.**
+  One generator is the only way `build_export_snapshot()`'s one-snapshot rule can hold, the 25 export tests
+  have no JS counterpart, and only Python has PDF, poster and ICS. **Two workbooks**: a plan file and a
+  shareable money file, both from the same snapshot — so the money file carries no itinerary, no addresses and
+  no readiness evidence. Planned-versus-actual lands in the plan workbook's Costs sheet as **values, not
+  formulas**, because there is nothing in the same file to point at; an export is a snapshot, not a live
+  document. Downloads are dedicated `GET` routes with `Content-Disposition` — **an exception to the RPC
+  convention, and bare `GET` may reach downloads and nothing else**, never a mutation or a paid call, because
+  a `GET` carries no `Content-Type` for the guard to check. See
+  `.wayfinder/artifacts/030-exporter-and-download-contract.md`.
+- **Two things must be taken from `Auto-Bill-Splitter` before it is archived**: a backup JSON per trip (the
+  migration channel — a file survives archiving, `localStorage` does not) and the 41 lifted element captures
+  for the parity gate. Both need the donor runnable.
 - Cost/split reconciliation: **a split row may claim a cost row via one optional `cost_id`, and the claimed
   row defers its actual.** Nothing is added to the cost row and `payment_state` is untouched — claimed-ness is
   derived — so `planned` is every cost row and `actual` is non-voided split rows **plus unclaimed paid cost
