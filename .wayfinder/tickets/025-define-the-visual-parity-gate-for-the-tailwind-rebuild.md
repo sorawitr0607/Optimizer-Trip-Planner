@@ -1,11 +1,11 @@
 ---
 id: WF-025
 title: Define the visual parity gate for the Tailwind rebuild
-status: open
+status: closed
 labels:
   - "wayfinder:grilling"
 parent: WF-MAP-002
-assignee:
+assignee: user-and-root
 blocked_by:
   - WF-020
 ---
@@ -63,3 +63,51 @@ Decide at least: the artifact that defines the target (extracted token table, re
 running Auto-Bill app itself); whether checking is manual review, a token-diff test, screenshot comparison,
 or a linted allowlist of permitted values; who signs off; and what the gate does for elements that never
 existed in Auto-Bill.
+
+## Resolution comments
+
+### 2026-07-31 — Decided through the parity interview
+
+The gate's full definition, the deviation register, the failure conditions and the ordered prerequisites are
+in [`025-visual-parity-gate.md`](../artifacts/025-visual-parity-gate.md).
+
+**The inline-only count is reconciled, and both prior figures undercount.** Measured against the sources:
+**39** JSX classes have no CSS rule (not 18 or 28), across **114** inline `style={{…}}` sites (88 Dashboard /
+16 Modal / 10 Wizard), against **250** distinct class selectors in `index.css`. `WF-021` counted renderable
+elements and `WF-020` a different slice, so neither was wrong for what it measured — but **the contract's
+blind spot is larger than either ticket assumed**. Three groups matter most: the six filter-dimming classes,
+the five split-allocation-mode classes plus three settlement classes (which is the `/split` screen's entire
+layout), and **seven Tailwind-shaped names that were never written** and now dissolve into real v4 utilities
+for free. Also noted: Auto-Bill *does* have tab views, styled inline only, which is why the inventory
+reported none.
+
+- **The target is the token contract, but the gate is blocked until it is completed** for those 39 classes,
+  the 114 inline sites, the off-token literals, and the 3 hardcoded pin hexes in `views/itinerary.py`. It is
+  chosen over the running app because the donor gets archived, so an app-anchored gate expires by design.
+- **Checking is screenshot comparison at two levels, and only one of them is parity.** Whole-screen diffs
+  against the donor are impossible — Auto-Bill has 2 screens, the planner has 9 routes. So: **element-level**
+  diffs of the 41 lifted elements rendered in isolation in both projects, which **must be captured before
+  `Auto-Bill-Splitter` is archived**; plus **screen-level** regression baselines of the rebuild, which catch
+  drift but do not prove parity and must not be described as if they do.
+- **4 baselines per screen, 36 total** — light/dark × en/th. The 13 accents collapse to a token assertion
+  because the accent is a single inline custom property on `<html>`: it can recolour a pixel but never move
+  one. Thai gets its own baseline per theme so Thai metrics never cause a false failure, captures happen on
+  one fixed machine, and a pixel tolerance must be agreed when the harness is built.
+- **Elements with no counterpart pass on token-only conformance plus a declared ancestor**, which the
+  inventory already assigned for all 18. The numbered map canvas is explicitly exempt — `WF-021` found the
+  visual language does not extend to it — though the stop list beneath it derives from the donut legend.
+- **Auto-Bill's defects are fixed and recorded in a deviation register (D1–D7).** Without the register the
+  gate cannot function: every intentional fix would read as a parity failure. Faux bold monospace stays with
+  `WF-034`; the duplicated `.landing-wizard-side` is cleanup, not a deviation; and the fallbacks' currency
+  disagreement is moot because the planner has its own currency handling.
+- **Radius unified on `2px`**, pills exempt. This finishes what `WF-020` reads as an unfinished sharp
+  restyle, dissolves two ambiguities at once, and collapses 11 radius values to one. Accepted as a real
+  visual change: charts, badges and the modal will read sharper than the donor.
+- **Colour data gets one machine-readable source that both renderers read.** This closes a parity hole
+  nobody had noticed: `exporters.py` hardcodes **8 hexes across 17 occurrences** in a cool blue-grey palette
+  that matches nothing in Auto-Bill, so the poster, PDF and workbook currently look like a different
+  product — and `WF-022` already made those exports a pilot-ready gate. The precedent is `WF-018`'s: one
+  implementation so the screen, the workbook and the PDF cannot disagree. It also names the five
+  undocumented tint alphas and de-duplicates the category and participant palettes.
+
+Sign-off is the owner; single-owner is a locked destination decision, so there is nobody else.

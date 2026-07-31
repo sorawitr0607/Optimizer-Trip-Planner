@@ -137,6 +137,23 @@ resolving tickets are throwaway artifacts, not the build.
   own wizard-then-dashboard shape was rejected: it destroys the journey model. **This changes
   [Prototype the merged cost and split screen](tickets/031-prototype-the-merged-cost-and-split-screen.md)'s
   premise** — there is no merged screen, and a dated note records it.
+- [Define the visual parity gate for the Tailwind rebuild](tickets/025-define-the-visual-parity-gate-for-the-tailwind-rebuild.md) —
+  The target is the **token contract, completed first**; checking is screenshot comparison at two levels;
+  new elements pass on **token conformance plus a declared ancestor**; and Auto-Bill's own defects are
+  **fixed and recorded in a deviation register (D1–D7)**, without which every intentional fix would read as
+  a parity failure. Full definition, failure conditions and ordered prerequisites in
+  [`025-visual-parity-gate.md`](artifacts/025-visual-parity-gate.md). Three findings reshape the work.
+  **The inline-only count reconciles to 39, not 18 or 28** — across 114 inline style sites — so the
+  contract's blind spot is larger than either earlier ticket assumed, and `/split`'s entire layout
+  (5 allocation-mode classes, 3 settlement classes, the cardholder selector) exists nowhere in the
+  stylesheet. **Whole-screen diffs against the donor are impossible** — 2 donor screens against 9 routes —
+  so element-level parity captures must be taken **before `Auto-Bill-Splitter` is archived**, while
+  screen-level baselines (4 per route: light/dark × en/th, with the 13 accents asserted as tokens rather
+  than imaged) only catch drift. And **`exporters.py` hardcodes 8 hexes across 17 occurrences in a cool
+  blue-grey palette matching nothing in Auto-Bill**, so the poster, PDF and workbook — already a
+  pilot-ready gate — look like a different product; colour therefore gets one machine-readable source both
+  renderers read, on `WF-018`'s precedent. Radius unifies on `2px`, finishing what the contract reads as an
+  unfinished sharp restyle.
 
 ## Not yet specified
 

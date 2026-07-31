@@ -253,7 +253,7 @@ and `streamlit` is the only one for the *interface*. Keep it that way.
 
 ## Phase 2 is being planned, not built — do not implement it yet
 
-`WF-MAP-002` is **open and unfinished**: 19 tickets, **7 closed, 12 open**, 8 of those on the frontier.
+`WF-MAP-002` is **open and unfinished**: 19 tickets, **8 closed, 11 open**, 8 of those on the frontier.
 The destination is a decision-complete specification, exactly as Phase 1's was, so **no Phase 2 code gets
 written until the map has no unresolved decisions**. Until then the Phase 1 out-of-scope rule above still
 binds: today those four remain the only runtime dependencies, and there is no `api/` and no `web/`. The
@@ -330,8 +330,20 @@ Already decided, and binding on any future implementation:
   `_optimizer_input`, invents the gap code `OPENING_EVIDENCE_MISSING` that the core never emits, and
   duplicates the rated-place filter `rank_candidates` enforces. React cannot recompute it — that would
   require exposing `_optimizer_input`.
-- `.wayfinder/artifacts/` holds the extracted Auto-Bill token contract, the element inventory matrix, the
-  local API contract, the POC-retirement decision, and the webapp stack. Consult them instead of re-reading
-  2458 lines of `index.css` — and note the token contract is known to be incomplete for the ~18 classes
-  that exist only as inline styles, and that its shadow-scale warning points at `theme.extend.boxShadow`
-  when it means a replacement (moot under Tailwind v4's `--shadow-*: initial`).
+- The visual parity gate: the **token contract is the target, and it must be completed before the gate can
+  run** — 39 JSX classes have no CSS rule (not the 18 or ~28 earlier tickets claimed) across 114 inline
+  style sites. Checking is screenshot comparison at two levels: **element-level captures of the 41 lifted
+  elements, which must be taken before `Auto-Bill-Splitter` is archived**, plus 4 screen baselines per route
+  (light/dark × en/th) that catch drift only. New elements pass on token conformance plus a declared
+  ancestor. Auto-Bill's defects are **fixed and recorded as deviations D1–D7** — without that register every
+  fix reads as a parity failure. Radius unifies on `2px`. See
+  `.wayfinder/artifacts/025-visual-parity-gate.md`.
+- **Colour gets one machine-readable source that both renderers read.** `exporters.py` hardcodes 8 hexes
+  across 17 occurrences in a cool blue-grey palette matching nothing in Auto-Bill, and
+  `views/itinerary.py:94,104` adds three pin hexes — so the poster, PDF and workbook currently look like a
+  different product, and `WF-022` already made them a pilot-ready gate. Same reasoning as `WF-018`'s single
+  rounding implementation.
+- `.wayfinder/artifacts/` holds the Auto-Bill token contract, the element inventory matrix, the local API
+  contract, the POC-retirement decision, the webapp stack, the information architecture, and the parity
+  gate. Consult them instead of re-reading 2458 lines of `index.css` — and read the correction block at the
+  top of the token contract before trusting its counts or its Tailwind config draft.

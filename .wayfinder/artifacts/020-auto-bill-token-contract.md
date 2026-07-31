@@ -1,5 +1,29 @@
 # Auto-Bill design token contract
 
+> ## 2026-07-31 — this contract is incomplete, and by more than it says
+>
+> [Define the visual parity gate for the Tailwind rebuild](025-visual-parity-gate.md) re-measured the
+> blind spot against the sources. **39** JSX classes have no CSS rule at all — not the ~28 estimated
+> here, nor the 18 in the element inventory — spread across **114** inline `style={{…}}` sites, against
+> **250** distinct class selectors in `index.css`. Neither earlier figure was wrong for what it measured;
+> both undercount. **The parity gate is blocked until this contract absorbs those 39 classes, the 114
+> inline sites, the off-token literals in §9d–9e, and the three hardcoded pin hexes in the planner's
+> `views/itinerary.py:94,104`.**
+>
+> Two further corrections to what is written below:
+>
+> - **The shadow-override pointer is wrong and now moot.** §2's warning correctly says Tailwind's default
+>   shadow scale must be *overridden, not extended*, but its code comment reads
+>   `// tailwind.config.js — theme.extend.boxShadow`, and `theme.extend` **merges** with the soft defaults —
+>   the exact outcome the warning says destroys the visual identity. The later `boxShadow` block does carry
+>   an `// OVERRIDE, not extend` note, so only the pointer was wrong. `WF-026` chose **Tailwind v4**, where
+>   `--shadow-*: initial` clears the namespace unambiguously, so the drafted JS config below is **reference
+>   material rather than code**.
+> - **The ambiguities are ruled on, not open.** AMBIGUITY 2 and 3 are dissolved by unifying radius on
+>   `2px`; 1, 5 and 6 are fixed as deviations D1, D3 and D6; 4 (faux bold monospace) is deferred to the
+>   offline asset ticket; 7 is deduplicated as cleanup. See the deviation register in
+>   [`025-visual-parity-gate.md`](025-visual-parity-gate.md).
+
 Extracted 2026-07-31 from `E:\ML_PROJECT\trip_planner\Auto-Bill-Splitter\` at the state on disk.
 Sources, in order of authority:
 
