@@ -244,15 +244,17 @@ rendering tofu. The app's status labels carry emoji that no such font has, so `_
 pictographs — the wording alone still carries the state.
 
 Explicitly out of scope for Phase 1: FastAPI, React, Docker, Redis, background workers, remote
-collaboration, hosted notifications. `streamlit` is the only runtime dependency in `pyproject.toml`;
-keep it that way.
+collaboration, hosted notifications. `pyproject.toml` lists exactly four runtime dependencies:
+`fpdf2`, `pillow` and `xlsxwriter` exist only because slice 5 renders a PDF, a poster and a workbook,
+and `streamlit` is the only one for the *interface*. Keep it that way.
 
 ## Phase 2 is being planned, not built — do not implement it yet
 
-`WF-MAP-002` is **open and unfinished**: 19 tickets, **3 closed, 16 open**, 7 of those on the frontier.
+`WF-MAP-002` is **open and unfinished**: 19 tickets, **4 closed, 15 open**, 8 of those on the frontier.
 The destination is a decision-complete specification, exactly as Phase 1's was, so **no Phase 2 code gets
 written until the map has no unresolved decisions**. Until then the Phase 1 out-of-scope rule above still
-binds: today `streamlit` remains the only runtime dependency, and there is no `api/` and no `web/`.
+binds: today those four remain the only runtime dependencies, and there is no `api/` and no `web/`. The
+locked API contract keeps it that way — it adds none.
 
 Read the map before touching anything in this area. Work it one ticket per session — claim a ticket by
 setting its `assignee:` before doing any work, and only research tickets may be resolved more than one
@@ -282,6 +284,16 @@ Already decided, and binding on any future implementation:
   disagree by a satang.
 - Settlement is a star through the main cardholder with fronted cash netted off. Rows are editable and
   void rather than delete, so the split ledger takes **no** append-only triggers.
-- `.wayfinder/artifacts/` holds the extracted Auto-Bill token contract and the element inventory matrix.
-  Consult them instead of re-reading 2458 lines of `index.css` — and note the token contract is known to be
-  incomplete for the ~18 classes that exist only as inline styles.
+- The local API is a stdlib `ThreadingHTTPServer` with **zero new runtime dependencies**, dispatching
+  `POST /api/<method>` straight onto `PlannerActions`. Two rules from that contract are safety-critical, not
+  taste: **the dispatch table is an explicit literal allowlist, never introspection**, because
+  `save_plan_version` writes an arbitrary snapshot as an activated immutable version with no optimizer
+  validation and `record_paid_call` forges append-only ledger rows — `dir()` would expose both. And a
+  snapshot `sha256` is **exposed but never accepted as an argument**; the server re-derives every hash
+  itself. Full contract in `.wayfinder/artifacts/019-local-api-contract.md`.
+- Refusals get stable codes: the 46 `raise ValueError` in `actions.py` collapse into 26 codes behind
+  `PlannerRefusal(ValueError)`. Until that migration lands, a Thai owner reads English at every refusal —
+  a **Phase 1** defect, so it is not gated by the Phase 2 decision gate.
+- `.wayfinder/artifacts/` holds the extracted Auto-Bill token contract, the element inventory matrix, and
+  the local API contract. Consult them instead of re-reading 2458 lines of `index.css` — and note the token
+  contract is known to be incomplete for the ~18 classes that exist only as inline styles.

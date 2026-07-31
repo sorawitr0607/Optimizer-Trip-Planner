@@ -72,13 +72,28 @@ resolving tickets are throwaway artifacts, not the build.
   `travel_planner/split.py`; settlement is a star through the cardholder with fronted cash netted off, which is
   exact. Rows are editable and void rather than delete — so the ledger needs **no** append-only discipline.
   Settling up is not recorded, so balances stay trip-to-date totals.
+- [Lock the local API contract between the webapp and the planning core](tickets/019-lock-the-local-api-contract-between-webapp-and-core.md) —
+  A stdlib `ThreadingHTTPServer` with **zero new runtime dependencies**, dispatching `POST /api/<method>` RPC
+  straight onto `PlannerActions`; verified that none of its 56 methods has a positional-only parameter, so the
+  transport can hold no business rule of its own. Full contract, measured counts and status map in
+  [`019-local-api-contract.md`](artifacts/019-local-api-contract.md). Three findings outrank the framework
+  choice: the exposed surface must be a **literal allowlist**, because `save_plan_version` would write an
+  arbitrary snapshot as an activated immutable version with no optimizer validation and `record_paid_call`
+  would forge append-only ledger rows — introspection would have exposed both. The 46 `raise ValueError` in
+  `actions.py` collapse into **26 stable codes** behind `PlannerRefusal`, which fixes a live *Phase 1*
+  bilingual defect: a Thai owner reads English at every refusal today. And the boundary is guarded by
+  requiring `application/json` plus a `Host` allowlist, which is a real security control rather than
+  hygiene, since `set_paid_cap` and `delete_trip` are exposed RPCs. Hashes are **exposed and never
+  accepted**; long operations block behind a persisted in-flight marker and never invent a progress
+  percentage, because Overpass emits no signal to report.
 
 ## Not yet specified
 
 <!-- In-scope fog: suspected questions not yet sharp enough to ticket. Graduates as the frontier advances. -->
 
-- How a 34-second Overpass discovery run reports progress across an HTTP boundary that a Streamlit
-  rerun used to hide. Sharpens once the API contract is locked.
+- Whether the 45-site `PlannerRefusal` migration is its own ticket. The 26-code vocabulary is locked by
+  the API contract, but the migration fixes a *Phase 1* bilingual defect and is therefore **not** gated by
+  this map's decision gate. Sharp enough to ticket as soon as the owner wants it sequenced.
 - Whether a trip that is fully settled in real life gets any marker at all, given that settlement payments
   are deliberately not recorded — and whether that matters once the trip is over rather than mid-trip.
 - Whether voided split rows appear in the PDF and Excel exports, or only in the app where the owner can see
