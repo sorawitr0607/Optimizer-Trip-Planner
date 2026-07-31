@@ -24,7 +24,10 @@ for optional provider configuration; never commit local secrets.
 - `scripts/` — validation, regression, provider, and Graphify maintenance commands.
 - `data/reference-itineraries/<city>/` — source workbooks and PDF itineraries.
 - `graphify-out/` — checked-in graph snapshot; generated caches are ignored.
-- `.wayfinder/` — project decisions and implementation tickets.
+- `.wayfinder/` — project decisions and implementation tickets. Two maps: `map.md` is the closed Phase 1
+  plan; `map-002-splitter-merge-and-webapp.md` is the open Phase 2 plan for merging the bill splitter and
+  replacing Streamlit with a webapp. **Phase 2 is still being decided — 16 of its 19 tickets are open, so
+  none of it is built.** Research findings live in `.wayfinder/artifacts/`.
 
 ## Checks
 
