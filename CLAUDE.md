@@ -253,7 +253,7 @@ and `streamlit` is the only one for the *interface*. Keep it that way.
 
 ## Phase 2 is being planned, not built — do not implement it yet
 
-`WF-MAP-002` is **open and unfinished**: 19 tickets, **5 closed, 14 open**, 7 of those on the frontier.
+`WF-MAP-002` is **open and unfinished**: 19 tickets, **6 closed, 13 open**, 9 of those on the frontier.
 The destination is a decision-complete specification, exactly as Phase 1's was, so **no Phase 2 code gets
 written until the map has no unresolved decisions**. Until then the Phase 1 out-of-scope rule above still
 binds: today those four remain the only runtime dependencies, and there is no `api/` and no `web/`. The
@@ -308,6 +308,23 @@ Already decided, and binding on any future implementation:
 - Refusals get stable codes: the 46 `raise ValueError` in `actions.py` collapse into 26 codes behind
   `PlannerRefusal(ValueError)`. Until that migration lands, a Thai owner reads English at every refusal —
   a **Phase 1** defect, so it is not gated by the Phase 2 decision gate.
-- `.wayfinder/artifacts/` holds the extracted Auto-Bill token contract, the element inventory matrix, and
-  the local API contract. Consult them instead of re-reading 2458 lines of `index.css` — and note the token
-  contract is known to be incomplete for the ~18 classes that exist only as inline styles.
+- The webapp stack: **TypeScript, react-router, TanStack Query, Tailwind v4 configured in CSS**, npm with
+  Node pinned by `.nvmrc`. `web/src/` is organised **by stage** beside `shared/`, `api/` and `i18n/`.
+  ESLint with `react-hooks`, `tsc` for types, no formatter. `web/dist` is not committed. Six web runtime
+  dependencies, ten dev — and **Python stays at four**. See
+  `.wayfinder/artifacts/026-webapp-stack-and-layout.md`.
+- Two rules from that ticket are correctness, not taste. **`retry: false` is TanStack Query's default
+  here**: the library's 3 retries would burn both of Overpass's 2 concurrent slots on a 34 s call and
+  double-spend paid calls against the US$10 cap. And **`save_setup` takes all 18 fields every time, each
+  defaulting to empty, so a partial payload silently erases what it omits** — the setup form holds one
+  draft object and always sends it whole.
+- `shared.journey()` (`ui/shared.py:160`) is 74 lines of business logic in the UI layer, and it moves into
+  `PlannerActions.journey()` as the 51st allowlisted method. It currently reaches into the private
+  `_optimizer_input`, invents the gap code `OPENING_EVIDENCE_MISSING` that the core never emits, and
+  duplicates the rated-place filter `rank_candidates` enforces. React cannot recompute it — that would
+  require exposing `_optimizer_input`.
+- `.wayfinder/artifacts/` holds the extracted Auto-Bill token contract, the element inventory matrix, the
+  local API contract, the POC-retirement decision, and the webapp stack. Consult them instead of re-reading
+  2458 lines of `index.css` — and note the token contract is known to be incomplete for the ~18 classes
+  that exist only as inline styles, and that its shadow-scale warning points at `theme.extend.boxShadow`
+  when it means a replacement (moot under Tailwind v4's `--shadow-*: initial`).

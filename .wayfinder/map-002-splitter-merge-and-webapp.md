@@ -104,6 +104,21 @@ resolving tickets are throwaway artifacts, not the build.
   `ตารางเวลา` is the owner's own four-trip precedent for merging the splitter in. Validation is
   programmatic against all four sheet types; details and the accepted consequence in
   [`022-streamlit-poc-retirement-and-pilot-commitment.md`](artifacts/022-streamlit-poc-retirement-and-pilot-commitment.md).
+- [Choose the webapp stack and project layout](tickets/026-choose-the-webapp-stack-and-project-layout.md) —
+  TypeScript, react-router, TanStack Query, **Tailwind v4 configured in CSS**, npm with Node pinned;
+  `web/src/` organised **by stage** beside `shared/`, `api/` and `i18n/`; ESLint with `react-hooks` and no
+  formatter; `web/dist` uncommitted behind one wrapper command that rebuilds when stale and serves on a
+  single port. Six web runtime dependencies, ten dev, and **Python stays at four**. Full tally in
+  [`026-webapp-stack-and-layout.md`](artifacts/026-webapp-stack-and-layout.md). Three findings outrank the
+  library picks. **The journey spine must move into the core**: `shared.journey()` is 74 lines of business
+  logic in a layer now scheduled for deletion, and it reaches into the private `_optimizer_input`, invents
+  a gap code the core never emits, and duplicates a filter `rank_candidates` already enforces — so it
+  becomes the 51st allowlisted method, and React genuinely *cannot* recompute it instead. **`retry: false`
+  is a safety setting, not a preference** — the library default would burn both Overpass slots and
+  double-spend paid calls against the US$10 cap. And **`save_setup` erases what a partial payload omits**,
+  so the whole-draft rule is a correctness requirement; the five Streamlit rerun workarounds it inspired
+  must not be ported. Tailwind v4 was chosen because the tokens already *are* CSS custom properties, which
+  also retires an extend-versus-override defect in the token contract.
 
 ## Not yet specified
 
