@@ -253,7 +253,7 @@ and `streamlit` is the only one for the *interface*. Keep it that way.
 
 ## Phase 2 is being planned, not built — do not implement it yet
 
-`WF-MAP-002` is **open and unfinished**: 19 tickets, **7 closed, 12 open**, 7 of those on the frontier.
+`WF-MAP-002` is **open and unfinished**: 19 tickets, **7 closed, 12 open**, 8 of those on the frontier.
 `Extract the Auto-Bill design token contract` was **reopened** on 2026-07-31: the parity gate made it the
 target the rebuild is measured against, and it is incomplete for 39 inline-only classes and 114 inline style
 sites. Its ambiguities are already ruled on — do not re-litigate them; the remaining scope and its

@@ -6,8 +6,7 @@ labels:
   - "wayfinder:grilling"
 parent: WF-MAP-002
 assignee:
-blocked_by:
-  - WF-020
+blocked_by: []
 ---
 
 # Decide the offline asset policy for the webapp
@@ -49,5 +48,40 @@ app whose whole premise is local-first.
 
 Decide at least: self-host or CDN, and if self-hosted where the files live and under what licence record;
 which families and weights ship, in `woff2` for the browser and `.ttf` for Pillow; whether bold monospace
-becomes a real weight; what replaces `flagcdn.com`; whether the export palette and the UI tokens converge;
-and what the app is contractually allowed to do when offline during a trip.
+becomes a real weight; what replaces `flagcdn.com`; ~~whether the export palette and the UI tokens
+converge~~ (**decided elsewhere — see below**); and what the app is contractually allowed to do when
+offline during a trip.
+
+### 2026-07-31 — Unblocked, and one item removed from scope
+
+**Unblocked.** `Extract the Auto-Bill design token contract` was reopened the same day because it is
+incomplete for 39 inline-only classes and 114 inline `style={{…}}` sites — but **none of that is asset
+work.** Everything this ticket needs from the contract is already extracted and is quoted in the Context
+above: the font families and weights, the faux-bold-monospace ambiguity, the `flagcdn.com` dependency and
+the three divergent country lists, and the export palette. The missing 39 classes are layout and
+interaction styling. So the `blocked_by` edge was dropped rather than waiting on work this ticket does not
+depend on.
+
+**One "decide at least" item is already decided, and it went the way this ticket's Context warned against.**
+[Define the visual parity gate for the Tailwind rebuild](025-define-the-visual-parity-gate-for-the-tailwind-rebuild.md)
+decided that **colour gets one machine-readable source that both renderers read**, recorded as deviation
+**D7** — so the export palette and the UI tokens **converge**, and the exports are recoloured. The Context
+above cautions that "a well-meaning 'unify the tokens' pass must not recolour the exports"; the owner
+overrode that caution deliberately, on this reasoning:
+
+- `WF-022` made the exports a **pilot-ready gate**, compared against the four reference workbooks. They are
+  already a checked surface — just not for colour — and they are what the owner physically carries in Taipei.
+- `exporters.py` hardcodes 8 hexes across 17 occurrences in a cool blue-grey palette that matches nothing in
+  Auto-Bill, so the poster, PDF and workbook currently look like a different product.
+- The precedent is this repo's own: `WF-018` put split math in one implementation so "the screen, the
+  workbook and the PDF cannot disagree by a satang."
+
+**Two consequences for what remains in scope here.** First, the `.ttf` for Pillow and the `woff2` files for
+the browser are still separate assets and that does not change — convergence is about *colour*, not fonts.
+Second, `Decide which exporter survives, Python or JavaScript` should be answered **before** the
+re-tokenisation work starts, because if the Python exporters are retired, part of D7 is wasted; that
+sequencing note belongs with the asset policy since it decides which renderer needs which files.
+
+**Still this ticket's to decide:** whether bold monospace becomes a real loaded weight (`WF-025` explicitly
+deferred AMBIGUITY 4 here), what replaces `flagcdn.com`, whether the token source ships as JSON or CSS, the
+map-tile question, and the offline contract itself.
