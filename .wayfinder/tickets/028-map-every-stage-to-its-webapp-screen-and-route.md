@@ -1,11 +1,11 @@
 ---
 id: WF-028
 title: Map every Streamlit stage to its webapp screen and route
-status: open
+status: closed
 labels:
   - "wayfinder:grilling"
 parent: WF-MAP-002
-assignee:
+assignee: user-and-root
 blocked_by:
   - WF-021
   - WF-026
@@ -55,3 +55,48 @@ Decide at least: the route table and URL shape; whether trip selection is a rout
 how journey gating and the attention-based landing are expressed client-side without duplicating the rules;
 where the split ledger and the cost ledger sit relative to each other; and what the navigation looks like in
 the Auto-Bill visual language on both desktop and phone.
+
+## Resolution comments
+
+### 2026-07-31 — Decided through the IA interview
+
+Route table, gate mapping, and the consequences for other tickets are in
+[`028-webapp-information-architecture.md`](../artifacts/028-webapp-information-architecture.md).
+
+- **9 stage routes under `/trips/:tripId/`, resolving to 5 gate keys, in 2 sections.** The eight ported
+  paths keep the slugs `st.navigation` already assigns, so the stage segment of every URL is unchanged.
+- **The trip id lives in the path**, not in ambient context. Every one of the 51 methods takes `trip_id`,
+  and TanStack Query keys must include it — reading it from `useParams` prevents a bug class where ~51
+  query keys each have to *remember* the ambient trip, and one omission serves another trip's cached data.
+  Refresh and deep links then work with no persistence layer at all.
+- **One `<StageGate>` wrapper, and exactly one redirect.** This is where a router would have quietly broken
+  Phase 1: `shared.require()` **does not redirect** — it renders one clear next step in place and returns
+  False, so a view explains itself. A redirect explains nothing and makes the URL disagree with the click.
+  The attention-based landing *is* a redirect, but only from `/`. `StageGate` reads `journey()`'s answer
+  and renders; it never decides.
+- **Setup stays one route with five steps in state**, inside Auto-Bill's wizard shell. `WF-026` already made
+  the draft one object sent whole, so five steps are five views over one piece of state. Two adaptations are
+  unavoidable: the step indicator **hardcodes four steps in its class names** (`.wizard-progress-4`,
+  `.progress-step-4`, …) so the family must be renamed to five, and clicking a step navigates **backwards
+  only** — which suits a wizard whose later steps depend on earlier answers, so it is kept rather than fixed.
+- **Costs and split are two cross-linked screens, on the owner's distinction:** costs is the *estimated*
+  cost for the drafted plan; split splits the bill for *actual cost that happened*; values can be linked
+  and edited for convenience. The split screen therefore gets Auto-Bill's full surface — the 694-line
+  `TransactionModal`, participant chips, settlement grid, cardholder selector — with no estimates table
+  competing for the space. **One overlap is flagged, not resolved:** `costs.py` is not purely estimates
+  (`PAYMENT_STATES = ("estimate", "committed", "paid")`, and a paid row locks `actual_thb`), so a paid cost
+  row is already actual money. That boundary belongs to `Decide cost-and-split reconciliation rules`.
+- **Removing a split row voids it, and the button still says remove.** Add, edit and remove all exist as
+  asked and the modal is lifted intact, while `WF-018`'s void-not-delete holds for its stated reason: the
+  voided row is *why* a total that moved can be explained. Needs a hide/show control, and the wording must
+  make clear it does not destroy the row.
+- **Navigation adapts Auto-Bill's sidebar shell** (element 17), keeping today's two sections, trip context
+  under the stages, and language at the foot. Only the content changes, so the visual language is honoured
+  rather than extended. **The one real gap:** at 992px `.sidebar` goes static, which for a nine-item
+  navigation means a long list above the content on every phone — a drawer must be designed, not lifted.
+  Auto-Bill's own shape (wizard, then one dashboard forever) was rejected because it destroys the journey
+  model and rebuilds the donor's 2,183-line dashboard by construction.
+
+**This changes `Prototype the merged cost and split screen`'s premise — there is no merged screen.** Its
+substance survives across two screens plus the link action, and a dated note has been added to its Context;
+its title is now misleading.

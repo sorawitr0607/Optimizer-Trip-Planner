@@ -47,5 +47,17 @@ Two things the decided split model forces onto this screen specifically:
   balance is not fixed. Auto-Bill only ever renders `{person} owes {cardholder}` (`Dashboard.jsx:1531`) and its
   memo template says the same, so both need a reversed form in both languages.
 
+**2026-07-31 — the premise changed, and this ticket's title is now misleading.**
+[Map every stage to its webapp screen and route](028-map-every-stage-to-its-webapp-screen-and-route.md)
+decided that costs and split are **two cross-linked screens**, not one merged screen, on the owner's
+distinction: costs is the *estimated* cost for the drafted plan, split is the function that splits the bill
+for *actual cost that happened*, with values linkable and editable between them. So `/costs` carries the
+estimates, the rate snapshot, payment states, `unconvertible_rows` and `missing_rates`; `/split` carries
+Auto-Bill's full surface — the 694-line `TransactionModal`, participant chips, settlement grid, cardholder
+selector — plus the link action's editable result. Everything below still applies; it applies across two
+screens and the link between them rather than one arrangement. The hardest questions are unchanged: making
+two ledgers legible as two without mental arithmetic, presenting a balance as a suggestion when settling up
+is never recorded, and rendering a reversed owe-direction in both languages.
+
 Produce a throwaway prototype and link it from this ticket. Record what the owner reacted against, not just
 what was built.

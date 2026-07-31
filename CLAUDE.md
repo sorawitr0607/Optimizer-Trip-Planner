@@ -253,7 +253,7 @@ and `streamlit` is the only one for the *interface*. Keep it that way.
 
 ## Phase 2 is being planned, not built — do not implement it yet
 
-`WF-MAP-002` is **open and unfinished**: 19 tickets, **6 closed, 13 open**, 9 of those on the frontier.
+`WF-MAP-002` is **open and unfinished**: 19 tickets, **7 closed, 12 open**, 8 of those on the frontier.
 The destination is a decision-complete specification, exactly as Phase 1's was, so **no Phase 2 code gets
 written until the map has no unresolved decisions**. Until then the Phase 1 out-of-scope rule above still
 binds: today those four remain the only runtime dependencies, and there is no `api/` and no `web/`. The
@@ -318,6 +318,13 @@ Already decided, and binding on any future implementation:
   double-spend paid calls against the US$10 cap. And **`save_setup` takes all 18 fields every time, each
   defaulting to empty, so a partial payload silently erases what it omits** — the setup form holds one
   draft object and always sends it whole.
+- The webapp's IA: **9 stage routes under `/trips/:tripId/`** resolving to **5 gate keys**, in the same two
+  BUILD/USE sections, with the eight ported slugs unchanged. The trip id lives in the **path** because all
+  51 methods take `trip_id` and TanStack keys must include it. One `<StageGate>` wrapper renders the blocked
+  explanation **in place** — `require()` never redirected, and only `/` does, to `journey["next"]`. Setup is
+  one route with five steps in state. **Costs and split are two cross-linked screens**: costs holds estimates
+  for the drafted plan, split holds actual bills split per person. Navigation adapts Auto-Bill's existing
+  sidebar shell. See `.wayfinder/artifacts/028-webapp-information-architecture.md`.
 - `shared.journey()` (`ui/shared.py:160`) is 74 lines of business logic in the UI layer, and it moves into
   `PlannerActions.journey()` as the 51st allowlisted method. It currently reaches into the private
   `_optimizer_input`, invents the gap code `OPENING_EVIDENCE_MISSING` that the core never emits, and

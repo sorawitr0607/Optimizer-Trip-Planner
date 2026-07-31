@@ -119,6 +119,24 @@ resolving tickets are throwaway artifacts, not the build.
   so the whole-draft rule is a correctness requirement; the five Streamlit rerun workarounds it inspired
   must not be ported. Tailwind v4 was chosen because the tokens already *are* CSS custom properties, which
   also retires an extend-versus-override defect in the token contract.
+- [Map every Streamlit stage to its webapp screen and route](tickets/028-map-every-stage-to-its-webapp-screen-and-route.md) —
+  **9 stage routes under `/trips/:tripId/`, resolving to 5 gate keys, in 2 sections**, with the eight ported
+  slugs unchanged from `st.navigation`. Full table in
+  [`028-webapp-information-architecture.md`](artifacts/028-webapp-information-architecture.md). The trip id
+  lives in the **path**, because all 51 methods take `trip_id` and TanStack keys must include it — ambient
+  state would make ~51 query keys each *remember* it, and one omission serves another trip's cached data.
+  **One `<StageGate>` wrapper and exactly one redirect**, because this is where a router would have quietly
+  broken Phase 1: `require()` does not redirect, it explains in place; only `/` redirects, to
+  `journey["next"]`. Setup stays **one route with five steps in state**, which forces two adaptations the
+  inventory pins down — the step indicator hardcodes **four** steps in its class names, and clicking a step
+  navigates backwards only. **Costs and split are two cross-linked screens**, on the owner's distinction
+  between estimates for a drafted plan and actual bills that happened; the split screen therefore gets
+  Auto-Bill's whole surface, and removing a row still voids rather than deletes, so `WF-018` holds while the
+  button still says remove. Navigation **adapts the existing sidebar shell** rather than inventing one —
+  its one real gap is that `.sidebar` goes static at 992px, so a phone drawer must be designed. Auto-Bill's
+  own wizard-then-dashboard shape was rejected: it destroys the journey model. **This changes
+  [Prototype the merged cost and split screen](tickets/031-prototype-the-merged-cost-and-split-screen.md)'s
+  premise** — there is no merged screen, and a dated note records it.
 
 ## Not yet specified
 
