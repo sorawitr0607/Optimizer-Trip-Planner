@@ -449,6 +449,7 @@ class PlannerActions:
 
     def _optimizer_input(self, trip_id: str) -> dict[str, Any]:
         setup, discovery, current_candidates = self._current_choice_inputs(trip_id)
+        trip = self.store.get_trip(trip_id)
         setup_payload = setup.snapshot.as_dict()
         allow_provisional_assumptions = setup_payload["planning_mode"] == "explore_first"
         choices = [
@@ -465,12 +466,16 @@ class PlannerActions:
         local_dates = date_range(start_date, end_date) if start_date and end_date else []
         usable_windows = []
         for index, local_date in enumerate(local_dates):
-            start = "09:00"
-            end = "21:00"
+            # The reference trips routinely begin before 09:00 and end after
+            # 21:00 once breakfast, hotel transitions, and the trip back to the
+            # base are represented. Arrival/departure still tighten their own
+            # day rather than silently becoming attraction time.
+            start = "08:00"
+            end = "22:00"
             if index == 0 and basics.get("arrival_time"):
-                start = max(start, basics["arrival_time"])
+                start = basics["arrival_time"]
             if index == len(local_dates) - 1 and basics.get("departure_time"):
-                end = min(end, basics["departure_time"])
+                end = basics["departure_time"]
             if start >= end:
                 raise ValueError(f"No usable planning time remains on {local_date}")
             usable_windows.append({"date": local_date, "start": start, "end": end})
@@ -662,8 +667,12 @@ class PlannerActions:
                 "discovery_status": discovery.status,
             },
             "trip": {
+                "destination": trip.destination if trip else "",
                 "planning_mode": setup_payload["planning_mode"],
                 "allow_provisional_assumptions": allow_provisional_assumptions,
+                "include_operational_timeline": True,
+                "arrival_time": basics.get("arrival_time"),
+                "departure_time": basics.get("departure_time"),
                 "accommodation_base_id": (
                     "booked_accommodation_base" if accommodation_base else None
                 ),

@@ -510,6 +510,20 @@ def _render_plan_item(item: dict, language: str) -> None:
                     f"- {words['boarding_buffer']}: "
                     f"{item['boarding_buffer_minutes']} {words['minutes']}"
                 )
+    elif item["type"] in {"meal", "preparation", "logistics"}:
+        st.markdown(f"**{clock}** · {item['display_name']}")
+        st.caption(
+            f"{state} · {words.get('type_' + item['type'], item['type'])} · {length}"
+        )
+        with st.expander(words["details"]):
+            if item.get("from_name") or item.get("to_name"):
+                st.markdown(
+                    f"- {item.get('from_name') or '?'} → {item.get('to_name') or '?'}"
+                )
+            if item.get("mode"):
+                st.markdown(f"- {words['travel_mode']}: {item['mode']}")
+            st.markdown(f"- {item['notes']}")
+            st.markdown(f"- {words['confirmation_needed']}")
     else:
         reason = _optimizer_code(item.get("reason") or "buffer", language)
         st.caption(f"{clock} · {reason} · {length}")

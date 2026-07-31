@@ -57,6 +57,10 @@ TIMELINE_COLUMNS = (
     ("Opening verified", 16),
     ("Address", 34),
     ("Reason", 22),
+    ("From", 30),
+    ("To", 30),
+    ("Operational notes", 52),
+    ("Confirm / assumption", 24),
 )
 
 # Latin + Thai + local-script coverage is required; a personal machine may have
@@ -170,18 +174,18 @@ def day_poster_png(
     )
     draw.line((margin, 268, POSTER_SIZE[0] - margin, 268), fill="#2A3B49", width=3)
 
-    highlights = [item for item in day["items"] if item["type"] == "visit"][
-        :POSTER_HIGHLIGHTS
-    ]
+    highlights = [item for item in day["items"] if item["type"] == "visit"]
+    if not highlights:
+        highlights = [item for item in day["items"] if item["type"] != "buffer"]
+    highlights = highlights[:POSTER_HIGHLIGHTS]
     text_left = 150
     text_width = POSTER_SIZE[0] - text_left - margin
     top = 340
     for item in highlights:
         centre = top + 28
         draw.ellipse((78, centre - 18, 114, centre + 18), fill="#8FB8D8")
-        draw.text(
-            (88, centre - 16), str(item["stop_number"]), font=small_font, fill="#101820"
-        )
+        marker = str(item.get("stop_number") or "•")
+        draw.text((88, centre - 16), marker, font=small_font, fill="#101820")
         name_bottom = _draw_block(
             draw,
             (text_left, top),
@@ -302,7 +306,10 @@ def plan_pdf(snapshot: dict[str, Any], labels: dict[str, str] | None = None) -> 
         f"{words['travel_minutes']} {totals['travel_minutes']} · "
         f"{words['walking_minutes']} {totals['walking_minutes']} "
         f"({words['rewarding_walking_minutes']} {totals['rewarding_walking_minutes']} / "
-        f"{words['plain_walking_minutes']} {totals['plain_walking_minutes']})",
+        f"{words['plain_walking_minutes']} {totals['plain_walking_minutes']}) · "
+        f"{words['meal_minutes']} {totals['meal_minutes']} · "
+        f"{words['logistics_minutes']} {totals['logistics_minutes']} · "
+        f"{words['preparation_minutes']} {totals['preparation_minutes']}",
     )
     board_readiness = snapshot["checklist"]["readiness"]
     if board_readiness:
@@ -559,6 +566,10 @@ def _write_timeline(
                     "yes" if item.get("opening_verified") else "",
                     item.get("address") or "",
                     item.get("reason") or "",
+                    item.get("from_name") or item.get("origin_name") or "",
+                    item.get("to_name") or item.get("destination_name") or "",
+                    item.get("notes") or "",
+                    item.get("reason") or "",
                 ],
                 wrap,
             )
@@ -607,7 +618,17 @@ def _write_summary(
 
     start = len(facts) + 4
     for index, name in enumerate(
-        ("Date", "Visits", "At places (min)", "Travel (min)", "Walking (min)", "Buffers (min)")
+        (
+            "Date",
+            "Visits",
+            "At places (min)",
+            "Meals (min)",
+            "Travel (min)",
+            "Walking (min)",
+            "Logistics (min)",
+            "Preparation (min)",
+            "Buffers (min)",
+        )
     ):
         sheet.write(start, index, name, header)
     # Formula-driven so a reader can audit the totals against the Timeline sheet.
@@ -635,8 +656,11 @@ def _write_summary(
         )
         for column, kind, value in (
             (2, "visit", totals["visit_minutes"]),
-            (3, "travel", totals["travel_minutes"]),
-            (5, "buffer", totals["buffer_minutes"]),
+            (3, "meal", totals["meal_minutes"]),
+            (4, "travel", totals["travel_minutes"]),
+            (6, "logistics", totals["logistics_minutes"]),
+            (7, "preparation", totals["preparation_minutes"]),
+            (8, "buffer", totals["buffer_minutes"]),
         ):
             sheet.write_formula(
                 row,
@@ -647,7 +671,7 @@ def _write_summary(
             )
         sheet.write_formula(
             row,
-            4,
+            5,
             f"=SUMIFS({walking},{dates},$A{row + 1})",
             None,
             totals["walking_minutes"],
@@ -659,9 +683,12 @@ def _write_summary(
     for column, key in (
         (1, "scheduled_visits"),
         (2, "visit_minutes"),
-        (3, "travel_minutes"),
-        (4, "walking_minutes"),
-        (5, "buffer_minutes"),
+        (3, "meal_minutes"),
+        (4, "travel_minutes"),
+        (5, "walking_minutes"),
+        (6, "logistics_minutes"),
+        (7, "preparation_minutes"),
+        (8, "buffer_minutes"),
     ):
         letter = chr(ord("A") + column)
         sheet.write_formula(
@@ -674,7 +701,7 @@ def _write_summary(
 
     if snapshot["days"]:
         chart = workbook.add_chart({"type": "column"})
-        for column, name in ((4, "Walking (min)"), (3, "Travel (min)")):
+        for column, name in ((5, "Walking (min)"), (4, "Travel (min)")):
             chart.add_series(
                 {
                     "name": name,
@@ -925,6 +952,18 @@ def _item_line(item: dict[str, Any], words: dict[str, str]) -> str:
             f"{item['destination_name']}  ({item['duration_minutes']} {words['minutes']}, "
             f"{words['walk_portion']} {item['walking_minutes']}) · {state}"
         )
+    if item["type"] in {"meal", "preparation", "logistics"}:
+        route = " > ".join(
+            value for value in (item.get("from_name"), item.get("to_name")) if value
+        )
+        details = " · ".join(
+            value for value in (route, item.get("notes")) if value
+        )
+        return (
+            f"{clock}  [{item['type']}] {item['display_name']} "
+            f"({item['duration_minutes']} {words['minutes']}) · {state}"
+            + (f"\n  {details}" if details else "")
+        )
     return f"{clock}  [{item.get('reason') or 'buffer'}] ({item['duration_minutes']} {words['minutes']})"
 
 
@@ -1054,6 +1093,9 @@ DEFAULT_LABELS = {
     "scheduled_visits": "Visits",
     "visit_minutes": "At places",
     "travel_minutes": "Travel",
+    "meal_minutes": "Meals",
+    "preparation_minutes": "Preparation",
+    "logistics_minutes": "Airport / hotel logistics",
     "walking_minutes": "Walking",
     "plain_walking_minutes": "Plain walking",
     "rewarding_walking_minutes": "Rewarding walking",

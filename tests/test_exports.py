@@ -84,7 +84,7 @@ class ExportSnapshotTest(unittest.TestCase):
         self.assertEqual(version.version_id, export["stamp"]["plan_version_id"])
         self.assertTrue(export["stamp"]["is_active_plan"])
         self.assertEqual("THB", export["stamp"]["base_currency"])
-        self.assertEqual("whole-trip-v1", export["stamp"]["optimizer_version"])
+        self.assertEqual("whole-trip-v2", export["stamp"]["optimizer_version"])
 
         # Every optimizer item appears exactly once, in chronological order.
         exported = [item for day in export["days"] for item in day["items"]]

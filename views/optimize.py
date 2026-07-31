@@ -106,10 +106,13 @@ if preview:
             "scheduled_visits",
             "travel_minutes",
             "walking_minutes",
+            "meal_minutes",
+            "logistics_minutes",
+            "preparation_minutes",
             "plain_walking_minutes",
             "buffer_minutes",
         )
-        for row_start in (0, 3):
+        for row_start in range(0, len(metric_labels), 3):
             row_labels = metric_labels[row_start : row_start + 3]
             for column, label in zip(st.columns(3), row_labels, strict=False):
                 column.metric(copy[label], variant["metrics"][label])

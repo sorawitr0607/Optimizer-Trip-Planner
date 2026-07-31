@@ -15,7 +15,7 @@ from time import monotonic
 from typing import Any
 
 
-OPTIMIZER_VERSION = "whole-trip-v1"
+OPTIMIZER_VERSION = "whole-trip-v2"
 VARIANT_CONFIGS = (
     {"id": "best_balance", "duration": "ideal", "buffer_minutes": 10},
     {"id": "relaxed", "duration": "maximum", "buffer_minutes": 20},
@@ -40,6 +40,97 @@ ACCESS_FACT_TYPES = frozenset(
         "access",
     }
 )
+
+# These are visible planning defaults, not claims about a booked flight, hotel,
+# or airport. They turn the attraction-only result into the same kind of
+# operational timetable as the four reference trips; the owner replaces the
+# assumptions after booking.
+OPERATIONAL_COPY = {
+    "pack_bags": (
+        "Pack bags for the forecast and planned activities",
+        "จัดกระเป๋าตามอากาศและกิจกรรมที่วางไว้",
+        "Put passports, medicines, chargers and first-day essentials in carry-on; check activity-specific prohibited items.",
+        "ใส่พาสปอร์ต ยา ที่ชาร์จ และของใช้วันแรกไว้ในกระเป๋าถือ พร้อมเช็กของต้องห้ามของกิจกรรม",
+    ),
+    "documents_and_tickets": (
+        "Recheck documents, tickets and terminal",
+        "ตรวจเอกสาร ตั๋ว และอาคารผู้โดยสารอีกครั้ง",
+        "Confirm passport, booking references, baggage rules, terminal, insurance and offline copies.",
+        "ยืนยันพาสปอร์ต เลขจอง กฎสัมภาระ อาคารผู้โดยสาร ประกัน และสำเนาออฟไลน์",
+    ),
+    "charge_and_alarm": (
+        "Charge devices, download maps and set alarms",
+        "ชาร์จอุปกรณ์ ดาวน์โหลดแผนที่ และตั้งปลุก",
+        "Charge the power bank and phones; save tickets, hotel address, maps and translation offline.",
+        "ชาร์จพาวเวอร์แบงก์และโทรศัพท์ พร้อมบันทึกตั๋ว ที่อยู่โรงแรม แผนที่ และคำแปลแบบออฟไลน์",
+    ),
+    "airport_arrival": (
+        "Arrival terminal: immigration, baggage and essentials",
+        "อาคารผู้โดยสารขาเข้า: ตม. รับกระเป๋า และเตรียมของจำเป็น",
+        "Planner allowance for immigration, baggage claim, restroom, cash or connectivity; confirm the real terminal and duration after booking.",
+        "เวลาสำรองสำหรับ ตม. รับกระเป๋า ห้องน้ำ เงินสดหรืออินเทอร์เน็ต ให้ยืนยันอาคารและเวลาจริงหลังจอง",
+    ),
+    "arrival_transfer": (
+        "Arrival terminal to accommodation area",
+        "จากอาคารผู้โดยสารขาเข้าไปย่านที่พัก",
+        "Confirm airport or station, mode, line, platform, exit, fare and door-to-door duration; this is a provisional transfer slot.",
+        "ยืนยันสนามบินหรือสถานี วิธีเดินทาง สาย ชานชาลา ทางออก ค่าโดยสาร และเวลาถึงประตู ที่นี่เป็นช่วงเวลาโดยประมาณ",
+    ),
+    "accommodation_check_in": (
+        "Check in, store bags and recover from the journey",
+        "เช็กอิน ฝากกระเป๋า และพักหลังเดินทาง",
+        "If the room is not ready, store bags; save the local address, entrance and check-in rule before leaving.",
+        "หากห้องยังไม่พร้อมให้ฝากกระเป๋า และบันทึกที่อยู่ ทางเข้า และกฎเช็กอินก่อนออกเที่ยว",
+    ),
+    "day_preparation": (
+        "Wake up, wash and prepare the day bag",
+        "ตื่น อาบน้ำ และเตรียมกระเป๋าประจำวัน",
+        "Check weather, tickets, batteries, water, medication and the day's first route.",
+        "เช็กอากาศ ตั๋ว แบตเตอรี่ น้ำ ยา และเส้นทางแรกของวัน",
+    ),
+    "breakfast": (
+        "Breakfast near the base or first stop",
+        "มื้อเช้าใกล้ที่พักหรือจุดแรก",
+        "Choose a nearby option and keep a queue backup so the first timed activity is not delayed.",
+        "เลือกร้านใกล้ ๆ และมีร้านสำรองกรณีคิว เพื่อไม่ให้กิจกรรมแรกที่กำหนดเวลาล่าช้า",
+    ),
+    "lunch": (
+        "Lunch near the surrounding stops",
+        "มื้อกลางวันใกล้จุดเที่ยวช่วงนั้น",
+        "Choose or reserve a restaurant near the preceding and next stop; record queue limit and one nearby backup.",
+        "เลือกหรือจองร้านใกล้จุดก่อนหน้าและจุดถัดไป พร้อมกำหนดเวลารอคิวและร้านสำรองใกล้ ๆ",
+    ),
+    "dinner": (
+        "Dinner near the evening route",
+        "มื้อเย็นใกล้เส้นทางช่วงค่ำ",
+        "Confirm opening, last order, reservation or queue plan, and a nearby fallback before the final return leg.",
+        "ยืนยันเวลาเปิด เวลารับออเดอร์สุดท้าย การจองหรือแผนคิว และร้านสำรองก่อนเดินทางกลับ",
+    ),
+    "return_to_accommodation": (
+        "Return to the accommodation base",
+        "เดินทางกลับที่พัก",
+        "Confirm the final service, station or pickup point and hotel entrance; replace this provisional duration with a routed leg.",
+        "ยืนยันเที่ยวสุดท้าย สถานีหรือจุดรับรถ และทางเข้าโรงแรม แล้วแทนเวลาโดยประมาณด้วยเส้นทางจริง",
+    ),
+    "pack_and_check_out": (
+        "Pack, room sweep, check out and collect bags",
+        "เก็บของ ตรวจห้อง เช็กเอาต์ และรับกระเป๋า",
+        "Check drawers, chargers, passports and purchases; confirm luggage storage if sightseeing continues.",
+        "ตรวจลิ้นชัก ที่ชาร์จ พาสปอร์ต และของที่ซื้อ พร้อมยืนยันที่ฝากกระเป๋าหากยังเที่ยวต่อ",
+    ),
+    "departure_transfer": (
+        "Accommodation to departure airport or station",
+        "จากที่พักไปสนามบินหรือสถานีขาออก",
+        "Confirm terminal, mode, line, platform or drop-off point, fare and disruption backup; this duration is provisional.",
+        "ยืนยันอาคาร วิธีเดินทาง สาย ชานชาลาหรือจุดส่ง ค่าโดยสาร และแผนสำรองเมื่อขัดข้อง เวลานี้เป็นค่าประมาณ",
+    ),
+    "airport_departure": (
+        "Check in, security, immigration and wait at the gate",
+        "เช็กอิน ตรวจความปลอดภัย ตม. และรอที่ประตูขึ้นเครื่อง",
+        "Confirm airline or operator cutoff, terminal, gate and baggage rules; include food, water and duty-free only after the gate is known.",
+        "ยืนยันเวลาปิดเช็กอิน อาคาร ประตู และกฎสัมภาระ ซื้ออาหาร น้ำ หรือดิวตี้ฟรีหลังทราบประตูแล้ว",
+    ),
+}
 
 
 def optimize_trip(
@@ -584,6 +675,8 @@ def _build_schedules(
     days = []
     hard_errors: list[dict[str, Any]] = []
     candidate_ids = {_candidate_id(item) for values in sequences.values() for item in values}
+    if snapshot["trip"].get("include_operational_timeline"):
+        days.append(_pre_trip_day(snapshot))
     for day, sequence in sequences.items():
         built = _build_day(snapshot, day, sequence, candidate_ids, config)
         hard_errors.extend(built["hard_errors"])
@@ -604,83 +697,75 @@ def _build_day(
     items: list[dict[str, Any]] = []
     hard_errors: list[dict[str, Any]] = []
     previous: str | None = None
+
+    operational = _operational_layout(snapshot, day, window, sequence)
+    for block in operational["prefix"]:
+        current = _append_operational(items, day, current, block)
+    body_end = window_end - sum(block["duration_minutes"] for block in operational["suffix"])
+    if current > body_end:
+        hard_errors.append({"code": "OPERATIONAL_TIMELINE_EXCEEDS_DAY", "subject_id": day})
+        return {
+            "day": {
+                "date": day,
+                "window": {"start": window["start"], "end": window["end"]},
+                "items": items,
+            },
+            "hard_errors": hard_errors,
+        }
+    meals = list(operational["meals"])
+
     for candidate in sequence:
         place_id = _candidate_id(candidate)
-        route = (
-            _best_inbound_route(snapshot, place_id, candidate_ids)
-            if previous is None
-            else _best_route(snapshot, previous, place_id)
-        )
-        if route:
-            departure = _minutes(route["departure_time"]) if route.get("departure_time") else current
-            if departure < current:
-                hard_errors.append({"code": "MISSED_ROUTE_DEPARTURE", "subject_id": place_id})
-                continue
-            current = _append_wait(items, day, current, departure, "route_departure")
-            route_end = current + int(route.get("duration_minutes", 0))
-            travel_item = _travel_item(
-                day, current, route_end, previous, place_id, route, snapshot
+        while True:
+            segment = _candidate_segment(
+                snapshot,
+                day,
+                candidate,
+                previous,
+                candidate_ids,
+                config,
+                current,
             )
-            items.append(travel_item)
-            current = route_end
-            boarding = max(
-                int(route.get("boarding_buffer_minutes", 0)),
-                _required_boarding_buffer(snapshot, place_id),
-            )
-            travel_item["boarding_buffer_minutes"] = boarding
-            if boarding:
-                items.append(_buffer_item(day, current, current + boarding, "boarding"))
-                current += boarding
-            if config["buffer_minutes"] and previous is not None:
-                items.append(
-                    _buffer_item(
-                        day,
-                        current,
-                        current + config["buffer_minutes"],
-                        "transfer_contingency",
+            if segment["error"]:
+                hard_errors.append(segment["error"])
+                break
+            due = meals[0] if meals else None
+            if due and (
+                current >= due["earliest"] or segment["end"] > due["latest_start"]
+            ):
+                if max(current, due["earliest"]) > due["latest_start"]:
+                    hard_errors.append(
+                        {"code": "MANDATORY_MEAL_WINDOW_MISSED", "subject_id": due["kind"]}
                     )
+                    break
+                current = _append_wait(
+                    items, day, current, max(current, due["earliest"]), "meal_window"
                 )
-                current += config["buffer_minutes"]
-        elif previous is not None and snapshot["trip"].get("requires_route_evidence"):
-            hard_errors.append({"code": "ROUTE_UNVERIFIED", "subject_id": place_id})
-            continue
+                current = _append_operational(items, day, current, due)
+                meals.pop(0)
+                continue
+            if segment["end"] > body_end:
+                hard_errors.append({"code": "DAY_WINDOW_EXCEEDED", "subject_id": place_id})
+                break
+            items.extend(segment["items"])
+            current = segment["end"]
+            previous = place_id
+            break
 
-        activity_route = candidate.get("_activity_route")
-        if activity_route:
-            route_end = current + int(activity_route.get("duration_minutes", 0))
-            items.append(
-                _travel_item(day, current, route_end, place_id, place_id, activity_route, snapshot)
+    for meal in meals:
+        start = max(current, meal["earliest"])
+        if start > meal["latest_start"] or start + meal["duration_minutes"] > body_end:
+            hard_errors.append(
+                {"code": "MANDATORY_MEAL_WINDOW_MISSED", "subject_id": meal["kind"]}
             )
-            current = route_end
+            continue
+        current = _append_wait(items, day, current, start, "meal_window")
+        current = _append_operational(items, day, current, meal)
 
-        duration = _duration(candidate, config["duration"])
-        start = _earliest_visit_start(snapshot, candidate, day, current, duration)
-        if start is None:
-            hard_errors.append({"code": "NO_VALID_VISIT_INTERVAL", "subject_id": place_id})
-            continue
-        current = _append_wait(items, day, current, start, "timing_window")
-        end = start + duration
-        if end > window_end:
-            hard_errors.append({"code": "DAY_WINDOW_EXCEEDED", "subject_id": place_id})
-            continue
-        items.append(
-            {
-                "type": "visit",
-                "subject_id": place_id,
-                "name": candidate.get("name") or place_id,
-                "names": candidate.get("names", {}),
-                "kind": candidate.get("kind", "attraction"),
-                "date": day,
-                "start": _clock(start),
-                "end": _clock(end),
-                "duration_minutes": duration,
-                "priority": candidate.get("priority", "interested"),
-                "score": float(candidate.get("score", 10)),
-                "replaces": candidate.get("replaces"),
-            }
-        )
-        current = end
-        previous = place_id
+    if snapshot["trip"].get("include_operational_timeline"):
+        current = _append_wait(items, day, current, body_end, "free_time_or_rest")
+        for block in operational["suffix"]:
+            current = _append_operational(items, day, current, block)
     return {
         "day": {
             "date": day,
@@ -691,12 +776,286 @@ def _build_day(
     }
 
 
+def _candidate_segment(
+    snapshot: dict[str, Any],
+    day: str,
+    candidate: dict[str, Any],
+    previous: str | None,
+    candidate_ids: set[str],
+    config: dict[str, Any],
+    current: int,
+) -> dict[str, Any]:
+    """Build one candidate off to the side so a due meal can precede it."""
+
+    place_id = _candidate_id(candidate)
+    cursor = current
+    segment: list[dict[str, Any]] = []
+    route = (
+        _best_inbound_route(snapshot, place_id, candidate_ids)
+        if previous is None
+        else _best_route(snapshot, previous, place_id)
+    )
+    if route:
+        departure = _minutes(route["departure_time"]) if route.get("departure_time") else cursor
+        if departure < cursor:
+            return {
+                "items": [],
+                "end": cursor,
+                "error": {"code": "MISSED_ROUTE_DEPARTURE", "subject_id": place_id},
+            }
+        cursor = _append_wait(segment, day, cursor, departure, "route_departure")
+        route_end = cursor + int(route.get("duration_minutes", 0))
+        travel_item = _travel_item(
+            day, cursor, route_end, previous, place_id, route, snapshot
+        )
+        segment.append(travel_item)
+        cursor = route_end
+        boarding = max(
+            int(route.get("boarding_buffer_minutes", 0)),
+            _required_boarding_buffer(snapshot, place_id),
+        )
+        travel_item["boarding_buffer_minutes"] = boarding
+        if boarding:
+            segment.append(_buffer_item(day, cursor, cursor + boarding, "boarding"))
+            cursor += boarding
+        if config["buffer_minutes"] and previous is not None:
+            segment.append(
+                _buffer_item(
+                    day,
+                    cursor,
+                    cursor + config["buffer_minutes"],
+                    "transfer_contingency",
+                )
+            )
+            cursor += config["buffer_minutes"]
+    elif previous is not None and snapshot["trip"].get("requires_route_evidence"):
+        return {
+            "items": [],
+            "end": cursor,
+            "error": {"code": "ROUTE_UNVERIFIED", "subject_id": place_id},
+        }
+
+    activity_route = candidate.get("_activity_route")
+    if activity_route:
+        route_end = cursor + int(activity_route.get("duration_minutes", 0))
+        segment.append(
+            _travel_item(day, cursor, route_end, place_id, place_id, activity_route, snapshot)
+        )
+        cursor = route_end
+
+    duration = _duration(candidate, config["duration"])
+    start = _earliest_visit_start(snapshot, candidate, day, cursor, duration)
+    if start is None:
+        return {
+            "items": [],
+            "end": cursor,
+            "error": {"code": "NO_VALID_VISIT_INTERVAL", "subject_id": place_id},
+        }
+    cursor = _append_wait(segment, day, cursor, start, "timing_window")
+    end = start + duration
+    segment.append(
+        {
+            "type": "visit",
+            "subject_id": place_id,
+            "name": candidate.get("name") or place_id,
+            "names": candidate.get("names", {}),
+            "kind": candidate.get("kind", "attraction"),
+            "date": day,
+            "start": _clock(start),
+            "end": _clock(end),
+            "duration_minutes": duration,
+            "priority": candidate.get("priority", "interested"),
+            "score": float(candidate.get("score", 10)),
+            "replaces": candidate.get("replaces"),
+        }
+    )
+    return {"items": segment, "end": end, "error": None}
+
+
+def _pre_trip_day(snapshot: dict[str, Any]) -> dict[str, Any]:
+    day = (date.fromisoformat(snapshot["trip"]["local_dates"][0]) - timedelta(days=1)).isoformat()
+    current = 19 * 60
+    items: list[dict[str, Any]] = []
+    for kind, duration in (
+        ("pack_bags", 45),
+        ("documents_and_tickets", 30),
+        ("charge_and_alarm", 15),
+    ):
+        current = _append_operational(
+            items,
+            day,
+            current,
+            {"type": "preparation", "kind": kind, "duration_minutes": duration},
+        )
+    return {
+        "date": day,
+        "window": {"start": "19:00", "end": "20:30"},
+        "items": items,
+    }
+
+
+def _operational_layout(
+    snapshot: dict[str, Any],
+    day: str,
+    window: dict[str, Any],
+    sequence: list[dict[str, Any]],
+) -> dict[str, list[dict[str, Any]]]:
+    """Visible defaults shared by preview, active view, PDF, and workbook."""
+
+    if not snapshot["trip"].get("include_operational_timeline"):
+        return {"prefix": [], "meals": [], "suffix": []}
+    dates = snapshot["trip"]["local_dates"]
+    first, last = day == dates[0], day == dates[-1]
+    prefix: list[dict[str, Any]] = []
+    if first:
+        prefix.extend(
+            [
+                {"type": "logistics", "kind": "airport_arrival", "duration_minutes": 60},
+                {
+                    "type": "logistics",
+                    "kind": "arrival_transfer",
+                    "duration_minutes": 45,
+                    "mode": "confirm",
+                    "from_name": _terminal_name(snapshot, arrival=True),
+                    "to_name": _base_name(snapshot),
+                },
+                {
+                    "type": "logistics",
+                    "kind": "accommodation_check_in",
+                    "duration_minutes": 30,
+                },
+            ]
+        )
+    elif not last:
+        prefix.append(
+            {"type": "preparation", "kind": "day_preparation", "duration_minutes": 30}
+        )
+
+    suffix: list[dict[str, Any]]
+    if last:
+        suffix = [
+            {
+                "type": "logistics",
+                "kind": "pack_and_check_out",
+                "duration_minutes": 45,
+            },
+            {
+                "type": "logistics",
+                "kind": "departure_transfer",
+                "duration_minutes": 45,
+                "mode": "confirm",
+                "from_name": _base_name(snapshot),
+                "to_name": _terminal_name(snapshot, arrival=False),
+            },
+            {
+                "type": "logistics",
+                "kind": "airport_departure",
+                "duration_minutes": 90,
+            },
+        ]
+    else:
+        suffix = [
+            {
+                "type": "logistics",
+                "kind": "return_to_accommodation",
+                "duration_minutes": 45,
+                "mode": "confirm",
+                "to_name": _base_name(snapshot),
+            }
+        ]
+
+    body_start = _minutes(window["start"]) + sum(
+        item["duration_minutes"] for item in prefix
+    )
+    body_end = _minutes(window["end"]) - sum(
+        item["duration_minutes"] for item in suffix
+    )
+    selected_meals = sum(item.get("kind") == "meal" for item in sequence)
+    lunch = _meal_window(snapshot) or {"start": "11:30", "end": "13:30"}
+    slots = [
+        ("breakfast", "07:00", "09:30", 45),
+        ("lunch", lunch["start"], lunch["end"], 60),
+        ("dinner", "17:30", "21:00", 60),
+    ]
+    if selected_meals:
+        slots.pop(1)
+    if selected_meals > 1:
+        slots.pop(-1)
+    meals = []
+    for kind, start, end, duration in slots:
+        earliest = max(body_start, _minutes(start))
+        latest_end = min(body_end, _minutes(end))
+        if earliest + duration <= latest_end:
+            meals.append(
+                {
+                    "type": "meal",
+                    "kind": kind,
+                    "duration_minutes": duration,
+                    "earliest": earliest,
+                    "latest_start": latest_end - duration,
+                }
+            )
+    return {"prefix": prefix, "meals": meals, "suffix": suffix}
+
+
+def _append_operational(
+    items: list[dict[str, Any]],
+    day: str,
+    current: int,
+    block: dict[str, Any],
+) -> int:
+    kind = block["kind"]
+    duration = int(block["duration_minutes"])
+    english, thai, note_en, note_th = OPERATIONAL_COPY[kind]
+    items.append(
+        {
+            "type": block["type"],
+            "subject_id": f"{kind}:{day}",
+            "name": english,
+            "names": {"en": english, "th": thai},
+            "kind": kind,
+            "date": day,
+            "start": _clock(current),
+            "end": _clock(current + duration),
+            "duration_minutes": duration,
+            "status": "assumed",
+            "notes": {"en": note_en, "th": note_th},
+            "from_name": block.get("from_name"),
+            "to_name": block.get("to_name"),
+            "mode": block.get("mode"),
+            "reason": "confirm_after_booking",
+        }
+    )
+    return current + duration
+
+
+def _terminal_name(snapshot: dict[str, Any], *, arrival: bool) -> str:
+    destination = snapshot["trip"].get("destination") or "Destination"
+    direction = "arrival" if arrival else "departure"
+    return f"{destination} {direction} airport / station (confirm)"
+
+
+def _base_name(snapshot: dict[str, Any]) -> str:
+    return (
+        "Booked accommodation base"
+        if snapshot["trip"].get("accommodation_status") == "booked"
+        else "Provisional accommodation area"
+    )
+
+
 def _schedule_metrics(
     snapshot: dict[str, Any], days: list[dict[str, Any]]
 ) -> dict[str, Any]:
     visits = [item for day in days for item in day["items"] if item["type"] == "visit"]
     travel = [item for day in days for item in day["items"] if item["type"] == "travel"]
     buffers = [item for day in days for item in day["items"] if item["type"] == "buffer"]
+    meals = [item for day in days for item in day["items"] if item["type"] == "meal"]
+    preparation = [
+        item for day in days for item in day["items"] if item["type"] == "preparation"
+    ]
+    logistics = [
+        item for day in days for item in day["items"] if item["type"] == "logistics"
+    ]
     plain_walk = sum(
         item.get("walking_minutes", 0)
         for item in travel
@@ -708,6 +1067,8 @@ def _schedule_metrics(
         if item.get("experience_evidence")
     )
     warnings = []
+    if meals or preparation or logistics:
+        warnings.append("OPERATIONAL_DETAILS_REQUIRE_CONFIRMATION")
     for item in travel:
         if item.get("claimed_experience") and not item.get("experience_supported_at_time"):
             warnings.append("ROUTE_EXPERIENCE_NOT_SUPPORTED_AT_SCHEDULED_TIME")
@@ -724,6 +1085,9 @@ def _schedule_metrics(
             item["duration_minutes"] for item in travel if item.get("mode") == "bike"
         ),
         "buffer_minutes": sum(item["duration_minutes"] for item in buffers),
+        "meal_minutes": sum(item["duration_minutes"] for item in meals),
+        "preparation_minutes": sum(item["duration_minutes"] for item in preparation),
+        "logistics_minutes": sum(item["duration_minutes"] for item in logistics),
         "maximum_walking_minutes_per_leg": max(
             (item.get("walking_minutes", 0) for item in travel), default=0
         ),
@@ -1469,7 +1833,19 @@ def _lock_for(snapshot: dict[str, Any], place_id: str) -> dict[str, Any] | None:
 
 
 def _window_for(snapshot: dict[str, Any], day: str) -> dict[str, Any]:
-    return next(item for item in snapshot["trip"]["usable_windows"] if item["date"] == day)
+    match = next(
+        (item for item in snapshot["trip"]["usable_windows"] if item["date"] == day),
+        None,
+    )
+    if match:
+        return match
+    if snapshot["trip"].get("include_operational_timeline"):
+        preparation_date = (
+            date.fromisoformat(snapshot["trip"]["local_dates"][0]) - timedelta(days=1)
+        ).isoformat()
+        if day == preparation_date:
+            return {"date": day, "start": "19:00", "end": "20:30"}
+    raise ValueError(f"No usable window for {day}")
 
 
 def _reconciliation(

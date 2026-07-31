@@ -100,6 +100,35 @@ class FullWorkflowTest(unittest.TestCase):
             actions.apply_checklist_proposal(trip.trip_id)
             snapshot = actions.build_export_snapshot(trip.trip_id).as_dict()
 
+            # The reference workbooks are complete trip timetables, not only
+            # attraction lists.  The shared result must therefore carry the
+            # recurring operational rows seen across those four trips.
+            timeline = [
+                item for day in snapshot["days"] for item in day["items"]
+            ]
+            kinds = {item.get("kind") for item in timeline}
+            self.assertTrue(
+                {
+                    "pack_bags",
+                    "airport_arrival",
+                    "accommodation_check_in",
+                    "breakfast",
+                    "lunch",
+                    "dinner",
+                    "pack_and_check_out",
+                    "airport_departure",
+                }.issubset(kinds)
+            )
+            for item in timeline:
+                if item["type"] in {"preparation", "meal", "logistics"}:
+                    self.assertTrue(item["display_name"])
+                    self.assertTrue(item["notes"])
+            for day in snapshot["days"]:
+                self.assertEqual(
+                    [item["end"] for item in day["items"][:-1]],
+                    [item["start"] for item in day["items"][1:]],
+                )
+
             poster = day_poster_png(snapshot, snapshot["days"][0]["date"])
             pdf = plan_pdf(snapshot)
             workbook = plan_workbook_xlsx(snapshot)
@@ -107,6 +136,18 @@ class FullWorkflowTest(unittest.TestCase):
             self.assertEqual((1080, 1920), Image.open(BytesIO(poster)).size)
             self.assertTrue(pdf.startswith(b"%PDF-"))
             self.assertTrue(zipfile.is_zipfile(BytesIO(workbook)))
+            archive = zipfile.ZipFile(BytesIO(workbook))
+            workbook_text = archive.read("xl/sharedStrings.xml").decode("utf-8")
+            for expected in (
+                "Pack bags for the forecast and planned activities",
+                "Arrival terminal: immigration, baggage and essentials",
+                "Breakfast near the base or first stop",
+                "Lunch near the surrounding stops",
+                "Dinner near the evening route",
+                "Pack, room sweep, check out and collect bags",
+                "Operational notes",
+            ):
+                self.assertIn(expected, workbook_text)
             self.assertTrue(calendar.startswith(b"BEGIN:VCALENDAR"))
             self.assertEqual(version.version_id, snapshot["stamp"]["plan_version_id"])
             self.assertEqual("ready", snapshot["readiness"]["state"])

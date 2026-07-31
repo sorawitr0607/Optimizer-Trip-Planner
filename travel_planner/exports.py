@@ -379,6 +379,25 @@ def _item(
                 "status": _travel_status(item),
             }
         )
+    elif item["type"] in {"meal", "preparation", "logistics"}:
+        names = item.get("names") or {}
+        notes = item.get("notes") or {}
+        row.update(
+            {
+                "display_name": display_name(
+                    names, item.get("name"), context["language"]
+                ),
+                "names": dict(names),
+                "local_name": names.get("local"),
+                "kind": item.get("kind"),
+                "notes": display_name(notes, item.get("note"), context["language"]),
+                "from_name": item.get("from_name"),
+                "to_name": item.get("to_name"),
+                "mode": item.get("mode"),
+                "reason": item.get("reason"),
+                "status": RECHECK if item.get("status") == "assumed" else CONFIRMED,
+            }
+        )
     else:
         row["reason"] = item.get("reason")
     return row
@@ -429,11 +448,17 @@ def _day_totals(items: list[dict[str, Any]]) -> dict[str, int]:
     visits = [item for item in items if item["type"] == "visit"]
     travel = [item for item in items if item["type"] == "travel"]
     buffers = [item for item in items if item["type"] == "buffer"]
+    meals = [item for item in items if item["type"] == "meal"]
+    preparation = [item for item in items if item["type"] == "preparation"]
+    logistics = [item for item in items if item["type"] == "logistics"]
     return {
         "scheduled_visits": len(visits),
         "visit_minutes": sum(item["duration_minutes"] for item in visits),
         "travel_minutes": sum(item["duration_minutes"] for item in travel),
         "buffer_minutes": sum(item["duration_minutes"] for item in buffers),
+        "meal_minutes": sum(item["duration_minutes"] for item in meals),
+        "preparation_minutes": sum(item["duration_minutes"] for item in preparation),
+        "logistics_minutes": sum(item["duration_minutes"] for item in logistics),
         "walking_minutes": sum(item["walking_minutes"] for item in travel),
         "plain_walking_minutes": sum(
             item["walking_minutes"] for item in travel if not item["sightseeing_walk"]
@@ -450,6 +475,9 @@ def _trip_totals(days: list[dict[str, Any]]) -> dict[str, int]:
         "visit_minutes",
         "travel_minutes",
         "buffer_minutes",
+        "meal_minutes",
+        "preparation_minutes",
+        "logistics_minutes",
         "walking_minutes",
         "plain_walking_minutes",
         "rewarding_walking_minutes",
@@ -470,6 +498,9 @@ def _reconcile_with_optimizer(
         "walking_minutes": metrics["walking_minutes"],
         "plain_walking_minutes": metrics["plain_walking_minutes"],
         "rewarding_walking_minutes": metrics["rewarding_walking_minutes"],
+        "meal_minutes": metrics.get("meal_minutes", 0),
+        "preparation_minutes": metrics.get("preparation_minutes", 0),
+        "logistics_minutes": metrics.get("logistics_minutes", 0),
     }
     mismatched = sorted(key for key, value in expected.items() if totals[key] != value)
     if mismatched:

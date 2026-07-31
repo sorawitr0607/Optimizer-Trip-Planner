@@ -61,6 +61,11 @@ else:
         f"{copy['plain_walking_minutes']} {totals['plain_walking_minutes']}) · "
         f"{copy['buffer_minutes']} {totals['buffer_minutes']} {copy['minutes']}"
     )
+    st.caption(
+        f"{copy['meal_minutes']} {totals['meal_minutes']} {copy['minutes']} · "
+        f"{copy['preparation_minutes']} {totals['preparation_minutes']} {copy['minutes']} · "
+        f"{copy['logistics_minutes']} {totals['logistics_minutes']} {copy['minutes']}"
+    )
     if day["highest_risk"]:
         st.warning(
             f"{copy['highest_risk']}: "
