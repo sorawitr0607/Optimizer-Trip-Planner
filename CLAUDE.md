@@ -206,6 +206,13 @@ must stay directed. Rebuild only through `python3 scripts/build_project_graph.py
 failure), and only when explicitly asked or after a topology-changing milestone. After any graph
 change, `--check` must pass before committing. See `AGENTS.md`.
 
+**Rebuilt 2026-08-01 and `--check` passes**: 1126 nodes, 2827 directed edges, 54 communities, all 36
+tickets covered. It cost **US$0.0254** — a rebuild is cents, not dollars, and the script reads
+`OPENAI_API_KEY` from `secrets.local.json` itself. Two things to know before using it: **ticket nodes are
+keyed by title, not by ID**, so `WF-0nn` never appears in a node name; and **`.wayfinder/artifacts/` is
+excluded from the graph**, so decisions are not queryable, only the tickets that link to them. `AGENTS.md`
+explains why.
+
 A node's `source_file` may hold an absolute path from the machine that built the graph. Such a path is
 not `is_absolute()` on Windows, so joining it to the repository root produced a drive-relative path
 that matched nothing, and `--check` failed with `Extraction produced no node for WF-001` on every

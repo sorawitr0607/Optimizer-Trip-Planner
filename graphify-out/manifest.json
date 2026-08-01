@@ -1,8 +1,8 @@
 {
   "app.py": {
-    "mtime": 1785384392.8294194,
-    "ast_hash": "1bdef5856d3a69e241f6e4d0b267cf54",
-    "semantic_hash": "1bdef5856d3a69e241f6e4d0b267cf54"
+    "mtime": 1785401105.515665,
+    "ast_hash": "e06bd26b24b17a0905114d4ca9c8370b",
+    "semantic_hash": "e06bd26b24b17a0905114d4ca9c8370b"
   },
   "pyproject.toml": {
     "mtime": 1785300241.8179274,
@@ -50,14 +50,14 @@
     "semantic_hash": "14d813f2f7526df6f128fcdd1a172c32"
   },
   "tests/test_exports.py": {
-    "mtime": 1785322649.7651312,
-    "ast_hash": "e271e3fe048d7e3875d79780263b62a6",
-    "semantic_hash": "e271e3fe048d7e3875d79780263b62a6"
+    "mtime": 1785468194.0041528,
+    "ast_hash": "b77de573df82ed639784d28fb9266428",
+    "semantic_hash": "b77de573df82ed639784d28fb9266428"
   },
   "tests/test_foundation.py": {
-    "mtime": 1785384613.9773242,
-    "ast_hash": "8587204c60bb92261ced0064a5b3197d",
-    "semantic_hash": "8587204c60bb92261ced0064a5b3197d"
+    "mtime": 1785401194.988853,
+    "ast_hash": "d7477c7bf4ff844f0cd7fb560037faef",
+    "semantic_hash": "d7477c7bf4ff844f0cd7fb560037faef"
   },
   "tests/test_graph_builder.py": {
     "mtime": 1785388058.30178,
@@ -70,9 +70,9 @@
     "semantic_hash": "544e539401c3df059f26ee8570bdafb1"
   },
   "tests/test_opening.py": {
-    "mtime": 1785319391.1681757,
-    "ast_hash": "59e1ff768157c562d9b81066639b0b62",
-    "semantic_hash": "59e1ff768157c562d9b81066639b0b62"
+    "mtime": 1785398350.4196372,
+    "ast_hash": "0cbc188f5e328254aea4250266ab61da",
+    "semantic_hash": "0cbc188f5e328254aea4250266ab61da"
   },
   "tests/test_optimizer.py": {
     "mtime": 1785382614.679707,
@@ -80,9 +80,9 @@
     "semantic_hash": "0a2ec18701a9bf95b1dcec8a4085a348"
   },
   "tests/test_ranking.py": {
-    "mtime": 1785387609.8880765,
-    "ast_hash": "fbc0ac32c1793317c14a76b2ec2dcdfb",
-    "semantic_hash": "fbc0ac32c1793317c14a76b2ec2dcdfb"
+    "mtime": 1785394602.991924,
+    "ast_hash": "5740050fd0fd354758014ee5ae5097fb",
+    "semantic_hash": "5740050fd0fd354758014ee5ae5097fb"
   },
   "tests/test_revision.py": {
     "mtime": 1785321630.9411383,
@@ -90,14 +90,14 @@
     "semantic_hash": "b5bc257c0dd53b8392c6f9a8ce1de078"
   },
   "tests/test_routes.py": {
-    "mtime": 1785382614.6807723,
-    "ast_hash": "4a7acee5b9195044c75147cebda72718",
-    "semantic_hash": "4a7acee5b9195044c75147cebda72718"
+    "mtime": 1785390573.3311598,
+    "ast_hash": "269e65445804cf1e7a20797c34732262",
+    "semantic_hash": "269e65445804cf1e7a20797c34732262"
   },
   "tests/test_setup_discovery.py": {
-    "mtime": 1785387452.7601993,
-    "ast_hash": "2bc906248cbed250a6b33c6ac1732d0c",
-    "semantic_hash": "2bc906248cbed250a6b33c6ac1732d0c"
+    "mtime": 1785390433.3863397,
+    "ast_hash": "c2b0aa0c18b1a5b683067d3d1846c145",
+    "semantic_hash": "c2b0aa0c18b1a5b683067d3d1846c145"
   },
   "tests/test_usage.py": {
     "mtime": 1785318218.298972,
@@ -105,9 +105,9 @@
     "semantic_hash": "2289465a4c15c78907c62270e4e14f67"
   },
   "tests/test_workflow.py": {
-    "mtime": 1785386052.1154392,
-    "ast_hash": "2809b3382c1207491a68f87bad00f663",
-    "semantic_hash": "2809b3382c1207491a68f87bad00f663"
+    "mtime": 1785468194.0045578,
+    "ast_hash": "9808b738cb376ea98fd7bad90dce618f",
+    "semantic_hash": "9808b738cb376ea98fd7bad90dce618f"
   },
   "travel_planner/__init__.py": {
     "mtime": 1785273242.0,
@@ -115,9 +115,9 @@
     "semantic_hash": "ef0aefdeae9a5f201e587415c32b8a5b"
   },
   "travel_planner/actions.py": {
-    "mtime": 1785385885.5476766,
-    "ast_hash": "2f1186419621daa5ee022706be6cabf3",
-    "semantic_hash": "2f1186419621daa5ee022706be6cabf3"
+    "mtime": 1785468194.0050488,
+    "ast_hash": "a896b53be3edc30611fe0706ff1fdab3",
+    "semantic_hash": "a896b53be3edc30611fe0706ff1fdab3"
   },
   "travel_planner/checklist.py": {
     "mtime": 1785316030.1684666,
@@ -145,14 +145,14 @@
     "semantic_hash": "539e145ea9e4e0123102c4360e9335be"
   },
   "travel_planner/exporters.py": {
-    "mtime": 1785317390.516778,
-    "ast_hash": "f4e588fab8d3ac55e3b08ec347773c58",
-    "semantic_hash": "f4e588fab8d3ac55e3b08ec347773c58"
+    "mtime": 1785468194.0054135,
+    "ast_hash": "ac4044764dd5cf5a311f164e80fa08a4",
+    "semantic_hash": "ac4044764dd5cf5a311f164e80fa08a4"
   },
   "travel_planner/exports.py": {
-    "mtime": 1785317363.7360854,
-    "ast_hash": "04c94ba92fb3e216026d8b8f406fb304",
-    "semantic_hash": "04c94ba92fb3e216026d8b8f406fb304"
+    "mtime": 1785468194.0057075,
+    "ast_hash": "e1fbb6b9be169864c0f1a3a0cb5a5e89",
+    "semantic_hash": "e1fbb6b9be169864c0f1a3a0cb5a5e89"
   },
   "travel_planner/interpret.py": {
     "mtime": 1785320568.189277,
@@ -165,14 +165,14 @@
     "semantic_hash": "9ee894f176866da44ca41771e596053b"
   },
   "travel_planner/optimizer.py": {
-    "mtime": 1785295625.0,
-    "ast_hash": "e59d1708ce5510169a455c0a544bf7a9",
-    "semantic_hash": "e59d1708ce5510169a455c0a544bf7a9"
+    "mtime": 1785468194.0061438,
+    "ast_hash": "bc0a651bd7637fd7c8c0b617bda50090",
+    "semantic_hash": "bc0a651bd7637fd7c8c0b617bda50090"
   },
   "travel_planner/providers.py": {
-    "mtime": 1785388269.275357,
-    "ast_hash": "0e87164f005fe52392719607dff7d5ee",
-    "semantic_hash": "0e87164f005fe52392719607dff7d5ee"
+    "mtime": 1785397212.768139,
+    "ast_hash": "a469529cb241479fe75c0c23932a1e2c",
+    "semantic_hash": "a469529cb241479fe75c0c23932a1e2c"
   },
   "travel_planner/ranking.py": {
     "mtime": 1785386609.8081107,
@@ -190,9 +190,9 @@
     "semantic_hash": "2ae63616343cd2772625c1cc43a6f376"
   },
   "travel_planner/store.py": {
-    "mtime": 1785319673.1409063,
-    "ast_hash": "d0963189d5446c8c6681f56f01a2c13c",
-    "semantic_hash": "d0963189d5446c8c6681f56f01a2c13c"
+    "mtime": 1785401105.197952,
+    "ast_hash": "f97dfa9a860fc3f0d326b39b505352ea",
+    "semantic_hash": "f97dfa9a860fc3f0d326b39b505352ea"
   },
   "travel_planner/usage.py": {
     "mtime": 1785385897.4960427,
@@ -205,14 +205,14 @@
     "semantic_hash": "0acc44669dfa2b68177437f8d7f64762"
   },
   "ui/shared.py": {
-    "mtime": 1785382614.685475,
-    "ast_hash": "e152a395e2cc845f7f05ad00fb756e21",
-    "semantic_hash": "e152a395e2cc845f7f05ad00fb756e21"
+    "mtime": 1785468194.0065525,
+    "ast_hash": "a9ebb2c8c33e0513306d91b42de03da7",
+    "semantic_hash": "a9ebb2c8c33e0513306d91b42de03da7"
   },
   "ui/text.py": {
-    "mtime": 1785387604.7542462,
-    "ast_hash": "2344eb56b246f331f42d34bca8c3b9e0",
-    "semantic_hash": "2344eb56b246f331f42d34bca8c3b9e0"
+    "mtime": 1785468194.0070856,
+    "ast_hash": "e6447a744b1f714f14e247694ee60f05",
+    "semantic_hash": "e6447a744b1f714f14e247694ee60f05"
   },
   "views/__init__.py": {
     "mtime": 1785322577.4793472,
@@ -225,24 +225,24 @@
     "semantic_hash": "a5f3b8dbeaa58f8538a48ce4dc978339"
   },
   "views/evidence.py": {
-    "mtime": 1785382614.687,
-    "ast_hash": "ed47a465d7b437be2612732aa3c461e8",
-    "semantic_hash": "ed47a465d7b437be2612732aa3c461e8"
+    "mtime": 1785397334.5195844,
+    "ast_hash": "a7379b1771c2eeed415bff43d9e8bf59",
+    "semantic_hash": "a7379b1771c2eeed415bff43d9e8bf59"
   },
   "views/itinerary.py": {
-    "mtime": 1785382614.6874068,
-    "ast_hash": "0834fc028f856fcbb576b24c2b396505",
-    "semantic_hash": "0834fc028f856fcbb576b24c2b396505"
+    "mtime": 1785468194.0078096,
+    "ast_hash": "43f0193dd378fbdcd6822a432c2152d4",
+    "semantic_hash": "43f0193dd378fbdcd6822a432c2152d4"
   },
   "views/optimize.py": {
-    "mtime": 1785382614.687834,
-    "ast_hash": "ed88de3b5947f895a6255d438f221683",
-    "semantic_hash": "ed88de3b5947f895a6255d438f221683"
+    "mtime": 1785468194.0081894,
+    "ast_hash": "136fa5e131a6d47f40cacb6970566556",
+    "semantic_hash": "136fa5e131a6d47f40cacb6970566556"
   },
   "views/places.py": {
-    "mtime": 1785387604.8964117,
-    "ast_hash": "830b6e242cc45c3ec3e40ef4d8be0f8b",
-    "semantic_hash": "830b6e242cc45c3ec3e40ef4d8be0f8b"
+    "mtime": 1785394755.0478828,
+    "ast_hash": "0cce8dda6ed3f5e98e7ccb7d2dd2d890",
+    "semantic_hash": "0cce8dda6ed3f5e98e7ccb7d2dd2d890"
   },
   "views/readiness.py": {
     "mtime": 1785382614.6886253,
@@ -255,14 +255,9 @@
     "semantic_hash": "f7c7704de27fa85b6b2db7e4cfc26d92"
   },
   "views/setup.py": {
-    "mtime": 1785382614.6893876,
-    "ast_hash": "ecff083fca6d56af0dba9f62be2fce46",
-    "semantic_hash": "ecff083fca6d56af0dba9f62be2fce46"
-  },
-  ".wayfinder/README.md": {
-    "mtime": 1785221670.0,
-    "ast_hash": "e95fbcf1f33044cd5b1f8e80e2151d03",
-    "semantic_hash": "e95fbcf1f33044cd5b1f8e80e2151d03"
+    "mtime": 1785398969.77164,
+    "ast_hash": "a64c727fa6cd289451d6d29af9b7f15e",
+    "semantic_hash": "a64c727fa6cd289451d6d29af9b7f15e"
   },
   ".wayfinder/map.md": {
     "mtime": 1785272453.0,
@@ -353,20 +348,5 @@
     "mtime": 1785258989.0,
     "ast_hash": "8eb597e61207566090c77928cafd0113",
     "semantic_hash": "8eb597e61207566090c77928cafd0113"
-  },
-  "AGENTS.md": {
-    "mtime": 1785320840.5350666,
-    "ast_hash": "7980e26a8851f5e18df1f899653396f1",
-    "semantic_hash": "7980e26a8851f5e18df1f899653396f1"
-  },
-  "CLAUDE.md": {
-    "mtime": 1785384718.4147763,
-    "ast_hash": "ac675c36d56b89d182a477f56c149ec9",
-    "semantic_hash": "ac675c36d56b89d182a477f56c149ec9"
-  },
-  "README.md": {
-    "mtime": 1785382614.67762,
-    "ast_hash": "dbbe20278c9790ae59b263aedd1bbdb0",
-    "semantic_hash": "dbbe20278c9790ae59b263aedd1bbdb0"
   }
 }

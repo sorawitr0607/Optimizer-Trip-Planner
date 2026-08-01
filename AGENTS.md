@@ -21,29 +21,47 @@
   this repository inherit the workflow; the installed `graphify` skill remains
   available globally for new sessions that trigger it.
 
-## The checked-in graph predates the Phase 2 map
+## The graph was rebuilt on 2026-08-01 and the guard passes
 
-- `python3 scripts/build_project_graph.py --check` currently **fails** with
-  `Extraction produced no node for WF-018`. This is not the 2026-07-29 corruption:
-  no data was lost. `WF-MAP-002` and tickets `018`–`036` were charted after the
-  last rebuild, so the graph simply has no nodes for them yet.
-- Fixing it needs the paid rebuild (`OPENAI_API_KEY`), so it waits for an explicit
-  request or the next topology milestone — most sensibly once the Phase 2 map is
-  decision-complete, rather than once per resolved ticket.
-- Diagnose as the CLAUDE.md note says: count the wayfinder-sourced nodes first. A
-  missing *new* ticket is staleness; a missing *old* ticket is corruption.
+- `python3 scripts/build_project_graph.py --check` **passes**. The long-standing
+  `Extraction produced no node for WF-018` failure is resolved: it was staleness,
+  exactly as diagnosed, and never the 2026-07-29 corruption.
+- The rebuild cost **US$0.0254** (44,100 in / 4,829 out), taking the cumulative
+  total to about US$0.11 over 15 runs. A full rebuild is **cents, not dollars** —
+  the earlier reluctance over-weighted the cost. It still needs `OPENAI_API_KEY`,
+  which `build_project_graph.py` reads from `secrets.local.json` itself, so no
+  variable has to be exported by hand.
+- State after the rebuild: **1126 nodes, 2827 directed edges, 54 communities**, with
+  **39 nodes from `.wayfinder/tickets/`** covering all 36 tickets plus one node each
+  for the two maps. Ticket nodes are keyed by **title**, not by ID — `WF-0nn` will
+  not appear in a node name, and `--check` resolves them by source file and title.
+- **Secrets are not ingested.** Verified empirically both before and after: zero
+  nodes sourced from `secrets.local.json` or `.env`, and no `sk-` string anywhere
+  in `graph.json`. Graphify honours `.gitignore`. Source code *is* sent to OpenAI,
+  which every prior rebuild already accepted.
+- Diagnosing a future failure is unchanged: count the wayfinder-sourced nodes first.
+  A missing *new* ticket is staleness; a missing *old* ticket is corruption.
 - The Phase 2 tickets carry long resolution prose, which is exactly what starved
   ticket 012's extraction twice. Keep long findings in `.wayfinder/artifacts/` and
-  link them in one line from the ticket.
-- **As of 2026-07-31 the gap is wider and the rebuild milestone is close.** Seven
-  Phase 2 grilling tickets were resolved that day and six artifacts now exist
-  (`019`, `020`, `021`, `022`, `023`, `025`, `026`, `028`, `030`), while `--check`
-  still fails at exactly the same place — `WF-018` — so this is still staleness and
-  still not corruption. The map is at 9 closed of 19, so the sensible rebuild moment
-  (decision-complete) is near rather than hypothetical.
-- The keep-findings-in-artifacts rule was **followed** for all seven of those
-  resolutions: each ticket carries a summary and one link, with the detail in its
-  artifact. Keep doing that — it is the established pattern now, not advice.
+  link them in one line from the ticket. That rule was followed for all seven
+  resolutions of 2026-07-31, and the tickets extract cleanly as a result — it is the
+  established pattern now, not advice.
+
+### Known: `.wayfinder/artifacts/` is excluded from the graph
+
+`build_project_graph.py` passes `--exclude artifacts` to skip the root
+`artifacts/validation/` bundles, whose manifests are evidence rather than
+architecture. But the pattern carries no leading slash, so in gitignore semantics it
+matches a directory called `artifacts` **at any depth** — which silently also
+excludes `.wayfinder/artifacts/`. Confirmed: the rebuild produced **zero** nodes from
+either directory.
+
+The consequence is worth knowing rather than discovering: following the
+keep-long-findings-in-artifacts rule above moves that content **out of the graph**.
+Tickets extract cleanly, which was the goal, but the decisions themselves are not
+queryable — only the tickets that link to them. That is acceptable while the graph is
+for broad architecture questions, as `CLAUDE.md` directs. If decision content should
+be graphed, anchor the pattern as `/artifacts` and rebuild.
 
 ## Validation evidence belongs in bundles
 
