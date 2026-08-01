@@ -363,16 +363,26 @@ def build() -> tuple[int, int]:
                     "120",
                     "--no-cluster",
                     "--exclude",
-                    # Reference itinerary workbooks and PDFs. Matched as a
-                    # case-sensitive gitignore line anchored at the root, so
-                    # this must track the real directory name; it read every
-                    # PDF while it still said "Data".
-                    "data",
+                    # Reference itinerary workbooks and PDFs. Case-sensitive, so
+                    # this must track the real directory name; it read every PDF
+                    # while it still said "Data".
+                    #
+                    # The LEADING SLASH matters. graphify parses each --exclude as
+                    # a gitignore line (detect.py `_parse_gitignore_line`), so a
+                    # slashless pattern matches a directory of that name at ANY
+                    # depth. Anchor it, or a nested `data/` is silently dropped.
+                    "/data",
                     "--exclude",
-                    # Retained validation bundles. Their manifests are evidence,
-                    # not architecture: ingesting them turns every manifest key
-                    # into a node and invents edges from code to those keys.
-                    "artifacts",
+                    # Retained validation bundles under the ROOT artifacts/. Their
+                    # manifests are evidence, not architecture: ingesting them turns
+                    # every manifest key into a node and invents edges from code to
+                    # those keys.
+                    #
+                    # Anchored for a reason found on 2026-08-01: as bare `artifacts`
+                    # this also excluded `.wayfinder/artifacts/`, so every Phase 2
+                    # decision document was missing from the graph while AGENTS.md
+                    # was simultaneously directing long findings to live there.
+                    "/artifacts",
                     env=env,
                 )
             finally:

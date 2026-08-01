@@ -10,9 +10,9 @@
     "semantic_hash": "31a30bde8e102bc15d99371f9d2fe34e"
   },
   "scripts/build_project_graph.py": {
-    "mtime": 1785388058.1612532,
-    "ast_hash": "93bf1e2e185b7b64a0b63e887712190a",
-    "semantic_hash": "93bf1e2e185b7b64a0b63e887712190a"
+    "mtime": 1785564188.8330529,
+    "ast_hash": "01d8de4b0735f2fbcd96a0293cfc6285",
+    "semantic_hash": "01d8de4b0735f2fbcd96a0293cfc6285"
   },
   "scripts/check_provider_access.py": {
     "mtime": 1785251698.0,
@@ -259,6 +259,61 @@
     "ast_hash": "a64c727fa6cd289451d6d29af9b7f15e",
     "semantic_hash": "a64c727fa6cd289451d6d29af9b7f15e"
   },
+  ".wayfinder/README.md": {
+    "mtime": 1785563136.3810906,
+    "ast_hash": "a7ef5fb263608944596512c4e02f11d8",
+    "semantic_hash": "a7ef5fb263608944596512c4e02f11d8"
+  },
+  ".wayfinder/artifacts/019-local-api-contract.md": {
+    "mtime": 1785471809.5662344,
+    "ast_hash": "4d5c4d6587d11b381c6207081f141a44",
+    "semantic_hash": "4d5c4d6587d11b381c6207081f141a44"
+  },
+  ".wayfinder/artifacts/020-auto-bill-token-contract.md": {
+    "mtime": 1785487987.9106412,
+    "ast_hash": "bf5527e83731a0b39f28bd871bc9c543",
+    "semantic_hash": "bf5527e83731a0b39f28bd871bc9c543"
+  },
+  ".wayfinder/artifacts/021-element-inventory-matrix.md": {
+    "mtime": 1785468188.2871447,
+    "ast_hash": "0b0a2d9917e0d9844be318ca4e68282a",
+    "semantic_hash": "0b0a2d9917e0d9844be318ca4e68282a"
+  },
+  ".wayfinder/artifacts/022-streamlit-poc-retirement-and-pilot-commitment.md": {
+    "mtime": 1785483119.842791,
+    "ast_hash": "e395a56f5ed85528495dc54de3afe205",
+    "semantic_hash": "e395a56f5ed85528495dc54de3afe205"
+  },
+  ".wayfinder/artifacts/023-cost-and-split-reconciliation.md": {
+    "mtime": 1785493599.0399745,
+    "ast_hash": "8373ff36e23f14555293d33fed89bc8e",
+    "semantic_hash": "8373ff36e23f14555293d33fed89bc8e"
+  },
+  ".wayfinder/artifacts/025-visual-parity-gate.md": {
+    "mtime": 1785487911.3046753,
+    "ast_hash": "f8d9372399d4d43d455836760f8662cb",
+    "semantic_hash": "f8d9372399d4d43d455836760f8662cb"
+  },
+  ".wayfinder/artifacts/026-webapp-stack-and-layout.md": {
+    "mtime": 1785484174.7107954,
+    "ast_hash": "d752d0f6a8adff4883a0acf1095249f7",
+    "semantic_hash": "d752d0f6a8adff4883a0acf1095249f7"
+  },
+  ".wayfinder/artifacts/028-webapp-information-architecture.md": {
+    "mtime": 1785485699.6460054,
+    "ast_hash": "feb0111fef4347349852f0e5da606ea0",
+    "semantic_hash": "feb0111fef4347349852f0e5da606ea0"
+  },
+  ".wayfinder/artifacts/030-exporter-and-download-contract.md": {
+    "mtime": 1785494923.0064409,
+    "ast_hash": "8536b529c01d4a4da0d06c1a03bf3964",
+    "semantic_hash": "8536b529c01d4a4da0d06c1a03bf3964"
+  },
+  ".wayfinder/map-002-splitter-merge-and-webapp.md": {
+    "mtime": 1785494962.1936057,
+    "ast_hash": "66556ec03ed17938b97aa91273cb2a04",
+    "semantic_hash": "66556ec03ed17938b97aa91273cb2a04"
+  },
   ".wayfinder/map.md": {
     "mtime": 1785272453.0,
     "ast_hash": "f2ea224e665fdb844438af7de7eba063",
@@ -348,5 +403,115 @@
     "mtime": 1785258989.0,
     "ast_hash": "8eb597e61207566090c77928cafd0113",
     "semantic_hash": "8eb597e61207566090c77928cafd0113"
+  },
+  ".wayfinder/tickets/018-define-the-split-ledger-model-and-where-its-math-lives.md": {
+    "mtime": 1785468188.287714,
+    "ast_hash": "93b77c44d9965aa7b35fe88044245f55",
+    "semantic_hash": "93b77c44d9965aa7b35fe88044245f55"
+  },
+  ".wayfinder/tickets/019-lock-the-local-api-contract-between-webapp-and-core.md": {
+    "mtime": 1785471841.4811525,
+    "ast_hash": "a6f3c0bcaee48213f35dc938c39e8204",
+    "semantic_hash": "a6f3c0bcaee48213f35dc938c39e8204"
+  },
+  ".wayfinder/tickets/020-extract-the-auto-bill-design-token-contract.md": {
+    "mtime": 1785490615.9610124,
+    "ast_hash": "ce96896cf91d8e67746bc870cd575759",
+    "semantic_hash": "ce96896cf91d8e67746bc870cd575759"
+  },
+  ".wayfinder/tickets/021-inventory-the-auto-bill-elements-each-stage-needs.md": {
+    "mtime": 1785468188.288624,
+    "ast_hash": "d52ea34f3571106d1095ed69c6580063",
+    "semantic_hash": "d52ea34f3571106d1095ed69c6580063"
+  },
+  ".wayfinder/tickets/022-decide-the-streamlit-freeze-and-pilot-fallback-rules.md": {
+    "mtime": 1785483157.6691444,
+    "ast_hash": "d5a4d2ac96f200407bff3f75d64e6ad4",
+    "semantic_hash": "d5a4d2ac96f200407bff3f75d64e6ad4"
+  },
+  ".wayfinder/tickets/023-decide-cost-and-split-reconciliation-rules.md": {
+    "mtime": 1785493628.4954998,
+    "ast_hash": "49c655405f5cf54db969f9e2c3aabff0",
+    "semantic_hash": "49c655405f5cf54db969f9e2c3aabff0"
+  },
+  ".wayfinder/tickets/024-decide-the-migration-path-for-existing-data.md": {
+    "mtime": 1785468188.2893832,
+    "ast_hash": "5e22f6b6cfc8cd4bbe85ba7445dfd40d",
+    "semantic_hash": "5e22f6b6cfc8cd4bbe85ba7445dfd40d"
+  },
+  ".wayfinder/tickets/025-define-the-visual-parity-gate-for-the-tailwind-rebuild.md": {
+    "mtime": 1785487942.6477358,
+    "ast_hash": "a6f95f46c20076507e634a9dd6efa8fb",
+    "semantic_hash": "a6f95f46c20076507e634a9dd6efa8fb"
+  },
+  ".wayfinder/tickets/026-choose-the-webapp-stack-and-project-layout.md": {
+    "mtime": 1785484203.2309036,
+    "ast_hash": "ebc386f327f10f089c8b5a3686244294",
+    "semantic_hash": "ebc386f327f10f089c8b5a3686244294"
+  },
+  ".wayfinder/tickets/027-decide-the-bilingual-copy-pipeline-for-the-webapp.md": {
+    "mtime": 1785468188.2900853,
+    "ast_hash": "d53bac5cb0852ec5af6d9abdcec6d9ca",
+    "semantic_hash": "d53bac5cb0852ec5af6d9abdcec6d9ca"
+  },
+  ".wayfinder/tickets/028-map-every-stage-to-its-webapp-screen-and-route.md": {
+    "mtime": 1785485727.010593,
+    "ast_hash": "1b9d68487e9521b527259b5b2d865b67",
+    "semantic_hash": "1b9d68487e9521b527259b5b2d865b67"
+  },
+  ".wayfinder/tickets/029-decide-the-test-strategy-after-apptest-dies.md": {
+    "mtime": 1785483318.985148,
+    "ast_hash": "81b92b20ba213bb6ca762ef2866122a5",
+    "semantic_hash": "81b92b20ba213bb6ca762ef2866122a5"
+  },
+  ".wayfinder/tickets/030-decide-which-exporter-survives.md": {
+    "mtime": 1785494951.6707962,
+    "ast_hash": "0b0ce2d6beb5a153d8ee06fd56fda87e",
+    "semantic_hash": "0b0ce2d6beb5a153d8ee06fd56fda87e"
+  },
+  ".wayfinder/tickets/031-prototype-the-merged-cost-and-split-screen.md": {
+    "mtime": 1785485736.780545,
+    "ast_hash": "adb16dcdc301afa993fb8f1cff95932b",
+    "semantic_hash": "adb16dcdc301afa993fb8f1cff95932b"
+  },
+  ".wayfinder/tickets/032-prototype-the-itinerary-day-screen-in-the-new-design.md": {
+    "mtime": 1785468188.2919002,
+    "ast_hash": "ae338672858b407ef62cbd102c1c1fa1",
+    "semantic_hash": "ae338672858b407ef62cbd102c1c1fa1"
+  },
+  ".wayfinder/tickets/033-lock-the-phase-2-slice-plan-and-validation-scorecard.md": {
+    "mtime": 1785468188.2922776,
+    "ast_hash": "6e496537f5dd7d65f8c20dfd98e8bd7e",
+    "semantic_hash": "6e496537f5dd7d65f8c20dfd98e8bd7e"
+  },
+  ".wayfinder/tickets/034-decide-the-offline-asset-policy-for-the-webapp.md": {
+    "mtime": 1785490926.5333853,
+    "ast_hash": "3428bdb3a93c8f794cef2ddd4f201224",
+    "semantic_hash": "3428bdb3a93c8f794cef2ddd4f201224"
+  },
+  ".wayfinder/tickets/035-design-the-feedback-confirm-and-disabled-elements.md": {
+    "mtime": 1785468188.2930944,
+    "ast_hash": "31bb838e021e61a2a86ace1905e61ffb",
+    "semantic_hash": "31bb838e021e61a2a86ace1905e61ffb"
+  },
+  ".wayfinder/tickets/036-prototype-the-ranked-candidate-card-grid.md": {
+    "mtime": 1785468188.293299,
+    "ast_hash": "f1b02223bdffe51e72c8ccf3c3dc935d",
+    "semantic_hash": "f1b02223bdffe51e72c8ccf3c3dc935d"
+  },
+  "AGENTS.md": {
+    "mtime": 1785563710.555607,
+    "ast_hash": "3a41b19cfbeead1cbce0c345dd22b0e6",
+    "semantic_hash": "3a41b19cfbeead1cbce0c345dd22b0e6"
+  },
+  "CLAUDE.md": {
+    "mtime": 1785563752.702951,
+    "ast_hash": "91efe4a824208f3e973e1b2a4eec5d83",
+    "semantic_hash": "91efe4a824208f3e973e1b2a4eec5d83"
+  },
+  "README.md": {
+    "mtime": 1785563105.1255076,
+    "ast_hash": "cefe7e8e52866e6614aaf086752e1493",
+    "semantic_hash": "cefe7e8e52866e6614aaf086752e1493"
   }
 }

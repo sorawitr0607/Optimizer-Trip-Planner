@@ -47,21 +47,48 @@
   resolutions of 2026-07-31, and the tickets extract cleanly as a result — it is the
   established pattern now, not advice.
 
-### Known: `.wayfinder/artifacts/` is excluded from the graph
+### The `--exclude` patterns are gitignore lines — anchor them
 
-`build_project_graph.py` passes `--exclude artifacts` to skip the root
-`artifacts/validation/` bundles, whose manifests are evidence rather than
-architecture. But the pattern carries no leading slash, so in gitignore semantics it
-matches a directory called `artifacts` **at any depth** — which silently also
-excludes `.wayfinder/artifacts/`. Confirmed: the rebuild produced **zero** nodes from
-either directory.
+`build_project_graph.py` passes `--exclude` straight to graphify, which parses each
+one as a gitignore line (`detect.py` `_parse_gitignore_line`, anchored at the scan
+root). **A slashless pattern therefore matches a directory of that name at any
+depth.**
 
-The consequence is worth knowing rather than discovering: following the
-keep-long-findings-in-artifacts rule above moves that content **out of the graph**.
-Tickets extract cleanly, which was the goal, but the decisions themselves are not
-queryable — only the tickets that link to them. That is acceptable while the graph is
-for broad architecture questions, as `CLAUDE.md` directs. If decision content should
-be graphed, anchor the pattern as `/artifacts` and rebuild.
+That bit us. As bare `artifacts`, the exclude meant to skip the root
+`artifacts/validation/` bundles *also* silently excluded `.wayfinder/artifacts/`, so
+every Phase 2 decision document was missing from the graph while this file was
+simultaneously directing long findings to live there. Fixed on 2026-08-01 by
+anchoring both patterns as `/data` and `/artifacts`; verified against graphify's own
+matcher before rebuilding, and confirmed after:
+
+- **96 nodes across all 9 decision artifacts** are now in the graph.
+- Root `artifacts/validation/` and `data/` are still excluded, as intended.
+
+If you add another `--exclude`, anchor it unless you genuinely mean every directory
+of that name at every depth.
+
+### Rebuilding: two behaviours that will waste your time
+
+- **`graphify extract` is incremental against an existing `graph.json`.** Leave one in
+  place and it re-extracts only changed files and writes a *partial* graph over the
+  top — a 1126-node graph became 150 nodes that way. `build_project_graph.py` avoids
+  this by moving the generated files into a temp backup first. Never call `graphify
+  extract` by hand in this repo; run the script.
+- **Clustering is non-deterministic.** The same graph clustered to 121, 123 and 127
+  communities across runs. Do not treat a changed community count as a signal.
+
+### One unexplained transient, 2026-08-01
+
+The first rebuild with artifacts included failed `validate()` with
+`Graph must be non-empty and directed`, after clustering reported 127 communities.
+**It did not reproduce**: two subsequent full runs of the same script over the same
+inputs both passed. Isolating each stage against the larger graph showed
+`normalize_raw_graph()`, `cluster-only` and `export html` all preserve `directed`,
+`nodes` and `links`, so no stage is implicated.
+
+What matters is that **the script's restore-on-failure worked exactly as designed** —
+the previous graph was put back intact and `--check` still passed. If this recurs,
+capture the failed `graph.json` before the restore runs rather than re-running blind.
 
 ## Validation evidence belongs in bundles
 
