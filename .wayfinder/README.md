@@ -14,6 +14,11 @@ This repository has no configured issue tracker, so Wayfinder issues live here.
 - `blocked_by:` records dependency ticket IDs because this tracker has no native dependency feature.
 - The frontier is every open, unclaimed ticket whose `blocked_by` tickets are closed.
 - Resolve a ticket by adding a dated `## Resolution comments` entry, setting `status: closed`, then adding one linked gist to the map's **Decisions so far** section.
+- **Reopening** a closed ticket is allowed when later work proves it unfinished: set `status: open`, clear
+  `assignee:` so it returns to the frontier, add a dated note stating the remaining scope *and what is
+  explicitly out of scope*, and mark its map gist `REOPENED` rather than deleting it — the decision it
+  recorded usually still stands. `WF-020` was reopened this way on 2026-07-31. Check what a reopen re-blocks:
+  any ticket listing it in `blocked_by` leaves the frontier, which may or may not be what you want.
 - Human-facing references use ticket titles as links; IDs are metadata only.
 
 Research agents edit only their assigned ticket. The ticket itself is the local context pointer; no research branch is required for this local-only tracker.

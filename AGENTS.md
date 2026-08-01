@@ -35,6 +35,15 @@
 - The Phase 2 tickets carry long resolution prose, which is exactly what starved
   ticket 012's extraction twice. Keep long findings in `.wayfinder/artifacts/` and
   link them in one line from the ticket.
+- **As of 2026-07-31 the gap is wider and the rebuild milestone is close.** Seven
+  Phase 2 grilling tickets were resolved that day and six artifacts now exist
+  (`019`, `020`, `021`, `022`, `023`, `025`, `026`, `028`, `030`), while `--check`
+  still fails at exactly the same place — `WF-018` — so this is still staleness and
+  still not corruption. The map is at 9 closed of 19, so the sensible rebuild moment
+  (decision-complete) is near rather than hypothetical.
+- The keep-findings-in-artifacts rule was **followed** for all seven of those
+  resolutions: each ticket carries a summary and one link, with the detail in its
+  artifact. Keep doing that — it is the established pattern now, not advice.
 
 ## Validation evidence belongs in bundles
 

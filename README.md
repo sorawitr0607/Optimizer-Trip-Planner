@@ -1,8 +1,15 @@
 # Optimizer Trip Planner
 
-Personal, evidence-aware trip planning MVP. The Streamlit app builds and
-revises a timetable from traveler preferences, attraction choices, opening
-hours, travel time, and pacing constraints.
+Personal, evidence-aware trip planning. The planning core builds and revises a
+timetable from traveler preferences, attraction choices, opening hours, travel
+time, and pacing constraints.
+
+The Streamlit app is the **proof of concept** that established the core works —
+not the product. Phase 2 replaces it with a local React webapp that also
+absorbs `Auto-Bill-Splitter` as a group split ledger. The planning core,
+`actions.py` and `store.py` survive that change untouched; `views/`, `app.py`
+and `ui/` are deleted once the webapp reaches parity. Until then the POC is
+what runs, and it is unmaintained rather than frozen.
 
 ## Run locally
 
@@ -26,8 +33,9 @@ for optional provider configuration; never commit local secrets.
 - `graphify-out/` — checked-in graph snapshot; generated caches are ignored.
 - `.wayfinder/` — project decisions and implementation tickets. Two maps: `map.md` is the closed Phase 1
   plan; `map-002-splitter-merge-and-webapp.md` is the open Phase 2 plan for merging the bill splitter and
-  replacing Streamlit with a webapp. **Phase 2 is still being decided — 16 of its 19 tickets are open, so
-  none of it is built.** Research findings live in `.wayfinder/artifacts/`.
+  replacing Streamlit with a webapp. **Phase 2 is still being decided — 10 of its 19 tickets are open, so
+  none of it is built.** Decisions and research findings live in `.wayfinder/artifacts/`; read the map's
+  *Decisions so far* index first, then the artifact a decision points at.
 
 ## Checks
 

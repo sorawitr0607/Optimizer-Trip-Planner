@@ -267,13 +267,18 @@ Read the map before touching anything in this area. Work it one ticket per sessi
 setting its `assignee:` before doing any work, and only research tickets may be resolved more than one
 per session.
 
+> **The owner set that last clause aside on 2026-07-31**, directing seven grilling tickets to be resolved in
+> one session (`WF-019`, `WF-022`, `WF-026`, `WF-028`, `WF-025`, `WF-023`, `WF-030`). It was explicit each
+> time, not drift. The rule still stands as written unless the owner says otherwise — do not assume a
+> standing exception.
+
 Locked by the destination interview, so not open for re-litigation inside a ticket:
 
 - The planning core, `actions.py`, and `store.py` stay as they are behind a thin local HTTP layer. React
   replaces `views/` and `app.py` only. The deterministic optimizer, the hash gates, the append-only plan
   history, and the 235 tests all survive the redesign.
 - **Two linked ledgers**, not one merged record: cost rows stay the budget and estimate truth, the split
-  ledger records actual group spend. Reconciling them is an open ticket, not a detail.
+  ledger records actual group spend. Reconciling them is now **decided**, not open — see the claim rule below.
 - Everything lands in this repository (`api/` + `web/`). `Auto-Bill-Splitter` is a read-only donor, then
   archived.
 - Tokens are **rebuilt** in Tailwind, so visual parity with Auto-Bill is a hard gated requirement rather
