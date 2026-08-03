@@ -411,8 +411,9 @@ class OpeningRefreshTest(unittest.TestCase):
         )
         trip = bare.create_trip(name="Bare", destination="Osaka")
         bare.save_setup(trip_id=trip.trip_id, main_style=["sightseeing"], confirmed=True)
-        with self.assertRaisesRegex(ValueError, "at least one place"):
+        with self.assertRaises(ValueError) as raised:
             bare.refresh_opening_hours(trip.trip_id)
+        self.assertEqual("no_places_chosen", str(raised.exception))
 
 
 class ExploreFirstEvidenceTest(unittest.TestCase):
@@ -484,6 +485,8 @@ class ExploreFirstEvidenceTest(unittest.TestCase):
             )
         )
         self.assertIn("OPENING_EVIDENCE_MISSING", snapshot["trip"]["capability_gaps"])
+        journey = self.actions.journey(self.trip.trip_id)
+        self.assertIn("OPENING_EVIDENCE_MISSING", journey["capability_gaps"])
         self.assertIn(
             "provisional_accommodation_base",
             {item["id"] for item in snapshot["candidates"]},

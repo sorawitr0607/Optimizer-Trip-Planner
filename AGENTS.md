@@ -21,20 +21,18 @@
   this repository inherit the workflow; the installed `graphify` skill remains
   available globally for new sessions that trigger it.
 
-## The graph was rebuilt on 2026-08-01 and the guard passes
+## The graph was rebuilt for S1 on 2026-08-03 and the guard passes
 
 - `python3 scripts/build_project_graph.py --check` **passes**. The long-standing
   `Extraction produced no node for WF-018` failure is resolved: it was staleness,
   exactly as diagnosed, and never the 2026-07-29 corruption.
-- The rebuild cost **US$0.0254** (44,100 in / 4,829 out), taking the cumulative
-  total to about US$0.11 over 15 runs. A full rebuild is **cents, not dollars** —
-  the earlier reluctance over-weighted the cost. It still needs `OPENAI_API_KEY`,
-  which `build_project_graph.py` reads from `secrets.local.json` itself, so no
-  variable has to be exported by hand.
-- State after the rebuild: **1126 nodes, 2827 directed edges, 54 communities**, with
-  **39 nodes from `.wayfinder/tickets/`** covering all 36 tickets plus one node each
-  for the two maps. Ticket nodes are keyed by **title**, not by ID — `WF-0nn` will
-  not appear in a node name, and `--check` resolves them by source file and title.
+- The S1 milestone rebuild used **124,699 input / 10,709 output tokens**, costing
+  **US$0.067015** across two safely restored clustering failures and the successful cached run. Recorded
+  cumulative cost is **US$0.228995**. It still needs `OPENAI_API_KEY`, which
+  `build_project_graph.py` reads from `secrets.local.json` itself.
+- State after the rebuild: **1358 nodes, 3185 directed edges, 137 communities**. Ticket nodes remain keyed
+  by **title**, not by ID — `WF-0nn` will not appear in a node name; `--check` resolves them by source file
+  and title.
 - **Secrets are not ingested.** Verified empirically both before and after: zero
   nodes sourced from `secrets.local.json` or `.env`, and no `sk-` string anywhere
   in `graph.json`. Graphify honours `.gitignore`. Source code *is* sent to OpenAI,
@@ -89,6 +87,15 @@ inputs both passed. Isolating each stage against the larger graph showed
 What matters is that **the script's restore-on-failure worked exactly as designed** —
 the previous graph was put back intact and `--check` still passed. If this recurs,
 capture the failed `graph.json` before the restore runs rather than re-running blind.
+
+### Resolved during the S1 rebuild, 2026-08-03
+
+The apparent transient reproduced twice. Root cause was Graphify's legitimate semantic-ID canonicalization:
+`cluster-only` built fewer NetworkX nodes than the raw extraction, then its overwrite guard retained the raw
+`edges`-format file. The project validator correctly refused that unclustered shape. The wrapper now stages
+the raw graph at `.graphify_raw.json` and passes it with `--graph`, leaving no destination file for the
+shrink guard to compare. The existing endpoint-pair validation still blocks genuine loss. A focused unit
+test and the full 1358-node rebuild prove the repaired path.
 
 ## Validation evidence belongs in bundles
 

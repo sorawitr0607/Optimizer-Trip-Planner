@@ -303,11 +303,12 @@ class RevisionFlowTest(unittest.TestCase):
             trip_id=self.trip.trip_id,
             operation={"operation": "lock_item", "arguments": {"place_id": self.place_id}},
         )
-        with self.assertRaisesRegex(ValueError, "already pending"):
+        with self.assertRaises(ValueError) as raised:
             self.actions.propose_revision(
                 trip_id=self.trip.trip_id,
                 operation={"operation": "reduce_walking", "arguments": {"factor": 0.7}},
             )
+        self.assertEqual("revision_already_pending", str(raised.exception))
         replaced = self.actions.propose_revision(
             trip_id=self.trip.trip_id,
             operation={"operation": "reduce_walking", "arguments": {"factor": 0.7}},
@@ -330,8 +331,9 @@ class RevisionFlowTest(unittest.TestCase):
         self.assertFalse(draft["can_apply"])
         self.assertEqual("best_balance", draft["explanation"]["variant_id"])
         self.assertIn("metrics", draft["explanation"])
-        with self.assertRaisesRegex(ValueError, "cannot be applied"):
+        with self.assertRaises(ValueError) as raised:
             self.actions.apply_revision(self.trip.trip_id)
+        self.assertEqual("revision_not_applicable", str(raised.exception))
         self.assertEqual(
             self.version.version_id,
             self.actions.get_active_plan(self.trip.trip_id).version_id,
@@ -346,16 +348,18 @@ class RevisionFlowTest(unittest.TestCase):
         self.actions.restore_plan_version(
             trip_id=self.trip.trip_id, version_id=self.version.version_id
         )
-        with self.assertRaisesRegex(ValueError, "active plan changed"):
+        with self.assertRaises(ValueError) as raised:
             self.actions.apply_revision(self.trip.trip_id)
+        self.assertEqual("revision_base_moved", str(raised.exception))
 
     def test_revising_needs_an_active_plan(self) -> None:
         bare = PlannerActions(Path(self.directory.name) / "bare.sqlite3")
         trip = bare.create_trip(name="Bare", destination="Osaka")
-        with self.assertRaisesRegex(ValueError, "Activate a plan"):
+        with self.assertRaises(ValueError) as raised:
             bare.propose_revision(
                 trip_id=trip.trip_id, operation={"operation": "explain", "arguments": {}}
             )
+        self.assertEqual("no_active_plan", str(raised.exception))
 
     def test_discarding_leaves_no_pending_preview(self) -> None:
         self.actions.propose_revision(
@@ -363,8 +367,9 @@ class RevisionFlowTest(unittest.TestCase):
         )
         self.actions.discard_revision_draft(self.trip.trip_id)
         self.assertIsNone(self.actions.get_revision_draft(self.trip.trip_id))
-        with self.assertRaisesRegex(ValueError, "no pending revision"):
+        with self.assertRaises(ValueError) as raised:
             self.actions.apply_revision(self.trip.trip_id)
+        self.assertEqual("no_pending_revision", str(raised.exception))
 
     def test_revision_history_is_immutable(self) -> None:
         self.actions.propose_revision(

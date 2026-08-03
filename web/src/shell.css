@@ -1,0 +1,195 @@
+.app-shell {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.sidebar {
+  align-self: start;
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  height: calc(100vh - 40px);
+  margin: 20px;
+  padding: 18px;
+  position: sticky;
+  top: 20px;
+}
+
+.brand {
+  align-items: center;
+  color: var(--text-primary);
+  display: flex;
+  font-weight: var(--weight-selected);
+  gap: 8px;
+  text-decoration: none;
+}
+
+.sidebar nav h2 {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  letter-spacing: 0.09em;
+  margin: 0 0 6px;
+  text-transform: uppercase;
+}
+
+.stage-link {
+  color: var(--text-secondary);
+  display: block;
+  font-size: var(--text-md);
+  font-weight: var(--weight-unselected);
+  padding: 5px 8px;
+  text-decoration: none;
+}
+
+.stage-link:hover,
+.stage-link.active {
+  background: var(--color-accent-light);
+  color: var(--color-accent);
+}
+
+.stage-link.active {
+  border-left: 3px solid var(--color-accent);
+  font-weight: var(--weight-selected);
+}
+
+.sidebar-controls {
+  border-top: 1px solid var(--bg-card-border);
+  display: grid;
+  gap: 7px;
+  margin-top: auto;
+  padding-top: 14px;
+}
+
+.sidebar-controls button,
+.trip-form button,
+.primary-link {
+  align-items: center;
+  background: var(--color-accent);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-on-accent);
+  cursor: pointer;
+  display: inline-flex;
+  font-weight: var(--weight-secondary);
+  gap: 7px;
+  justify-content: center;
+  padding: 8px 10px;
+  text-decoration: none;
+}
+
+.stage-main {
+  min-width: 0;
+  padding: 20px 24px 40px 4px;
+}
+
+.stage-card,
+.stage-blocked {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  padding: 24px;
+}
+
+.stage-card h1,
+.stage-card h2,
+.stage-blocked h2 {
+  margin-top: 0;
+}
+
+.stage-blocked {
+  background: var(--color-accent-light);
+  border-color: var(--color-accent);
+  border-left-width: var(--blocked-stripe-width);
+  box-shadow: none;
+}
+
+.stage-blocked p {
+  color: var(--text-secondary);
+  margin-bottom: 14px;
+}
+
+.trips-page {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+  margin: 40px auto;
+  max-width: 960px;
+  padding: 0 20px;
+}
+
+.trip-list {
+  display: grid;
+  gap: 8px;
+}
+
+.trip-list a {
+  background: var(--bg-secondary);
+  border: 1px solid var(--bg-card-border);
+  box-shadow: var(--shadow-sm);
+  color: var(--text-primary);
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 12px;
+  text-decoration: none;
+  transition: transform var(--duration-fast) ease;
+}
+
+.trip-list a:hover {
+  background: var(--bg-card-hover);
+  transform: translateX(3px);
+}
+
+.trip-form {
+  align-self: start;
+  display: grid;
+  gap: 14px;
+}
+
+.trip-form label {
+  color: var(--text-muted);
+  display: grid;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-secondary);
+  gap: 4px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.trip-form input {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  padding: 8px 9px;
+}
+
+.field-error {
+  color: var(--color-danger);
+  font-weight: var(--weight-secondary);
+}
+
+@media (max-width: 992px) {
+  .app-shell,
+  .trips-page {
+    display: block;
+  }
+
+  .sidebar {
+    height: auto;
+    position: static;
+  }
+
+  .stage-main {
+    padding: 0 20px 40px;
+  }
+
+  .trips-page > * + * {
+    margin-top: 20px;
+  }
+}

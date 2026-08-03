@@ -1,0 +1,201 @@
+@import "tailwindcss";
+
+/* Single colour and motion source for the webapp and Python workbook. */
+:root {
+  --bg-primary: #fcfbf9;
+  --bg-secondary: #f3f1ec;
+  --bg-card: #ffffff;
+  --bg-card-hover: #ffffff;
+  --bg-card-border: #1a1a1a;
+  --text-primary: #1a1a1a;
+  --text-secondary: #4d4d4d;
+  --text-muted: #737373;
+  --color-accent: #a30000;
+  --color-accent-light: #f7ecec;
+  --color-accent-hover: #800000;
+  --color-success: #006644;
+  --color-success-light: #eaf5f0;
+  --color-danger: #d11a2a;
+  --color-danger-light: #fcecee;
+  --color-warning: #c46200;
+  --color-warning-light: #faf3ec;
+  --color-purple: #8b5cf6;
+  --color-purple-light: rgb(139 92 246 / 15%);
+  --color-on-accent: #ffffff;
+  --shadow-hard-sm: 1px 1px 0 0 var(--bg-card-border);
+  --shadow-hard-md: 3px 3px 0 0 var(--bg-card-border);
+  --shadow-hard-lg: 5px 5px 0 0 var(--bg-card-border);
+  --shadow-sm: var(--shadow-hard-sm);
+  --shadow-md: var(--shadow-hard-md);
+  --shadow-lg: var(--shadow-hard-lg);
+  --glass-blur: 0px;
+
+  --radius-house: 2px;
+  --radius: var(--radius-house);
+  --radius-pill: 9999px;
+  --duration-fast: 200ms;
+  --duration-standard: 300ms;
+  --opacity-tint-10: 0.063;
+  --opacity-tint-12: 0.071;
+  --opacity-tint-15: 0.082;
+  --opacity-tint-30: 0.188;
+  --opacity-tint-40: 0.251;
+  --opacity-dim: 0.35;
+  --opacity-dim-strong: 0.4;
+  --opacity-disabled: 0.45;
+  --weight-unselected: 500;
+  --weight-secondary: 600;
+  --weight-selected: 800;
+  --color-success-border: rgb(0 102 68 / 20%);
+  --color-danger-border: rgb(209 26 42 / 20%);
+  --blocked-stripe-width: 10px;
+
+  --category-transport: #3b82f6;
+  --category-food: #10b981;
+  --category-accommodation: #ec4899;
+  --category-shopping: #f59e0b;
+  --category-activities: var(--color-purple);
+  --category-other: #64748b;
+  --participant-1: #10b981;
+  --participant-2: #3b82f6;
+  --participant-3: var(--color-purple);
+  --participant-4: #ea580c;
+  --participant-5: #ec4899;
+  --participant-6: #06b6d4;
+  --participant-7: #eab308;
+
+  /* D7: the surviving workbook header follows the UI's recessed surface. */
+  --export-header-bg: var(--bg-secondary);
+}
+
+:root.dark,
+:root[data-theme="dark"] {
+  --bg-primary: #121212;
+  --bg-secondary: #1c1c1c;
+  --bg-card: #181818;
+  --bg-card-hover: #1f1f1f;
+  --bg-card-border: #3a3a3a;
+  --text-primary: #f5f5f5;
+  --text-secondary: #a3a3a3;
+  --color-accent: #e53e3e;
+  --color-accent-light: #3b1c1c;
+  --color-accent-hover: #fc8181;
+  --color-success: #38a169;
+  --color-success-light: #1c3b24;
+  --color-danger: #e53e3e;
+  --color-danger-light: #3b1c1c;
+  --color-warning: #dd6b20;
+  --color-warning-light: #3b2a1c;
+  --color-success-border: rgb(56 161 105 / 20%);
+  --color-danger-border: rgb(229 62 62 / 20%);
+}
+
+/* D6: one country-to-accent mapping. Unknown countries keep the house red (D3). */
+:root[data-country="china"] { --color-accent: #dc2626; --color-accent-hover: #b91c1c; --color-accent-light: rgb(220 38 38 / 12%); }
+:root[data-country="japan"] { --color-accent: #e11d48; --color-accent-hover: #be123c; --color-accent-light: rgb(225 29 72 / 12%); }
+:root[data-country="south-korea"] { --color-accent: #2563eb; --color-accent-hover: #1d4ed8; --color-accent-light: rgb(37 99 235 / 12%); }
+:root[data-country="singapore"] { --color-accent: #7c3aed; --color-accent-hover: #6d28d9; --color-accent-light: rgb(124 58 237 / 12%); }
+:root[data-country="united-states"] { --color-accent: #1e3a8a; --color-accent-hover: #172554; --color-accent-light: rgb(30 58 138 / 12%); }
+:root[data-country="united-kingdom"] { --color-accent: #475569; --color-accent-hover: #334155; --color-accent-light: rgb(71 85 105 / 12%); }
+:root[data-country="eurozone"] { --color-accent: #0284c7; --color-accent-hover: #0369a1; --color-accent-light: rgb(2 132 199 / 12%); }
+:root[data-country="taiwan"] { --color-accent: #0d9488; --color-accent-hover: #0f766e; --color-accent-light: rgb(13 148 136 / 12%); }
+:root[data-country="hong-kong"] { --color-accent: #059669; --color-accent-hover: #047857; --color-accent-light: rgb(5 150 105 / 12%); }
+:root[data-country="vietnam"] { --color-accent: #ea580c; --color-accent-hover: #c2410c; --color-accent-light: rgb(234 88 12 / 12%); }
+:root[data-country="malaysia"] { --color-accent: #ca8a04; --color-accent-hover: #a16207; --color-accent-light: rgb(202 138 4 / 12%); }
+:root[data-country="switzerland"] { --color-accent: #be185d; --color-accent-hover: #9d174d; --color-accent-light: rgb(190 24 93 / 12%); }
+:root[data-country="australia"] { --color-accent: #16a34a; --color-accent-hover: #15803d; --color-accent-light: rgb(22 163 74 / 12%); }
+
+@theme {
+  --color-page: var(--bg-primary);
+  --color-recessed: var(--bg-secondary);
+  --color-card: var(--bg-card);
+  --color-card-hover: var(--bg-card-hover);
+  --color-border: var(--bg-card-border);
+  --color-ink: var(--text-primary);
+  --color-ink-secondary: var(--text-secondary);
+  --color-ink-muted: var(--text-muted);
+  --color-brand: var(--color-accent);
+  --color-brand-light: var(--color-accent-light);
+  --color-brand-hover: var(--color-accent-hover);
+  --color-positive: var(--color-success);
+  --color-positive-light: var(--color-success-light);
+  --color-negative: var(--color-danger);
+  --color-negative-light: var(--color-danger-light);
+  --color-caution: var(--color-warning);
+  --color-caution-light: var(--color-warning-light);
+  --color-violet: var(--color-purple);
+  --color-violet-light: var(--color-purple-light);
+  --color-on-brand: var(--color-on-accent);
+
+  --shadow-*: initial;
+  --shadow-sm: var(--shadow-hard-sm);
+  --shadow: 2px 2px 0 0 var(--bg-card-border);
+  --shadow-md: var(--shadow-hard-md);
+  --shadow-lg: var(--shadow-hard-lg);
+
+  --radius-*: initial;
+  --radius: var(--radius-house);
+  --radius-full: var(--radius-pill);
+
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --text-2xs: 0.65rem;
+  --text-xs: 0.6875rem;
+  --text-sm: 0.75rem;
+  --text-base: 0.8125rem;
+  --text-md: 0.875rem;
+  --text-lg: 0.9375rem;
+  --text-xl: 1.05rem;
+  --text-2xl: 1.15rem;
+  --text-3xl: 1.25rem;
+  --text-4xl: 1.4rem;
+  --text-5xl: 1.5rem;
+  --text-6xl: 1.85rem;
+
+  --ease-standard: ease;
+  --ease-out: ease-out;
+}
+
+@custom-variant max-xl (@media (max-width: 1200px));
+@custom-variant max-lg (@media (max-width: 992px));
+@custom-variant max-md (@media (max-width: 768px));
+@custom-variant max-sm (@media (max-width: 576px));
+@custom-variant max-xs (@media (max-width: 480px));
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  line-height: 1.5;
+  transition: background-color var(--duration-standard) ease, color var(--duration-standard) ease;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: var(--opacity-disabled);
+  box-shadow: none;
+  transform: none;
+}
+
+:focus-visible {
+  outline: 2.5px solid var(--color-purple);
+  outline-offset: 2.5px;
+}

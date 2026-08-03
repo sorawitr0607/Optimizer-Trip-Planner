@@ -1,18 +1,38 @@
 {
+  "api/__init__.py": {
+    "mtime": 1785765479.455153,
+    "ast_hash": "041c068004895ae72197bb3a1360bc12",
+    "semantic_hash": "041c068004895ae72197bb3a1360bc12"
+  },
+  "api/__main__.py": {
+    "mtime": 1785763907.01604,
+    "ast_hash": "dd29c33b88e04a13639211c6aa301586",
+    "semantic_hash": "dd29c33b88e04a13639211c6aa301586"
+  },
   "app.py": {
     "mtime": 1785401105.515665,
     "ast_hash": "e06bd26b24b17a0905114d4ca9c8370b",
     "semantic_hash": "e06bd26b24b17a0905114d4ca9c8370b"
   },
+  "i18n/copy.json": {
+    "mtime": 1785764541.9843946,
+    "ast_hash": "9ff99a03e64e0a8a1960c202f826eead",
+    "semantic_hash": "9ff99a03e64e0a8a1960c202f826eead"
+  },
   "pyproject.toml": {
-    "mtime": 1785300241.8179274,
-    "ast_hash": "31a30bde8e102bc15d99371f9d2fe34e",
-    "semantic_hash": "31a30bde8e102bc15d99371f9d2fe34e"
+    "mtime": 1785761501.1522167,
+    "ast_hash": "a6ef0cc1a62299f02f01ff3e223ce581",
+    "semantic_hash": "a6ef0cc1a62299f02f01ff3e223ce581"
   },
   "scripts/build_project_graph.py": {
-    "mtime": 1785564188.8330529,
-    "ast_hash": "01d8de4b0735f2fbcd96a0293cfc6285",
-    "semantic_hash": "01d8de4b0735f2fbcd96a0293cfc6285"
+    "mtime": 1785766358.7313938,
+    "ast_hash": "5c01250b00d9d2fe09cd697cad58135c",
+    "semantic_hash": "5c01250b00d9d2fe09cd697cad58135c"
+  },
+  "scripts/check.py": {
+    "mtime": 1785765022.3158774,
+    "ast_hash": "2f3588000a95998bda36df9e33550b41",
+    "semantic_hash": "2f3588000a95998bda36df9e33550b41"
   },
   "scripts/check_provider_access.py": {
     "mtime": 1785251698.0,
@@ -39,10 +59,15 @@
     "ast_hash": "0f0b97bc1702fe704a6233c14f3c26b1",
     "semantic_hash": "0f0b97bc1702fe704a6233c14f3c26b1"
   },
+  "tests/test_api.py": {
+    "mtime": 1785764092.65951,
+    "ast_hash": "3ed81ec4625d4085a94dc4d8b4bd75d2",
+    "semantic_hash": "3ed81ec4625d4085a94dc4d8b4bd75d2"
+  },
   "tests/test_checklist.py": {
-    "mtime": 1785321630.9379063,
-    "ast_hash": "e4614289ea4ce4779d4533467bea1df0",
-    "semantic_hash": "e4614289ea4ce4779d4533467bea1df0"
+    "mtime": 1785761600.203605,
+    "ast_hash": "43f13c959ed6a10dccbe0744f0411284",
+    "semantic_hash": "43f13c959ed6a10dccbe0744f0411284"
   },
   "tests/test_costs.py": {
     "mtime": 1785321630.9393976,
@@ -50,34 +75,34 @@
     "semantic_hash": "14d813f2f7526df6f128fcdd1a172c32"
   },
   "tests/test_exports.py": {
-    "mtime": 1785468194.0041528,
-    "ast_hash": "b77de573df82ed639784d28fb9266428",
-    "semantic_hash": "b77de573df82ed639784d28fb9266428"
+    "mtime": 1785765121.246404,
+    "ast_hash": "fd1e7b6f6bf6288cbdc6c2bfe791d040",
+    "semantic_hash": "fd1e7b6f6bf6288cbdc6c2bfe791d040"
   },
   "tests/test_foundation.py": {
-    "mtime": 1785401194.988853,
-    "ast_hash": "d7477c7bf4ff844f0cd7fb560037faef",
-    "semantic_hash": "d7477c7bf4ff844f0cd7fb560037faef"
+    "mtime": 1785765863.3807282,
+    "ast_hash": "40d458691e298cb6f4aa6dd482b3c84b",
+    "semantic_hash": "40d458691e298cb6f4aa6dd482b3c84b"
   },
   "tests/test_graph_builder.py": {
-    "mtime": 1785388058.30178,
-    "ast_hash": "cc76c065650f39d44b189f7ab6dc319f",
-    "semantic_hash": "cc76c065650f39d44b189f7ab6dc319f"
+    "mtime": 1785766358.8725471,
+    "ast_hash": "1a7b5beb95683c91adb2dd1062f54e72",
+    "semantic_hash": "1a7b5beb95683c91adb2dd1062f54e72"
   },
   "tests/test_interpret.py": {
-    "mtime": 1785320634.4487672,
-    "ast_hash": "544e539401c3df059f26ee8570bdafb1",
-    "semantic_hash": "544e539401c3df059f26ee8570bdafb1"
+    "mtime": 1785764174.4091427,
+    "ast_hash": "286bdf6707e108984145a34b014672f0",
+    "semantic_hash": "286bdf6707e108984145a34b014672f0"
   },
   "tests/test_opening.py": {
-    "mtime": 1785398350.4196372,
-    "ast_hash": "0cbc188f5e328254aea4250266ab61da",
-    "semantic_hash": "0cbc188f5e328254aea4250266ab61da"
+    "mtime": 1785765245.9844794,
+    "ast_hash": "6ee9c6fbd89181289ab6214ae6e42105",
+    "semantic_hash": "6ee9c6fbd89181289ab6214ae6e42105"
   },
   "tests/test_optimizer.py": {
-    "mtime": 1785382614.679707,
-    "ast_hash": "0a2ec18701a9bf95b1dcec8a4085a348",
-    "semantic_hash": "0a2ec18701a9bf95b1dcec8a4085a348"
+    "mtime": 1785764174.2624924,
+    "ast_hash": "7282e981674cccca5bb98f6affc3fd4f",
+    "semantic_hash": "7282e981674cccca5bb98f6affc3fd4f"
   },
   "tests/test_ranking.py": {
     "mtime": 1785394602.991924,
@@ -85,14 +110,14 @@
     "semantic_hash": "5740050fd0fd354758014ee5ae5097fb"
   },
   "tests/test_revision.py": {
-    "mtime": 1785321630.9411383,
-    "ast_hash": "b5bc257c0dd53b8392c6f9a8ce1de078",
-    "semantic_hash": "b5bc257c0dd53b8392c6f9a8ce1de078"
+    "mtime": 1785764174.5622783,
+    "ast_hash": "7d25e502482241cc5b3e2008d498bbe0",
+    "semantic_hash": "7d25e502482241cc5b3e2008d498bbe0"
   },
   "tests/test_routes.py": {
-    "mtime": 1785390573.3311598,
-    "ast_hash": "269e65445804cf1e7a20797c34732262",
-    "semantic_hash": "269e65445804cf1e7a20797c34732262"
+    "mtime": 1785764173.9333112,
+    "ast_hash": "9d321aa4a232a9b1ba7b82f6a24fe86c",
+    "semantic_hash": "9d321aa4a232a9b1ba7b82f6a24fe86c"
   },
   "tests/test_setup_discovery.py": {
     "mtime": 1785390433.3863397,
@@ -100,14 +125,14 @@
     "semantic_hash": "c2b0aa0c18b1a5b683067d3d1846c145"
   },
   "tests/test_usage.py": {
-    "mtime": 1785318218.298972,
-    "ast_hash": "2289465a4c15c78907c62270e4e14f67",
-    "semantic_hash": "2289465a4c15c78907c62270e4e14f67"
+    "mtime": 1785764173.4874504,
+    "ast_hash": "52c6dea620a4e81eeb3dc88d1ab9d672",
+    "semantic_hash": "52c6dea620a4e81eeb3dc88d1ab9d672"
   },
   "tests/test_workflow.py": {
-    "mtime": 1785468194.0045578,
-    "ast_hash": "9808b738cb376ea98fd7bad90dce618f",
-    "semantic_hash": "9808b738cb376ea98fd7bad90dce618f"
+    "mtime": 1785761600.2028484,
+    "ast_hash": "c626b9a1b705b27cc14c1188a8b24ce6",
+    "semantic_hash": "c626b9a1b705b27cc14c1188a8b24ce6"
   },
   "travel_planner/__init__.py": {
     "mtime": 1785273242.0,
@@ -115,14 +140,19 @@
     "semantic_hash": "ef0aefdeae9a5f201e587415c32b8a5b"
   },
   "travel_planner/actions.py": {
-    "mtime": 1785468194.0050488,
-    "ast_hash": "a896b53be3edc30611fe0706ff1fdab3",
-    "semantic_hash": "a896b53be3edc30611fe0706ff1fdab3"
+    "mtime": 1785764116.86341,
+    "ast_hash": "8b6af68e854e406b0dc841190e712f5d",
+    "semantic_hash": "8b6af68e854e406b0dc841190e712f5d"
   },
   "travel_planner/checklist.py": {
     "mtime": 1785316030.1684666,
     "ast_hash": "7de1311a33e06152b0c6597a62fef969",
     "semantic_hash": "7de1311a33e06152b0c6597a62fef969"
+  },
+  "travel_planner/copy.py": {
+    "mtime": 1785763620.5478418,
+    "ast_hash": "fc1cc714110a268e6ba2b91ea40879c2",
+    "semantic_hash": "fc1cc714110a268e6ba2b91ea40879c2"
   },
   "travel_planner/core.py": {
     "mtime": 1785318198.1395998,
@@ -145,9 +175,9 @@
     "semantic_hash": "539e145ea9e4e0123102c4360e9335be"
   },
   "travel_planner/exporters.py": {
-    "mtime": 1785468194.0054135,
-    "ast_hash": "ac4044764dd5cf5a311f164e80fa08a4",
-    "semantic_hash": "ac4044764dd5cf5a311f164e80fa08a4"
+    "mtime": 1785765961.2896464,
+    "ast_hash": "f2a6394bdbcd2b165c56acdb42e41064",
+    "semantic_hash": "f2a6394bdbcd2b165c56acdb42e41064"
   },
   "travel_planner/exports.py": {
     "mtime": 1785468194.0057075,
@@ -205,14 +235,14 @@
     "semantic_hash": "0acc44669dfa2b68177437f8d7f64762"
   },
   "ui/shared.py": {
-    "mtime": 1785468194.0065525,
-    "ast_hash": "a9ebb2c8c33e0513306d91b42de03da7",
-    "semantic_hash": "a9ebb2c8c33e0513306d91b42de03da7"
+    "mtime": 1785765862.9522305,
+    "ast_hash": "2d33ef824ea6f96a3a1c0ac2522da431",
+    "semantic_hash": "2d33ef824ea6f96a3a1c0ac2522da431"
   },
   "ui/text.py": {
-    "mtime": 1785468194.0070856,
-    "ast_hash": "e6447a744b1f714f14e247694ee60f05",
-    "semantic_hash": "e6447a744b1f714f14e247694ee60f05"
+    "mtime": 1785765142.068806,
+    "ast_hash": "589929b6bad4fd3435d8c7dc7a670218",
+    "semantic_hash": "589929b6bad4fd3435d8c7dc7a670218"
   },
   "views/__init__.py": {
     "mtime": 1785322577.4793472,
@@ -230,9 +260,9 @@
     "semantic_hash": "a7379b1771c2eeed415bff43d9e8bf59"
   },
   "views/itinerary.py": {
-    "mtime": 1785468194.0078096,
-    "ast_hash": "43f0193dd378fbdcd6822a432c2152d4",
-    "semantic_hash": "43f0193dd378fbdcd6822a432c2152d4"
+    "mtime": 1785761560.326523,
+    "ast_hash": "04eead2ea0c87e35a89ea850c8274872",
+    "semantic_hash": "04eead2ea0c87e35a89ea850c8274872"
   },
   "views/optimize.py": {
     "mtime": 1785468194.0081894,
@@ -240,9 +270,9 @@
     "semantic_hash": "136fa5e131a6d47f40cacb6970566556"
   },
   "views/places.py": {
-    "mtime": 1785394755.0478828,
-    "ast_hash": "0cce8dda6ed3f5e98e7ccb7d2dd2d890",
-    "semantic_hash": "0cce8dda6ed3f5e98e7ccb7d2dd2d890"
+    "mtime": 1785765863.239277,
+    "ast_hash": "bc7dd7e71178fcddec7664570852e685",
+    "semantic_hash": "bc7dd7e71178fcddec7664570852e685"
   },
   "views/readiness.py": {
     "mtime": 1785382614.6886253,
@@ -255,9 +285,84 @@
     "semantic_hash": "f7c7704de27fa85b6b2db7e4cfc26d92"
   },
   "views/setup.py": {
-    "mtime": 1785398969.77164,
-    "ast_hash": "a64c727fa6cd289451d6d29af9b7f15e",
-    "semantic_hash": "a64c727fa6cd289451d6d29af9b7f15e"
+    "mtime": 1785765863.0945861,
+    "ast_hash": "594b500c61dfebb900965050b935c013",
+    "semantic_hash": "594b500c61dfebb900965050b935c013"
+  },
+  "web/eslint.config.js": {
+    "mtime": 1785764956.464039,
+    "ast_hash": "8904653362cf7bad7d16953e5689ca33",
+    "semantic_hash": "8904653362cf7bad7d16953e5689ca33"
+  },
+  "web/package.json": {
+    "mtime": 1785764784.4128542,
+    "ast_hash": "39c50ba6ae1dcb8562cfff0bc1bc4135",
+    "semantic_hash": "39c50ba6ae1dcb8562cfff0bc1bc4135"
+  },
+  "web/src/api/client.ts": {
+    "mtime": 1785764956.7022483,
+    "ast_hash": "895e28a97fb0e5f1f3be408c6321315e",
+    "semantic_hash": "895e28a97fb0e5f1f3be408c6321315e"
+  },
+  "web/src/i18n/LanguageProvider.tsx": {
+    "mtime": 1785764957.075687,
+    "ast_hash": "6cfe971bcfea31f927f0c547edcd952d",
+    "semantic_hash": "6cfe971bcfea31f927f0c547edcd952d"
+  },
+  "web/src/i18n/copy.test.ts": {
+    "mtime": 1785764958.3994863,
+    "ast_hash": "ba87d85aa85532d0aa597f4a3fd64e8b",
+    "semantic_hash": "ba87d85aa85532d0aa597f4a3fd64e8b"
+  },
+  "web/src/i18n/copy.ts": {
+    "mtime": 1785764956.9364347,
+    "ast_hash": "d2c487dc36e4bf4d52c958eac33fa55e",
+    "semantic_hash": "d2c487dc36e4bf4d52c958eac33fa55e"
+  },
+  "web/src/main.tsx": {
+    "mtime": 1785764957.982091,
+    "ast_hash": "5dae66200329ba22b3dfbb7805952bad",
+    "semantic_hash": "5dae66200329ba22b3dfbb7805952bad"
+  },
+  "web/src/routes.tsx": {
+    "mtime": 1785765001.4850638,
+    "ast_hash": "365fc6494f81b70d3a1707136f53c6de",
+    "semantic_hash": "365fc6494f81b70d3a1707136f53c6de"
+  },
+  "web/src/shared/AppShell.tsx": {
+    "mtime": 1785764957.4493442,
+    "ast_hash": "ca0d31e601eb3c517d41529d79824c95",
+    "semantic_hash": "ca0d31e601eb3c517d41529d79824c95"
+  },
+  "web/src/shared/StageGate.test.tsx": {
+    "mtime": 1785764958.259835,
+    "ast_hash": "24bb91e2ec9af53d4d7172591e7ba83f",
+    "semantic_hash": "24bb91e2ec9af53d4d7172591e7ba83f"
+  },
+  "web/src/shared/StageGate.tsx": {
+    "mtime": 1785764957.309102,
+    "ast_hash": "9232c9f0b0a399d641e8d6243924c06f",
+    "semantic_hash": "9232c9f0b0a399d641e8d6243924c06f"
+  },
+  "web/src/stages/StagePage.tsx": {
+    "mtime": 1785764957.6883242,
+    "ast_hash": "27fa84c802d673fd8ab178684b248162",
+    "semantic_hash": "27fa84c802d673fd8ab178684b248162"
+  },
+  "web/src/vite-env.d.ts": {
+    "mtime": 1785764988.1386132,
+    "ast_hash": "f7b141a75e795569736ed06fbadc743c",
+    "semantic_hash": "f7b141a75e795569736ed06fbadc743c"
+  },
+  "web/tsconfig.json": {
+    "mtime": 1785764542.4977694,
+    "ast_hash": "f2097abbe56ba343d0a42511d58c5188",
+    "semantic_hash": "f2097abbe56ba343d0a42511d58c5188"
+  },
+  "web/vite.config.ts": {
+    "mtime": 1785765283.82713,
+    "ast_hash": "e32e2fde5e06c9da96b8efae933ef073",
+    "semantic_hash": "e32e2fde5e06c9da96b8efae933ef073"
   },
   ".wayfinder/README.md": {
     "mtime": 1785563136.3810906,
@@ -270,9 +375,9 @@
     "semantic_hash": "4d5c4d6587d11b381c6207081f141a44"
   },
   ".wayfinder/artifacts/020-auto-bill-token-contract.md": {
-    "mtime": 1785487987.9106412,
-    "ast_hash": "bf5527e83731a0b39f28bd871bc9c543",
-    "semantic_hash": "bf5527e83731a0b39f28bd871bc9c543"
+    "mtime": 1785742096.9417396,
+    "ast_hash": "b37bd2d0768931178f2e8d33fa9bc3f9",
+    "semantic_hash": "b37bd2d0768931178f2e8d33fa9bc3f9"
   },
   ".wayfinder/artifacts/021-element-inventory-matrix.md": {
     "mtime": 1785468188.2871447,
@@ -289,30 +394,65 @@
     "ast_hash": "8373ff36e23f14555293d33fed89bc8e",
     "semantic_hash": "8373ff36e23f14555293d33fed89bc8e"
   },
+  ".wayfinder/artifacts/024-migration-path.md": {
+    "mtime": 1785740910.7791877,
+    "ast_hash": "edee0f6c687871ee48c8622fd7416475",
+    "semantic_hash": "edee0f6c687871ee48c8622fd7416475"
+  },
   ".wayfinder/artifacts/025-visual-parity-gate.md": {
-    "mtime": 1785487911.3046753,
-    "ast_hash": "f8d9372399d4d43d455836760f8662cb",
-    "semantic_hash": "f8d9372399d4d43d455836760f8662cb"
+    "mtime": 1785747012.5907426,
+    "ast_hash": "c81ebff2bfa655697d9632c2d15a525e",
+    "semantic_hash": "c81ebff2bfa655697d9632c2d15a525e"
   },
   ".wayfinder/artifacts/026-webapp-stack-and-layout.md": {
     "mtime": 1785484174.7107954,
     "ast_hash": "d752d0f6a8adff4883a0acf1095249f7",
     "semantic_hash": "d752d0f6a8adff4883a0acf1095249f7"
   },
+  ".wayfinder/artifacts/027-bilingual-copy-pipeline.md": {
+    "mtime": 1785738841.946262,
+    "ast_hash": "22d3070fbb68b8ea173f4edafa210714",
+    "semantic_hash": "22d3070fbb68b8ea173f4edafa210714"
+  },
   ".wayfinder/artifacts/028-webapp-information-architecture.md": {
     "mtime": 1785485699.6460054,
     "ast_hash": "feb0111fef4347349852f0e5da606ea0",
     "semantic_hash": "feb0111fef4347349852f0e5da606ea0"
+  },
+  ".wayfinder/artifacts/029-test-strategy-after-apptest.md": {
+    "mtime": 1785740271.544008,
+    "ast_hash": "cc14b1e0a7d9df8febdb18a7863044ec",
+    "semantic_hash": "cc14b1e0a7d9df8febdb18a7863044ec"
   },
   ".wayfinder/artifacts/030-exporter-and-download-contract.md": {
     "mtime": 1785494923.0064409,
     "ast_hash": "8536b529c01d4a4da0d06c1a03bf3964",
     "semantic_hash": "8536b529c01d4a4da0d06c1a03bf3964"
   },
-  ".wayfinder/map-002-splitter-merge-and-webapp.md": {
-    "mtime": 1785494962.1936057,
-    "ast_hash": "66556ec03ed17938b97aa91273cb2a04",
-    "semantic_hash": "66556ec03ed17938b97aa91273cb2a04"
+  ".wayfinder/artifacts/031-money-screens-prototype.html": {
+    "mtime": 1785743529.1450818,
+    "ast_hash": "b01e338df262ffc63e6d60a98fef81e7",
+    "semantic_hash": "b01e338df262ffc63e6d60a98fef81e7"
+  },
+  ".wayfinder/artifacts/032-day-screen-prototype.html": {
+    "mtime": 1785746988.4554408,
+    "ast_hash": "154b2bc03b693266aec779d73f98d3a1",
+    "semantic_hash": "154b2bc03b693266aec779d73f98d3a1"
+  },
+  ".wayfinder/artifacts/033-phase-2-slice-plan-and-scorecard.md": {
+    "mtime": 1785761846.9553747,
+    "ast_hash": "c325a803944b22fec3267321de66c292",
+    "semantic_hash": "c325a803944b22fec3267321de66c292"
+  },
+  ".wayfinder/artifacts/034-offline-asset-policy.md": {
+    "mtime": 1785741640.8044293,
+    "ast_hash": "b7f5da58561900ad8437c90d9ed1dce3",
+    "semantic_hash": "b7f5da58561900ad8437c90d9ed1dce3"
+  },
+  ".wayfinder/artifacts/035-feedback-element-family.html": {
+    "mtime": 1785757280.0451212,
+    "ast_hash": "420e1f2e633c10d6ebabeb1d067f63a8",
+    "semantic_hash": "420e1f2e633c10d6ebabeb1d067f63a8"
   },
   ".wayfinder/map.md": {
     "mtime": 1785272453.0,
@@ -415,9 +555,9 @@
     "semantic_hash": "a6f3c0bcaee48213f35dc938c39e8204"
   },
   ".wayfinder/tickets/020-extract-the-auto-bill-design-token-contract.md": {
-    "mtime": 1785490615.9610124,
-    "ast_hash": "ce96896cf91d8e67746bc870cd575759",
-    "semantic_hash": "ce96896cf91d8e67746bc870cd575759"
+    "mtime": 1785742189.2429953,
+    "ast_hash": "b4255ded0595f49be9cd692b6766d18a",
+    "semantic_hash": "b4255ded0595f49be9cd692b6766d18a"
   },
   ".wayfinder/tickets/021-inventory-the-auto-bill-elements-each-stage-needs.md": {
     "mtime": 1785468188.288624,
@@ -435,14 +575,14 @@
     "semantic_hash": "49c655405f5cf54db969f9e2c3aabff0"
   },
   ".wayfinder/tickets/024-decide-the-migration-path-for-existing-data.md": {
-    "mtime": 1785468188.2893832,
-    "ast_hash": "5e22f6b6cfc8cd4bbe85ba7445dfd40d",
-    "semantic_hash": "5e22f6b6cfc8cd4bbe85ba7445dfd40d"
+    "mtime": 1785740944.715638,
+    "ast_hash": "1912e705addbe157f0b1244d2bab38f5",
+    "semantic_hash": "1912e705addbe157f0b1244d2bab38f5"
   },
   ".wayfinder/tickets/025-define-the-visual-parity-gate-for-the-tailwind-rebuild.md": {
-    "mtime": 1785487942.6477358,
-    "ast_hash": "a6f95f46c20076507e634a9dd6efa8fb",
-    "semantic_hash": "a6f95f46c20076507e634a9dd6efa8fb"
+    "mtime": 1785759646.519038,
+    "ast_hash": "0f97b422a7cb372eb591f540b3e0165b",
+    "semantic_hash": "0f97b422a7cb372eb591f540b3e0165b"
   },
   ".wayfinder/tickets/026-choose-the-webapp-stack-and-project-layout.md": {
     "mtime": 1785484203.2309036,
@@ -450,9 +590,9 @@
     "semantic_hash": "ebc386f327f10f089c8b5a3686244294"
   },
   ".wayfinder/tickets/027-decide-the-bilingual-copy-pipeline-for-the-webapp.md": {
-    "mtime": 1785468188.2900853,
-    "ast_hash": "d53bac5cb0852ec5af6d9abdcec6d9ca",
-    "semantic_hash": "d53bac5cb0852ec5af6d9abdcec6d9ca"
+    "mtime": 1785738875.2427065,
+    "ast_hash": "31b19cd4993696304e82c57cba006e5c",
+    "semantic_hash": "31b19cd4993696304e82c57cba006e5c"
   },
   ".wayfinder/tickets/028-map-every-stage-to-its-webapp-screen-and-route.md": {
     "mtime": 1785485727.010593,
@@ -460,58 +600,58 @@
     "semantic_hash": "1b9d68487e9521b527259b5b2d865b67"
   },
   ".wayfinder/tickets/029-decide-the-test-strategy-after-apptest-dies.md": {
-    "mtime": 1785483318.985148,
-    "ast_hash": "81b92b20ba213bb6ca762ef2866122a5",
-    "semantic_hash": "81b92b20ba213bb6ca762ef2866122a5"
+    "mtime": 1785740298.8736432,
+    "ast_hash": "161f5536f7ce703eaa36b8efc5a99c2e",
+    "semantic_hash": "161f5536f7ce703eaa36b8efc5a99c2e"
   },
   ".wayfinder/tickets/030-decide-which-exporter-survives.md": {
-    "mtime": 1785494951.6707962,
-    "ast_hash": "0b0ce2d6beb5a153d8ee06fd56fda87e",
-    "semantic_hash": "0b0ce2d6beb5a153d8ee06fd56fda87e"
+    "mtime": 1785759646.5173948,
+    "ast_hash": "80099695446766cf528bc1142a6500af",
+    "semantic_hash": "80099695446766cf528bc1142a6500af"
   },
   ".wayfinder/tickets/031-prototype-the-merged-cost-and-split-screen.md": {
-    "mtime": 1785485736.780545,
-    "ast_hash": "adb16dcdc301afa993fb8f1cff95932b",
-    "semantic_hash": "adb16dcdc301afa993fb8f1cff95932b"
+    "mtime": 1785743587.9648793,
+    "ast_hash": "89267524d754d2022b61b01098daf93f",
+    "semantic_hash": "89267524d754d2022b61b01098daf93f"
   },
   ".wayfinder/tickets/032-prototype-the-itinerary-day-screen-in-the-new-design.md": {
-    "mtime": 1785468188.2919002,
-    "ast_hash": "ae338672858b407ef62cbd102c1c1fa1",
-    "semantic_hash": "ae338672858b407ef62cbd102c1c1fa1"
+    "mtime": 1785756872.2353406,
+    "ast_hash": "fd20ae9a205301e367b4a0787cba1516",
+    "semantic_hash": "fd20ae9a205301e367b4a0787cba1516"
   },
   ".wayfinder/tickets/033-lock-the-phase-2-slice-plan-and-validation-scorecard.md": {
-    "mtime": 1785468188.2922776,
-    "ast_hash": "6e496537f5dd7d65f8c20dfd98e8bd7e",
-    "semantic_hash": "6e496537f5dd7d65f8c20dfd98e8bd7e"
+    "mtime": 1785759646.5165129,
+    "ast_hash": "36397bd11afbafba0e90b87281e43cdb",
+    "semantic_hash": "36397bd11afbafba0e90b87281e43cdb"
   },
   ".wayfinder/tickets/034-decide-the-offline-asset-policy-for-the-webapp.md": {
-    "mtime": 1785490926.5333853,
-    "ast_hash": "3428bdb3a93c8f794cef2ddd4f201224",
-    "semantic_hash": "3428bdb3a93c8f794cef2ddd4f201224"
+    "mtime": 1785759646.5181725,
+    "ast_hash": "f2a3bffbf1b198a3cc3b1e94a2ff5602",
+    "semantic_hash": "f2a3bffbf1b198a3cc3b1e94a2ff5602"
   },
   ".wayfinder/tickets/035-design-the-feedback-confirm-and-disabled-elements.md": {
-    "mtime": 1785468188.2930944,
-    "ast_hash": "31bb838e021e61a2a86ace1905e61ffb",
-    "semantic_hash": "31bb838e021e61a2a86ace1905e61ffb"
+    "mtime": 1785759761.9246192,
+    "ast_hash": "2f75c7e38e1c83c56c90f97f23d08fc8",
+    "semantic_hash": "2f75c7e38e1c83c56c90f97f23d08fc8"
   },
   ".wayfinder/tickets/036-prototype-the-ranked-candidate-card-grid.md": {
     "mtime": 1785468188.293299,
     "ast_hash": "f1b02223bdffe51e72c8ccf3c3dc935d",
     "semantic_hash": "f1b02223bdffe51e72c8ccf3c3dc935d"
   },
-  "AGENTS.md": {
-    "mtime": 1785563710.555607,
-    "ast_hash": "3a41b19cfbeead1cbce0c345dd22b0e6",
-    "semantic_hash": "3a41b19cfbeead1cbce0c345dd22b0e6"
-  },
   "CLAUDE.md": {
-    "mtime": 1785563752.702951,
-    "ast_hash": "91efe4a824208f3e973e1b2a4eec5d83",
-    "semantic_hash": "91efe4a824208f3e973e1b2a4eec5d83"
+    "mtime": 1785765447.6961954,
+    "ast_hash": "cd28d7e8fe53d3ea98e0cb2249d41276",
+    "semantic_hash": "cd28d7e8fe53d3ea98e0cb2249d41276"
   },
-  "README.md": {
-    "mtime": 1785563105.1255076,
-    "ast_hash": "cefe7e8e52866e6614aaf086752e1493",
-    "semantic_hash": "cefe7e8e52866e6614aaf086752e1493"
+  "i18n/notes.md": {
+    "mtime": 1785763620.6959195,
+    "ast_hash": "8fcb568be478636a65efc69546baa3c9",
+    "semantic_hash": "8fcb568be478636a65efc69546baa3c9"
+  },
+  "web/index.html": {
+    "mtime": 1785764542.7786586,
+    "ast_hash": "60a50da417ae004d0e5e42ce16527be4",
+    "semantic_hash": "60a50da417ae004d0e5e42ce16527be4"
   }
 }

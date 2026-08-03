@@ -190,10 +190,11 @@ class OptimizerActionsTest(unittest.TestCase):
                     for item in variant["reconciliation"]
                 },
             )
-            with self.assertRaisesRegex(ValueError, "fully validated Ready"):
+            with self.assertRaises(ValueError) as raised:
                 resumed.activate_plan_preview(
                     trip_id=trip.trip_id, variant_id="best_balance"
                 )
+            self.assertEqual("variant_not_ready", str(raised.exception))
             self.assertIsNone(resumed.get_active_plan(trip.trip_id))
 
             with patch.dict(os.environ, {"TOURIST_DB_PATH": str(path)}):

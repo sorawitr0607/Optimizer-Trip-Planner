@@ -203,8 +203,9 @@ class ExportSnapshotTest(unittest.TestCase):
             current = actions.build_export_snapshot(trip.trip_id).as_dict()
 
             unplanned = actions.create_trip(name="No plan", destination="Osaka")
-            with self.assertRaisesRegex(ValueError, "Activate a plan"):
+            with self.assertRaises(ValueError) as raised:
                 actions.build_export_snapshot(unplanned.trip_id)
+            self.assertEqual("no_active_plan", str(raised.exception))
 
         self.assertFalse(old["stamp"]["is_active_plan"])
         self.assertTrue(current["stamp"]["is_active_plan"])
@@ -432,14 +433,14 @@ class ArtifactTest(unittest.TestCase):
 
         thai = "การเดินทางธรรมดาเกินค่าที่ตั้งไว้"
         words = exporters._labels({"PLAIN_WALK_THRESHOLD": thai})
-        # Same rule the app's _optimizer_code uses: table first, else prettify.
+        # Same rule the app's _optimizer_code uses: table first, else expose the gap.
         self.assertEqual(thai, exporters._code(words, "PLAIN_WALK_THRESHOLD"))
         self.assertEqual(
-            "Plain walk threshold",
+            "⚠ PLAIN_WALK_THRESHOLD",
             exporters._code(exporters._labels(None), "PLAIN_WALK_THRESHOLD"),
         )
         self.assertEqual(
-            "Kept in unscheduled shortlist",
+            "⚠ kept_in_unscheduled_shortlist",
             exporters._code(words, "kept_in_unscheduled_shortlist"),
         )
         self.assertEqual("", exporters._code(words, None))

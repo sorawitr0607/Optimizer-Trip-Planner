@@ -407,8 +407,9 @@ class InterpretFlowTest(unittest.TestCase):
             interpreter=FakeInterpreter(model_reply("explain")),
         )
         trip = bare.create_trip(name="Bare", destination="Osaka")
-        with self.assertRaisesRegex(ValueError, "Activate a plan"):
+        with self.assertRaises(ValueError) as raised:
             bare.interpret_revision(trip_id=trip.trip_id, request_text="explain")
+        self.assertEqual("no_active_plan", str(raised.exception))
 
 
 if __name__ == "__main__":

@@ -165,8 +165,9 @@ class LedgerPersistenceTest(unittest.TestCase):
         self.assertEqual(5, status["by_operation"]["openrouteservice:directions"]["requests"])
 
     def test_a_negative_cap_is_refused(self) -> None:
-        with self.assertRaisesRegex(ValueError, "cannot be negative"):
+        with self.assertRaises(ValueError) as raised:
             self.actions.set_paid_cap(-1)
+        self.assertEqual("invalid_paid_cap", str(raised.exception))
 
     def test_ledger_rows_are_immutable(self) -> None:
         self.actions.record_paid_call(operation="google_places:details", count=1)

@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 from streamlit.testing.v1 import AppTest
 
-from travel_planner.actions import PlannerActions
+from travel_planner.actions import PlannerActions, PlannerRefusal
 from travel_planner.core import freeze_snapshot
 
 
@@ -163,8 +163,9 @@ class FoundationTest(unittest.TestCase):
             )
         finally:
             connection.close()
-        with self.assertRaisesRegex(ValueError, "Unknown trip"):
+        with self.assertRaises(ValueError) as raised:
             self.actions.delete_trip(victim.trip_id)
+        self.assertEqual("unknown_trip", str(raised.exception))
 
     def test_secret_bearing_snapshot_is_rejected(self) -> None:
         trip = self.actions.create_trip(name="", destination="Taipei")
@@ -339,11 +340,51 @@ class FoundationTest(unittest.TestCase):
         self.assertEqual([], self.actions.list_trips())
 
     def test_every_interface_string_exists_in_both_languages(self) -> None:
-        """A missing `th` key is a KeyError in front of a Thai owner, not a typo."""
+        """Every bilingual table is key-for-key; categories are derived in English."""
 
-        from ui.text import TEXT
+        from ui.text import (
+            ACCOMMODATION_TEXT,
+            CATEGORY_TEXT,
+            DIMENSION_TEXT,
+            EXPLANATION_TEXT,
+            OPTIMIZER_CODE_TEXT,
+            REJECTION_TEXT,
+            TAG_TEXT,
+            TEXT,
+        )
 
-        self.assertEqual(set(TEXT["en"]), set(TEXT["th"]))
+        for table in (
+            TEXT,
+            TAG_TEXT,
+            EXPLANATION_TEXT,
+            REJECTION_TEXT,
+            DIMENSION_TEXT,
+            ACCOMMODATION_TEXT,
+            OPTIMIZER_CODE_TEXT,
+        ):
+            self.assertEqual(set(table["en"]), set(table["th"]))
+        for category in CATEGORY_TEXT["th"]:
+            rendered = CATEGORY_TEXT["en"].get(
+                category, category.replace("_", " ").title()
+            )
+            self.assertNotIn(" Of ", rendered)
+
+        from ui import shared
+
+        with patch.object(shared, "language", return_value="th"):
+            self.assertEqual(
+                OPTIMIZER_CODE_TEXT["th"]["setup_not_confirmed"],
+                shared.plain(PlannerRefusal("setup_not_confirmed")),
+            )
+
+    def test_copy_never_uses_a_pictograph_as_the_only_meaning(self) -> None:
+        from travel_planner.copy import TABLE_NAMES, _CATALOGUE
+        from travel_planner.exporters import PICTOGRAPHS
+
+        for name in TABLE_NAMES:
+            for words in _CATALOGUE[name].values():
+                for value in words.values():
+                    self.assertTrue(PICTOGRAPHS.sub("", value).strip())
 
 
 class LocalCredentialsTest(unittest.TestCase):

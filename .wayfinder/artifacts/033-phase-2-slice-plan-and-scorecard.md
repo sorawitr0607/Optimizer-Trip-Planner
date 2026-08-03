@@ -65,7 +65,7 @@ cheap-before-expensive *within* the journey while proving the merge early.
 | Slice | Contents | The runnable check that closes it |
 |---|---|---|
 | **S0** | The scope cut: delete PDF + poster, `pillow`, `fpdf2`, the font apparatus | **Done 2026-08-03.** All existing gates green at **230** tests; `pyproject.toml` shows 2 runtime deps. *(This row originally named `scripts/check.py`, which does not exist until S1 — the existing commands were used instead.)* |
-| **S1** | **Foundation.** `api/` transport (dispatch, 51-method allowlist, `jsonable()`, error map, boundary guard, `GET` downloads) · `PlannerActions.journey()` · `tokens.css` · the JSON copy catalogue · `web/` shell with routing and `<StageGate>` · `scripts/check.py` | One contract test per dataclass shape; the three socket-level guard tests; parity test over all 8 copy tables; `uv run python -m api` serves the shell and one real API call round-trips |
+| **S1** | **Foundation.** `api/` transport (dispatch, 51-method allowlist, `jsonable()`, error map, boundary guard, `GET` downloads) · `PlannerActions.journey()` · `tokens.css` · the JSON copy catalogue · `web/` shell with routing and `<StageGate>` · `scripts/check.py` | **Done 2026-08-03.** [Evidence](../../artifacts/validation/2026-08-03-slice-1/notes.md): 248 Python + 2 web tests; all 8 check stages, live shell/API round-trip, and the 1358-node directed graph pass. |
 | **S2** | **The merge.** `split.py` · the split-ledger table with its pre-bump database copy · `costs.totals()` gaining `planned_thb` / `actual_thb` · `/costs` and `/split` screens | `split.py` unit tests including the rounding remainder and star settlement; a claimed cost row contributes its actual **once**; both screens render in `en` and `th`; the pre-bump copy exists and the migration refuses without it |
 | **S3** | **The cheap journey screens.** `setup` (5 steps, one whole draft) · `optimize` · app chrome · the sidebar navigation | The real Taipei trip's setup round-trips whole; a variant activates and refuses on a stale hash; 3 of the 14 ported `AppTest` behaviours pass at actions level |
 | **S4** | **The expensive journey screens.** `places` (570 lines, nearly all-new) · `itinerary` (the six row types, the stop list, the coordinate map) | **Gate 1 becomes assessable**: the real Taipei trip walks setup → discovery → ranking → optimize → activate → export in the webapp |
@@ -130,7 +130,7 @@ S6's parity baselines have a history rather than appearing from nowhere.
 1. **The real Taipei trip planned end to end in the webapp.** Not a fixture.
 2. **Exports verified against the four reference workbooks** — now the workbook and ICS only, since the PDF and
    poster are gone.
-3. **All 230 tests green.**
+3. **The full current Python suite green** — 248 tests at S1 closure.
 
 Not on track ⇒ Taipei is planned by hand in Excel, as the four reference trips were.
 

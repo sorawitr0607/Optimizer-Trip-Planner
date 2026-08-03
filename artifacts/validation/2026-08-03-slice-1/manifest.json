@@ -1,0 +1,83 @@
+{
+  "slice": "S1 — API and web foundation",
+  "date": "2026-08-03",
+  "status": "PASS",
+  "authority": ".wayfinder/artifacts/033-phase-2-slice-plan-and-scorecard.md §1",
+  "gates": {
+    "unified_check": {
+      "stages": 8,
+      "duration_seconds": 13.9,
+      "result": "PASS"
+    },
+    "unittest": {
+      "tests": 248,
+      "duration_seconds": 9.974,
+      "result": "OK"
+    },
+    "optimizer_regressions": {
+      "atomic": 20,
+      "interaction": 7,
+      "variants_each": 3,
+      "result": "PASS"
+    },
+    "fixture_catalog": {
+      "rules": 24,
+      "result": "PASS"
+    },
+    "provider_redaction_self_test": "PASS",
+    "web_typecheck": "PASS",
+    "web_lint": "PASS",
+    "web_tests": {
+      "files": 2,
+      "tests": 2,
+      "result": "PASS"
+    }
+  },
+  "api_contract": {
+    "allowlisted_methods": 51,
+    "refusal_codes": 26,
+    "dataclass_shapes_tested": 9,
+    "socket_security_guards_tested": 3,
+    "download_routes": 2,
+    "python_runtime_dependencies_added": 0
+  },
+  "copy": {
+    "tables": 8,
+    "text_keys_per_language": 528,
+    "optimizer_code_keys_per_language": 62,
+    "legacy_copy_mismatches": 0,
+    "parity": "PASS"
+  },
+  "web": {
+    "node": "24.14.1",
+    "routes": 9,
+    "redirecting_routes": 1,
+    "runtime_dependencies": 6,
+    "dev_dependencies": 12,
+    "npm_audit_vulnerabilities": 0,
+    "vite_build": {
+      "modules": 1896,
+      "javascript_kb": 418.95,
+      "css_kb": 11.87,
+      "result": "PASS"
+    }
+  },
+  "live_launch": {
+    "command": "uv run --locked python -m api --port 0",
+    "stale_frontend_rebuilt": true,
+    "deep_spa_route_status": 200,
+    "post_list_trips_status": 200,
+    "temporary_database_removed": true
+  },
+  "graph": {
+    "nodes": 1358,
+    "directed_edges": 3185,
+    "communities": 137,
+    "check": "PASS",
+    "s1_input_tokens": 124699,
+    "s1_output_tokens": 10709,
+    "s1_estimated_usd": 0.067015,
+    "cumulative_estimated_usd": 0.228995
+  },
+  "paid_provider_calls": 0
+}

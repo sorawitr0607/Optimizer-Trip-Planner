@@ -256,7 +256,7 @@ def _save(step_number: int, *, confirmed: bool) -> bool:
             **(_saved_values() | _edited_values(step_number)),
         )
     except ValueError as error:
-        st.session_state[FLASH_KEY] = ("error", str(error))
+        st.session_state[FLASH_KEY] = ("error", shared.plain(error))
         return False
     return True
 

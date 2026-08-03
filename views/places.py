@@ -112,7 +112,7 @@ if catalog:
     try:
         ranking = actions.rank_candidates(trip.trip_id)
     except ValueError as error:
-        st.info(f"{copy['ranking_wait']} ({error})")
+        st.info(f"{copy['ranking_wait']} ({shared.plain(error)})")
 else:
     st.info(copy["ranking_wait"])
 

@@ -8,7 +8,9 @@ invent no missing value; a missing required field raises a precise error.
 from __future__ import annotations
 
 from datetime import date, timedelta
+from functools import cache
 from io import BytesIO
+from pathlib import Path
 import re
 from typing import Any
 import unicodedata
@@ -59,13 +61,28 @@ TIMELINE_COLUMNS = (
 # Latin + Thai + local-script coverage is required; a personal machine may have
 # any of these.  ponytail: env override first, so a missing system font is a
 # configuration fix rather than a code change.
-FONT_CANDIDATES = (
-    "/Library/Fonts/Arial Unicode.ttf",
-    "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
-    "/System/Library/Fonts/Supplemental/Ayuthaya.ttf",
-    "/usr/share/fonts/truetype/noto/NotoSansThai-Regular.ttf",
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-)
+TOKEN_FILE = Path(__file__).resolve().parents[1] / "tokens.css"
+
+
+@cache
+def _light_tokens() -> dict[str, str]:
+    match = re.search(r":root\s*\{(?P<body>.*?)\}", TOKEN_FILE.read_text(encoding="utf-8"), re.S)
+    if match is None:
+        raise RuntimeError("tokens.css has no :root token block")
+    return dict(re.findall(r"(--[\w-]+)\s*:\s*([^;]+);", match.group("body")))
+
+
+def _design_token(name: str) -> str:
+    tokens = _light_tokens()
+    value = tokens[name].strip()
+    seen = {name}
+    while reference := re.fullmatch(r"var\((--[\w-]+)\)", value):
+        name = reference.group(1)
+        if name in seen:
+            raise RuntimeError(f"Circular design token: {name}")
+        seen.add(name)
+        value = tokens[name].strip()
+    return value
 
 
 def checklist_ics(
@@ -169,7 +186,9 @@ def plan_workbook_xlsx(
     words = _labels(labels)
     buffer = BytesIO()
     workbook = xlsxwriter.Workbook(buffer, {"in_memory": True})
-    header = workbook.add_format({"bold": True, "bg_color": "#E8EEF3", "border": 1})
+    header = workbook.add_format(
+        {"bold": True, "bg_color": _design_token("--export-header-bg"), "border": 1}
+    )
     title = workbook.add_format({"bold": True, "font_size": 13})
     wrap = workbook.add_format({"text_wrap": True, "valign": "top"})
 
@@ -601,12 +620,12 @@ def _write_sources(sheet: Any, snapshot: dict[str, Any], header: Any) -> None:
 
 
 def _code(words: dict[str, str], code: Any) -> str:
-    """Localize an optimizer code the way the app does, or prettify it."""
+    """Localize an optimizer code, visibly marking a missing catalogue entry."""
 
     text = str(code or "")
     if not text:
         return ""
-    return words.get(text) or text.replace("_", " ").capitalize()
+    return words.get(text) or f"⚠ {text}"
 
 
 def _rate_summary(snapshot: dict[str, Any] | None) -> str:
@@ -632,10 +651,9 @@ def _rate_summary(snapshot: dict[str, Any] | None) -> str:
 def _labels(labels: dict[str, str] | None) -> dict[str, str]:
     """Merge caller labels over the defaults, minus glyphs no export font has.
 
-    The app's status labels carry emoji for on-screen scanning; a PDF or poster
-    font has no pictographs, so they would silently drop.  The wording alone
+    The app's status labels may carry emoji for scanning. The wording alone
     still carries the state, which is what "colour is never the only signal"
-    needs.
+    needs in the workbook.
     """
 
     words = dict(DEFAULT_LABELS)
@@ -645,6 +663,7 @@ def _labels(labels: dict[str, str] | None) -> dict[str, str]:
 
 # Export-only strings; the app passes its own TEXT[language] over these.
 DEFAULT_LABELS = {
+    "rain": "Rain",
     "minutes": "min",
     "scheduled_visits": "Visits",
     "visit_minutes": "At places",

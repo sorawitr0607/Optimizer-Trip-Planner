@@ -274,6 +274,25 @@ def extracted_edge_issues(
     return missing_pairs, changed_relations
 
 
+def cluster_raw_graph(graphify: str) -> None:
+    """Cluster from a staged raw graph so Graphify's shrink guard cannot retain it."""
+
+    raw_graph = OUT / ".graphify_raw.json"
+    shutil.move(GRAPH, raw_graph)
+    try:
+        run(
+            graphify,
+            "cluster-only",
+            str(ROOT),
+            "--graph",
+            str(raw_graph),
+            "--no-label",
+            "--no-viz",
+        )
+    finally:
+        raw_graph.unlink(missing_ok=True)
+
+
 def validate(expected: set[tuple[str, str, str]] | None = None) -> tuple[int, int]:
     data = json.loads(GRAPH.read_text(encoding="utf-8"))
     nodes = data.get("nodes", [])
@@ -389,7 +408,7 @@ def build() -> tuple[int, int]:
                 if saved_memory.exists():
                     shutil.move(saved_memory, memory)
             expected = normalize_raw_graph()
-            run(graphify, "cluster-only", str(ROOT), "--no-label", "--no-viz")
+            cluster_raw_graph(graphify)
             annotate_report_cost()
             run(graphify, "export", "html")
             result = validate(expected)

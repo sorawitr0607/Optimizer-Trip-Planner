@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 
+from scripts import build_project_graph
 from scripts.build_project_graph import (
+    cluster_raw_graph,
     deduplicate_nodes,
     extracted_edge_issues,
     resolve_ticket_node,
@@ -55,6 +60,28 @@ class TicketNodeResolutionTest(unittest.TestCase):
 
 
 class GraphBuilderEdgeValidationTest(unittest.TestCase):
+    def test_cluster_reads_a_staged_raw_graph_and_writes_a_fresh_output(self) -> None:
+        with TemporaryDirectory() as directory:
+            out = Path(directory)
+            graph = out / "graph.json"
+            graph.write_text("raw", encoding="utf-8")
+
+            def fake_run(*args: str, **_kwargs: object) -> None:
+                self.assertFalse(graph.exists())
+                self.assertEqual("raw", (out / ".graphify_raw.json").read_text())
+                self.assertIn("--graph", args)
+                graph.write_text("clustered", encoding="utf-8")
+
+            with (
+                patch.object(build_project_graph, "OUT", out),
+                patch.object(build_project_graph, "GRAPH", graph),
+                patch.object(build_project_graph, "run", side_effect=fake_run),
+            ):
+                cluster_raw_graph("graphify")
+
+            self.assertEqual("clustered", graph.read_text(encoding="utf-8"))
+            self.assertFalse((out / ".graphify_raw.json").exists())
+
     def test_duplicate_node_ids_follow_networkx_last_attributes_win(self) -> None:
         nodes = deduplicate_nodes(
             [

@@ -15,6 +15,7 @@ from urllib.parse import quote
 import streamlit as st
 
 from travel_planner import PlannerActions
+from travel_planner.actions import PlannerRefusal
 from travel_planner.checklist import (
     display_consequence,
     display_title,
@@ -63,6 +64,8 @@ def plain(value: object) -> str:
     through here.
     """
 
+    if isinstance(value, PlannerRefusal):
+        value = OPTIMIZER_CODE_TEXT[language()].get(value.code, f"⚠ {value.code}")
     return str(value).replace("$", r"\$")
 
 
@@ -156,79 +159,14 @@ def trip():
 
 
 def journey(current_trip) -> dict:
-    """Which stage this trip has reached, and what the next step is.
+    """Compatibility shim while the Streamlit POC remains in the tree."""
 
-    Each entry is (done, reachable). A view uses it to explain what is missing;
-    the sidebar uses it to show progress and pick the landing page.
-    """
-
-    planner = actions()
     if current_trip is None:
         return {
             "stages": [{"key": "setup", "done": False, "blocked_by": None}],
             "next": "setup",
         }
-    trip_id = current_trip.trip_id
-    setup = planner.get_setup(trip_id)
-    discovery = planner.get_latest_discovery(trip_id)
-    choices = [
-        choice
-        for choice in planner.list_candidate_choices(trip_id)
-        if choice.action in {"must_do", "interested", "maybe"}
-    ]
-    active = planner.get_active_plan(trip_id)
-    gaps: list[str] = []
-    if setup is not None and setup.confirmed and discovery is not None and choices:
-        try:
-            optimizer_input = planner._optimizer_input(trip_id)
-            gaps = list(optimizer_input["trip"]["capability_gaps"])
-            verified_openings = {
-                fact["subject_id"]
-                for fact in optimizer_input["facts"]
-                if fact.get("fact_type") == "opening_interval"
-                and fact.get("status") == "verified"
-            }
-            if optimizer_input["trip"]["local_dates"] and any(
-                candidate.get("requires_opening_evidence")
-                and candidate["id"] not in verified_openings
-                for candidate in optimizer_input["candidates"]
-            ) and "OPENING_EVIDENCE_MISSING" not in gaps:
-                gaps.append("OPENING_EVIDENCE_MISSING")
-        except ValueError:
-            gaps = ["INPUT_NOT_READY"]
-    stages = [
-        {"key": "setup", "done": bool(setup and setup.confirmed), "blocked_by": None},
-        {
-            "key": "places",
-            "done": bool(discovery is not None and choices),
-            "blocked_by": None if setup and setup.confirmed else "setup",
-        },
-        {
-            "key": "evidence",
-            "done": bool(
-                choices and (not gaps or current_trip.planning_mode == "explore_first")
-            ),
-            "blocked_by": None if discovery is not None and choices else "places",
-        },
-        {
-            "key": "optimize",
-            "done": active is not None,
-            "blocked_by": None if choices else "places",
-        },
-        {
-            "key": "itinerary",
-            "done": active is not None,
-            "blocked_by": None if active is not None else "optimize",
-        },
-    ]
-    pending = next((item["key"] for item in stages if not item["done"]), "itinerary")
-    return {
-        "stages": stages,
-        "next": pending,
-        "capability_gaps": gaps,
-        "has_active_plan": active is not None,
-        "choice_count": len(choices),
-    }
+    return actions().journey(current_trip.trip_id)
 
 
 def require(stage_key: str, current_trip, *, journey_state: dict | None = None) -> bool:
@@ -257,13 +195,11 @@ def _category_text(category: str, language: str) -> str:
 
 
 def _explain(code: str, language: str) -> str:
-    return EXPLANATION_TEXT[language].get(code, code.replace("_", " ").title())
+    return EXPLANATION_TEXT[language].get(code, f"⚠ {code}")
 
 
 def _optimizer_code(code: str, language: str) -> str:
-    return OPTIMIZER_CODE_TEXT.get(language, {}).get(
-        code, code.replace("_", " ").capitalize()
-    )
+    return OPTIMIZER_CODE_TEXT.get(language, {}).get(code, f"⚠ {code}")
 
 
 def _plan_item_name(item: dict, language: str) -> str:
@@ -383,7 +319,7 @@ def _render_checklist_item(
                         note=note or None,
                     )
                 except ValueError as error:
-                    st.error(str(error))
+                    st.error(plain(error))
                 else:
                     st.session_state[flash_key] = words["task_saved"]
                     st.rerun()
@@ -424,7 +360,7 @@ def _render_checklist_item(
                         authority_type=authority,
                     )
                 except ValueError as error:
-                    st.error(str(error))
+                    st.error(plain(error))
                 else:
                     st.session_state[flash_key] = words["evidence_recorded"]
                     st.rerun()

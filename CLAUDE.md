@@ -5,8 +5,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-uv run streamlit run app.py                                          # run the app
-uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 230 tests, ~9s
+npm --prefix web install                                             # first web run only
+uv run --locked python -m api                                        # production shell on 127.0.0.1:8765
+uv run streamlit run app.py                                          # temporary Phase 1 POC
+uv run --locked python scripts/check.py                              # every free Python + web gate
+uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 248 tests, ~10s
 uv run --locked python -m unittest tests.test_optimizer.OptimizerCoreTest.test_safe_route_and_weather_fallback_are_selected  # one test
 python3 scripts/validate_regression_fixtures.py                      # fixture catalog structure
 uv run --locked python scripts/run_optimizer_regressions.py          # 27 historic cases through the real optimizer
@@ -16,21 +19,24 @@ python3 scripts/check_provider_access.py --self-test                 # redaction
 ```
 
 All commands run from the repo root: `tests/` imports both `travel_planner` and `scripts` as top-level
-packages via cwd on `sys.path`. There is no linter or formatter configured.
+packages via cwd on `sys.path`. Python has no linter or formatter; `web/` uses ESLint and deliberately has
+no formatter.
 
 `scripts/check_provider_access.py --live-paid` makes billable Google requests. Don't run it unasked.
 
 ## Architecture
 
-Phase 1 is one local Streamlit app. The design decisions are already locked in `.wayfinder/tickets/`
-(see below) — the constraints in this section are decisions, not incidental structure.
+Phase 1 is the temporary local Streamlit POC. Phase 2 S1 adds the local React shell without deleting it.
+The design decisions are already locked in `.wayfinder/tickets/` (see below) — the constraints in this
+section are decisions, not incidental structure.
 
 ### Dependency direction is one-way and enforced by review, not by tooling
 
 ```
-app.py (Streamlit)  →  travel_planner/actions.py  →  core.py / optimizer.py / ranking.py / setup.py / discovery.py
-                                    ↓
-                       store.py (SQLite) · providers.py (HTTP)
+web/ (React)  →  api/ (stdlib localhost HTTP)  →  travel_planner/actions.py
+app.py (Streamlit POC) ────────────────────────→             │
+                                                             ├─ core / optimizer / ranking / setup / discovery
+                                                             └─ store.py (SQLite) · providers.py (HTTP)
 ```
 
 - `core.py`, `optimizer.py`, `ranking.py`, `setup.py`, `discovery.py` are the planning core: pure,
@@ -38,11 +44,12 @@ app.py (Streamlit)  →  travel_planner/actions.py  →  core.py / optimizer.py 
   each state this. Adding such an import is the single easiest way to break the design.
 - `PlannerActions` (`actions.py`) is the only coordinator: it assembles snapshots, calls the core,
   and persists results. It holds no Streamlit session state and no presentation formatting.
-- The UI is split by journey stage. `app.py` (about 100 lines) owns only what every stage shares: the
-  language, the selected trip, the journey state, and `st.navigation`. Each stage is a script under
-  `views/`, all copy lives in `ui/text.py`, and shared state plus row renderers live in `ui/shared.py`.
+- The POC UI is split by journey stage. `app.py` owns only what every stage shares: the language, selected
+  trip, journey state, and `st.navigation`. Each stage is under `views/`; `ui/text.py` re-exports the shared
+  JSON catalogue and `ui/shared.py` holds POC state plus row renderers.
   A view never recomputes context: it calls `shared.actions()`, `shared.words()`, `shared.trip()`.
-- `shared.journey()` decides which stages are done and which is next; `shared.require(stage, trip)`
+- `PlannerActions.journey()` decides which stages are done and which is next; `shared.journey()` is only a
+  POC compatibility shim. `shared.require(stage, trip)`
   renders one clear next step and returns False when a stage is not reachable, so a view explains
   itself instead of erroring. The landing page is the stage that needs attention, so a returning owner
   sees the itinerary rather than the setup form.
@@ -156,26 +163,18 @@ preview. `SCHEMA_VERSION` (`store.py`) is stamped into `PRAGMA user_version`; a 
 
 ### Bilingual by data, not by branching
 
-All user-facing strings live in `en`/`th` dicts in `ui/text.py` (`TEXT`, `TAG_TEXT`,
-`EXPLANATION_TEXT`, `OPTIMIZER_CODE_TEXT`, …). The core emits stable codes; the views map code →
+All user-facing strings live in the eight `en`/`th` tables in `i18n/copy.json`; `ui/text.py` is a thin POC
+compatibility shim and React imports the same catalogue. The core emits stable codes; the views map code →
 language → text. Switching language must never change ranking, scheduling, or the active plan — so
-never put display text in the core or a language check in a scoring path. New user-visible string ⇒
-add both `en` and `th`; a test asserts `TEXT["en"]` and `TEXT["th"]` carry the same keys, because a
-missing `th` key is a `KeyError` in front of a Thai owner rather than a typo.
-
-**That test covers `TEXT` only — one of eight bilingual tables — and two of the other seven are asymmetric.**
-`CATEGORY_TEXT["en"]` is empty by design (the title-case fallback is the English), but
-`OPTIMIZER_CODE_TEXT` has **24 codes with Thai and no English**. It is invisible because every consumer
-prettifies the code instead of raising (`shared.py:266`, `exporters.py:991`), so an English owner reads
-`Access unverified` and cannot tell it from real copy — the asymmetry runs *against English*, the reverse of
-the warning above. This is a **Phase 1 defect**, so like the `PlannerRefusal` migration it is not gated by
-the Phase 2 decision gate. `WF-027` decided the fix: the test grows to all eight tables and the fallback
-becomes visibly machine output.
+never put display text in the core or a language check in a scoring path. New user-visible string ⇒ add both
+`en` and `th`. Tests enforce key parity across all tables except `CATEGORY_TEXT`'s documented derived-English
+rule. Unknown stable codes render visibly as `⚠ CODE`; never prettify them into copy-looking prose.
 
 ### Tests
 
-`unittest` only, plus `streamlit.testing.v1.AppTest` for UI paths (`AppTest.from_file(ROOT / "app.py")`
-with `TOURIST_DB_PATH` patched to a temp dir). No network, no paid API, no fixtures framework.
+Python uses `unittest`, plus `streamlit.testing.v1.AppTest` for the temporary POC paths
+(`AppTest.from_file(ROOT / "app.py")` with `TOURIST_DB_PATH` patched to a temp dir). The webapp uses Vitest
+for focused UI behavior. No network, no paid API, no Python fixtures framework.
 `tests/fixtures/historic_regressions.json` encodes 20 atomic + 7 interaction failures from four real
 past trips; `scripts/run_optimizer_regressions.py` replays all of them through the real optimizer.
 Behavior changes to the optimizer should be expressed there.
@@ -215,9 +214,9 @@ must stay directed. Rebuild only through `python3 scripts/build_project_graph.py
 failure), and only when explicitly asked or after a topology-changing milestone. After any graph
 change, `--check` must pass before committing. See `AGENTS.md`.
 
-**Rebuilt 2026-08-01 and `--check` passes**: 1225 nodes, 2855 directed edges, all 36 tickets and all 9
-decision artifacts covered (96 nodes). A rebuild is **cents, not dollars** — about US$0.03–0.05, and free
-when the semantic cache is warm — and the script reads `OPENAI_API_KEY` from `secrets.local.json` itself.
+**Rebuilt for S1 on 2026-08-03 and `--check` passes**: 1358 nodes, 3185 directed edges. The guarded S1
+run cost US$0.067015 across two restored clustering failures and one successful cached run; recorded
+cumulative cost is US$0.228995. The script reads `OPENAI_API_KEY` from `secrets.local.json` itself.
 Three things to know: **ticket nodes are keyed by title, not by ID**, so `WF-0nn` never appears in a node
 name; **`--exclude` patterns are gitignore lines**, so anchor them (`/artifacts`, not `artifacts`) or they
 match at every depth; and **never run `graphify extract` by hand** — it is incremental against an existing
@@ -250,7 +249,9 @@ readiness ICS — both snapshot-in, bytes-out. **The 9:16 poster and the trip PD
 (2026-08-03), and with them the whole export-font apparatus. `checklist.py` generates the readiness board and `costs.py` converts owner-recorded
 expenses into THB against an owner-editable, timestamped rate snapshot; a paid charge locks its actual
 THB so a later rate cannot rewrite it, and a missing rate stays a visible gap rather than a guess.
-**Slice 6's core exists but only behind the POC UI:** `revision.py`'s non-AI quick actions (`a7ad537`) and
+**Phase 2 S1 is complete:** `api/` owns the 51-method localhost boundary and downloads, `web/` owns the nine
+routes and in-place `StageGate`, and `scripts/check.py` is the one free green command. Stage pages are stubs
+until their assigned slices. **Slice 6's core exists but only behind the POC UI:** `revision.py`'s non-AI quick actions (`a7ad537`) and
 `interpret.py`'s constrained GenAI revision (`a2d59f6`) landed 2026-07-29 with tests, wired into
 `views/revise.py`. The pure modules survive the redesign; their Streamlit surfaces are POC code awaiting
 deletion, so **slice 6 still has to be built in the webapp** and the live pilot remains unbuilt. Every new
@@ -262,21 +263,21 @@ The export-font requirement is **gone** with the poster and PDF (S0): no Unicode
 no `TOURIST_EXPORT_FONT`. `_labels()` still strips pictographs, because the wording alone carrying the state
 is an accessibility rule and not only an export one.
 
-Explicitly out of scope for Phase 1: FastAPI, React, Docker, Redis, background workers, remote
-collaboration, hosted notifications. `pyproject.toml` lists exactly four runtime dependencies:
+Explicitly out of scope for the Python core: FastAPI, Docker, Redis, background workers, remote
+collaboration, hosted notifications. `pyproject.toml` lists exactly two runtime dependencies:
 `xlsxwriter` exists only because slice 5 renders a workbook, and `streamlit` is the only one for the
 *interface*. Keep it that way. **After S0 there are two**: `fpdf2` and `pillow` were dropped with the PDF and
 poster — though `pillow` stays *installed* because `streamlit` depends on it, so it only leaves the
 environment when Streamlit is deleted at S6.
 
-## Phase 2 is being planned, not built — do not implement it yet
+## Phase 2 implementation follows the locked slice order
 
 `WF-MAP-002` is **decision-complete as of 2026-08-03**: 19 tickets, **18 closed, 1 open**. The one open
 ticket, `Prototype the ranked candidate card grid`, is **deferred past the pilot by decision** rather than
 outstanding. `Lock the Phase 2 slice plan and validation scorecard` is the destination artifact — read it
 first: `.wayfinder/artifacts/033-phase-2-slice-plan-and-scorecard.md`.
 
-**The Phase 2 code freeze has lifted.** S0 of the slice plan is the first thing that may be built.
+**The Phase 2 code freeze has lifted.** S0 and S1 are complete; S2 is the next allowed slice.
 
 **A scope cut landed with the slice plan: the PDF and the 9:16 poster are dropped.** `pyproject.toml` goes to
 **two** runtime dependencies (`streamlit`, `xlsxwriter`), the whole export-font apparatus is void — do not
@@ -284,10 +285,9 @@ build the merged Noto pipeline — and tests went **235 → 230**. The workbook 
 **S0 is done as of 2026-08-03**: `exporters.py` is 1136 → 692 lines, and the workbook now localises optimizer
 codes through `_code()` as the PDF always did, so a Thai owner still gets Thai where a label exists.
 
-The destination is a decision-complete specification, exactly as Phase 1's was, so **no Phase 2 code gets
-written until the map has no unresolved decisions**. Until then the Phase 1 out-of-scope rule above still
-binds: today those four remain the only runtime dependencies, and there is no `api/` and no `web/`. The
-locked API contract keeps it that way — it adds none.
+The destination specification is decision-complete. The Python transport adds no runtime dependency; the
+browser dependencies live only in `web/package.json`. Build one slice vertically and retain its evidence
+before starting the next.
 
 Read the map before touching anything in this area. Work it one ticket per session — claim a ticket by
 setting its `assignee:` before doing any work, and only research tickets may be resolved more than one
@@ -300,9 +300,9 @@ per session.
 
 Locked by the destination interview, so not open for re-litigation inside a ticket:
 
-- The planning core, `actions.py`, and `store.py` stay as they are behind a thin local HTTP layer. React
-  replaces `views/` and `app.py` only. The deterministic optimizer, the hash gates, the append-only plan
-  history, and the 230 tests all survive the redesign.
+- The planning core, `actions.py`, and `store.py` remain the domain layer behind a thin local HTTP layer.
+  React replaces the `views/`, `app.py`, and `ui/` presentation surface. The deterministic optimizer, the
+  hash gates, the append-only plan history, and the 248 current tests all survive the redesign.
 - **Two linked ledgers**, not one merged record: cost rows stay the budget and estimate truth, the split
   ledger records actual group spend. Reconciling them is now **decided**, not open — see the claim rule below.
 - Everything lands in this repository (`api/` + `web/`). `Auto-Bill-Splitter` is a read-only donor, then
@@ -322,7 +322,7 @@ Locked by the destination interview, so not open for re-litigation inside a tick
   recurring sheets (`ตารางเวลา`, `ค่าใช้จ่าย`, `♢ To-Do List`, `☺ Things to Bring`) are the merged app's
   entire output surface, so they validate the merge itself. Comparison asserts structural coverage, not
   cell equality: the workbooks are hand-made and inconsistent. Reading them needs `openpyxl` as a **dev**
-  dependency; the four runtime dependencies stay untouched. See
+  dependency; the Python runtime dependencies stay untouched. See
   `.wayfinder/artifacts/022-streamlit-poc-retirement-and-pilot-commitment.md`.
 
 Already decided, and binding on any future implementation:

@@ -22,28 +22,28 @@ resolving tickets are throwaway artifacts, not the build.
 > is the handoff artifact — read it first. **It stays `status: open` deliberately**, by owner decision, because
 > [Prototype the ranked candidate card grid](tickets/036-prototype-the-ranked-candidate-card-grid.md) is
 > **deferred past the pilot** and will be built later. An open map here means outstanding *prototype* work, not
-> outstanding decisions: 18 of 19 tickets are closed and nothing on the frontier is a decision.
+> outstanding decisions: 18 of 19 tickets are closed and nothing on the frontier is a decision. **S0 and S1
+> are complete; S2 is next.**
 
 ## Notes
 
 - Domain: local, owner-led trip planning plus group expense splitting, one repository, Python planning
   core behind a thin local API, React frontend.
 - Locked by the destination interview (2026-07-31), not open for re-litigation inside tickets:
-  - The Python planning core, `actions.py`, and `store.py` stay as they are. A thin local HTTP layer
-    exposes `PlannerActions`. React replaces `views/*.py` and `app.py` only. The deterministic
-    optimizer, hash gates, append-only history, and the 235 tests survive the redesign.
+  - The Python planning core, `actions.py`, and `store.py` remain the domain layer. A thin local HTTP layer
+    exposes `PlannerActions`. React replaces the `views/`, `app.py`, and `ui/` presentation surface. The
+    deterministic optimizer, hash gates, append-only history, and the current Python suite survive the redesign.
   - **Two linked ledgers.** Planner cost rows stay the budget/estimate truth; the split ledger records
-    actual group spend keyed to the trip. Reconciliation between them is an explicit open problem with
-    its own ticket, not a detail.
+    actual group spend keyed to the trip. Their claim-once reconciliation contract is decided and lands in S2.
   - Everything lands in `Optimizer-Trip-Planner` (`api/` + `web/` beside `travel_planner/`).
     `Auto-Bill-Splitter` becomes a read-only donor — lift its tokens, elements, and split math — then
     it is archived.
   - The design tokens are **rebuilt** in Tailwind / CSS modules rather than lifted verbatim, so visual
     parity with Auto-Bill is a hard, gated requirement: same palette, same hard offset shadows, same
     fonts, same elements. Drift is a defect, not a style choice.
-  - Bilingual `en`/`th` is mandatory. The `ui/text.py` copy ports to the webapp, the core keeps emitting
-    stable codes, and the key-parity test keeps running. Auto-Bill-derived elements gain Thai strings
-    they never had.
+  - Bilingual `en`/`th` is mandatory. The shared JSON catalogue serves both Python and the webapp, the core
+    keeps emitting stable codes, and the key-parity test keeps running. Auto-Bill-derived elements gain Thai
+    strings they never had.
   - Local-only, single owner: `localhost` API plus local frontend, SQLite on disk, no accounts, no auth.
   - **Streamlit is the POC that proved the core works — not a product and not a pilot fallback.** It stays
     in the tree unmaintained while the webapp is built, and `views/`, `app.py` and `ui/` are deleted once

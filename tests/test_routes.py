@@ -223,8 +223,9 @@ class RouteRefreshTest(unittest.TestCase):
             Path(self.directory.name) / "empty.sqlite3", route_provider=self.provider
         )
         trip = empty.create_trip(name="Bare", destination="Osaka")
-        with self.assertRaisesRegex(ValueError, "at least two places"):
+        with self.assertRaises(ValueError) as raised:
             empty.refresh_routes(trip.trip_id)
+        self.assertEqual("insufficient_geocoded_places", str(raised.exception))
 
     def test_routes_clear_the_capability_gap_and_reach_the_optimizer(self) -> None:
         before = self.actions._optimizer_input(self.trip.trip_id)
@@ -394,8 +395,9 @@ class TimeZoneTest(unittest.TestCase):
             Path(self.directory.name) / "bare.sqlite3", timezone_provider=self.provider
         )
         trip = bare.create_trip(name="Bare", destination="Nowhere")
-        with self.assertRaisesRegex(ValueError, "Discover places"):
+        with self.assertRaises(ValueError) as raised:
             bare.refresh_timezone(trip.trip_id)
+        self.assertEqual("discovery_missing", str(raised.exception))
 
     def test_the_cap_stops_the_paid_lookup(self) -> None:
         self.actions.record_paid_call(operation="google_places:details", count=600)

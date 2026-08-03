@@ -73,6 +73,15 @@ CHECKLIST_TEMPLATE_FIELDS = (
 MAX_ROUTE_REQUESTS = 60
 
 
+class PlannerRefusal(ValueError):
+    """An owner-visible refusal with a stable, translatable code."""
+
+    def __init__(self, code: str, **detail: Any) -> None:
+        self.code = code
+        self.detail = detail
+        super().__init__(code)
+
+
 class PlannerActions:
     def __init__(
         self,
@@ -116,7 +125,60 @@ class PlannerActions:
     def get_trip(self, trip_id: str) -> Trip | None:
         return self.store.get_trip(trip_id)
 
+    def journey(self, trip_id: str) -> dict[str, Any]:
+        """Return the server-owned stage gates and attention stage for one trip."""
+
+        trip = self.store.get_trip(trip_id)
+        if trip is None:
+            raise PlannerRefusal("unknown_trip", trip_id=trip_id)
+        setup = self.store.get_setup(trip_id)
+        discovery = self.store.get_latest_discovery(trip_id)
+        choices = [
+            choice
+            for choice in self.store.list_candidate_choices(trip_id)
+            if choice.action in {"must_do", "interested", "maybe"}
+        ]
+        active = self.store.get_active_plan(trip_id)
+        gaps: list[str] = []
+        if setup is not None and setup.confirmed and discovery is not None and choices:
+            try:
+                gaps = list(self._optimizer_input(trip_id)["trip"]["capability_gaps"])
+            except PlannerRefusal:
+                gaps = ["INPUT_NOT_READY"]
+        stages = [
+            {"key": "setup", "done": bool(setup and setup.confirmed), "blocked_by": None},
+            {
+                "key": "places",
+                "done": bool(discovery is not None and choices),
+                "blocked_by": None if setup and setup.confirmed else "setup",
+            },
+            {
+                "key": "evidence",
+                "done": bool(choices and (not gaps or trip.planning_mode == "explore_first")),
+                "blocked_by": None if discovery is not None and choices else "places",
+            },
+            {
+                "key": "optimize",
+                "done": active is not None,
+                "blocked_by": None if choices else "places",
+            },
+            {
+                "key": "itinerary",
+                "done": active is not None,
+                "blocked_by": None if active is not None else "optimize",
+            },
+        ]
+        return {
+            "stages": stages,
+            "next": next((stage["key"] for stage in stages if not stage["done"]), "itinerary"),
+            "capability_gaps": gaps,
+            "has_active_plan": active is not None,
+            "choice_count": len(choices),
+        }
+
     def delete_trip(self, trip_id: str) -> None:
+        if self.store.get_trip(trip_id) is None:
+            raise PlannerRefusal("unknown_trip", trip_id=trip_id)
         self.store.delete_trip(trip_id)
 
     def save_setup(
@@ -141,7 +203,7 @@ class PlannerActions:
     ) -> SetupDraft:
         trip = self.store.get_trip(trip_id)
         if trip is None:
-            raise ValueError(f"Unknown trip: {trip_id}")
+            raise PlannerRefusal("unknown_trip", trip_id=trip_id)
         payload = build_setup_payload(
             planning_mode=trip.planning_mode,
             owner_age=owner_age,
@@ -171,9 +233,9 @@ class PlannerActions:
         trip = self.store.get_trip(trip_id)
         setup = self.store.get_setup(trip_id)
         if trip is None:
-            raise ValueError(f"Unknown trip: {trip_id}")
+            raise PlannerRefusal("unknown_trip", trip_id=trip_id)
         if setup is None or not setup.confirmed:
-            raise ValueError("Confirm the trip setup before discovery")
+            raise PlannerRefusal("setup_not_confirmed")
 
         provider = self.place_provider or OpenStreetMapProvider()
         provider_name = str(provider.name)
@@ -285,7 +347,7 @@ class PlannerActions:
             (item for item in candidates if item["place_id"] == place_id), None
         )
         if candidate is None:
-            raise ValueError(f"Unknown candidate in current discovery: {place_id}")
+            raise PlannerRefusal("unknown_candidate", place_id=place_id)
         clean_action, clean_reason = validate_choice(action, reason)
         return self.store.save_candidate_choice(
             new_candidate_choice(
@@ -300,7 +362,7 @@ class PlannerActions:
 
     def clear_candidate_choice(self, *, trip_id: str, place_id: str) -> None:
         if self.store.get_trip(trip_id) is None:
-            raise ValueError(f"Unknown trip: {trip_id}")
+            raise PlannerRefusal("unknown_trip", trip_id=trip_id)
         self.store.delete_candidate_choice(trip_id, place_id)
 
     def list_candidate_choices(self, trip_id: str) -> list[CandidateChoice]:
@@ -331,13 +393,13 @@ class PlannerActions:
 
         trip = self.store.get_trip(trip_id)
         if trip is None:
-            raise ValueError(f"Unknown trip: {trip_id}")
+            raise PlannerRefusal("unknown_trip", trip_id=trip_id)
         _, _, candidates = self._current_choice_inputs(trip_id)
         candidate = next(
             (item for item in candidates if item["place_id"] == place_id), None
         )
         if candidate is None:
-            raise ValueError(f"Unknown candidate in current discovery: {place_id}")
+            raise PlannerRefusal("unknown_candidate", place_id=place_id)
 
         provider = self.card_provider or GooglePlacesCardProvider()
         self._spend(
@@ -396,17 +458,17 @@ class PlannerActions:
     ) -> PlanVersion:
         preview = self.store.get_optimization_preview(trip_id)
         if preview is None:
-            raise ValueError("Generate a plan preview before activation")
+            raise PlannerRefusal("preview_missing")
         current_input = freeze_snapshot(self._optimizer_input(trip_id))
         if current_input.sha256 != preview.optimizer_input.sha256:
-            raise ValueError("Plan preview is stale; optimize the current choices again")
+            raise PlannerRefusal("preview_stale")
         proposal = preview.proposal.as_dict()
         variant = next(
             (item for item in proposal.get("variants", []) if item["variant_id"] == variant_id),
             None,
         )
         if variant is None:
-            raise ValueError(f"Unknown plan variant: {variant_id}")
+            raise PlannerRefusal("unknown_plan_variant", variant_id=variant_id)
         trip = self.store.get_trip(trip_id)
         provisional_allowed = bool(
             trip
@@ -416,7 +478,9 @@ class PlannerActions:
         if not variant["validation"]["valid"] or (
             variant["status"] != "ready" and not provisional_allowed
         ):
-            raise ValueError("Only a fully validated Ready variant can become active")
+            raise PlannerRefusal(
+                "variant_not_ready", variant_id=variant_id, status=variant["status"]
+            )
         version = self.save_plan_version(
             trip_id=trip_id,
             snapshot={
@@ -437,14 +501,14 @@ class PlannerActions:
         setup = self.store.get_setup(trip_id)
         discovery = self.store.get_latest_discovery(trip_id)
         if setup is None or not setup.confirmed:
-            raise ValueError("Confirm the trip setup before ranking")
+            raise PlannerRefusal("setup_not_confirmed")
         if discovery is None:
-            raise ValueError("Discover candidates before ranking")
+            raise PlannerRefusal("discovery_missing")
         if discovery.setup_sha256 != setup.snapshot.sha256:
-            raise ValueError("Discovery belongs to an older setup; discover again before ranking")
+            raise PlannerRefusal("discovery_stale")
         candidates = discovery.candidates.as_dict().get("candidates", [])
         if not candidates:
-            raise ValueError("Current discovery has no candidates to rank")
+            raise PlannerRefusal("discovery_empty")
         return setup, discovery, candidates
 
     def _optimizer_input(self, trip_id: str) -> dict[str, Any]:
@@ -458,7 +522,7 @@ class PlannerActions:
             if choice.action in {"must_do", "interested", "maybe"}
         ]
         if not choices:
-            raise ValueError("Choose at least one Must do, Interested, or Maybe place")
+            raise PlannerRefusal("no_places_chosen", purpose="planning", minimum=1)
         ranking = self.rank_candidates(trip_id)
         cards = ranking["cards"]
         basics = setup_payload["trip_basics"]
@@ -477,7 +541,7 @@ class PlannerActions:
             if index == len(local_dates) - 1 and basics.get("departure_time"):
                 end = basics["departure_time"]
             if start >= end:
-                raise ValueError(f"No usable planning time remains on {local_date}")
+                raise PlannerRefusal("no_planning_time", local_date=local_date)
             usable_windows.append({"date": local_date, "start": start, "end": end})
 
         candidates = []
@@ -714,7 +778,7 @@ class PlannerActions:
         activate: bool = True,
     ) -> PlanVersion:
         if self.store.get_trip(trip_id) is None:
-            raise ValueError(f"Unknown trip: {trip_id}")
+            raise PlannerRefusal("unknown_trip", trip_id=trip_id)
         active = self.store.get_active_plan(trip_id)
         version = new_plan_version(
             trip_id=trip_id,
@@ -727,7 +791,9 @@ class PlannerActions:
     def restore_plan_version(self, *, trip_id: str, version_id: str) -> PlanVersion:
         target = self.store.get_plan_version(version_id)
         if target is None or target.trip_id != trip_id:
-            raise ValueError(f"Unknown plan version for trip: {version_id}")
+            raise PlannerRefusal(
+                "unknown_plan_version", trip_id=trip_id, version_id=version_id
+            )
         return self.save_plan_version(
             trip_id=trip_id,
             snapshot=target.snapshot.as_dict(),
@@ -743,9 +809,9 @@ class PlannerActions:
         trip = self.store.get_trip(trip_id)
         setup = self.store.get_setup(trip_id)
         if trip is None:
-            raise ValueError(f"Unknown trip: {trip_id}")
+            raise PlannerRefusal("unknown_trip", trip_id=trip_id)
         if setup is None:
-            raise ValueError("Save the trip setup before building a checklist")
+            raise PlannerRefusal("setup_missing")
         proposed = checklist.propose_items(
             destination=trip.destination,
             setup=setup.snapshot.as_dict(),
@@ -883,7 +949,7 @@ class PlannerActions:
     def _checklist_item(self, trip_id: str, item_id: str) -> dict[str, Any]:
         stored = self.store.get_checklist_item(item_id)
         if stored is None or stored.trip_id != trip_id:
-            raise ValueError(f"Unknown checklist item: {item_id}")
+            raise PlannerRefusal("unknown_checklist_item", item_id=item_id)
         return stored.as_dict()
 
     def _write_checklist_item(
@@ -922,12 +988,12 @@ class PlannerActions:
         trip = self.store.get_trip(trip_id)
         setup = self.store.get_setup(trip_id)
         if trip is None:
-            raise ValueError(f"Unknown trip: {trip_id}")
+            raise PlannerRefusal("unknown_trip", trip_id=trip_id)
         if setup is None:
-            raise ValueError("Save the trip setup before fetching opening hours")
+            raise PlannerRefusal("setup_missing")
         places = self._selected_places(trip_id)
         if not places:
-            raise ValueError("Choose at least one place before fetching opening hours")
+            raise PlannerRefusal("no_places_chosen", purpose="opening_hours", minimum=1)
 
         provider = self.hours_provider or GooglePlacesOpeningHoursProvider()
         now = datetime.now(timezone.utc)
@@ -1061,10 +1127,10 @@ class PlannerActions:
         places = {item["place_id"]: item for item in self._selected_places(trip_id)}
         place = places.get(place_id)
         if place is None:
-            raise ValueError("Choose this place before confirming its opening window")
+            raise PlannerRefusal("place_not_chosen", place_id=place_id)
         interval = _simple_interval(f"{start}-{end}")
         if interval is None:
-            raise ValueError("Opening time must be a valid start before end")
+            raise PlannerRefusal("invalid_time_window", start=start, end=end)
         now = datetime.now(timezone.utc)
         value = {
             "kind": GooglePlacesOpeningHoursProvider.kind,
@@ -1104,10 +1170,10 @@ class PlannerActions:
 
         trip = self.store.get_trip(trip_id)
         if trip is None:
-            raise ValueError(f"Unknown trip: {trip_id}")
+            raise PlannerRefusal("unknown_trip", trip_id=trip_id)
         name = query.strip()
         if not name:
-            raise ValueError("Enter the booked accommodation name or address")
+            raise PlannerRefusal("accommodation_query_missing")
         provider = (
             self.place_provider
             if self.place_provider is not None and hasattr(self.place_provider, "geocode")
@@ -1157,7 +1223,7 @@ class PlannerActions:
 
         trip = self.store.get_trip(trip_id)
         if trip is None:
-            raise ValueError(f"Unknown trip: {trip_id}")
+            raise PlannerRefusal("unknown_trip", trip_id=trip_id)
         provider = self.timezone_provider or GoogleTimeZoneProvider()
         now = datetime.now(timezone.utc)
         existing = self.store.get_trip_evidence(trip_id, provider.kind)
@@ -1221,19 +1287,17 @@ class PlannerActions:
                 "latitude": points[0]["latitude"],
                 "longitude": points[0]["longitude"],
             }
-        raise ValueError(
-            "Discover places before looking up the destination time zone"
-        )
+        raise PlannerRefusal("discovery_missing")
 
     def refresh_routes(self, trip_id: str, *, force: bool = False) -> dict[str, Any]:
         """Fetch walking routes between the selected places, sparsely and capped."""
 
         trip = self.store.get_trip(trip_id)
         if trip is None:
-            raise ValueError(f"Unknown trip: {trip_id}")
+            raise PlannerRefusal("unknown_trip", trip_id=trip_id)
         points = self._route_points(trip_id)
         if len(points) < 2:
-            raise ValueError("Choose at least two places with coordinates before routing")
+            raise PlannerRefusal("insufficient_geocoded_places", minimum=2)
 
         provider = self.route_provider or OpenRouteServiceProvider()
         now = datetime.now(timezone.utc)
@@ -1380,7 +1444,7 @@ class PlannerActions:
         """Only the owner may raise the stop threshold."""
 
         if float(cap_usd) < 0:
-            raise ValueError("A paid cap cannot be negative")
+            raise PlannerRefusal("invalid_paid_cap", cap_usd=float(cap_usd))
         return self.store.set_paid_cap(
             cap_usd=float(cap_usd), now=datetime.now(timezone.utc).isoformat()
         )
@@ -1440,7 +1504,7 @@ class PlannerActions:
         """Record the sourced, timestamped rates costs convert against."""
 
         if self.store.get_trip(trip_id) is None:
-            raise ValueError(f"Unknown trip: {trip_id}")
+            raise PlannerRefusal("unknown_trip", trip_id=trip_id)
         snapshot = costs.new_rate_snapshot(
             rates=dict(rates), as_of=as_of, source=source, buffer_percent=buffer_percent
         )
@@ -1457,7 +1521,7 @@ class PlannerActions:
         self, *, trip_id: str, item: Mapping[str, Any], cost_id: str | None = None
     ) -> dict[str, Any]:
         if self.store.get_trip(trip_id) is None:
-            raise ValueError(f"Unknown trip: {trip_id}")
+            raise PlannerRefusal("unknown_trip", trip_id=trip_id)
         payload = {
             "label": "",
             "category": "other",
@@ -1554,13 +1618,13 @@ class PlannerActions:
 
         active = self.store.get_active_plan(trip_id)
         if active is None:
-            raise ValueError("Activate a plan before revising it")
+            raise PlannerRefusal("no_active_plan")
         pending = self.store.get_revision_draft(trip_id)
         if pending and not replace_pending and pending["operation"] != str(
             operation.get("operation")
         ):
-            raise ValueError(
-                "A different revision is already pending; apply, discard, or confirm replacing it"
+            raise PlannerRefusal(
+                "revision_already_pending", pending_operation=pending["operation"]
             )
 
         stored = active.snapshot.as_dict()
@@ -1604,7 +1668,7 @@ class PlannerActions:
             proposal["variants"][0] if proposal["variants"] else None,
         )
         if after_variant is None:
-            raise ValueError("The revision produced no plan variant")
+            raise PlannerRefusal("revision_no_variant")
         change = revision.consequences(before_variant, after_variant)
         draft = {
             "schema_version": revision.SCHEMA_VERSION,
@@ -1647,7 +1711,7 @@ class PlannerActions:
 
         active = self.store.get_active_plan(trip_id)
         if active is None:
-            raise ValueError("Activate a plan before revising it")
+            raise PlannerRefusal("no_active_plan")
         payload = interpret.build_payload(
             plan=active.snapshot.as_dict(),
             request_text=request_text,
@@ -1729,15 +1793,15 @@ class PlannerActions:
 
         draft = self.store.get_revision_draft(trip_id)
         if draft is None:
-            raise ValueError("There is no pending revision to apply")
+            raise PlannerRefusal("no_pending_revision")
         if not draft.get("can_apply") or not draft.get("proposal"):
-            raise ValueError(
-                "This revision cannot be applied until it passes validation"
-            )
+            raise PlannerRefusal("revision_not_applicable")
         active = self.store.get_active_plan(trip_id)
         if active is None or active.version_id != draft["base_version_id"]:
-            raise ValueError(
-                "The active plan changed after this preview; rebuild the revision"
+            raise PlannerRefusal(
+                "revision_base_moved",
+                base_version_id=draft["base_version_id"],
+                active_version_id=active.version_id if active else None,
             )
         proposal = draft["proposal"]
         version = self.save_plan_version(
@@ -1807,13 +1871,13 @@ class PlannerActions:
     ) -> FrozenSnapshot:
         trip = self.store.get_trip(trip_id)
         if trip is None:
-            raise ValueError(f"Unknown trip: {trip_id}")
+            raise PlannerRefusal("unknown_trip", trip_id=trip_id)
         active = self.store.get_active_plan(trip_id)
         version = (
             self.store.get_plan_version(version_id) if version_id else active
         )
         if version is None or version.trip_id != trip_id:
-            raise ValueError("Activate a plan before exporting")
+            raise PlannerRefusal("no_active_plan")
         return freeze_snapshot(
             exports.build_export_snapshot(
                 trip={
