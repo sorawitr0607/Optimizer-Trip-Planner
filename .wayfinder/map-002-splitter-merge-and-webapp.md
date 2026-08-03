@@ -221,6 +221,20 @@ resolving tickets are throwaway artifacts, not the build.
   free** from WF-025's parity harness, which already navigates all 9 routes in both themes and languages. One
   green command, `scripts/check.py`, one exit code, reporting stage by stage and skipping frontend steps while
   `web/` does not exist.
+- [Decide the migration path for existing trips and splitter data](tickets/024-decide-the-migration-path-for-existing-data.md) —
+  **A read-only census reframed it: there is one trip, and it is the pilot.** `data/tourist.sqlite3` holds
+  `user_version` 12 and exactly **one** trip — `Taipei, Taiwan`, created 2026-07-30 — with 3 plan versions and
+  50 paid-usage rows. So this migrates the pilot trip itself, five months before the pilot. Census and rules in
+  [`024-migration-path.md`](artifacts/024-migration-path.md). **No importer is built**: Auto-Bill holds one
+  trip's data at a time and there is nothing to merge it into, so the owner exports a backup JSON before
+  archiving and it is kept as a **record**, while Taipei's split ledger starts empty. That **deletes three
+  problems this map called mandatory** — name→traveller mapping, a `paid_by` the source never recorded, and
+  rate provenance at import. A row arriving with known THB and no rate keeps it as a **locked `actual_thb`**,
+  because fabricating an `as_of` would put a made-up date in a field that means something else. **Every schema
+  bump copies the database first and refuses to proceed if the copy fails** — this bump differs in kind from
+  the twelve before it, since WF-022 removed the downgrade path, so a pre-bump copy is the only way back. The
+  ticket's downgrade question is **void** (there is no frozen app to return to), and its mid-trip question is
+  answered by a rule: **no schema change between 29 December 2026 and 4 January 2027.**
 
 ## Not yet specified
 

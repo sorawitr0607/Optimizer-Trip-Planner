@@ -270,7 +270,7 @@ and `streamlit` is the only one for the *interface*. Keep it that way.
 
 ## Phase 2 is being planned, not built — do not implement it yet
 
-`WF-MAP-002` is **open and unfinished**: 19 tickets, **11 closed, 8 open**, 5 of those on the frontier.
+`WF-MAP-002` is **open and unfinished**: 19 tickets, **12 closed, 7 open**, 4 of those on the frontier.
 `Extract the Auto-Bill design token contract` was **reopened** on 2026-07-31: the parity gate made it the
 target the rebuild is measured against, and it is incomplete for 39 inline-only classes and 114 inline style
 sites. Its ambiguities are already ruled on — do not re-litigate them; the remaining scope and its
@@ -389,6 +389,15 @@ Already decided, and binding on any future implementation:
   guard, the `Host` allowlist and the bare-`GET` rule are **security controls** unreachable without a socket.
   **Vitest** for frontend units; the journey walk comes free from the parity harness. One green command,
   `scripts/check.py`. See `.wayfinder/artifacts/029-test-strategy-after-apptest.md`.
+- Migration: **no importer is built.** `data/tourist.sqlite3` holds exactly **one trip — the Taipei pilot** —
+  and Auto-Bill keeps one trip's data at a time, so there is nothing to merge it into. The backup JSON is an
+  **archive record**, and the split ledger starts empty. A row arriving with known THB and no rate keeps it as
+  a **locked `actual_thb`**; fabricating an `as_of` would put a made-up date in a field that means something
+  else. **Every schema bump copies the database to `data/tourist-pre-v<n>-<date>.sqlite3` first and refuses to
+  proceed if the copy fails** — WF-022 removed the downgrade path, so that copy is the only way back. And
+  **no schema change between 29 December 2026 and 4 January 2027**: a one-way bump on the only trip in the
+  file, while that trip is happening abroad, is not worth any feature. See
+  `.wayfinder/artifacts/024-migration-path.md`.
 - **Two things must be taken from `Auto-Bill-Splitter` before it is archived**: a backup JSON per trip (the
   migration channel — a file survives archiving, `localStorage` does not) and the 41 lifted element captures
   for the parity gate. Both need the donor runnable.

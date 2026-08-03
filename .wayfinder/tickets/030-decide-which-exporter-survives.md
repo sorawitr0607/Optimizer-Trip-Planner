@@ -79,3 +79,14 @@ The full contract, the download rule and what is left open are in
   consequence stated: edit a split row in the money workbook and the plan workbook's comparison does not
   update. Acceptable because an export is a snapshot of a plan version rather than a live document — but the
   sheet must say so, so nobody trusts a stale figure. The money workbook keeps live formulas internally.
+
+### 2026-08-03 — Narrowed: the backup JSON is an archive, not an import source
+
+[Decide the migration path for existing trips and splitter data](024-decide-the-migration-path-for-existing-data.md)
+decided that **no importer is built.** Auto-Bill's `localStorage` holds one trip's data at a time and the
+planner's only trip is a brand-new Taipei, so there is nothing to merge it into.
+
+Nothing above is reversed: `exceljs` and `file-saver` still never join `web/`, the Python exporters still
+survive, and **exporting a backup JSON per trip before the donor is archived is still a dated obligation.**
+What changes is only what the file is for — it is kept as a **record**, and nothing reads it. Calling it "the
+migration channel" overstated what gets built; the channel exists and carries an archive.
