@@ -557,3 +557,401 @@
   grid-column: 1 / -1;
   margin: 0;
 }
+
+/* Setup wizard. The donor's step-indicator class family hardcodes four steps
+   (.wizard-progress-4, .progress-step-4, .step-num-4, .step-label-4); the
+   planner has five, so the family is generalised rather than renamed to -5. */
+.setup-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.wizard-steps {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.wizard-step button {
+  align-items: center;
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius-house);
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  gap: 7px;
+  padding: 7px 9px;
+  text-align: left;
+  width: 100%;
+}
+
+.wizard-step.reached button {
+  color: var(--text-primary);
+}
+
+.wizard-step.current button {
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-accent);
+  font-weight: var(--weight-selected);
+  opacity: 1;
+}
+
+/* Later steps depend on earlier answers, so forward jumps stay closed. A step
+   already visited stays fully legible; only the unreachable ones dim. */
+.wizard-step button:disabled {
+  cursor: default;
+}
+
+.wizard-step:not(.reached) button:disabled {
+  opacity: var(--opacity-disabled);
+}
+
+.wizard-step-num {
+  background: var(--bg-secondary);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius-pill);
+  display: grid;
+  flex: none;
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-selected);
+  height: 20px;
+  place-items: center;
+  width: 20px;
+}
+
+.wizard-step.current .wizard-step-num {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.wizard-step-label {
+  font-size: var(--text-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wizard-count {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  margin: 0;
+}
+
+.setup-flash {
+  color: var(--color-success);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-secondary);
+  margin: 0;
+}
+
+.setup-fields {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.setup-fields > label {
+  display: flex;
+  flex-direction: column;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-secondary);
+  gap: 4px;
+}
+
+.setup-fields input,
+.setup-fields select,
+.setup-fields textarea {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius-house);
+  color: var(--text-primary);
+  font-family: inherit;
+  padding: 6px 8px;
+}
+
+.setup-wide {
+  grid-column: 1 / -1;
+}
+
+/* Two classes, so this beats `.setup-fields > label`'s column direction: a
+   checkbox and its label belong on one line. */
+.setup-fields > .setup-check {
+  align-items: center;
+  flex-direction: row;
+  gap: 6px;
+  grid-column: 1 / -1;
+  justify-content: flex-start;
+}
+
+.setup-fields > .setup-check input {
+  flex: none;
+  margin: 0;
+  width: auto;
+}
+
+.setup-hint {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.setup-tags,
+.setup-member {
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius-house);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  grid-column: 1 / -1;
+  padding: 8px 10px;
+}
+
+.setup-tags legend,
+.setup-member legend,
+.setup-legend {
+  color: var(--text-muted);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-selected);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.setup-member {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.setup-member label {
+  display: flex;
+  flex-direction: column;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-secondary);
+  gap: 4px;
+}
+
+.setup-review {
+  display: grid;
+  gap: 0;
+  grid-template-columns: minmax(120px, 200px) minmax(0, 1fr);
+  margin: 0;
+}
+
+.setup-review dt {
+  border-top: 1px dashed var(--bg-card-border);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-selected);
+  padding: 7px 0;
+}
+
+.setup-review dd {
+  border-top: 1px dashed var(--bg-card-border);
+  font-size: var(--text-base);
+  margin: 0;
+  padding: 7px 0;
+}
+
+.setup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.setup-actions button {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius-house);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-secondary);
+  padding: 6px 12px;
+}
+
+.setup-actions .setup-primary {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+@media (max-width: 768px) {
+  .wizard-step-label {
+    display: none;
+  }
+}
+
+/* Optimize screen. */
+.optimize-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.optimize-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.optimize-actions button {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius-house);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-secondary);
+  padding: 6px 14px;
+}
+
+.optimize-actions .setup-primary {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.optimize-variant {
+  display: flex;
+  flex-direction: column;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-secondary);
+  gap: 4px;
+  max-width: 320px;
+}
+
+.optimize-variant select {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius-house);
+  color: var(--text-primary);
+  padding: 6px 8px;
+}
+
+.optimize-base {
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius-house);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+}
+
+/* Three per row, not five: the labels clipped at a fifth of the page. */
+.optimize-metrics {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 768px) {
+  .optimize-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.optimize-warnings {
+  border: 1px solid var(--color-warning);
+  background: var(--color-warning-light);
+  border-radius: var(--radius-house);
+  padding: 9px 11px;
+}
+
+.optimize-warnings summary {
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-selected);
+}
+
+.optimize-warnings ul {
+  font-size: var(--text-sm);
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+/* Trip context, directly under the stages as Phase 1 decided. */
+.trip-context {
+  border-top: 1px dashed var(--bg-card-border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 12px;
+}
+
+.trip-context label {
+  display: flex;
+  flex-direction: column;
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-selected);
+  gap: 4px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.trip-context select {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius-house);
+  color: var(--text-primary);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-unselected);
+  letter-spacing: normal;
+  padding: 5px 7px;
+  text-transform: none;
+}
+
+.trip-destination {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.trip-new {
+  align-items: center;
+  color: var(--color-accent);
+  display: flex;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-secondary);
+  gap: 4px;
+  text-decoration: none;
+}
+
+/* The phone collapse. Designed rather than lifted: Auto-Bill's sidebar was
+   informational, so it never needed one. Above 992px the sidebar is always
+   open and the toggle does not exist. */
+.nav-toggle {
+  display: none;
+}
+
+@media (max-width: 992px) {
+  .nav-toggle {
+    align-items: center;
+    background: var(--bg-card);
+    border: 1px solid var(--bg-card-border);
+    border-radius: var(--radius-house);
+    box-shadow: var(--shadow-sm);
+    color: var(--text-primary);
+    cursor: pointer;
+    display: flex;
+    font-size: var(--text-sm);
+    font-weight: var(--weight-selected);
+    gap: 8px;
+    margin: 20px 20px 0;
+    padding: 8px 12px;
+    width: calc(100% - 40px);
+  }
+
+  .sidebar {
+    display: none;
+  }
+
+  .sidebar.open {
+    display: flex;
+  }
+}

@@ -9,7 +9,7 @@ npm --prefix web install                                             # first web
 uv run --locked python -m api                                        # production shell on 127.0.0.1:8765
 uv run streamlit run app.py                                          # temporary Phase 1 POC
 uv run --locked python scripts/check.py                              # every free Python + web gate
-uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 287 tests, ~10s
+uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 306 tests, ~11s
 uv run --locked python -m unittest tests.test_optimizer.OptimizerCoreTest.test_safe_route_and_weather_fallback_are_selected  # one test
 python3 scripts/validate_regression_fixtures.py                      # fixture catalog structure
 uv run --locked python scripts/run_optimizer_regressions.py          # 27 historic cases through the real optimizer
@@ -251,8 +251,9 @@ expenses into THB against an owner-editable, timestamped rate snapshot; a paid c
 THB so a later rate cannot rewrite it, and a missing rate stays a visible gap rather than a guess.
 **Phase 2 S1 is complete:** `api/` owns the localhost boundary and downloads, `web/` owns the nine
 routes and in-place `StageGate`, and `scripts/check.py` is the one free green command. The allowlist is
-**56 methods** after S2 added five split-ledger ones (it was 51 at S1), with 28 refusal codes. Stage pages
-are stubs until their assigned slices; `/costs` and `/split` are real as of S2. **Slice 6's core exists but only behind the POC UI:** `revision.py`'s non-AI quick actions (`a7ad537`) and
+**57 methods**: 51 at S1, five split-ledger ones at S2, and `setup_vocabulary` at S3; 28 refusal codes.
+`/costs`, `/split`, `/setup` and `/optimize` are real; `places`, `evidence`, `itinerary`, `readiness` and
+`revise` are still stubs until their assigned slices. **Slice 6's core exists but only behind the POC UI:** `revision.py`'s non-AI quick actions (`a7ad537`) and
 `interpret.py`'s constrained GenAI revision (`a2d59f6`) landed 2026-07-29 with tests, wired into
 `views/revise.py`. The pure modules survive the redesign; their Streamlit surfaces are POC code awaiting
 deletion, so **slice 6 still has to be built in the webapp** and the live pilot remains unbuilt. Every new
@@ -278,8 +279,39 @@ ticket, `Prototype the ranked candidate card grid`, is **deferred past the pilot
 outstanding. `Lock the Phase 2 slice plan and validation scorecard` is the destination artifact — read it
 first: `.wayfinder/artifacts/033-phase-2-slice-plan-and-scorecard.md`.
 
-**The Phase 2 code freeze has lifted.** S0, S1 and S2 are complete; **S3 is the next allowed slice** —
-the cheap journey screens (`setup`, `optimize`, app chrome, sidebar navigation).
+**The Phase 2 code freeze has lifted.** S0 through S3 are complete; **S4 is the next allowed slice** —
+the expensive journey screens (`places`, 570 lines and nearly all-new; `itinerary` with its six row
+types, stop list and coordinate map). **S4 is the slice that first makes the webapp usable end to end,
+and it is what the 1 November checkpoint actually measures.**
+
+**S3 landed the cheap journey screens on 2026-08-03**
+(evidence: `artifacts/validation/2026-08-03-slice-3/notes.md`). Five things from it bind later work:
+
+- **The setup draft is one object, always sent whole.** `save_setup` defaults every field to empty, so
+  a partial payload **erases what it omits**. Five steps are five views over one piece of state, never
+  five requests. The draft also carries `owner_nationality` and each member's `nationality`, which
+  `views/setup.py` drops on save — readiness reads them, so losing them is not round-tripping whole.
+- **`setup_vocabulary` is the 57th allowlisted method**, a read returning planning modes, accommodation
+  statuses, the four tag groups as codes, and countries with **both** language labels plus their cities.
+  Both languages in one payload so a language switch never refetches. Its picker orders are explicit
+  lists asserted against the core frozensets: a frozenset is right for validation and useless for a
+  radio group.
+- **The step indicator is step-count-agnostic.** The donor's `.*-4` family hardcoded four; renaming to
+  `-5` would hardcode the next wrong number. Clicking a step navigates **backwards only**, kept because
+  later steps depend on earlier answers.
+- **`copyFrom(table, code, language)`** renders the seven catalogue tables beside `TEXT`. Unknown codes
+  still surface as `⚠ CODE`. A flash or any other message must hold a **code**, never rendered text, or
+  a language switch cannot re-render it.
+- **The accent is destination-driven now.** `AppShell` sets `data-country` on the root from the
+  destination's country (D6); an unknown country matches no rule and keeps the house red (D3). **The
+  phone sidebar collapse below 992px is a new element** — artifact 028 explicitly left it undesigned —
+  so it declares element 17 `.sidebar` as its ancestor and still needs a real-phone capture before the
+  parity gate runs.
+
+**`tests/test_ported_behaviours.py` is the S6 deletion checklist.** It holds the actions-level homes for
+behaviours still asserted through `AppTest`, organised by provenance on purpose. Two of artifact 029's
+"14 portable" were already at actions level, so **12 were outstanding and 9 remain**; its module
+docstring lists what is owed. No `AppTest` original is deleted until `views/` goes at S6.
 
 **S2 landed the merge on 2026-08-03** (evidence: `artifacts/validation/2026-08-03-slice-2/notes.md`).
 Four things from it bind later work:

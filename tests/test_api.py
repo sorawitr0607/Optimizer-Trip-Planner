@@ -98,7 +98,7 @@ class JsonableContractTest(unittest.TestCase):
 class DispatchContractTest(unittest.TestCase):
     def test_allowlist_is_literal_and_excludes_internal_writes(self) -> None:
         self.assertIsInstance(ACTIONS, tuple)
-        self.assertEqual(56, len(ACTIONS))
+        self.assertEqual(57, len(ACTIONS))
         self.assertEqual(len(ACTIONS), len(set(ACTIONS)))
         self.assertNotIn("save_plan_version", ACTIONS)
         self.assertNotIn("record_paid_call", ACTIONS)

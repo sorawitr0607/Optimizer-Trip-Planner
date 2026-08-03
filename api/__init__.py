@@ -39,6 +39,7 @@ ACTIONS = (
     "delete_trip",
     "save_setup",
     "get_setup",
+    "setup_vocabulary",
     "discover_places",
     "get_latest_discovery",
     "save_candidate_choice",

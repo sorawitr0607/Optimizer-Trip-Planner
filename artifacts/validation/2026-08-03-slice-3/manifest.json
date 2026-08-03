@@ -1,0 +1,101 @@
+{
+  "slice": 3,
+  "title": "The cheap journey screens: setup, optimize, app chrome, sidebar navigation",
+  "date": "2026-08-03",
+  "closes": ".wayfinder/artifacts/033-phase-2-slice-plan-and-scorecard.md S3 row",
+  "paid_calls": 0,
+  "paid_spend_usd": 0.0,
+  "check_script": {
+    "command": "uv run --locked python scripts/check.py",
+    "stages_passed": 8
+  },
+  "tests": {
+    "python_total": 306,
+    "python_total_at_slice_2": 287,
+    "python_added": 19,
+    "web_total": 21,
+    "web_total_at_slice_2": 12,
+    "web_added": 9,
+    "new_suites": {
+      "tests/test_ported_behaviours.py": 19,
+      "web/src/stages/journey.test.tsx": 9
+    }
+  },
+  "closing_checks": {
+    "the_real_taipei_trip_setup_round_trips_whole": "pass",
+    "a_variant_activates_and_refuses_on_a_stale_hash": "pass",
+    "three_ported_apptest_behaviours_pass_at_actions_level": "pass"
+  },
+  "ported_behaviours": {
+    "target": 3,
+    "ported": [
+      "owner_and_two_members_confirm_and_survive_thai_switch",
+      "trip_slots_create_switch_and_keep_drafts_independent",
+      "deleting_the_last_trip_returns_to_first_trip_setup"
+    ],
+    "already_at_actions_level_before_the_port": [
+      "preview_is_persisted_but_unverified_inputs_cannot_activate",
+      "a_destination_outside_the_picker_still_creates_a_trip"
+    ],
+    "artifact_029_count": 14,
+    "actually_outstanding_at_s3_start": 12,
+    "still_owed_after_s3": 9,
+    "apptest_originals_deleted": 0
+  },
+  "api": {
+    "allowlisted_actions_before": 56,
+    "allowlisted_actions_after": 57,
+    "actions_added": ["setup_vocabulary"],
+    "refusal_codes": 28,
+    "new_runtime_dependencies": 0
+  },
+  "copy": {
+    "text_keys": 592,
+    "new_keys_added": 0,
+    "note": "Every string both screens need already existed in the catalogue, which is what WF-027's one-catalogue decision was for."
+  },
+  "code": {
+    "web/src/stages/SetupPage.tsx": 554,
+    "web/src/stages/OptimizePage.tsx": 325,
+    "web/src/stages/journey.test.tsx": 257,
+    "web/src/shared/AppShell.tsx": 129,
+    "tests/test_ported_behaviours.py": 450,
+    "poc_setup_view_lines_replaced": 520,
+    "poc_optimize_view_lines_replaced": 196
+  },
+  "live_walkthrough": {
+    "database": "scratch copy, not data/tourist.sqlite3",
+    "server": "uv run --locked python -m api --port 8801",
+    "steps_walked": 5,
+    "draft_saved_flash_seen": true,
+    "step_2_change_survived_to_review": true,
+    "forward_jump_to_step_5_blocked": true,
+    "review_reports_real_planning_mode": "explore_first",
+    "destination_driven_accent": "taiwan teal, from data-country on the root",
+    "trip_selector_shows": "Taipei / Taipei, Taiwan",
+    "optimize_screen_live": false,
+    "optimize_screen_live_reason": "the scratch trip has no candidate choices, so StageGate correctly blocks on Places; the render test carries the proof instead",
+    "phone_collapse_screenshot": false,
+    "phone_collapse_screenshot_reason": "the harness could not take the page viewport below 992px (1347px was the floor), so the media query never activated; the toggle state machine and both 992px rules were verified in the live DOM instead"
+  },
+  "defects_found_and_fixed_during_the_live_walk": [
+    "checkbox labels stacked above their checkboxes, because `.setup-fields > label` out-specified `.setup-check`",
+    "the review step reported a label against a label (\"Mode: Status\") instead of the trip's real planning mode and confirmation state",
+    "the save flash stored rendered text, so switching language could not re-render it"
+  ],
+  "graph": {
+    "check_command": "python3 scripts/build_project_graph.py --check",
+    "result": "pass",
+    "nodes": 1358,
+    "directed_edges": 3185,
+    "rebuilt": false
+  },
+  "captures": [
+    "captures/setup-step1-en-light.jpg",
+    "captures/setup-step2-tags-en-light.jpg",
+    "captures/setup-step3-travellers-en-light.jpg",
+    "captures/setup-step5-review-en-light.jpg",
+    "captures/setup-step5-review-th-light.jpg",
+    "captures/optimize-gated-on-places-en-light.jpg"
+  ]
+}

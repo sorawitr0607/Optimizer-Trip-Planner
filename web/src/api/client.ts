@@ -25,14 +25,54 @@ export interface Journey {
 
 export interface SetupMember {
   traveller_id: string;
-  label: string;
+  label?: string;
+  age?: number | null;
+  tags?: string[];
+  description?: string;
+  must_respect?: string[];
+  nationality?: string | null;
+}
+
+export interface SetupPayload {
+  planning_mode?: string;
+  trip_basics?: {
+    start_date?: string | null;
+    end_date?: string | null;
+    arrival_time?: string | null;
+    departure_time?: string | null;
+    accommodation_status?: string;
+  };
+  owner?: {
+    age?: number | null;
+    main_style?: string[];
+    also_enjoy?: string[];
+    avoid?: string[];
+    comfort?: string[];
+    description?: string;
+    must_respect?: string[];
+    nationality?: string | null;
+  };
+  travellers?: SetupMember[];
+  group_preference_weights?: Record<string, number>;
 }
 
 export interface SetupDraft {
   trip_id: string;
-  snapshot: { data: { travellers?: SetupMember[] }; sha256: string };
+  snapshot: { data: SetupPayload; sha256: string };
   confirmed: boolean;
   updated_at: string;
+}
+
+export interface SetupVocabulary {
+  planning_modes: string[];
+  accommodation_statuses: string[];
+  tag_groups: {
+    main_style: string[];
+    also_enjoy: string[];
+    avoid: string[];
+    comfort: string[];
+  };
+  countries: { code: string; label: { en: string; th: string }; cities: string[] }[];
 }
 
 export interface CostItem {
@@ -120,6 +160,67 @@ export interface SplitSummary {
   settlement: Settlement[];
   unconvertible_rows: number;
   missing_rates: string[];
+}
+
+export interface CandidateChoice {
+  trip_id: string;
+  place_id: string;
+  action: string;
+  reason: string | null;
+}
+
+type Names = Record<string, string | undefined>;
+
+export interface PlanItem {
+  type: string;
+  start: string;
+  end: string;
+  duration_minutes: number;
+  name?: string;
+  names?: Names;
+}
+
+export interface PlanDay {
+  date: string;
+  items: PlanItem[];
+}
+
+export interface Reconciliation {
+  name: string;
+  names?: Names;
+  priority: string;
+  status: string;
+  reason: string;
+  consequence: string;
+}
+
+export interface PlanVariant {
+  variant_id: string;
+  status: string;
+  metrics: Record<string, number>;
+  warnings: string[];
+  reconciliation: Reconciliation[];
+  days: PlanDay[];
+  stopped_at_limit: boolean;
+  objective_improved_or_equal_to_greedy: boolean;
+  validation: { valid: boolean };
+  hotel_recommendation?: { default_area_id: string; basis: string } | null;
+}
+
+export interface PlanProposal {
+  mode: string;
+  variants?: PlanVariant[];
+  stay_recommendations?: { id: string; days: number; daily_capacity_minutes: number }[];
+}
+
+export interface PlanPreview {
+  trip_id: string;
+  optimizer_input: {
+    data: { candidates?: { id?: string; name?: string; names?: Names }[] };
+    sha256: string;
+  };
+  proposal: { data: PlanProposal; sha256: string };
+  created_at: string;
 }
 
 export class ApiError extends Error {

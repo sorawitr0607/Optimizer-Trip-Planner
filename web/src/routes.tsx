@@ -9,6 +9,8 @@ import { useLanguage } from "./i18n/LanguageProvider";
 import { AppShell } from "./shared/AppShell";
 import { StageGate } from "./shared/StageGate";
 import { CostsPage } from "./stages/CostsPage";
+import { OptimizePage } from "./stages/OptimizePage";
+import { SetupPage } from "./stages/SetupPage";
 import { SplitPage } from "./stages/SplitPage";
 import { StagePage } from "./stages/StagePage";
 
@@ -103,10 +105,17 @@ export const router = createBrowserRouter([
     path: "/trips/:tripId",
     element: <AppShell />,
     children: [
-      { path: "setup", element: <StagePage stage="setup" /> },
+      { path: "setup", element: <SetupPage /> },
       { path: "places", element: gated("places", "places") },
       { path: "evidence", element: gated("evidence", "evidence") },
-      { path: "optimize", element: gated("optimize", "optimize") },
+      {
+        path: "optimize",
+        element: (
+          <StageGate stage="optimize">
+            <OptimizePage />
+          </StageGate>
+        ),
+      },
       { path: "itinerary", element: gated("itinerary", "itinerary") },
       { path: "readiness", element: gated("readiness", "setup") },
       {

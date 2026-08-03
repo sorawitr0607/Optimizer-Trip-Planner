@@ -9,6 +9,7 @@ import re
 from typing import Any
 
 from .core import (
+    PLANNING_MODES,
     CandidateChoice,
     DiscoveryRun,
     FrozenSnapshot,
@@ -26,7 +27,8 @@ from .core import (
     new_setup_draft,
     new_trip,
 )
-from . import checklist, costs, exports, interpret, opening, revision, split, usage
+from . import checklist, costs, destinations, exports, interpret, opening, revision, split, usage
+from . import setup as setup_module
 from .discovery import build_candidate_catalog
 from .optimizer import date_range, optimize_trip
 from .providers import (
@@ -228,6 +230,52 @@ class PlannerActions:
 
     def get_setup(self, trip_id: str) -> SetupDraft | None:
         return self.store.get_setup(trip_id)
+
+    def setup_vocabulary(self) -> dict[str, Any]:
+        """Every list the setup form offers, as stable codes plus picker data.
+
+        Both language labels ship in one payload so switching language never
+        refetches: a refetch is a chance for a stored value to move, and
+        switching language must never change one. Preference-tag and
+        accommodation display text still comes from the copy catalogue -- these
+        are codes, not copy.
+
+        The country and city tables are **picker convenience only**. Both fields
+        accept a typed value, so a destination absent from this table stays
+        reachable; the worldwide acceptance check requires it.
+        """
+
+        # Both of these are frozensets in the core, which is right for
+        # validation and useless for a radio group: a picker needs a stable
+        # order, and these two carry meaning in their order. Planning mode leads
+        # with the less committed option, accommodation runs from least to most
+        # certain. Asserted against the core sets so a new member cannot be
+        # added there and silently miss the form.
+        modes = ("explore_first", "ready_to_schedule")
+        statuses = ("unknown", "not_booked", "booked")
+        assert set(modes) == set(PLANNING_MODES)
+        assert set(statuses) == set(setup_module.ACCOMMODATION_STATUSES)
+        return {
+            "planning_modes": list(modes),
+            "accommodation_statuses": list(statuses),
+            "tag_groups": {
+                "main_style": list(setup_module.MAIN_STYLE_TAGS),
+                "also_enjoy": list(setup_module.ALSO_ENJOY_TAGS),
+                "avoid": list(setup_module.AVOID_TAGS),
+                "comfort": list(setup_module.COMFORT_TAGS),
+            },
+            "countries": [
+                {
+                    "code": country,
+                    "label": {
+                        "en": destinations.country_label(country, "en"),
+                        "th": destinations.country_label(country, "th"),
+                    },
+                    "cities": list(destinations.city_options(country)),
+                }
+                for country in destinations.country_options()
+            ],
+        }
 
     def discover_places(self, *, trip_id: str, force_refresh: bool = False) -> DiscoveryRun:
         trip = self.store.get_trip(trip_id)
