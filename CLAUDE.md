@@ -270,8 +270,9 @@ and `streamlit` is the only one for the *interface*. Keep it that way.
 
 ## Phase 2 is being planned, not built — do not implement it yet
 
-`WF-MAP-002` is **open and unfinished**: 19 tickets, **15 closed, 4 open**, 2 of those on the frontier.
-**All decision and research work is done.** What remains is two prototype tickets and the final slice plan.
+`WF-MAP-002` is **open and unfinished**: 19 tickets, **16 closed, 3 open**, 1 of those on the frontier.
+**All decision and research work is done.** What remains is `WF-035` (design the feedback/confirm/disabled
+elements), `WF-036` behind it, and `WF-033`, the final slice plan — now unblocked.
 The token contract was reopened on 2026-07-31 and **completed on 2026-08-03**: §10 of its artifact extracts
 the inline-only layer, and its seven ambiguities are all ruled on — do not re-litigate them.
 The destination is a decision-complete specification, exactly as Phase 1's was, so **no Phase 2 code gets

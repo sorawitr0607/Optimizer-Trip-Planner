@@ -1,0 +1,762 @@
+<title>Itinerary day screen — throwaway prototype v2 (WF-032)</title>
+
+<style>
+/* Auto-Bill token contract as extracted (WF-020 §1), deviations D1/D2/D5/D8.
+   Accent is destination-driven: Taipei -> Taiwan teal. */
+:root{
+  --bg-primary:#FCFBF9; --bg-secondary:#F3F1EC; --bg-card:#FFFFFF;
+  --bg-card-border:#1A1A1A;
+  --text-primary:#1A1A1A; --text-secondary:#4D4D4D; --text-muted:#737373;
+  --color-accent:#0d9488; --color-accent-hover:#0f766e;
+  --color-accent-light:rgba(13,148,136,.12);
+  --color-success:#006644; --color-success-light:#EAF5F0;
+  --color-danger:#D11A2A;  --color-danger-light:#FCECEE;
+  --color-warning:#C46200; --color-warning-light:#FAF3EC;
+  --color-violet:#8b5cf6;  --color-violet-light:rgba(139,92,246,.13);
+  --shadow-sm:1px 1px 0 0 var(--bg-card-border);
+  --shadow-md:3px 3px 0 0 var(--bg-card-border);
+  --radius:2px; --pill:9999px; --t-fast:.2s ease;
+  --sans:"Plus Jakarta Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  /* row-type identity: rail colour + a matching wash */
+  --stop-c:#0d9488;  --stop-w:rgba(13,148,136,.07);
+  --trav-c:#4D4D4D;  --trav-w:rgba(77,77,77,.05);
+  --meal-c:#C46200;  --meal-w:rgba(196,98,0,.07);
+  --logi-c:#8b5cf6;  --logi-w:rgba(139,92,246,.07);
+  --buff-c:#A3A3A3;  --buff-w:transparent;
+  --free-c:#A3A3A3;  --free-w:transparent;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg-primary:#121212; --bg-secondary:#1C1C1C; --bg-card:#181818;
+  --bg-card-border:#3A3A3A; --text-primary:#F5F5F5; --text-secondary:#A3A3A3;
+  --color-accent:#14b8a6; --color-accent-light:rgba(20,184,166,.16);
+  --color-success:#38A169; --color-success-light:#1C3B24;
+  --color-danger:#E53E3E; --color-danger-light:#3B1C1C;
+  --color-warning:#DD6B20; --color-warning-light:#3B2A1C;
+  --stop-c:#14b8a6; --stop-w:rgba(20,184,166,.13);
+  --trav-c:#A3A3A3; --trav-w:rgba(163,163,163,.07);
+  --meal-c:#DD6B20; --meal-w:rgba(221,107,32,.13);
+  --logi-c:#a78bfa; --logi-w:rgba(167,139,250,.13);
+}}
+:root[data-theme="dark"]{
+  --bg-primary:#121212; --bg-secondary:#1C1C1C; --bg-card:#181818;
+  --bg-card-border:#3A3A3A; --text-primary:#F5F5F5; --text-secondary:#A3A3A3;
+  --color-accent:#14b8a6; --color-accent-light:rgba(20,184,166,.16);
+  --color-success:#38A169; --color-success-light:#1C3B24;
+  --color-danger:#E53E3E; --color-danger-light:#3B1C1C;
+  --color-warning:#DD6B20; --color-warning-light:#3B2A1C;
+  --stop-c:#14b8a6; --stop-w:rgba(20,184,166,.13);
+  --trav-c:#A3A3A3; --trav-w:rgba(163,163,163,.07);
+  --meal-c:#DD6B20; --meal-w:rgba(221,107,32,.13);
+  --logi-c:#a78bfa; --logi-w:rgba(167,139,250,.13);
+}
+:root[data-theme="light"]{
+  --bg-primary:#FCFBF9; --bg-secondary:#F3F1EC; --bg-card:#FFFFFF;
+  --bg-card-border:#1A1A1A; --text-primary:#1A1A1A; --text-secondary:#4D4D4D;
+  --color-accent:#0d9488; --color-accent-light:rgba(13,148,136,.12);
+  --color-success:#006644; --color-success-light:#EAF5F0;
+  --color-danger:#D11A2A; --color-danger-light:#FCECEE;
+  --color-warning:#C46200; --color-warning-light:#FAF3EC;
+  --stop-c:#0d9488; --stop-w:rgba(13,148,136,.07);
+  --trav-c:#4D4D4D; --trav-w:rgba(77,77,77,.05);
+  --meal-c:#C46200; --meal-w:rgba(196,98,0,.07);
+  --logi-c:#8b5cf6; --logi-w:rgba(139,92,246,.07);
+}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg-secondary);color:var(--text-primary);
+  font-family:var(--sans);font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.wrap{max-width:920px;margin:0 auto;padding:26px 18px 70px}
+body.phone .wrap{max-width:430px}
+
+.bar{display:flex;flex-wrap:wrap;gap:9px;align-items:center;padding:14px 16px;
+  margin-bottom:22px;background:var(--bg-card);border:1px solid var(--bg-card-border);
+  border-radius:var(--radius);box-shadow:var(--shadow-sm)}
+.bar h1{margin:0;font-size:16px;font-weight:800;flex:1 1 240px}
+.bar .meta{flex:1 1 100%;font-size:13px;color:var(--text-muted);margin-top:3px}
+button{font:inherit;font-size:13px;font-weight:600;cursor:pointer;padding:6px 12px;
+  border-radius:var(--radius);border:1px solid var(--bg-card-border);
+  background:var(--bg-card);color:var(--text-primary);
+  transition:transform var(--t-fast),box-shadow var(--t-fast)}
+button:hover{box-shadow:var(--shadow-sm);transform:translate(-1px,-1px)}
+button[aria-pressed="true"]{background:var(--color-accent);color:#fff;border-color:var(--color-accent)}
+button:focus-visible{outline:2.5px solid var(--color-violet);outline-offset:2.5px}
+
+.card{background:var(--bg-card);border:1px solid var(--bg-card-border);
+  border-radius:var(--radius);box-shadow:var(--shadow-md);margin-bottom:22px}
+
+/* CHANGE 6 — 3/1 aspect ratio, as asked. The donor's CSS has a locked 260px and no
+   aspect-ratio at all; its README claims 3/1. Deviation D10. */
+.dayhead{display:grid;grid-template-columns:minmax(320px,34%) minmax(0,1fr);aspect-ratio:3/1}
+body.phone .dayhead{grid-template-columns:1fr;aspect-ratio:auto}
+body.phone .dayhead>.l{border-right:0;border-bottom:1px solid var(--bg-card-border)}
+@media(max-width:720px){
+  .dayhead{grid-template-columns:1fr;aspect-ratio:auto}
+  .dayhead>.l{border-right:0;border-bottom:1px solid var(--bg-card-border)}
+}
+.dayhead>.l{padding:18px;border-right:1px solid var(--bg-card-border);
+  display:flex;flex-direction:column;gap:7px;justify-content:center;min-width:0}
+.dayhead>.r{padding:18px;display:flex;flex-direction:column;gap:11px;overflow:hidden;min-width:0}
+.daynum{font-size:12px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--text-muted)}
+.daydate{font-size:28px;font-weight:800;letter-spacing:-.02em;line-height:1.1}
+.dayplace{font-size:14px;color:var(--text-secondary)}
+.stats{display:grid;gap:9px;grid-template-columns:repeat(auto-fit,minmax(94px,1fr))}
+.stat{border:1px solid var(--bg-card-border);border-radius:var(--radius);padding:8px 10px;
+  background:var(--bg-card);box-shadow:var(--shadow-sm)}
+.stat .k{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--text-muted)}
+.stat .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:19px;font-weight:700;margin-top:2px}
+
+/* CHANGE 7 — variants are real buttons */
+.variant{display:flex;flex-wrap:wrap;gap:7px;align-items:center;font-size:13px;color:var(--text-muted)}
+.vbtn{font-size:12px;font-weight:700;padding:5px 11px}
+.vbtn[aria-pressed="true"]{background:var(--color-accent);color:#fff;border-color:var(--color-accent);font-weight:800}
+
+.note{display:flex;gap:9px;padding:10px 12px;border-radius:var(--radius);font-size:13.5px;border:1px solid}
+.warnbox{background:var(--color-warning-light);border-color:var(--color-warning)}
+.infobox{background:var(--color-accent-light);border-color:var(--color-accent)}
+.violetbox{background:var(--color-violet-light);border-color:var(--color-violet)}
+
+.sect{padding:15px 16px;border-top:1px solid var(--bg-card-border)}
+.eyebrow{font-size:12px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--text-muted);margin-bottom:10px;display:flex;justify-content:space-between;gap:8px}
+.eyebrow .tot{font-family:var(--mono);letter-spacing:0;text-transform:none;font-weight:700}
+
+/* CHANGE 1 — row type must be obvious. A 10px rail, a matching wash, and a
+   type label. Three channels for TYPE; status still lives only in words. */
+.row{display:grid;grid-template-columns:74px 1fr;gap:12px;
+  padding:11px 12px 11px 10px;margin-bottom:3px;
+  border:1px solid var(--bg-card-border);border-left:10px solid var(--stop-c);
+  border-radius:var(--radius);background:var(--stop-w)}
+.row.travel{border-left-color:var(--trav-c);background:var(--trav-w)}
+.row.meal  {border-left-color:var(--meal-c);background:var(--meal-w)}
+.row.logi  {border-left-color:var(--logi-c);background:var(--logi-w)}
+.row.buffer{border-left-color:var(--buff-c);background:var(--buff-w);border-style:dashed;
+  border-left-style:solid;padding-top:8px;padding-bottom:8px}
+.row.free  {border-left-color:var(--free-c);background:var(--free-w);border-style:dashed;
+  border-left-style:solid;padding-top:8px;padding-bottom:8px}
+.clock{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:13px;
+  font-weight:700;color:var(--text-primary);padding-top:2px;line-height:1.35}
+.clock .dur{display:block;font-size:11.5px;font-weight:600;color:var(--text-muted);margin-top:1px}
+.what{min-width:0}
+.tlabel{display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:700;
+  letter-spacing:.06em;text-transform:uppercase;padding:1px 6px;border-radius:var(--radius);
+  color:#fff;background:var(--stop-c);margin-bottom:3px}
+.travel .tlabel{background:var(--trav-c)} .meal .tlabel{background:var(--meal-c)}
+.logi .tlabel{background:var(--logi-c)}
+.buffer .tlabel,.free .tlabel{background:transparent;color:var(--text-muted);
+  border:1px solid var(--buff-c)}
+.title{font-weight:700;font-size:15px;line-height:1.35}
+.title .ord{display:inline-block;min-width:21px;height:21px;line-height:21px;text-align:center;
+  font-family:var(--mono);font-size:12px;font-weight:700;color:#fff;background:var(--stop-c);
+  border-radius:var(--pill);margin-right:6px}
+.sub{font-size:13px;color:var(--text-secondary);margin-top:3px}
+.local{color:var(--text-muted)}
+.chip{display:inline-block;font-size:11px;font-weight:700;padding:2px 7px;border-radius:var(--pill);
+  border:1px solid;margin-right:5px}
+.ok{color:var(--color-success);border-color:var(--color-success);background:var(--color-success-light)}
+.risk{color:var(--color-warning);border-color:var(--color-warning);background:var(--color-warning-light)}
+.bad{color:var(--color-danger);border-color:var(--color-danger);background:var(--color-danger-light)}
+details{margin-top:7px}
+summary{font-size:12.5px;font-weight:700;color:var(--color-accent);cursor:pointer;
+  list-style:none;display:inline-block}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"+ ";font-family:var(--mono)}
+details[open] summary::before{content:"− "}
+details ul{margin:6px 0 0;padding-left:17px;font-size:13px;color:var(--text-secondary);
+  display:flex;flex-direction:column;gap:3px}
+details ul b{color:var(--text-primary);font-weight:700}
+
+.fallback{margin:4px 0 3px 10px;padding:11px 13px;border:1px solid var(--color-danger);
+  border-left:10px solid var(--color-danger);
+  border-radius:var(--radius);background:var(--color-danger-light);font-size:13.5px}
+.fallback b{font-weight:800}
+.fallback .cap{color:var(--text-secondary);font-size:12.5px;margin-top:3px}
+
+/* CHANGE 8 — a map, with no tiles. Stops plotted at true relative geometry. */
+.mapbox{border:1px solid var(--bg-card-border);border-radius:var(--radius);
+  background:var(--bg-secondary);box-shadow:var(--shadow-sm);padding:10px;overflow-x:auto}
+.mapbox svg{display:block;width:100%;min-width:380px;height:auto}
+.scalebar{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--text-muted);
+  margin-top:7px;font-family:var(--mono)}
+.scalebar i{display:block;height:5px;width:88px;border:1px solid var(--text-muted);border-top:0}
+
+.stops{display:flex;flex-direction:column;margin-top:11px}
+.stop{display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px dashed var(--bg-card-border)}
+.stop:first-child{border-top:0}
+.dot{width:14px;height:14px;border-radius:var(--pill);flex:none;border:1.5px solid var(--bg-card-border)}
+.stop .n{font-family:var(--mono);font-size:12.5px;font-weight:700;color:var(--text-muted);width:17px}
+.stop .nm{flex:1 1 auto;font-size:13.5px;min-width:0}
+.stop .co{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:11.5px;color:var(--text-muted)}
+
+.maplink{font-size:12.5px;font-weight:700;color:var(--color-accent);text-decoration:none;
+  white-space:nowrap;border-bottom:1px solid transparent}
+.maplink:hover{border-bottom-color:var(--color-accent)}
+.maplink:focus-visible{outline:2.5px solid var(--color-violet);outline-offset:2px}
+.stop .lk{flex:none}
+.dayroute{display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin-top:10px;
+  padding-top:10px;border-top:1px dashed var(--bg-card-border);font-size:12.5px;
+  color:var(--text-muted)}
+.legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;font-size:12px;color:var(--text-secondary)}
+.legend span{display:flex;align-items:center;gap:5px}
+.legend i{width:14px;height:10px;border-radius:2px;display:block}
+
+.react{padding:17px;background:var(--bg-card);border:1px solid var(--bg-card-border);
+  border-radius:var(--radius);box-shadow:var(--shadow-sm)}
+.react h2{margin:0 0 5px;font-size:15px;font-weight:800}
+.react p{margin:0 0 12px;font-size:13.5px;color:var(--text-muted)}
+.react ol{margin:0;padding-left:20px;font-size:14px;display:flex;flex-direction:column;gap:8px}
+.chg{display:inline-block;font-family:var(--mono);font-size:11px;font-weight:700;
+  padding:1px 6px;border-radius:var(--radius);background:var(--color-accent);color:#fff;margin-right:5px}
+.rejected{margin-top:15px;padding-top:13px;border-top:1px dashed var(--bg-card-border)}
+.rejected h3{margin:0 0 7px;font-size:12px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--text-muted)}
+.rejected ul{margin:0;padding-left:20px;font-size:13.5px;color:var(--text-secondary);
+  display:flex;flex-direction:column;gap:6px}
+.fid{margin-top:14px;font-size:12.5px;color:var(--text-muted);line-height:1.6}
+[lang-th]{display:none}
+body.th [lang-en]{display:none}
+body.th [lang-th]{display:revert}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <div class="bar">
+    <h1>Itinerary day screen — prototype v2</h1>
+    <button id="lang" aria-pressed="false">ไทย</button>
+    <button id="theme" aria-pressed="false">Dark</button>
+    <button id="phone" aria-pressed="false">Phone</button>
+    <button id="nodates" aria-pressed="false">No dates</button>
+    <button id="china" aria-pressed="false">China trip</button>
+    <div class="meta">WF-032 · six changes applied · every minute 07:30–22:00 accounted for ·
+      map plots true geometry with no tiles</div>
+  </div>
+
+  <div id="dated">
+  <section class="card">
+    <div class="dayhead">
+      <div class="l">
+        <div class="daynum"><span lang-en>Day 2 of 7 · active plan v3</span><span lang-th>วันที่ 2 จาก 7 · แผนใช้งาน v3</span></div>
+        <div class="daydate"><span lang-en>Tue 30 Dec</span><span lang-th>อ. 30 ธ.ค.</span></div>
+        <div class="dayplace">Taipei, Taiwan · <span class="num">UTC+8</span></div>
+        <div class="variant">
+          <span lang-en>Variant</span><span lang-th>รูปแบบ</span>
+          <button class="vbtn" aria-pressed="true">best balance</button>
+          <button class="vbtn" aria-pressed="false">relaxed</button>
+          <button class="vbtn" aria-pressed="false">more highlights</button>
+        </div>
+      </div>
+      <div class="r">
+        <div class="stats">
+          <div class="stat"><div class="k"><span lang-en>Stops</span><span lang-th>จุดหมาย</span></div><div class="v">4</div></div>
+          <div class="stat"><div class="k"><span lang-en>Walking</span><span lang-th>เดิน</span></div><div class="v">38m</div></div>
+          <div class="stat"><div class="k"><span lang-en>In transit</span><span lang-th>เดินทาง</span></div><div class="v">1h42</div></div>
+          <div class="stat"><div class="k"><span lang-en>Unscheduled</span><span lang-th>ยังไม่จัด</span></div><div class="v">4h30</div></div>
+        </div>
+        <div class="note warnbox"><b>⚠</b><div>
+          <span lang-en><b>Highest risk today: opening hours unverified.</b>
+            Longshan Temple's hours were never confirmed — check before you set out.</span>
+          <span lang-th><b>ความเสี่ยงสูงสุดวันนี้: ยังไม่ยืนยันเวลาเปิด</b>
+            เวลาเปิดวัดหลงซานยังไม่ได้รับการยืนยัน ควรตรวจสอบก่อนออกเดินทาง</span>
+        </div></div>
+      </div>
+    </div>
+
+    <!-- ================= morning ================= -->
+    <div class="sect">
+      <div class="eyebrow">
+        <span><span lang-en>Morning</span><span lang-th>ช่วงเช้า</span></span>
+        <span class="tot">07:30 → 12:00 · <span lang-en>no gaps</span><span lang-th>ต่อเนื่อง</span></span>
+      </div>
+
+      <div class="row logi">
+        <div class="clock">07:30–08:00<span class="dur">30 min</span></div>
+        <div class="what">
+          <div class="tlabel"><span lang-en>Prep</span><span lang-th>เตรียม</span></div>
+          <div class="title"><span lang-en>Hotel breakfast &amp; pack day bag</span><span lang-th>อาหารเช้าที่โรงแรม &amp; จัดกระเป๋า</span></div>
+          <div class="sub"><span class="chip ok"><span lang-en>Ready</span><span lang-th>พร้อม</span></span>
+            <span lang-en>Grand Hyatt Taipei · room 1412</span><span lang-th>แกรนด์ ไฮแอท ไทเป · ห้อง 1412</span></div>
+          <details><summary><span lang-en>Details</span><span lang-th>รายละเอียด</span></summary>
+            <ul>
+              <li><b><span lang-en>Bring</span><span lang-th>ของที่ต้องพา</span>:</b>
+                <span lang-en>umbrella — rain likely after 15:00 · passport copy · EasyCard</span>
+                <span lang-th>ร่ม — มีแนวโน้มฝนหลัง 15:00 · สำเนาพาสปอร์ต · บัตรอีซี่การ์ด</span></li>
+              <li><b><span lang-en>Breakfast served</span><span lang-th>อาหารเช้า</span>:</b> 06:30–10:00</li>
+              <li><b><span lang-en>Needs your confirmation</span><span lang-th>ต้องการการยืนยัน</span></b></li>
+            </ul>
+          </details>
+        </div>
+      </div>
+
+      <div class="row travel">
+        <div class="clock">08:00–08:22<span class="dur">22 min</span></div>
+        <div class="what">
+          <div class="tlabel"><span lang-en>Travel</span><span lang-th>เดินทาง</span></div>
+          <div class="title">Grand Hyatt → <span lang-en>Longshan Temple</span><span lang-th>วัดหลงซาน</span></div>
+          <div class="sub"><span class="chip ok"><span lang-en>Ready</span><span lang-th>พร้อม</span></span>
+            <span lang-en>metro · 9 min of walking</span><span lang-th>รถไฟฟ้า · เดิน 9 นาที</span></div>
+          <details><summary><span lang-en>Details</span><span lang-th>รายละเอียด</span></summary>
+            <ul>
+              <li><b><span lang-en>Route</span><span lang-th>เส้นทาง</span>:</b>
+                Taipei 101/World Trade Center → <span lang-en>Bannan line</span><span lang-th>สายบันหนาน</span>
+                → Ximen → <span lang-en>Bannan line</span><span lang-th>สายบันหนาน</span> → Longshan Temple</li>
+              <li><b><span lang-en>Plain transfer</span><span lang-th>การเดินทางปกติ</span></b> —
+                <span lang-en>not counted as sightseeing walking</span><span lang-th>ไม่นับเป็นการเดินชมเมือง</span></li>
+              <li><b><span lang-en>Distance</span><span lang-th>ระยะทาง</span>:</b> <span class="num">6,580 m</span> ·
+                <b><span lang-en>transfers</span><span lang-th>เปลี่ยนสาย</span>:</b> 1</li>
+              <li><b><span lang-en>Boarding buffer</span><span lang-th>เวลาสำรองขึ้นรถ</span>:</b> 5 min</li>
+              <li><b><span lang-en>Fare</span><span lang-th>ค่าโดยสาร</span>:</b> <span class="num">NT$ 25</span></li>
+            </ul>
+          </details>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="clock">08:22–09:40<span class="dur">78 min</span></div>
+        <div class="what">
+          <div class="tlabel"><span lang-en>Stop</span><span lang-th>จุดหมาย</span></div>
+          <div class="title"><span class="ord">1</span><span lang-en>Longshan Temple</span><span lang-th>วัดหลงซาน</span></div>
+          <div class="sub"><span class="chip risk"><span lang-en>Opening unverified</span><span lang-th>ยังไม่ยืนยันเวลาเปิด</span></span>
+            <span class="local">龍山寺</span></div>
+          <details><summary><span lang-en>Details</span><span lang-th>รายละเอียด</span></summary>
+            <ul>
+              <li><b><span lang-en>Your choice</span><span lang-th>ระดับที่เลือก</span>:</b>
+                <span lang-en>must do</span><span lang-th>ต้องไป</span></li>
+              <li><b><span lang-en>Address</span><span lang-th>ที่อยู่</span>:</b>
+                No. 211, Guangzhou St, Wanhua District</li>
+              <li><b><span lang-en>Opening hours were never verified</span><span lang-th>ยังไม่ได้ยืนยันเวลาเปิด</span></b> —
+                <span lang-en>no provider published them. A fallback is prepared below.</span>
+                <span lang-th>ไม่มีแหล่งข้อมูลเผยแพร่ไว้ มีแผนสำรองด้านล่าง</span></li>
+              <li><b><span lang-en>Why it ranked</span><span lang-th>เหตุผลที่ถูกจัดอันดับ</span>:</b>
+                <span lang-en>evidence 30 · fit 20 · effort 20 · variety 10 · timing 15 · exploration 5</span>
+                <span lang-th>หลักฐาน 30 · ตรงใจ 20 · ความเหนื่อย 20 · ความหลากหลาย 10 · จังหวะเวลา 15 · สำรวจ 5</span></li>
+            </ul>
+          </details>
+        </div>
+      </div>
+
+      <div class="row buffer">
+        <div class="clock">09:40–09:55<span class="dur">15 min</span></div>
+        <div class="what">
+          <div class="tlabel"><span lang-en>Buffer</span><span lang-th>สำรอง</span></div>
+          <div class="sub"><span lang-en>Crowd risk at a busy stop — held back so a slow exit does not
+            push the rest of the day.</span>
+            <span lang-th>จุดหมายคนพลุกพล่าน — กันเวลาไว้เพื่อไม่ให้กระทบตารางที่เหลือ</span></div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="clock">09:55–11:30<span class="dur">95 min</span></div>
+        <div class="what">
+          <div class="tlabel"><span lang-en>Stop</span><span lang-th>จุดหมาย</span></div>
+          <div class="title"><span class="ord">2</span><span lang-en>Bopiliao Historic Block</span><span lang-th>ย่านปั๋วผีเหลียว</span></div>
+          <div class="sub"><span class="chip ok"><span lang-en>Ready</span><span lang-th>พร้อม</span></span>
+            <span class="local">剝皮寮歷史街區</span> ·
+            <span lang-en>70 m from stop 1 — walk it</span><span lang-th>ห่างจากจุดที่ 1 เพียง 70 ม. — เดินได้</span></div>
+          <details><summary><span lang-en>Details</span><span lang-th>รายละเอียด</span></summary>
+            <ul>
+              <li><b><span lang-en>Your choice</span><span lang-th>ระดับที่เลือก</span>:</b>
+                <span lang-en>interested</span><span lang-th>สนใจ</span></li>
+              <li><b><span lang-en>Address</span><span lang-th>ที่อยู่</span>:</b> No. 173, Kangding Rd, Wanhua District</li>
+              <li><b><span lang-en>Opening hours verified</span><span lang-th>ยืนยันเวลาเปิดแล้ว</span>:</b>
+                09:00–18:00 · <span lang-en>checked 2 days ago</span><span lang-th>ตรวจเมื่อ 2 วันก่อน</span></li>
+              <li><b><span lang-en>Free entry</span><span lang-th>เข้าฟรี</span></b></li>
+            </ul>
+          </details>
+        </div>
+      </div>
+
+      <div class="fallback">
+        <b><span lang-en>Fallback ready</span><span lang-th>แผนสำรองพร้อม</span></b>
+        · <span lang-en>trigger: opening hours unverified</span><span lang-th>เงื่อนไข: ยังไม่ยืนยันเวลาเปิด</span>
+        <div class="cap"><span lang-en>Longshan Temple → Herb Alley · from 08:30 · the day was re-optimized</span>
+          <span lang-th>วัดหลงซาน → ตรอกสมุนไพร · ตั้งแต่ 08:30 · จัดตารางวันนี้ใหม่แล้ว</span></div>
+        <div class="cap"><span lang-en>Consequence: Taipei 101 moves 30 minutes later; nothing is dropped.</span>
+          <span lang-th>ผลกระทบ: ไทเป 101 เลื่อนไป 30 นาที ไม่มีรายการใดถูกตัดออก</span></div>
+      </div>
+
+      <div class="row travel">
+        <div class="clock">11:30–11:50<span class="dur">20 min</span></div>
+        <div class="what">
+          <div class="tlabel"><span lang-en>Travel</span><span lang-th>เดินทาง</span></div>
+          <div class="title"><span lang-en>Bopiliao → Din Tai Fung (Xinyi)</span><span lang-th>ปั๋วผีเหลียว → ติ่นไท่ฟง (ซินยี่)</span></div>
+          <div class="sub"><span class="chip ok"><span lang-en>Ready</span><span lang-th>พร้อม</span></span>
+            <span lang-en>metro · 6 min of walking</span><span lang-th>รถไฟฟ้า · เดิน 6 นาที</span></div>
+          <details><summary><span lang-en>Details</span><span lang-th>รายละเอียด</span></summary>
+            <ul><li><b><span lang-en>Distance</span><span lang-th>ระยะทาง</span>:</b> <span class="num">6,470 m</span> ·
+              <b><span lang-en>transfers</span><span lang-th>เปลี่ยนสาย</span>:</b> 1</li>
+              <li><b><span lang-en>Boarding buffer</span><span lang-th>เวลาสำรองขึ้นรถ</span>:</b> 5 min</li></ul>
+          </details>
+        </div>
+      </div>
+
+      <div class="row buffer">
+        <div class="clock">11:50–12:00<span class="dur">10 min</span></div>
+        <div class="what">
+          <div class="tlabel"><span lang-en>Buffer</span><span lang-th>สำรอง</span></div>
+          <div class="sub"><span lang-en>Queue allowance before the meal window opens.</span>
+            <span lang-th>กันเวลาต่อคิวก่อนเข้าช่วงมื้ออาหาร</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= afternoon ================= -->
+    <div class="sect">
+      <div class="eyebrow">
+        <span><span lang-en>Afternoon</span><span lang-th>ช่วงบ่าย</span></span>
+        <span class="tot">12:00 → 17:30 · <span lang-en>no gaps</span><span lang-th>ต่อเนื่อง</span></span>
+      </div>
+
+      <div class="row meal">
+        <div class="clock">12:00–13:15<span class="dur">75 min</span></div>
+        <div class="what">
+          <div class="tlabel"><span lang-en>Meal</span><span lang-th>มื้ออาหาร</span></div>
+          <div class="title"><span lang-en>Lunch · Din Tai Fung</span><span lang-th>มื้อกลางวัน · ติ่นไท่ฟง</span></div>
+          <div class="sub"><span class="chip ok"><span lang-en>Ready</span><span lang-th>พร้อม</span></span>
+            <span class="local">鼎泰豐</span> ·
+            <span lang-en>inside your 12:00–13:30 window</span><span lang-th>อยู่ในช่วง 12:00–13:30 ที่คุณตั้งไว้</span></div>
+          <details><summary><span lang-en>Details</span><span lang-th>รายละเอียด</span></summary>
+            <ul>
+              <li><b><span lang-en>Meal window you set</span><span lang-th>ช่วงมื้อที่คุณตั้ง</span>:</b> 12:00–13:30</li>
+              <li><b><span lang-en>Typical queue</span><span lang-th>คิวโดยทั่วไป</span>:</b>
+                <span lang-en>25–40 min at this hour</span><span lang-th>25–40 นาทีในช่วงเวลานี้</span></li>
+              <li><b><span lang-en>Estimated</span><span lang-th>ประมาณการ</span>:</b>
+                <span class="num">NT$ 1,100</span> <span lang-en>for three</span><span lang-th>สำหรับ 3 คน</span>
+                (<span class="num">1,240 THB</span>)</li>
+              <li><b><span lang-en>Needs your confirmation</span><span lang-th>ต้องการการยืนยัน</span></b></li>
+            </ul>
+          </details>
+        </div>
+      </div>
+
+      <div class="row travel">
+        <div class="clock">13:15–13:45<span class="dur">30 min</span></div>
+        <div class="what">
+          <div class="tlabel"><span lang-en>Travel</span><span lang-th>เดินทาง</span></div>
+          <div class="title"><span lang-en>Din Tai Fung → Taipei 101 · on foot</span><span lang-th>ติ่นไท่ฟง → ไทเป 101 · เดิน</span></div>
+          <div class="sub"><span class="chip ok"><span lang-en>Ready</span><span lang-th>พร้อม</span></span>
+            <span lang-en>walk · 23 min of walking</span><span lang-th>เดิน · 23 นาที</span></div>
+          <details><summary><span lang-en>Details</span><span lang-th>รายละเอียด</span></summary>
+            <ul>
+              <li><b><span lang-en>Counted as a sightseeing walk</span><span lang-th>นับเป็นการเดินชมเมือง</span></b> —
+                <span lang-en>it adds to today's 38 walking minutes</span><span lang-th>รวมอยู่ใน 38 นาทีของการเดินวันนี้</span></li>
+              <li><b><span lang-en>Distance</span><span lang-th>ระยะทาง</span>:</b> <span class="num">1,600 m</span> ·
+                <span lang-en>covered walkway most of the way</span><span lang-th>มีทางเดินมีหลังคาเกือบทั้งเส้น</span></li>
+            </ul>
+          </details>
+        </div>
+      </div>
+
+      <div class="row buffer">
+        <div class="clock">13:45–14:00<span class="dur">15 min</span></div>
+        <div class="what">
+          <div class="tlabel"><span lang-en>Buffer</span><span lang-th>สำรอง</span></div>
+          <div class="sub"><span lang-en>Ticket queue allowance.</span><span lang-th>กันเวลาต่อคิวซื้อตั๋ว</span></div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="clock">14:00–16:30<span class="dur">150 min</span></div>
+        <div class="what">
+          <div class="tlabel"><span lang-en>Stop</span><span lang-th>จุดหมาย</span></div>
+          <div class="title"><span class="ord">3</span>Taipei 101</div>
+          <div class="sub"><span class="chip bad"><span lang-en>Closed at this time</span><span lang-th>ปิดในเวลานี้</span></span>
+            <span class="local">台北101</span></div>
+          <details open><summary><span lang-en>Details</span><span lang-th>รายละเอียด</span></summary>
+            <ul>
+              <li><b><span lang-en>Your choice</span><span lang-th>ระดับที่เลือก</span>:</b>
+                <span lang-en>must do · locked to this time by you</span><span lang-th>ต้องไป · คุณตรึงเวลานี้ไว้</span></li>
+              <li><b><span lang-en>Verified hours say</span><span lang-th>เวลาเปิดที่ยืนยัน</span>:</b> 11:00–21:00 —
+                <b><span lang-en>but the observatory deck closes 18:00 on Tuesdays</span>
+                <span lang-th>แต่จุดชมวิวปิด 18:00 ในวันอังคาร</span></b></li>
+              <li><b><span lang-en>Why this is still shown</span><span lang-th>ทำไมยังแสดงอยู่</span>:</b>
+                <span lang-en>you locked it, so it is kept with a warning rather than silently moved</span>
+                <span lang-th>คุณตรึงเวลาไว้ ระบบจึงคงไว้พร้อมคำเตือน ไม่ย้ายเงียบ ๆ</span></li>
+              <li><b><span lang-en>Estimated</span><span lang-th>ประมาณการ</span>:</b> <span class="num">NT$ 1,800</span>
+                <span lang-en>for three</span><span lang-th>สำหรับ 3 คน</span></li>
+            </ul>
+          </details>
+        </div>
+      </div>
+
+      <div class="row travel">
+        <div class="clock">16:30–17:00<span class="dur">30 min</span></div>
+        <div class="what">
+          <div class="tlabel"><span lang-en>Travel</span><span lang-th>เดินทาง</span></div>
+          <div class="title"><span lang-en>Taipei 101 → Grand Hyatt</span><span lang-th>ไทเป 101 → แกรนด์ ไฮแอท</span></div>
+          <div class="sub"><span class="chip ok"><span lang-en>Ready</span><span lang-th>พร้อม</span></span>
+            <span lang-en>walk · 8 min of walking</span><span lang-th>เดิน · 8 นาที</span></div>
+        </div>
+      </div>
+
+      <div class="row logi">
+        <div class="clock">17:00–17:30<span class="dur">30 min</span></div>
+        <div class="what">
+          <div class="tlabel"><span lang-en>Errand</span><span lang-th>ธุระ</span></div>
+          <div class="title"><span lang-en>Collect laundry · hotel front desk</span><span lang-th>รับผ้าซัก · เคาน์เตอร์โรงแรม</span></div>
+          <div class="sub"><span class="chip ok"><span lang-en>Ready</span><span lang-th>พร้อม</span></span>
+            <span lang-en>front desk closes 22:00</span><span lang-th>เคาน์เตอร์ปิด 22:00</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= evening ================= -->
+    <div class="sect">
+      <div class="eyebrow">
+        <span><span lang-en>Evening</span><span lang-th>ช่วงเย็น</span></span>
+        <span class="tot">17:30 → 22:00 · <span lang-en>unscheduled</span><span lang-th>ยังไม่จัด</span></span>
+      </div>
+      <div class="row free">
+        <div class="clock">17:30–22:00<span class="dur">4h 30m</span></div>
+        <div class="what">
+          <div class="tlabel"><span lang-en>Free</span><span lang-th>ว่าง</span></div>
+          <div class="title"><span lang-en>Nothing scheduled</span><span lang-th>ยังไม่มีรายการ</span></div>
+          <div class="sub"><span lang-en>The optimizer left this open — no chosen place fits without pushing
+            tomorrow's first stop. Shilin Night Market is 22 minutes away if you want it.</span>
+            <span lang-th>ระบบเว้นช่วงนี้ไว้ — ไม่มีสถานที่ที่เลือกไว้ลงตัวโดยไม่กระทบจุดหมายแรกของวันพรุ่งนี้
+            ตลาดกลางคืนซื่อหลินอยู่ห่าง 22 นาทีหากต้องการไป</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= map ================= -->
+    <div class="sect">
+      <div class="eyebrow">
+        <span><span lang-en>Day map</span><span lang-th>แผนที่วัน</span></span>
+        <span class="tot"><span lang-en>true relative geometry</span><span lang-th>สัดส่วนตามพิกัดจริง</span></span>
+      </div>
+
+      <div class="mapbox">
+        <!-- Stops plotted from real coordinates. Longitude scaled by cos(25.04°)=0.906
+             so distances are not distorted. viewBox is 4.25:1, the real bounding box. -->
+        <svg viewBox="0 0 425 110" role="img"
+             aria-label="Day map: four stops plotted by coordinate, with the route between them">
+          <defs>
+            <pattern id="g" width="42.5" height="42.5" patternUnits="userSpaceOnUse">
+              <path d="M42.5 0 L0 0 0 42.5" fill="none" stroke="currentColor"
+                    stroke-width=".4" opacity=".18"/>
+            </pattern>
+          </defs>
+          <rect width="425" height="110" fill="url(#g)" color="var(--text-muted)"/>
+          <!-- route in visit order: hotel -> 1 -> 2 -> 3 -->
+          <path d="M124.5 20 L23.7 76 L20 78 L405 90" fill="none"
+                stroke="var(--color-accent)" stroke-width="1.6" stroke-dasharray="5 4" opacity=".7"/>
+          <!-- hotel anchor -->
+          <g><circle cx="124.5" cy="20" r="7.5" fill="var(--color-warning)"
+                     stroke="var(--bg-card-border)" stroke-width="1.2"/>
+             <text x="124.5" y="23.5" text-anchor="middle" font-size="8" font-weight="700"
+                   fill="#fff" font-family="monospace">H</text>
+             <text x="136" y="23" font-size="9.5" fill="var(--text-secondary)"
+                   font-family="sans-serif">Grand Hyatt</text></g>
+          <!-- stop 1 -->
+          <g><circle cx="23.7" cy="76" r="8" fill="var(--color-warning)"
+                     stroke="var(--bg-card-border)" stroke-width="1.2"/>
+             <text x="23.7" y="79.5" text-anchor="middle" font-size="8.5" font-weight="700"
+                   fill="#fff" font-family="monospace">1</text></g>
+          <!-- stop 2 -->
+          <g><circle cx="20" cy="93" r="8" fill="var(--color-warning)"
+                     stroke="var(--bg-card-border)" stroke-width="1.2"/>
+             <text x="20" y="96.5" text-anchor="middle" font-size="8.5" font-weight="700"
+                   fill="#fff" font-family="monospace">2</text>
+             <text x="33" y="88" font-size="9" fill="var(--text-secondary)"
+                   font-family="sans-serif">Longshan / Bopiliao · 70 m apart</text></g>
+          <!-- stop 3 -->
+          <g><circle cx="405" cy="90" r="8.5" fill="var(--color-danger)"
+                     stroke="var(--bg-card-border)" stroke-width="1.2"/>
+             <text x="405" y="93.5" text-anchor="middle" font-size="8.5" font-weight="700"
+                   fill="#fff" font-family="monospace">3</text>
+             <text x="393" y="76" text-anchor="end" font-size="9.5" fill="var(--text-secondary)"
+                   font-family="sans-serif">Taipei 101</text></g>
+        </svg>
+        <div class="scalebar"><i></i> <span lang-en>about 1.5 km</span><span lang-th>ประมาณ 1.5 กม.</span></div>
+      </div>
+
+      <div class="dayroute">
+        <span id="provname"><span lang-en>Opens in Google Maps</span><span lang-th>เปิดใน Google Maps</span></span>
+        <a class="maplink" id="routelink" target="_blank" rel="noopener"
+           href="https://www.google.com/maps/dir/?api=1&amp;origin=25.04776,121.51700&amp;destination=25.03376,121.56450&amp;waypoints=25.03654,121.49992%7C25.03610,121.49930&amp;travelmode=transit">
+          <span lang-en>Open today's whole route ↗</span><span lang-th>เปิดเส้นทางทั้งวัน ↗</span></a>
+      </div>
+
+      <div class="legend">
+        <span><i style="background:var(--color-warning)"></i><span lang-en>flexible timing</span><span lang-th>เวลายืดหยุ่น</span></span>
+        <span><i style="background:var(--color-danger)"></i><span lang-en>locked to a time</span><span lang-th>ตรึงเวลา</span></span>
+        <span><i style="background:var(--color-accent);height:3px"></i><span lang-en>route order</span><span lang-th>ลำดับเส้นทาง</span></span>
+      </div>
+
+      <div class="note infobox" style="margin-top:11px" id="chinanote" hidden><b>ⓘ</b><div>
+        <span lang-en><b>China trip: links point at Amap, not Google Maps</b>, because Google Maps does not
+          work in mainland China. Note two things the implementation has to get right: Amap takes
+          <b>longitude first</b> (<span class="num">position=lon,lat</span>), the reverse of Google's
+          <span class="num">query=lat,lon</span>; and Amap expects <b>GCJ-02</b> coordinates while ours are
+          <b>WGS-84</b> from OpenStreetMap, so handing them over unconverted lands the pin
+          <b>100–500 m away</b> — the wrong block in a dense city. Taiwan and Hong Kong stay on Google Maps.</span>
+        <span lang-th><b>ทริปจีน: ลิงก์จะชี้ไปที่ Amap ไม่ใช่ Google Maps</b> เพราะ Google Maps ใช้ไม่ได้ในจีนแผ่นดินใหญ่
+          มีสองเรื่องที่ต้องทำให้ถูก: Amap ใส่<b>ลองจิจูดก่อน</b>
+          (<span class="num">position=lon,lat</span>) กลับกับ Google (<span class="num">query=lat,lon</span>)
+          และ Amap ใช้พิกัด <b>GCJ-02</b> ขณะที่ของเราเป็น <b>WGS-84</b> จาก OpenStreetMap
+          หากส่งต่อโดยไม่แปลง หมุดจะเพี้ยน <b>100–500 ม.</b> ซึ่งคนละบล็อกในเมืองหนาแน่น
+          ไต้หวันและฮ่องกงยังใช้ Google Maps</span>
+      </div></div>
+
+      <div class="note violetbox" style="margin-top:11px"><b>◆</b><div>
+        <span lang-en><b>This map has no street tiles</b> — it plots the stops at their true relative
+          positions, so you can see that stops 1 and 2 are 70 m apart while Taipei 101 is 6.5 km east.
+          It needs no network, no tile licence and no attribution, and Pillow can draw the same thing so the
+          PDF and poster match. <b>Street-level tiles would be a different decision</b> — see the note under
+          the reactions.</span>
+        <span lang-th><b>แผนที่นี้ไม่มีภาพถนน</b> — แสดงตำแหน่งจริงตามพิกัด จึงเห็นได้ว่าจุดที่ 1 และ 2
+          ห่างกันเพียง 70 ม. ขณะที่ไทเป 101 อยู่ห่างไปทางตะวันออก 6.5 กม.
+          ไม่ต้องใช้อินเทอร์เน็ต ไม่ต้องมีลิขสิทธิ์แผนที่ และ Pillow วาดแบบเดียวกันได้ ทำให้ PDF และโปสเตอร์ตรงกัน
+          <b>แผนที่ระดับถนนเป็นการตัดสินใจอีกเรื่องหนึ่ง</b> ดูหมายเหตุใต้ส่วนความเห็น</span>
+      </div></div>
+
+      <div class="stops">
+        <div class="stop"><span class="dot" style="background:var(--color-warning)"></span><span class="n">H</span>
+          <span class="nm"><span lang-en>Grand Hyatt Taipei — provisional, not booked</span><span lang-th>แกรนด์ ไฮแอท ไทเป — ยังไม่ได้จอง</span></span>
+          <span class="co">25.04776, 121.51700</span><span class="lk"><a class="maplink" target="_blank" rel="noopener" data-lat="25.04776" data-lon="121.51700" data-name="Grand Hyatt Taipei" href="https://www.google.com/maps/search/?api=1&amp;query=25.04776,121.51700"><span lang-en>Maps ↗</span><span lang-th>แผนที่ ↗</span></a></span></div>
+        <div class="stop"><span class="dot" style="background:var(--color-warning)"></span><span class="n">1</span>
+          <span class="nm"><span lang-en>Longshan Temple</span><span lang-th>วัดหลงซาน</span> ·
+            <span style="color:var(--color-warning)"><span lang-en>flexible</span><span lang-th>ยืดหยุ่น</span></span></span>
+          <span class="co">25.03654, 121.49992</span><span class="lk"><a class="maplink" target="_blank" rel="noopener" data-lat="25.03654" data-lon="121.49992" data-name="Longshan Temple" href="https://www.google.com/maps/search/?api=1&amp;query=25.03654,121.49992"><span lang-en>Maps ↗</span><span lang-th>แผนที่ ↗</span></a></span></div>
+        <div class="stop"><span class="dot" style="background:var(--color-warning)"></span><span class="n">2</span>
+          <span class="nm"><span lang-en>Bopiliao Historic Block</span><span lang-th>ปั๋วผีเหลียว</span> ·
+            <span style="color:var(--color-warning)"><span lang-en>flexible</span><span lang-th>ยืดหยุ่น</span></span></span>
+          <span class="co">25.03610, 121.49930</span><span class="lk"><a class="maplink" target="_blank" rel="noopener" data-lat="25.03610" data-lon="121.49930" data-name="Bopiliao Historic Block" href="https://www.google.com/maps/search/?api=1&amp;query=25.03610,121.49930"><span lang-en>Maps ↗</span><span lang-th>แผนที่ ↗</span></a></span></div>
+        <div class="stop"><span class="dot" style="background:var(--color-danger)"></span><span class="n">3</span>
+          <span class="nm">Taipei 101 ·
+            <span style="color:var(--color-danger)"><span lang-en>locked to this time</span><span lang-th>ตรึงเวลานี้</span></span></span>
+          <span class="co">25.03376, 121.56450</span><span class="lk"><a class="maplink" target="_blank" rel="noopener" data-lat="25.03376" data-lon="121.56450" data-name="Taipei 101" href="https://www.google.com/maps/search/?api=1&amp;query=25.03376,121.56450"><span lang-en>Maps ↗</span><span lang-th>แผนที่ ↗</span></a></span></div>
+      </div>
+    </div>
+  </section>
+  </div>
+
+  <div id="stay" hidden>
+    <section class="card">
+      <div class="sect" style="border-top:0">
+        <div class="eyebrow"><span><span lang-en>No trip dates yet</span><span lang-th>ยังไม่ได้ระบุวันเดินทาง</span></span></div>
+        <div class="daydate" style="margin-bottom:9px"><span lang-en>Stay recommendation</span><span lang-th>คำแนะนำระยะเวลา</span></div>
+        <div class="note infobox"><b>ⓘ</b><div>
+          <span lang-en><b>The optimizer returns a stay recommendation instead of a timetable</b> when a trip
+            has no dates. There is no day to show, so this screen shows what it can say.</span>
+          <span lang-th><b>เมื่อยังไม่มีวันเดินทาง ระบบจะให้คำแนะนำระยะเวลาแทนตารางเวลา</b>
+            ยังไม่มีวันให้แสดง หน้าจอนี้จึงแสดงเท่าที่บอกได้</span>
+        </div></div>
+        <div class="stats" style="margin-top:12px">
+          <div class="stat"><div class="k"><span lang-en>Suggested</span><span lang-th>แนะนำ</span></div><div class="v">5–6</div></div>
+          <div class="stat"><div class="k"><span lang-en>Chosen places</span><span lang-th>สถานที่ที่เลือก</span></div><div class="v">14</div></div>
+          <div class="stat"><div class="k"><span lang-en>Would not fit</span><span lang-th>ใส่ไม่ครบ</span></div><div class="v">2</div></div>
+        </div>
+        <div class="note warnbox" style="margin-top:12px"><b>⚠</b><div>
+          <span lang-en>Add trip dates on setup to get a timetable. Nothing here is scheduled yet.</span>
+          <span lang-th>เพิ่มวันเดินทางในขั้นตั้งค่าเพื่อรับตารางเวลา ยังไม่มีการจัดตารางใด ๆ</span>
+        </div></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="react">
+    <h2>Six changes applied</h2>
+    <p>Your notes, and what each one turned into.</p>
+    <ol>
+      <li><span class="chg">1</span><b>Row type is now unmistakable.</b> The rail went 4px → <b>10px</b>, each
+        type gained a <b>matching background wash</b>, and every row carries a <b>type label</b> (Stop, Travel,
+        Meal, Prep, Errand, Buffer, Free). Three channels for type. Status still lives only in words, because
+        exports strip pictographs.</li>
+      <li><span class="chg">2</span><b>Every minute from 07:30 to 22:00 is now accounted for</b> — the four
+        gaps are filled with the travel legs and buffers that were always implied but not drawn, and each
+        half-day header states its span and says “no gaps”. Details are also much fuller: routes with line
+        names, fares, distances, transfer counts, queue allowances, verified-hours dates, ranking weights, and
+        why a warned row is still shown.</li>
+      <li><span class="chg">3</span><b>Text enlarged throughout</b> — body 15→16px, clock 11.5→13px with the
+        duration on its own line, titles 13.5→15px, captions and details 11.5→13px, chips 9.5→11px.</li>
+      <li><span class="chg">4</span>Details stay collapsed by default, as approved — except Taipei 101, which
+        is opened to show what a warned row explains.</li>
+      <li><span class="chg">5</span>Fallback stays inline after the rows it affects, as approved.</li>
+      <li><span class="chg">6</span><b>Header is now <span class="num">3/1</span></b>, as asked. Worth knowing
+        what that means: the donor's CSS has a locked <span class="num">260px</span> and no
+        <span class="num">aspect-ratio</span> anywhere — <span class="num">3/1</span> is what its README
+        claims. So this is a <b>deliberate deviation from the donor's code toward its documentation</b>, and it
+        needs a register entry (<b>D10</b>) or the parity gate will read it as drift.</li>
+      <li><span class="chg">7</span><b>Variants are real buttons</b> now, pressed state and all.</li>
+      <li><span class="chg">8</span><b>You have a map.</b> It plots the four stops at true relative geometry —
+        longitude scaled by <span class="num">cos(25.04°)</span> so nothing is distorted — with the route in
+        visit order and a scale bar. It makes the useful thing visible immediately: stops 1 and 2 are
+        <b>70 m apart</b>, Taipei 101 is <b>6.5 km east</b>.</li>
+    </ol>
+
+    <ol start="9" style="margin-top:8px">
+      <li><span class="chg">9</span><b>Every stop links out to a real map app</b>, and the whole day links as a
+        transit route — which follows a pattern the app already uses, redirecting to TripAdvisor and Wikimedia
+        rather than faking richer content. Toggle <b>China trip</b> to see the Amap variant. Two things the
+        build must get right, both easy to get wrong: Amap takes <b>longitude first</b>, and it expects
+        <b>GCJ-02</b> while ours are <b>WGS-84</b> from OpenStreetMap — unconverted, the pin lands
+        <b>100–500 m</b> off, which is the wrong block in Shanghai. Taiwan and Hong Kong stay on Google Maps;
+        only mainland China switches.</li>
+    </ol>
+
+    <div class="rejected">
+      <h3>Kept as decided</h3>
+      <ul>
+        <li><b>Street tiles are a reopened decision, not a build task.</b> <i>Decide the offline asset policy
+          for the webapp</i> closed with “no tile map”, on three grounds: the exports contain no map so screen
+          and export agree by construction, tiles are the largest remote dependency in an app whose premise is
+          a plane and a hotel with no network, and the element inventory found the map is the one element
+          Auto-Bill's visual language cannot reach. <b>The coordinate plot above honours all three</b> — no
+          network, no licence, and Pillow can draw the same figure into the PDF and poster.</li>
+        <li><b>Street tiles stay out.</b> Confirmed — the coordinate plot does the job, so
+          <i>Decide the offline asset policy for the webapp</i> is not reopened. The outbound links cover the
+          case where you genuinely want streets: they hand off to an app that already has them, offline caches
+          and all, instead of this app growing a tile dependency.</li>
+      </ul>
+    </div>
+
+    <div class="fid"><b>Fidelity notes.</b> Tokens are the extracted contract (WF-020 §1) with D1/D2/D5/D8
+      applied, and D10 proposed for the 3/1 header. <b>Plus Jakarta Sans and JetBrains Mono are substituted by
+      a system stack</b> — the woff2 files are not in the repo yet (WF-034) and the artifact runtime blocks
+      font CDNs. Fares, queue times, walkway notes and the evening suggestion are plausible placeholders, not
+      real provider data.</div>
+  </div>
+</div>
+
+<script>
+const root=document.documentElement, body=document.body;
+const t=document.getElementById('theme'),l=document.getElementById('lang'),
+      p=document.getElementById('phone'),n=document.getElementById('nodates');
+const dark=matchMedia('(prefers-color-scheme:dark)').matches;
+root.dataset.theme=dark?'dark':'light';
+t.setAttribute('aria-pressed',String(dark)); t.textContent=dark?'Light':'Dark';
+t.onclick=()=>{const d=root.dataset.theme!=='dark';root.dataset.theme=d?'dark':'light';
+  t.setAttribute('aria-pressed',String(d));t.textContent=d?'Light':'Dark';};
+l.onclick=()=>{const th=body.classList.toggle('th');
+  l.setAttribute('aria-pressed',String(th));l.textContent=th?'English':'ไทย';};
+p.onclick=()=>{const ph=body.classList.toggle('phone');
+  p.setAttribute('aria-pressed',String(ph));p.textContent=ph?'Desktop':'Phone';};
+n.onclick=()=>{const on=document.getElementById('stay').hidden;
+  document.getElementById('stay').hidden=!on; document.getElementById('dated').hidden=on;
+  n.setAttribute('aria-pressed',String(on));};
+/* Outbound map provider. Google everywhere except mainland China, where it does not work.
+   Amap wants lon,lat AND GCJ-02; ours are WGS-84, so a real build must convert. */
+const cn=document.getElementById('china'), note=document.getElementById('chinanote'),
+      pn=document.getElementById('provname'), rl=document.getElementById('routelink');
+cn.onclick=()=>{
+  const on=cn.getAttribute('aria-pressed')!=='true';
+  cn.setAttribute('aria-pressed',String(on)); note.hidden=!on;
+  pn.innerHTML=on
+    ? '<span lang-en>Opens in Amap (Google Maps is blocked)</span><span lang-th>เปิดใน Amap (Google Maps ถูกบล็อก)</span>'
+    : '<span lang-en>Opens in Google Maps</span><span lang-th>เปิดใน Google Maps</span>';
+  document.querySelectorAll('.maplink[data-lat]').forEach(a=>{
+    const {lat,lon,name}=a.dataset;
+    a.href = on
+      ? `https://uri.amap.com/marker?position=${lon},${lat}&name=${encodeURIComponent(name)}`
+      : `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
+  });
+  rl.href = on
+    ? 'https://uri.amap.com/navigation?from=121.51700,25.04776&to=121.56450,25.03376&mode=bus'
+    : 'https://www.google.com/maps/dir/?api=1&origin=25.04776,121.51700&destination=25.03376,121.56450&waypoints=25.03654,121.49992%7C25.03610,121.49930&travelmode=transit';
+};
+
+document.querySelectorAll('.vbtn').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.vbtn').forEach(o=>o.setAttribute('aria-pressed','false'));
+  b.setAttribute('aria-pressed','true');});
+</script>

@@ -131,9 +131,15 @@ archived afterwards, so this becomes the only record of why the two differ.
 | **D8** | **JetBrains Mono 700 is a real loaded weight** | Added 2026-08-03 by `Decide the offline asset policy for the webapp`. `.font-mono` is used at 700/800 in six places while only 400/500/600 load, so every bold numeral in the donor is browser-synthesised — and faux bold smears digit shapes at exactly the size where a `3` and an `8` must stay distinguishable. Resolves AMBIGUITY 4 |
 | **D9** | **Flags are a local SVG sprite with a mandatory country name**, not `flagcdn.com` images alone | Added 2026-08-03 by the same ticket. Removes a remote dependency; the name is required by `WF-027` regardless, since a flag-only cell becomes an empty cell in the PDF. Scoped to `destinations.COUNTRIES`' 32 — flag absent shows the name alone |
 
+| **D10** | **The day-summary header is `aspect-ratio: 3/1`**, not a locked `260px` height | Added 2026-08-03 by `Prototype the itinerary day screen in the new design`, at the owner's request. The donor's CSS has a locked `260px` and **no `aspect-ratio` anywhere**; `3/1` is what its README claims. So this deviates from the donor's *code* toward the donor's *documentation* — the column rule `minmax(320px,34%) minmax(0,1fr)` is kept unchanged |
+
 **Not deviations, decided the same day:** the webapp ships **no tile map** (the donor has no spatial element,
 so there is nothing to deviate from), and the token source is **`tokens.css`** rather than the drafted JS
 config, which is a format decision rather than a visual one.
+
+**Also not a deviation:** the outbound map links (Google Maps, or Amap for mainland China) follow a pattern the
+planner already uses — it redirects to TripAdvisor and Wikimedia Commons rather than faking richer content — so
+they extend an existing behaviour rather than departing from the donor.
 
 **Not deviations:**
 

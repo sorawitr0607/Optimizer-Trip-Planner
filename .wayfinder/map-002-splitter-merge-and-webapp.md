@@ -253,6 +253,20 @@ resolving tickets are throwaway artifacts, not the build.
   right catch and the largest miss available, since **6 of the 23 inline-only classes are the filter
   interaction**, the biggest stylesheet-invisible group in the extraction. Added with its recovered values,
   dimming rather than hiding so a moved total stays explainable.
+- [Prototype the itinerary day screen in the new design](tickets/032-prototype-the-itinerary-day-screen-in-the-new-design.md) —
+  [`032-day-screen-prototype.html`](artifacts/032-day-screen-prototype.html), throwaway, EN/TH, light/dark,
+  phone, plus no-dates and China toggles. **The row model is six types, not three** — `meal`/`preparation`/
+  `logistics` share one renderer. Eight calls were put up and **six drew changes**: the type rail went 4px → 10px
+  with a colour wash and a type label, because 4px could not be told apart at a glance; **the timeline had four
+  gaps and is now continuous 07:30–22:00**, with the implied travel legs and buffers drawn and an unscheduled
+  evening shown rather than omitted; text enlarged throughout; the header became **`3/1`**, which deviates from
+  the donor's *code* toward its *README* and is registered as **D10**; variants became real buttons. **A map was
+  wanted and built as a coordinate plot with no tiles** — true relative geometry, so stops 1 and 2 read as 70 m
+  apart while Taipei 101 is 6.5 km east — and it was accepted, so `WF-034` is **not** reopened: the plot needs no
+  network, no licence, and Pillow can draw it so screen and export still agree. **Outbound map links** were added
+  on top, extending the app's existing TripAdvisor/Wikimedia redirect pattern; two traps are recorded for the
+  build — **Amap takes longitude first, and expects GCJ-02 while ours are WGS-84**, so unconverted the pin lands
+  100–500 m off, and only mainland China switches provider.
 - [Decide the offline asset policy for the webapp](tickets/034-decide-the-offline-asset-policy-for-the-webapp.md) —
   **The largest item in the ticket turned out not to exist.** Map tiles were called the biggest remote
   dependency, but the exports contain **no map at all** — just numbered stops with coordinates as text — and the
