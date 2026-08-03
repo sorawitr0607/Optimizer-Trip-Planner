@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 uv run streamlit run app.py                                          # run the app
-uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 235 tests, ~13s
+uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 230 tests, ~9s
 uv run --locked python -m unittest tests.test_optimizer.OptimizerCoreTest.test_safe_route_and_weather_fallback_are_selected  # one test
 python3 scripts/validate_regression_fixtures.py                      # fixture catalog structure
 uv run --locked python scripts/run_optimizer_regressions.py          # 27 historic cases through the real optimizer
@@ -245,8 +245,9 @@ the "why" is there, not in the code. Reference tickets by linked title, never ba
 
 Slices 1–4 are built and evidenced (foundation, setup+discovery, ranking, optimization). Slice 5 is
 **complete**, including the readiness checklist and owner-recorded costs: `exports.py` builds the one shared export snapshot; `app.py` renders the active-plan
-day summary, timeline, and numbered map; `exporters.py` writes the 9:16 poster PNG, the trip PDF, and
-the six-sheet Excel workbook — all three snapshot-in, bytes-out. `checklist.py` generates the readiness board and `costs.py` converts owner-recorded
+day summary, timeline, and numbered map; `exporters.py` writes the six-sheet Excel workbook and the
+readiness ICS — both snapshot-in, bytes-out. **The 9:16 poster and the trip PDF were dropped in slice S0**
+(2026-08-03), and with them the whole export-font apparatus. `checklist.py` generates the readiness board and `costs.py` converts owner-recorded
 expenses into THB against an owner-editable, timestamped rate snapshot; a paid charge locks its actual
 THB so a later rate cannot rewrite it, and a missing rate stays a visible gap rather than a guess.
 **Slice 6's core exists but only behind the POC UI:** `revision.py`'s non-AI quick actions (`a7ad537`) and
@@ -257,16 +258,16 @@ output must read
 `build_export_snapshot()` rather than the raw variant — that is what keeps their times, totals, and
 statuses from diverging. Complete a slice vertically with its own runnable check before starting the next.
 
-PDF and poster rendering needs a Unicode TTF covering Latin + Thai + local script (CJK for the Taipei
-pilot). `exporters.resolve_font()` checks `TOURIST_EXPORT_FONT` first, then a small candidate list
-(macOS `Arial Unicode.ttf` is the one that covers all three here); with no font it raises rather than
-rendering tofu. The app's status labels carry emoji that no such font has, so `_labels()` strips
-pictographs — the wording alone still carries the state.
+The export-font requirement is **gone** with the poster and PDF (S0): no Unicode TTF, no `resolve_font()`,
+no `TOURIST_EXPORT_FONT`. `_labels()` still strips pictographs, because the wording alone carrying the state
+is an accessibility rule and not only an export one.
 
 Explicitly out of scope for Phase 1: FastAPI, React, Docker, Redis, background workers, remote
 collaboration, hosted notifications. `pyproject.toml` lists exactly four runtime dependencies:
-`fpdf2`, `pillow` and `xlsxwriter` exist only because slice 5 renders a PDF, a poster and a workbook,
-and `streamlit` is the only one for the *interface*. Keep it that way.
+`xlsxwriter` exists only because slice 5 renders a workbook, and `streamlit` is the only one for the
+*interface*. Keep it that way. **After S0 there are two**: `fpdf2` and `pillow` were dropped with the PDF and
+poster — though `pillow` stays *installed* because `streamlit` depends on it, so it only leaves the
+environment when Streamlit is deleted at S6.
 
 ## Phase 2 is being planned, not built — do not implement it yet
 
@@ -279,7 +280,9 @@ first: `.wayfinder/artifacts/033-phase-2-slice-plan-and-scorecard.md`.
 
 **A scope cut landed with the slice plan: the PDF and the 9:16 poster are dropped.** `pyproject.toml` goes to
 **two** runtime dependencies (`streamlit`, `xlsxwriter`), the whole export-font apparatus is void — do not
-build the merged Noto pipeline — and tests go to **231**. The workbook and ICS survive.
+build the merged Noto pipeline — and tests went **235 → 230**. The workbook and ICS survive.
+**S0 is done as of 2026-08-03**: `exporters.py` is 1136 → 692 lines, and the workbook now localises optimizer
+codes through `_code()` as the PDF always did, so a Thai owner still gets Thai where a label exists.
 
 The destination is a decision-complete specification, exactly as Phase 1's was, so **no Phase 2 code gets
 written until the map has no unresolved decisions**. Until then the Phase 1 out-of-scope rule above still
@@ -299,7 +302,7 @@ Locked by the destination interview, so not open for re-litigation inside a tick
 
 - The planning core, `actions.py`, and `store.py` stay as they are behind a thin local HTTP layer. React
   replaces `views/` and `app.py` only. The deterministic optimizer, the hash gates, the append-only plan
-  history, and the 235 tests all survive the redesign.
+  history, and the 230 tests all survive the redesign.
 - **Two linked ledgers**, not one merged record: cost rows stay the budget and estimate truth, the split
   ledger records actual group spend. Reconciling them is now **decided**, not open — see the claim rule below.
 - Everything lands in this repository (`api/` + `web/`). `Auto-Bill-Splitter` is a read-only donor, then
@@ -388,7 +391,7 @@ Already decided, and binding on any future implementation:
   the one documented exemption, with derived English plus a `place_of_worship` override. **Emoji decorate and
   never carry meaning alone** — a flag-only cell becomes an empty cell in the PDF. See
   `.wayfinder/artifacts/027-bilingual-copy-pipeline.md`.
-- Testing after `AppTest`: exposure is **7%** — 18 of 235 tests, not 12 of 15 files — so 217 survive
+- Testing after `AppTest`: exposure is **7%** — 18 of 235 tests at the time of measuring, now 230, not 12 of 15 files — so 217 survive
   untouched. Of the 18, **14 port down** to actions/core/exports and are moved **before** anything is deleted,
   **3 are genuinely UI**, and 1 dies with Streamlit's `$`-as-LaTeX workaround. API contract tests are
   `unittest` at two levels: dispatch directly, plus a real server on **port 0**, because the `Content-Type`

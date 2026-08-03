@@ -9,23 +9,16 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 from io import BytesIO
-import os
-from pathlib import Path
 import re
 from typing import Any
 import unicodedata
 
-from fpdf import FPDF
-from PIL import Image, ImageDraw, ImageFont
 import xlsxwriter
 
 from .checklist import display_consequence, display_title
 
 
-POSTER_SIZE = (1080, 1920)  # 9:16
 PICTOGRAPHS = re.compile(r"[\U0001F000-\U0001FAFF←-⯿️]")
-POSTER_HIGHLIGHTS = 5
-POSTER_TASKS = 3
 CHECKLIST_TIMING = (
     "do_now",
     "30_days_before",
@@ -73,335 +66,6 @@ FONT_CANDIDATES = (
     "/usr/share/fonts/truetype/noto/NotoSansThai-Regular.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
 )
-
-
-def fit_lines(
-    text: str, font: Any, max_width: float, *, max_lines: int = 1
-) -> list[str]:
-    """Break text to fit max_width, ellipsizing once max_lines is reached.
-
-    Pillow draws whatever it is given, so an unwrapped place name runs off the
-    poster and is clipped.  Thai and Chinese names carry no word spaces, so this
-    measures character by character and prefers a space break when one exists.
-    """
-
-    words = str(text or "")
-    if not words:
-        return [""]
-    lines: list[str] = []
-    current = ""
-    index = 0
-    while index < len(words):
-        candidate = current + words[index]
-        if font.getlength(candidate) <= max_width:
-            current = candidate
-            index += 1
-            continue
-        if not current:  # A single glyph wider than the box; take it anyway.
-            current, index = words[index], index + 1
-        elif len(lines) + 1 >= max_lines:
-            remaining = words[index:].strip()
-            if remaining:
-                current = _ellipsize(current, font, max_width)
-            lines.append(current)
-            return lines
-        else:
-            cut = current.rfind(" ")
-            if cut > 0:
-                index -= len(current) - cut - 1
-                current = current[:cut]
-            else:
-                # ponytail: character break. Thai needs a dictionary to break on
-                # word boundaries; this only refuses to strand a combining mark
-                # at the start of a line, which is the visibly broken case.
-                while len(current) > 1 and unicodedata.combining(words[index]) != 0:
-                    index -= 1
-                    current = current[:-1]
-        lines.append(current.strip() or current)
-        current = ""
-    if current.strip():
-        lines.append(current.strip())
-    return lines or [""]
-
-
-def _ellipsize(text: str, font: Any, max_width: float) -> str:
-    trimmed = text.rstrip()
-    while trimmed and font.getlength(trimmed + "…") > max_width:
-        trimmed = trimmed[:-1].rstrip()
-    return (trimmed + "…") if trimmed else text
-
-
-def resolve_font() -> Path:
-    """Return a Unicode TTF able to draw the selected language and local names."""
-
-    override = os.environ.get("TOURIST_EXPORT_FONT", "").strip()
-    for candidate in (override, *FONT_CANDIDATES):
-        if candidate and Path(candidate).is_file():
-            return Path(candidate)
-    raise ValueError(
-        "No Unicode export font found; set TOURIST_EXPORT_FONT to a .ttf path"
-    )
-
-
-def day_poster_png(
-    snapshot: dict[str, Any], date: str, labels: dict[str, str] | None = None
-) -> bytes:
-    """One 9:16 share poster for a single day: identity, highlights, load, risk."""
-
-    words = _labels(labels)
-    day = _day(snapshot, date)
-    stamp = snapshot["stamp"]
-    font_path = str(resolve_font())
-    title_font = ImageFont.truetype(font_path, 64)
-    heading_font = ImageFont.truetype(font_path, 44)
-    body_font = ImageFont.truetype(font_path, 34)
-    small_font = ImageFont.truetype(font_path, 28)
-
-    image = Image.new("RGB", POSTER_SIZE, "#101820")
-    draw = ImageDraw.Draw(image)
-    margin = 72
-    full_width = POSTER_SIZE[0] - margin * 2
-    _draw_block(
-        draw, (margin, 96), stamp["destination"], title_font, "#F2F5F7", full_width
-    )
-    _draw_block(
-        draw,
-        (margin, 184),
-        f"{date} · {stamp['trip_name']}",
-        heading_font,
-        "#8FB8D8",
-        full_width,
-    )
-    draw.line((margin, 268, POSTER_SIZE[0] - margin, 268), fill="#2A3B49", width=3)
-
-    highlights = [item for item in day["items"] if item["type"] == "visit"]
-    if not highlights:
-        highlights = [item for item in day["items"] if item["type"] != "buffer"]
-    highlights = highlights[:POSTER_HIGHLIGHTS]
-    text_left = 150
-    text_width = POSTER_SIZE[0] - text_left - margin
-    top = 340
-    for item in highlights:
-        centre = top + 28
-        draw.ellipse((78, centre - 18, 114, centre + 18), fill="#8FB8D8")
-        marker = str(item.get("stop_number") or "•")
-        draw.text((88, centre - 16), marker, font=small_font, fill="#101820")
-        name_bottom = _draw_block(
-            draw,
-            (text_left, top),
-            item["display_name"],
-            heading_font,
-            "#F2F5F7",
-            text_width,
-            max_lines=2,
-            line_height=52,
-        )
-        detail = f"{item['start']}–{item['end']} · {item['duration_minutes']} {words['minutes']}"
-        if item.get("local_name"):
-            detail = f"{detail} · {item['local_name']}"
-        bottom = _draw_block(
-            draw, (text_left, name_bottom), detail, body_font, "#A9BECD", text_width
-        )
-        if item is not highlights[-1]:
-            draw.line((96, centre + 24, 96, bottom + 20), fill="#2A3B49", width=4)
-        top = bottom + 56
-
-    totals = day["totals"]
-    footer = POSTER_SIZE[1] - 400
-    draw.line((margin, footer, POSTER_SIZE[0] - margin, footer), fill="#2A3B49", width=3)
-    _draw_block(
-        draw,
-        (margin, footer + 36),
-        f"{day['start']}–{day['end']} · {words['scheduled_visits']} "
-        f"{totals['scheduled_visits']}",
-        heading_font,
-        "#F2F5F7",
-        full_width,
-    )
-    _draw_block(
-        draw,
-        (margin, footer + 104),
-        f"{words['walking_minutes']} {totals['walking_minutes']} {words['minutes']} · "
-        f"{words['travel_minutes']} {totals['travel_minutes']} {words['minutes']}",
-        body_font,
-        "#A9BECD",
-        full_width,
-        max_lines=2,
-        line_height=44,
-    )
-    # Only the tasks needed on this day.
-    tasks = day.get("tasks", [])[:POSTER_TASKS]
-    if tasks:
-        task_top = footer - 40 - len(tasks) * 44
-        _draw_block(
-            draw,
-            (margin, task_top - 46),
-            words["today_tasks"],
-            body_font,
-            "#8FB8D8",
-            full_width,
-        )
-        for offset, task in enumerate(tasks):
-            _draw_block(
-                draw,
-                (margin, task_top + offset * 44),
-                f"• {display_title(task, words)}",
-                body_font,
-                "#A9BECD",
-                full_width,
-            )
-
-    if day["highest_risk"]:
-        risk = words.get(
-            f"state_{day['highest_risk']['status']}", day["highest_risk"]["status"]
-        )
-        _draw_block(
-            draw,
-            (margin, footer + 204),
-            f"{words['highest_risk']}: {risk}",
-            body_font,
-            "#F2C14E",
-            full_width,
-        )
-    _draw_block(
-        draw,
-        (margin, POSTER_SIZE[1] - 108),
-        _stamp_line(snapshot),
-        small_font,
-        "#6C8598",
-        full_width,
-    )
-
-    buffer = BytesIO()
-    image.save(buffer, format="PNG")
-    return buffer.getvalue()
-
-
-def plan_pdf(snapshot: dict[str, Any], labels: dict[str, str] | None = None) -> bytes:
-    """Offline trip snapshot: cover, one section per day, choices, sources."""
-
-    words = _labels(labels)
-    stamp = snapshot["stamp"]
-    pdf = FPDF(unit="mm", format="A4")
-    font_path = str(resolve_font())
-    pdf.add_font("body", "", font_path)
-    pdf.set_auto_page_break(auto=True, margin=18)
-    pdf.set_font("body", size=10)
-    pdf.set_title(f"{stamp['destination']} {stamp['plan_version_id']}")
-
-    pdf.add_page()
-    _pdf_heading(pdf, stamp["destination"], size=22)
-    _pdf_line(pdf, f"{stamp['trip_name']} · {words.get(stamp['variant_id'], stamp['variant_id'])}")
-    _pdf_line(
-        pdf,
-        f"{words['readiness']}: "
-        f"{words.get(snapshot['readiness']['state'], snapshot['readiness']['state'])}",
-    )
-    _pdf_line(pdf, _stamp_line(snapshot))
-    totals = snapshot["totals"]
-    _pdf_line(
-        pdf,
-        f"{words['scheduled_visits']} {totals['scheduled_visits']} · "
-        f"{words['visit_minutes']} {totals['visit_minutes']} · "
-        f"{words['travel_minutes']} {totals['travel_minutes']} · "
-        f"{words['walking_minutes']} {totals['walking_minutes']} "
-        f"({words['rewarding_walking_minutes']} {totals['rewarding_walking_minutes']} / "
-        f"{words['plain_walking_minutes']} {totals['plain_walking_minutes']}) · "
-        f"{words['meal_minutes']} {totals['meal_minutes']} · "
-        f"{words['logistics_minutes']} {totals['logistics_minutes']} · "
-        f"{words['preparation_minutes']} {totals['preparation_minutes']}",
-    )
-    board_readiness = snapshot["checklist"]["readiness"]
-    if board_readiness:
-        counts = board_readiness["counts"]
-        _pdf_line(
-            pdf,
-            f"{words['checklist']}: "
-            f"{words.get(board_readiness['state'], board_readiness['state'])} · "
-            f"{counts['open']} {words['open_tasks']} · "
-            f"{counts['overdue']} {words['overdue']}",
-        )
-    if snapshot["readiness"]["capability_gaps"]:
-        _pdf_heading(pdf, words["capability_gaps"], size=13)
-        for gap in snapshot["readiness"]["capability_gaps"]:
-            _pdf_line(pdf, f"- {_code(words, gap)}")
-    if snapshot["warnings"]:
-        _pdf_heading(pdf, words["optimizer_warning"], size=13)
-        for warning in snapshot["warnings"]:
-            _pdf_line(pdf, f"- {_code(words, warning)}")
-
-    for day in snapshot["days"]:
-        pdf.add_page()
-        _pdf_heading(pdf, day["date"], size=18)
-        poster = BytesIO(day_poster_png(snapshot, day["date"], labels))
-        pdf.image(poster, x=pdf.l_margin, w=58)
-        pdf.ln(2)
-        _pdf_heading(pdf, words["timeline"], size=13)
-        for item in day["items"]:
-            _pdf_line(pdf, _item_line(item, words))
-        if day["fallbacks"]:
-            _pdf_heading(pdf, words["fallback"], size=13)
-            for fallback in day["fallbacks"]:
-                _pdf_line(pdf, _fallback_line(fallback, words))
-        if day["stops"]:
-            _pdf_heading(pdf, words["tab_map"], size=13)
-            anchor = snapshot["accommodation"]["anchor"]
-            if anchor:
-                _pdf_line(
-                    pdf,
-                    f"{words['hotel_anchor']} · {anchor['display_name']}"
-                    f"{_coordinates(anchor)}",
-                )
-            for stop in day["stops"]:
-                marker = (
-                    f" · {words['state_locked']}"
-                    if stop["status"] == "locked"
-                    else ""
-                )
-                _pdf_line(
-                    pdf,
-                    f"{words['stop']} {stop['stop_number']} · {stop['display_name']}"
-                    f"{_coordinates(stop)}{marker}",
-                )
-
-    if snapshot["unscheduled"]:
-        pdf.add_page()
-        _pdf_heading(pdf, words["unscheduled_choices"], size=18)
-        for item in snapshot["unscheduled"]:
-            _pdf_line(
-                pdf,
-                f"- {item['display_name']} · {_code(words, item['reason'])} · "
-                f"{_code(words, item['consequence'])}",
-            )
-
-    pdf.add_page()
-    _pdf_heading(pdf, words["checklist"], size=18)
-    board = snapshot["checklist"]
-    if not board["items"] and not board["dismissed"]:
-        _pdf_line(pdf, words["checklist_pending"])
-    else:
-        for bucket in CHECKLIST_TIMING:
-            bucket_items = [item for item in board["items"] if item["timing"] == bucket]
-            if not bucket_items:
-                continue
-            _pdf_heading(pdf, words.get(bucket, bucket), size=13)
-            for item in bucket_items:
-                _pdf_line(pdf, _task_line(item, words))
-        if board["dismissed"]:
-            _pdf_heading(pdf, words["dismissed_history"], size=13)
-            for item in board["dismissed"]:
-                _pdf_line(pdf, f"- {display_title(item, words)}")
-    _pdf_heading(pdf, words["sources"], size=18)
-    if snapshot["sources"]:
-        for source in snapshot["sources"]:
-            _pdf_line(
-                pdf,
-                f"- {source['display_name']} · {source['fact_type']} · "
-                f"{source['status']} · {source['source']}",
-            )
-    else:
-        _pdf_line(pdf, words["no_sources"])
-    return bytes(pdf.output())
 
 
 def checklist_ics(
@@ -510,9 +174,9 @@ def plan_workbook_xlsx(
     wrap = workbook.add_format({"text_wrap": True, "valign": "top"})
 
     sheets = {name: workbook.add_worksheet(name) for name in SHEETS}
-    timeline_rows = _write_timeline(sheets["Timeline"], snapshot, header, wrap)
+    timeline_rows = _write_timeline(sheets["Timeline"], snapshot, words, header, wrap)
     _write_summary(sheets["Summary"], snapshot, workbook, header, title, timeline_rows)
-    _write_choices(sheets["Choices & Backups"], snapshot, header, wrap)
+    _write_choices(sheets["Choices & Backups"], snapshot, words, header, wrap)
     _write_checklist(sheets["Checklist"], snapshot, words, header, wrap)
     _write_costs(sheets["Costs"], snapshot, words, header)
     _write_sources(sheets["Sources"], snapshot, header)
@@ -528,7 +192,11 @@ def _timeline_letter(name: str) -> str:
 
 
 def _write_timeline(
-    sheet: Any, snapshot: dict[str, Any], header: Any, wrap: Any
+    sheet: Any,
+    snapshot: dict[str, Any],
+    words: dict[str, str],
+    header: Any,
+    wrap: Any,
 ) -> int:
     columns = TIMELINE_COLUMNS
     for index, (name, width) in enumerate(columns):
@@ -565,11 +233,11 @@ def _write_timeline(
                     item.get("priority") or "",
                     "yes" if item.get("opening_verified") else "",
                     item.get("address") or "",
-                    item.get("reason") or "",
+                    _code(words, item.get("reason")),
                     item.get("from_name") or item.get("origin_name") or "",
                     item.get("to_name") or item.get("destination_name") or "",
                     item.get("notes") or "",
-                    item.get("reason") or "",
+                    _code(words, item.get("reason")),
                 ],
                 wrap,
             )
@@ -714,7 +382,13 @@ def _write_summary(
         sheet.insert_chart(total_row + 2, 0, chart)
 
 
-def _write_choices(sheet: Any, snapshot: dict[str, Any], header: Any, wrap: Any) -> None:
+def _write_choices(
+    sheet: Any,
+    snapshot: dict[str, Any],
+    words: dict[str, str],
+    header: Any,
+    wrap: Any,
+) -> None:
     columns = (
         ("Place", 30),
         ("Choice", 12),
@@ -736,7 +410,7 @@ def _write_choices(sheet: Any, snapshot: dict[str, Any], header: Any, wrap: Any)
                 item["display_name"],
                 item["priority"],
                 item["status"],
-                item["reason"],
+                _code(words, item["reason"]),
                 item["consequence"],
                 item["smallest_alternative"],
                 "yes" if item["owner_acceptance_required"] else "",
@@ -768,7 +442,7 @@ def _write_choices(sheet: Any, snapshot: dict[str, Any], header: Any, wrap: Any)
             [
                 fallback.get("date") or "",
                 fallback.get("half_day") or "",
-                fallback.get("trigger") or "",
+                _code(words, fallback.get("trigger")),
                 fallback.get("status") or "",
                 fallback.get("primary_name") or "",
                 fallback.get("replacement_name") or "",
@@ -926,68 +600,6 @@ def _write_sources(sheet: Any, snapshot: dict[str, Any], header: Any) -> None:
         sheet.autofilter(0, 0, len(snapshot["sources"]), len(columns) - 1)
 
 
-def _day(snapshot: dict[str, Any], date: str) -> dict[str, Any]:
-    day = next((item for item in snapshot["days"] if item["date"] == date), None)
-    if day is None:
-        raise ValueError(f"Plan has no day {date}")
-    return day
-
-
-def _item_line(item: dict[str, Any], words: dict[str, str]) -> str:
-    clock = f"{item['start']}-{item['end']}"
-    state = words.get(f"state_{item['status']}", item["status"])
-    if item["type"] == "visit":
-        line = (
-            f"{clock}  [{words['stop']} {item['stop_number']}] {item['display_name']}"
-            f"  ({item['duration_minutes']} {words['minutes']}) · {state}"
-        )
-        if item.get("local_name"):
-            line = f"{line} · {item['local_name']}"
-        if item.get("address"):
-            line = f"{line} · {item['address']}"
-        return line
-    if item["type"] == "travel":
-        return (
-            f"{clock}  [{item.get('mode') or '?'}] {item['origin_name']} > "
-            f"{item['destination_name']}  ({item['duration_minutes']} {words['minutes']}, "
-            f"{words['walk_portion']} {item['walking_minutes']}) · {state}"
-        )
-    if item["type"] in {"meal", "preparation", "logistics"}:
-        route = " > ".join(
-            value for value in (item.get("from_name"), item.get("to_name")) if value
-        )
-        details = " · ".join(
-            value for value in (route, item.get("notes")) if value
-        )
-        return (
-            f"{clock}  [{item['type']}] {item['display_name']} "
-            f"({item['duration_minutes']} {words['minutes']}) · {state}"
-            + (f"\n  {details}" if details else "")
-        )
-    return f"{clock}  [{item.get('reason') or 'buffer'}] ({item['duration_minutes']} {words['minutes']})"
-
-
-def _draw_block(
-    draw: Any,
-    xy: tuple[int, int],
-    text: str,
-    font: Any,
-    fill: str,
-    max_width: float,
-    *,
-    max_lines: int = 1,
-    line_height: int | None = None,
-) -> int:
-    """Draw text inside max_width and return the y below the last line."""
-
-    x, y = xy
-    step = line_height or int(font.size * 1.2)
-    lines = fit_lines(text, font, max_width, max_lines=max_lines)
-    for offset, line in enumerate(lines):
-        draw.text((x, y + offset * step), line, font=font, fill=fill)
-    return y + len(lines) * step
-
-
 def _code(words: dict[str, str], code: Any) -> str:
     """Localize an optimizer code the way the app does, or prettify it."""
 
@@ -1015,62 +627,6 @@ def _rate_summary(snapshot: dict[str, Any] | None) -> str:
         )
         if part
     )
-
-
-def _coordinates(point: dict[str, Any]) -> str:
-    if point.get("latitude") is None or point.get("longitude") is None:
-        return ""
-    return f" · {point['latitude']:.5f}, {point['longitude']:.5f}"
-
-
-def _fallback_line(fallback: dict[str, Any], words: dict[str, str]) -> str:
-    parts = [
-        f"{words['fallback_trigger']}: {_code(words, fallback.get('trigger')) or '?'}",
-        f"{fallback.get('primary_name')} > {fallback.get('replacement_name')}",
-    ]
-    if fallback.get("half_day"):
-        parts.insert(0, words.get(fallback["half_day"], fallback["half_day"]))
-    if fallback.get("day_reoptimized"):
-        parts.append(words["day_reoptimized"])
-    if fallback.get("displaced_consequence"):
-        parts.append(_code(words, fallback["displaced_consequence"]))
-    return "- " + " · ".join(parts)
-
-
-def _task_line(item: dict[str, Any], words: dict[str, str]) -> str:
-    parts = [
-        words.get(item["requirement_level"], item["requirement_level"]),
-        words.get(f"progress_{item['progress']}", item["progress"]),
-        words.get(f"evidence_{item['evidence_state']}", item["evidence_state"]),
-    ]
-    if item.get("due_date"):
-        parts.append(f"{words['due']} {item['due_date']}")
-    line = f"- {display_title(item, words)}  ({' · '.join(str(p) for p in parts)})"
-    consequence = display_consequence(item, words)
-    if consequence:
-        line = f"{line}\n  {words['consequence']}: {consequence}"
-    if item.get("source_url"):
-        line = f"{line}\n  {item['source_url']}"
-    return line
-
-
-def _stamp_line(snapshot: dict[str, Any]) -> str:
-    stamp = snapshot["stamp"]
-    return (
-        f"{stamp['plan_version_id']} · {stamp['variant_id']} · {stamp['language']} · "
-        f"{stamp['base_currency']} · {stamp['exported_at']}"
-    )
-
-
-def _pdf_heading(pdf: FPDF, text: str, *, size: int) -> None:
-    pdf.set_font_size(size)
-    pdf.multi_cell(0, size * 0.5, text, new_x="LMARGIN", new_y="NEXT")
-    pdf.set_font_size(10)
-    pdf.ln(1)
-
-
-def _pdf_line(pdf: FPDF, text: str) -> None:
-    pdf.multi_cell(0, 5, text, new_x="LMARGIN", new_y="NEXT")
 
 
 def _labels(labels: dict[str, str] | None) -> dict[str, str]:

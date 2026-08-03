@@ -42,7 +42,14 @@ workbook and exporting on demand is how the reference trips were actually made.
 `test_missing_export_font_is_a_precise_error` which dies with `resolve_font()`. But **three of the PDF-only
 tests assert content, not rendering** — `status_wording_survives_when_its_icon_cannot_be_drawn`,
 `documents_carry_the_fallback_and_the_hotel_anchor`, `documents_localize_optimizer_codes_like_the_app` — so they
-**re-base onto the workbook** rather than being deleted. Net: **235 → 231**, with 3 rewritten.
+**re-base onto the workbook** rather than being deleted. Net: **235 → 230**, with 3 rewritten.
+
+> **Corrected 2026-08-03 by building S0.** The estimate above said 231; the real figure is **230**, because
+> `test_pdf_carries_the_appendix_and_a_cover_summary` in `test_checklist.py` was missed when counting — 5 tests
+> delete, not 4. Two further corrections from the build: **`pillow` is not actually removed from the
+> environment**, because `streamlit` depends on it, so only `fpdf2`, `fonttools` and `defusedxml` leave and
+> `pillow` waits for S6; and preserving code localisation **changed workbook content** — the fallback trigger
+> now reads `Rain` rather than raw `rain`, matching what the PDF always produced.
 
 **Tickets this amends**, each of which gets a dated pointer here: `WF-030` (chose Python partly because only it
 had PDF and poster — the workbook keeps that conclusion intact), `WF-034` (§1's merged font is void; the
@@ -57,7 +64,7 @@ cheap-before-expensive *within* the journey while proving the merge early.
 
 | Slice | Contents | The runnable check that closes it |
 |---|---|---|
-| **S0** | The scope cut: delete PDF + poster, `pillow`, `fpdf2`, the font apparatus | `scripts/check.py` green at **231** tests; `pyproject.toml` shows 2 runtime deps |
+| **S0** | The scope cut: delete PDF + poster, `pillow`, `fpdf2`, the font apparatus | **Done 2026-08-03.** All existing gates green at **230** tests; `pyproject.toml` shows 2 runtime deps. *(This row originally named `scripts/check.py`, which does not exist until S1 — the existing commands were used instead.)* |
 | **S1** | **Foundation.** `api/` transport (dispatch, 51-method allowlist, `jsonable()`, error map, boundary guard, `GET` downloads) · `PlannerActions.journey()` · `tokens.css` · the JSON copy catalogue · `web/` shell with routing and `<StageGate>` · `scripts/check.py` | One contract test per dataclass shape; the three socket-level guard tests; parity test over all 8 copy tables; `uv run python -m api` serves the shell and one real API call round-trips |
 | **S2** | **The merge.** `split.py` · the split-ledger table with its pre-bump database copy · `costs.totals()` gaining `planned_thb` / `actual_thb` · `/costs` and `/split` screens | `split.py` unit tests including the rounding remainder and star settlement; a claimed cost row contributes its actual **once**; both screens render in `en` and `th`; the pre-bump copy exists and the migration refuses without it |
 | **S3** | **The cheap journey screens.** `setup` (5 steps, one whole draft) · `optimize` · app chrome · the sidebar navigation | The real Taipei trip's setup round-trips whole; a variant activates and refuses on a stale hash; 3 of the 14 ported `AppTest` behaviours pass at actions level |
@@ -96,7 +103,7 @@ S6's parity baselines have a history rather than appearing from nowhere.
 
 | Gate | Command or rule |
 |---|---|
-| Unit tests | `unittest discover -s tests` — **231** after S0, not the 202 this ticket was charted with |
+| Unit tests | `unittest discover -s tests` — **230** after S0, not the 202 this ticket was charted with |
 | Historic regressions | `scripts/run_optimizer_regressions.py` — 27 cases, 20 atomic + 7 interaction |
 | Fixture structure | `scripts/validate_regression_fixtures.py` |
 | Copy parity | `en`/`th` key-for-key across **all 8 tables**, with `CATEGORY_TEXT` exempted and tested on rendered output |
@@ -123,7 +130,7 @@ S6's parity baselines have a history rather than appearing from nowhere.
 1. **The real Taipei trip planned end to end in the webapp.** Not a fixture.
 2. **Exports verified against the four reference workbooks** — now the workbook and ICS only, since the PDF and
    poster are gone.
-3. **All 231 tests green.**
+3. **All 230 tests green.**
 
 Not on track ⇒ Taipei is planned by hand in Excel, as the four reference trips were.
 

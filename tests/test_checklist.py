@@ -15,7 +15,7 @@ from streamlit.testing.v1 import AppTest
 
 from travel_planner import checklist
 from travel_planner.actions import PlannerActions
-from travel_planner.exporters import checklist_ics, plan_pdf, plan_workbook_xlsx
+from travel_planner.exporters import checklist_ics, plan_workbook_xlsx
 from travel_planner.optimizer import optimize_trip
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -672,13 +672,6 @@ class ChecklistExportTest(unittest.TestCase):
         self.assertIn("Verify entry requirements for Dali", strings)
         self.assertNotIn("The readiness checklist is not generated yet.", strings)
 
-    def test_pdf_carries_the_appendix_and_a_cover_summary(self) -> None:
-        pdf = plan_pdf(self.export)
-        self.assertTrue(pdf.startswith(b"%PDF-"))
-        # Cover, one page per day, unscheduled if any, appendix.
-        self.assertGreaterEqual(
-            pdf.count(b"/Type /Page\n"), 2 + len(self.export["days"])
-        )
 
     def test_ics_is_well_formed_and_only_dated_tasks_appear(self) -> None:
         data = checklist_ics(self.export).decode("utf-8")

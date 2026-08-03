@@ -23,8 +23,6 @@ from travel_planner.checklist import (
 )
 from travel_planner.exporters import (
     checklist_ics,
-    day_poster_png,
-    plan_pdf,
     plan_workbook_xlsx,
 )
 from ui.text import (
@@ -337,15 +335,10 @@ def _plan_documents(_snapshot: dict, sha256: str, language: str) -> dict[str, by
 
     labels = _export_labels(language)
     return {
-        "pdf": plan_pdf(_snapshot, labels),
         "xlsx": plan_workbook_xlsx(_snapshot, labels),
         "ics": checklist_ics(_snapshot, labels),
     }
 
-
-@st.cache_data(show_spinner=False)
-def _day_poster(_snapshot: dict, sha256: str, language: str, date: str) -> bytes:
-    return day_poster_png(_snapshot, date, _export_labels(language))
 
 
 def _render_checklist_item(

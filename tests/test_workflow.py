@@ -8,7 +8,6 @@ import unittest
 from unittest.mock import patch
 import zipfile
 
-from PIL import Image
 from streamlit.testing.v1 import AppTest
 
 from tests.test_opening import FakeHoursProvider, TRIP_DATES
@@ -16,8 +15,6 @@ from tests.test_routes import FakePlaceProvider, FakeRouteProvider, FakeTimeZone
 from travel_planner.actions import PlannerActions
 from travel_planner.exporters import (
     checklist_ics,
-    day_poster_png,
-    plan_pdf,
     plan_workbook_xlsx,
 )
 
@@ -129,12 +126,8 @@ class FullWorkflowTest(unittest.TestCase):
                     [item["start"] for item in day["items"][1:]],
                 )
 
-            poster = day_poster_png(snapshot, snapshot["days"][0]["date"])
-            pdf = plan_pdf(snapshot)
             workbook = plan_workbook_xlsx(snapshot)
             calendar = checklist_ics(snapshot)
-            self.assertEqual((1080, 1920), Image.open(BytesIO(poster)).size)
-            self.assertTrue(pdf.startswith(b"%PDF-"))
             self.assertTrue(zipfile.is_zipfile(BytesIO(workbook)))
             archive = zipfile.ZipFile(BytesIO(workbook))
             workbook_text = archive.read("xl/sharedStrings.xml").decode("utf-8")

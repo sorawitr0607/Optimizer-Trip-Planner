@@ -11,13 +11,12 @@ from unittest.mock import patch
 import unicodedata
 import zipfile
 
-from PIL import Image
 from streamlit.testing.v1 import AppTest
 
 from travel_planner import exporters
 from travel_planner.actions import PlannerActions
 from travel_planner.core import new_optimization_preview
-from travel_planner.exporters import day_poster_png, plan_pdf, plan_workbook_xlsx
+from travel_planner.exporters import plan_workbook_xlsx
 from travel_planner.exports import build_export_snapshot, half_day
 from travel_planner.optimizer import optimize_trip
 
@@ -331,27 +330,7 @@ class ArtifactTest(unittest.TestCase):
             exported_at="2030-01-01T00:00:00+00:00",
         )
 
-    def test_poster_is_a_readable_nine_by_sixteen_png(self) -> None:
-        png = day_poster_png(self.export, self.export["days"][0]["date"])
-        image = Image.open(BytesIO(png))
 
-        self.assertEqual("PNG", image.format)
-        self.assertEqual((1080, 1920), image.size)
-        self.assertAlmostEqual(9 / 16, image.size[0] / image.size[1], places=4)
-        # Text actually rendered: more than one colour reached the canvas.
-        self.assertGreater(len(image.convert("RGB").getcolors(maxcolors=1 << 16)), 1)
-
-        with self.assertRaisesRegex(ValueError, "no day 2999-01-01"):
-            day_poster_png(self.export, "2999-01-01")
-
-    def test_pdf_keeps_each_day_and_the_version_stamp(self) -> None:
-        pdf = plan_pdf(self.export)
-
-        self.assertTrue(pdf.startswith(b"%PDF-"))
-        # Cover + one page per day + unscheduled (if any) + checklist/sources page.
-        expected_minimum = 2 + len(self.export["days"])
-        self.assertGreaterEqual(pdf.count(b"/Type /Page\n"), expected_minimum)
-        self.assertGreater(len(pdf), 20_000)
 
     def test_workbook_has_the_six_agreed_sheets_and_working_formulas(self) -> None:
         xlsx = plan_workbook_xlsx(self.export)
@@ -422,63 +401,29 @@ class ArtifactTest(unittest.TestCase):
         self.assertEqual("Locked", words["state_locked"])
         for text in ("ชิบูยะสกาย", "渋谷スカイ", "09:00–10:30 · 90 min"):
             self.assertEqual(text, exporters.PICTOGRAPHS.sub("", text))
-        # The document still builds and still names the state.
-        self.assertTrue(plan_pdf(self.export, labels).startswith(b"%PDF-"))
+        # The workbook still builds with the stripped labels. It writes raw
+        # status values rather than the state_* wording, so the label itself
+        # is asserted above rather than in the file.
+        self.assertTrue(
+            zipfile.is_zipfile(BytesIO(plan_workbook_xlsx(self.export, labels)))
+        )
 
     def test_documents_carry_the_fallback_and_the_hotel_anchor(self) -> None:
         rain = export_for("ix-jp-rain-fallback-reoptimization")
         hotel = export_for("ix-dali-hotel-whole-trip")
 
-        # Both reach the workbook's fallback block and the PDF day sections.
+        # Both reach the workbook's fallback block.
         choices = (
             zipfile.ZipFile(BytesIO(plan_workbook_xlsx(rain)))
             .read("xl/sharedStrings.xml")
             .decode("utf-8")
         )
-        for text in ("Linked fallbacks", "Half-day", "rain", "nearby_museum"):
+        # "Rain" not "rain": the workbook now localises the trigger through
+        # _code(), which is what the PDF always did.
+        for text in ("Linked fallbacks", "Half-day", "Rain", "nearby_museum"):
             self.assertIn(text, choices)
-        self.assertTrue(plan_pdf(rain).startswith(b"%PDF-"))
-        self.assertTrue(plan_pdf(hotel).startswith(b"%PDF-"))
         self.assertIsNotNone(hotel["accommodation"]["anchor"])
 
-    def test_long_names_wrap_inside_the_poster_instead_of_being_clipped(self) -> None:
-        from PIL import ImageFont
-
-        font = ImageFont.truetype(str(exporters.resolve_font()), 44)
-        width = exporters.POSTER_SIZE[0] - 150 - 72
-        samples = {
-            "latin": "Erhai Lake Western Shoreline Cycling Viewpoint",
-            "thai": "จุดชมวิวเส้นทางปั่นจักรยานริมทะเลสาบเอ๋อไห่ฝั่งตะวันตก",
-            "han": "洱海西岸自行车观景平台大理古城南门历史文化街区洱海西岸",
-            "unbroken": "A" * 120,
-        }
-        for label, text in samples.items():
-            self.assertGreater(font.getlength(text), width, f"{label} must overflow")
-            lines = exporters.fit_lines(text, font, width, max_lines=2)
-            self.assertLessEqual(len(lines), 2, label)
-            for line in lines:
-                self.assertLessEqual(round(font.getlength(line)), width, f"{label}: {line}")
-                self.assertNotEqual(
-                    0, len(line), f"{label} produced an empty line"
-                )
-                # A line must never begin with an orphaned combining mark.
-                self.assertEqual(0, unicodedata.combining(line[0]), f"{label}: {line}")
-
-        # Truncation is visible rather than silent.
-        single = exporters.fit_lines(samples["thai"], font, width, max_lines=1)
-        self.assertEqual(1, len(single))
-        self.assertTrue(single[0].endswith("…"))
-        self.assertLessEqual(round(font.getlength(single[0])), width)
-
-        # A poster built from those names is still a valid 9:16 image.
-        export = export_for("ix-dali-hotel-whole-trip")
-        for day in export["days"]:
-            for item in day["items"]:
-                if item["type"] == "visit":
-                    item["display_name"] = samples["thai"]
-                    item["local_name"] = samples["han"]
-        image = Image.open(BytesIO(day_poster_png(export, export["days"][0]["date"])))
-        self.assertEqual(exporters.POSTER_SIZE, image.size)
 
     def test_documents_localize_optimizer_codes_like_the_app(self) -> None:
         export = export_for("ix-dali-hotel-whole-trip", language="th")
@@ -499,7 +444,6 @@ class ArtifactTest(unittest.TestCase):
         )
         self.assertEqual("", exporters._code(words, None))
         # A supplied code table survives into the document build.
-        self.assertTrue(plan_pdf(export, {"PLAIN_WALK_THRESHOLD": thai}).startswith(b"%PDF-"))
 
     def test_every_formula_ships_with_a_cached_value(self) -> None:
         """A formula with no cached value reads blank until the app recalculates."""
@@ -528,12 +472,6 @@ class ArtifactTest(unittest.TestCase):
         indexed = set(re.findall(r"""words\[['\"]([a-z_0-9]+)['\"]\]""", source))
         self.assertTrue(indexed)
         self.assertEqual(set(), indexed - set(exporters.DEFAULT_LABELS))
-
-    def test_missing_export_font_is_a_precise_error(self) -> None:
-        with patch.dict(os.environ, {"TOURIST_EXPORT_FONT": "/nowhere/none.ttf"}):
-            with patch.object(exporters, "FONT_CANDIDATES", ()):
-                with self.assertRaisesRegex(ValueError, "TOURIST_EXPORT_FONT"):
-                    exporters.resolve_font()
 
 
 class ActivePlanViewTest(unittest.TestCase):

@@ -1,0 +1,91 @@
+{
+  "slice": "S0 \u2014 scope cut: drop the PDF and the 9:16 poster",
+  "date": "2026-08-03",
+  "authority": ".wayfinder/artifacts/033-phase-2-slice-plan-and-scorecard.md \u00a70",
+  "gates": {
+    "unittest": {
+      "tests": 230,
+      "result": "OK",
+      "was": 235
+    },
+    "optimizer_regressions": {
+      "atomic": 20,
+      "interaction": 7,
+      "variants_each": 3,
+      "result": "PASS"
+    },
+    "fixture_catalog": {
+      "rules": 24,
+      "result": "PASS"
+    },
+    "graph_check": "PASS",
+    "provider_redaction_self_test": "PASS"
+  },
+  "code": {
+    "exporters_py_lines": {
+      "before": 1136,
+      "after": 692,
+      "removed": 444
+    },
+    "functions_removed": [
+      "day_poster_png",
+      "plan_pdf",
+      "resolve_font",
+      "fit_lines",
+      "_ellipsize",
+      "_draw_block",
+      "_pdf_heading",
+      "_pdf_line",
+      "_day",
+      "_item_line",
+      "_stamp_line",
+      "_coordinates",
+      "_fallback_line",
+      "_task_line"
+    ],
+    "outputs_remaining": [
+      "plan_workbook_xlsx",
+      "checklist_ics"
+    ]
+  },
+  "dependencies": {
+    "declared_before": [
+      "fpdf2",
+      "pillow",
+      "streamlit",
+      "xlsxwriter"
+    ],
+    "declared_after": [
+      "streamlit",
+      "xlsxwriter"
+    ],
+    "uninstalled": [
+      "fpdf2",
+      "fonttools",
+      "defusedxml"
+    ],
+    "pillow_note": "still installed: streamlit depends on it. Leaves the environment at S6."
+  },
+  "tests": {
+    "deleted": [
+      "test_poster_is_a_readable_nine_by_sixteen_png",
+      "test_long_names_wrap_inside_the_poster_instead_of_being_clipped",
+      "test_pdf_keeps_each_day_and_the_version_stamp",
+      "test_missing_export_font_is_a_precise_error",
+      "test_pdf_carries_the_appendix_and_a_cover_summary"
+    ],
+    "rebased_onto_workbook": [
+      "test_status_wording_survives_when_its_icon_cannot_be_drawn",
+      "test_documents_carry_the_fallback_and_the_hotel_anchor",
+      "test_documents_localize_optimizer_codes_like_the_app"
+    ]
+  },
+  "behaviour_changes": [
+    "The workbook now localises optimizer codes through _code(), as plan_pdf always did. Four value sites: two in _write_timeline, two in _write_choices. Visible effect: the fallback trigger reads 'Rain' rather than raw 'rain'.",
+    "Downloads on the itinerary screen go from four buttons to two (workbook, calendar)."
+  ],
+  "findings_for_later": [
+    "The workbook writes raw status and type values ('confirmed', 'visit', 'buffer') rather than the localised state_* labels. Pre-existing, not caused by this cut. A Thai owner sees English there.",
+    "ui/text.py still carries now-unused copy keys for the poster and pdf buttons. Left for S1's copy-catalogue migration rather than touched here."
+  ]
+}

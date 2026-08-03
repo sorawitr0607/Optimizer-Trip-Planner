@@ -6,7 +6,7 @@ import streamlit as st
 
 from ui import shared
 from travel_planner.exports import half_day
-from ui.shared import _day_poster, _optimizer_code, _plan_documents, _render_fallback, _render_plan_item
+from ui.shared import _optimizer_code, _plan_documents, _render_fallback, _render_plan_item
 
 actions = shared.actions()
 copy = shared.words()
@@ -134,29 +134,12 @@ else:
     version_tag = stamp["plan_version_id"][5:17]
     try:
         documents = _plan_documents(export, export_snapshot.sha256, language)
-        poster = _day_poster(export, export_snapshot.sha256, language, day["date"])
     except ValueError as error:
         st.error(shared.plain(error))
     else:
-        # Four downloads in one row rather than four stacked full-width bars, so
-        # the day's content stays on screen next to them.
-        poster_column, pdf_column, excel_column, calendar_column = st.columns(4)
-        poster_column.download_button(
-            copy["poster"],
-            data=poster,
-            file_name=f"plan-{version_tag}-{day['date']}-poster.png",
-            mime="image/png",
-            key=f"poster_{trip.trip_id}",
-            width="stretch",
-        )
-        pdf_column.download_button(
-            copy["pdf"],
-            data=documents["pdf"],
-            file_name=f"plan-{version_tag}.pdf",
-            mime="application/pdf",
-            key=f"pdf_{trip.trip_id}",
-            width="stretch",
-        )
+        # Downloads in one row rather than stacked full-width bars, so the day's
+        # content stays on screen next to them.
+        excel_column, calendar_column = st.columns(2)
         excel_column.download_button(
             copy["excel"],
             data=documents["xlsx"],
