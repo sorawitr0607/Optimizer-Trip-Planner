@@ -111,3 +111,10 @@ reported none.
   undocumented tint alphas and de-duplicates the category and participant palettes.
 
 Sign-off is the owner; single-owner is a locked destination decision, so there is nobody else.
+
+### 2026-08-03 — Amended by the slice plan: D7 shrinks to one hex
+
+[Lock the Phase 2 slice plan and validation scorecard](033-lock-the-phase-2-slice-plan-and-validation-scorecard.md)
+records an owner decision to drop the PDF and the poster. Measured, **16 of the 17 hardcoded export hexes live
+in the poster**, so **deviation D7 shrinks to a single workbook hex**. The gate, the register D1–D10, the
+element-level captures, the 36 baselines and the token allowlist are all unaffected.

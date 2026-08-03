@@ -136,3 +136,16 @@ Streamlit. So tiles would be a **new** dependency, not a migrated one.
 Adds two entries to `WF-025`'s deviation register: **D8** real JetBrains Mono 700, and **D9** local flag
 sprite with a mandatory country name. No tile map is *not* a deviation, since the donor has no spatial
 element to deviate from.
+
+### 2026-08-03 — Amended by the slice plan: the export font is void
+
+[Lock the Phase 2 slice plan and validation scorecard](033-lock-the-phase-2-slice-plan-and-validation-scorecard.md)
+records an owner decision to **drop the PDF and the 9:16 poster** — the only two consumers of the export font.
+
+So **§1's merged Noto TTF is void**: no `fonttools` build step, no multi-megabyte binary, no OFL licence
+record, and `resolve_font()`, `FONT_CANDIDATES` and `TOURIST_EXPORT_FONT` all go with it. **Do not build the
+font pipeline.**
+
+Everything else here stands: the **self-hosted `woff2` browser fonts**, **D8's real JetBrains Mono 700**, the
+**local flag sprite** with its name-always-present rule, **no tile map**, the **offline contract**, and
+**`tokens.css`** as the single colour source.

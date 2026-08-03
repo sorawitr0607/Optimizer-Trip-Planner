@@ -1,0 +1,454 @@
+<title>Feedback, confirm & disabled — element family (WF-035)</title>
+
+<style>
+/* Auto-Bill token contract as extracted (WF-020 §1). Deviations D1/D2/D5/D8.
+   Accent destination-driven: Taipei -> Taiwan teal.
+   Everything here is NEW: the donor has no banner, no field error,
+   no :disabled rule, and no confirm element. */
+:root{
+  --bg-primary:#FCFBF9; --bg-secondary:#F3F1EC; --bg-card:#FFFFFF;
+  --bg-card-border:#1A1A1A;
+  --text-primary:#1A1A1A; --text-secondary:#4D4D4D; --text-muted:#737373;
+  --color-accent:#0d9488; --color-accent-hover:#0f766e; --color-accent-light:rgba(13,148,136,.12);
+  --color-success:#006644; --color-success-light:#EAF5F0;
+  --color-danger:#D11A2A;  --color-danger-light:#FCECEE;
+  --color-warning:#C46200; --color-warning-light:#FAF3EC;
+  --color-violet:#8b5cf6;  --color-violet-light:rgba(139,92,246,.13);
+  --shadow-sm:1px 1px 0 0 var(--bg-card-border);
+  --shadow-md:3px 3px 0 0 var(--bg-card-border);
+  --shadow-lg:5px 5px 0 0 var(--bg-card-border);
+  --radius:2px; --pill:9999px; --t-fast:.2s ease;
+  --off:.45;                       /* disabled — nearest donor precedent is .dimmed-* at .4 */
+  --sans:"Plus Jakarta Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg-primary:#121212; --bg-secondary:#1C1C1C; --bg-card:#181818; --bg-card-border:#3A3A3A;
+  --text-primary:#F5F5F5; --text-secondary:#A3A3A3;
+  --color-accent:#14b8a6; --color-accent-light:rgba(20,184,166,.16);
+  --color-success:#38A169; --color-success-light:#1C3B24;
+  --color-danger:#E53E3E; --color-danger-light:#3B1C1C;
+  --color-warning:#DD6B20; --color-warning-light:#3B2A1C;
+}}
+:root[data-theme="dark"]{
+  --bg-primary:#121212; --bg-secondary:#1C1C1C; --bg-card:#181818; --bg-card-border:#3A3A3A;
+  --text-primary:#F5F5F5; --text-secondary:#A3A3A3;
+  --color-accent:#14b8a6; --color-accent-light:rgba(20,184,166,.16);
+  --color-success:#38A169; --color-success-light:#1C3B24;
+  --color-danger:#E53E3E; --color-danger-light:#3B1C1C;
+  --color-warning:#DD6B20; --color-warning-light:#3B2A1C;
+}
+:root[data-theme="light"]{
+  --bg-primary:#FCFBF9; --bg-secondary:#F3F1EC; --bg-card:#FFFFFF; --bg-card-border:#1A1A1A;
+  --text-primary:#1A1A1A; --text-secondary:#4D4D4D;
+  --color-accent:#0d9488; --color-accent-light:rgba(13,148,136,.12);
+  --color-success:#006644; --color-success-light:#EAF5F0;
+  --color-danger:#D11A2A; --color-danger-light:#FCECEE;
+  --color-warning:#C46200; --color-warning-light:#FAF3EC;
+}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg-secondary);color:var(--text-primary);
+  font-family:var(--sans);font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.wrap{max-width:840px;margin:0 auto;padding:26px 18px 70px}
+
+.bar{display:flex;flex-wrap:wrap;gap:9px;align-items:center;padding:14px 16px;margin-bottom:22px;
+  background:var(--bg-card);border:1px solid var(--bg-card-border);border-radius:var(--radius);
+  box-shadow:var(--shadow-sm)}
+.bar h1{margin:0;font-size:16px;font-weight:800;flex:1 1 250px}
+.bar .meta{flex:1 1 100%;font-size:13px;color:var(--text-muted);margin-top:3px}
+button{font:inherit;font-size:13px;font-weight:600;cursor:pointer;padding:6px 12px;
+  border-radius:var(--radius);border:1px solid var(--bg-card-border);background:var(--bg-card);
+  color:var(--text-primary);transition:transform var(--t-fast),box-shadow var(--t-fast)}
+button:hover:not(:disabled){box-shadow:var(--shadow-sm);transform:translate(-1px,-1px)}
+button[aria-pressed="true"]{background:var(--color-accent);color:#fff;border-color:var(--color-accent)}
+button:focus-visible{outline:2.5px solid var(--color-violet);outline-offset:2.5px}
+.primary{background:var(--color-accent);color:#fff;border-color:var(--color-accent);font-weight:700}
+.destructive{background:var(--color-danger);color:#fff;border-color:var(--color-danger);font-weight:700}
+
+/* ---- THE DISABLED TOKEN. The donor has no :disabled rule anywhere. ---- */
+button:disabled{opacity:var(--off);cursor:not-allowed;box-shadow:none;transform:none}
+.act{display:flex;flex-direction:column;gap:5px;align-items:flex-start}
+.why{font-size:12.5px;color:var(--text-secondary);max-width:52ch}
+.why b{font-weight:700;color:var(--text-primary)}
+
+.card{background:var(--bg-card);border:1px solid var(--bg-card-border);border-radius:var(--radius);
+  box-shadow:var(--shadow-md);margin-bottom:20px}
+.sect{padding:16px}
+.sect+.sect{border-top:1px solid var(--bg-card-border)}
+.h{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin-bottom:4px}
+.h h2{margin:0;font-size:15px;font-weight:800}
+.h .tag{font-family:var(--mono);font-size:10.5px;font-weight:700;padding:1px 6px;border-radius:var(--radius);
+  background:var(--color-violet);color:#fff;letter-spacing:.04em}
+.h .tag.ext{background:var(--text-muted)}
+.lead{font-size:13px;color:var(--text-muted);margin:0 0 13px;max-width:64ch}
+.stack{display:flex;flex-direction:column;gap:10px}
+
+/* ---- THE FOUR BANNER LEVELS. Level is carried by a WORD, never a glyph:
+        pictographs are stripped on the export path. ---- */
+.ban{display:flex;gap:10px;padding:11px 13px;border-radius:var(--radius);border:1px solid;
+  box-shadow:var(--shadow-sm);font-size:13.5px;align-items:flex-start}
+.ban .lvl{font-weight:800;white-space:nowrap;letter-spacing:.01em}
+.ban .msg{min-width:0}
+.ban.done  {background:var(--color-success-light);border-color:var(--color-success)}
+.ban.done .lvl{color:var(--color-success)}
+.ban.stop  {background:var(--color-danger-light);border-color:var(--color-danger)}
+.ban.stop .lvl{color:var(--color-danger)}
+.ban.check {background:var(--color-warning-light);border-color:var(--color-warning)}
+.ban.check .lvl{color:var(--color-warning)}
+.ban.note  {background:var(--color-accent-light);border-color:var(--color-accent)}
+.ban.note .lvl{color:var(--color-accent)}
+.ban a{color:inherit;font-weight:700;text-decoration:underline}
+
+/* ---- FIELD ERROR ---- */
+.field{display:flex;flex-direction:column;gap:4px;max-width:340px}
+.field label{font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-muted)}
+.field input{font:inherit;font-size:14px;padding:7px 9px;border-radius:var(--radius);
+  border:1px solid var(--bg-card-border);background:var(--bg-card);color:var(--text-primary)}
+.field input:focus-visible{outline:2.5px solid var(--color-violet);outline-offset:2.5px}
+.field.bad input{border-color:var(--color-danger);border-width:1.5px;background:var(--color-danger-light)}
+.ferr{display:flex;gap:6px;font-size:12.5px;color:var(--color-danger);font-weight:600}
+.ferr .l{font-weight:800}
+
+/* ---- BLOCKED STAGE ---- */
+.blocked{border:1px solid var(--color-accent);border-left:10px solid var(--color-accent);
+  border-radius:var(--radius);background:var(--color-accent-light);padding:14px 15px}
+.blocked .t{font-weight:800;font-size:14.5px;margin-bottom:3px}
+.blocked .b{font-size:13.5px;color:var(--text-secondary);max-width:58ch}
+.blocked .go{margin-top:10px}
+
+/* ---- CONFIRM (replaces window.confirm) ---- */
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;
+  align-items:center;justify-content:center;padding:20px;z-index:50}
+.scrim[open]{display:flex}
+.dlg{background:var(--bg-card);border:1px solid var(--bg-card-border);border-radius:var(--radius);
+  box-shadow:var(--shadow-lg);max-width:430px;width:100%;padding:18px}
+.dlg h3{margin:0 0 6px;font-size:16px;font-weight:800}
+.dlg p{margin:0 0 9px;font-size:13.5px;color:var(--text-secondary)}
+.dlg .conseq{font-size:13px;padding:9px 11px;border-radius:var(--radius);
+  background:var(--color-danger-light);border:1px solid var(--color-danger);margin-bottom:13px}
+.dlg .row{display:flex;gap:9px;justify-content:flex-end;flex-wrap:wrap}
+
+/* ---- word vs number ---- */
+.pair{display:grid;gap:12px;grid-template-columns:1fr 1fr}
+@media(max-width:640px){.pair{grid-template-columns:1fr}}
+.demo{border:1px solid var(--bg-card-border);border-radius:var(--radius);padding:11px;background:var(--bg-card)}
+.demo .cap{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;margin-bottom:7px}
+.demo.no .cap{color:var(--color-danger)} .demo.yes .cap{color:var(--color-success)}
+.metric{border:1px solid var(--bg-card-border);border-radius:var(--radius);padding:8px 10px;
+  box-shadow:var(--shadow-sm);width:118px;overflow:hidden}
+.metric .k{font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--text-muted)}
+.metric .v{font-family:var(--mono);font-size:19px;font-weight:700;margin-top:2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.line{font-size:13.5px}
+.pill{display:inline-block;font-size:11.5px;font-weight:700;padding:2px 9px;border-radius:var(--pill);
+  border:1px solid var(--color-warning);color:var(--color-warning);background:var(--color-warning-light)}
+
+.meter{height:7px;border-radius:3px;background:var(--bg-secondary);border:1px solid var(--bg-card-border);
+  overflow:hidden;margin-top:6px;max-width:290px}
+.meter i{display:block;height:100%}
+
+.react{padding:17px;background:var(--bg-card);border:1px solid var(--bg-card-border);
+  border-radius:var(--radius);box-shadow:var(--shadow-sm)}
+.react h2{margin:0 0 5px;font-size:15px;font-weight:800}
+.react p{margin:0 0 12px;font-size:13.5px;color:var(--text-muted)}
+.react ol{margin:0;padding-left:20px;font-size:14px;display:flex;flex-direction:column;gap:8px}
+.rejected{margin-top:15px;padding-top:13px;border-top:1px dashed var(--bg-card-border)}
+.rejected h3{margin:0 0 7px;font-size:12px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--text-muted)}
+.rejected ul{margin:0;padding-left:20px;font-size:13.5px;color:var(--text-secondary);
+  display:flex;flex-direction:column;gap:6px}
+.fid{margin-top:14px;font-size:12.5px;color:var(--text-muted);line-height:1.6}
+[lang-th]{display:none}
+body.th [lang-en]{display:none}
+body.th [lang-th]{display:revert}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <div class="bar">
+    <h1>Feedback, confirm &amp; disabled — element family</h1>
+    <button id="lang" aria-pressed="false">ไทย</button>
+    <button id="theme" aria-pressed="false">Dark</button>
+    <div class="meta">WF-035 · every element here is <b>new</b> — the donor has no banner, no field error,
+      no <span class="num">:disabled</span> rule and no confirm element ·
+      <b>68</b> planner status calls face <b>27</b> donor <span class="num">alert()</span> calls</div>
+  </div>
+
+  <!-- ============ 1 · four banner levels ============ -->
+  <section class="card">
+    <div class="sect">
+      <div class="h"><h2><span lang-en>Status banner — four levels</span><span lang-th>แถบสถานะ — สี่ระดับ</span></h2>
+        <span class="tag">NEW</span></div>
+      <p class="lead"><span lang-en>Replaces 68 Streamlit status calls. <b>The level is carried by a word, not
+        a glyph</b> — the export path strips pictographs, so a banner that leaned on an icon would lose its
+        meaning in the PDF.</span>
+        <span lang-th>แทนการเรียกสถานะ 68 จุด <b>ระดับสื่อด้วยคำ ไม่ใช่ไอคอน</b> —
+        เพราะการส่งออกจะตัดสัญลักษณ์ภาพออก แถบที่พึ่งไอคอนจะเสียความหมายใน PDF</span></p>
+      <div class="stack">
+        <div class="ban done"><span class="lvl"><span lang-en>Saved</span><span lang-th>บันทึกแล้ว</span></span>
+          <span class="msg"><span lang-en>Setup confirmed. Discovery is now available.</span>
+            <span lang-th>ยืนยันการตั้งค่าแล้ว เริ่มค้นหาสถานที่ได้</span></span></div>
+        <div class="ban stop"><span class="lvl"><span lang-en>Cannot</span><span lang-th>ไม่สามารถ</span></span>
+          <span class="msg"><span lang-en>This plan preview is stale — optimize the current choices again.</span>
+            <span lang-th>ตัวอย่างแผนนี้ล้าสมัย กรุณาจัดแผนจากตัวเลือกปัจจุบันอีกครั้ง</span></span></div>
+        <div class="ban check"><span class="lvl"><span lang-en>Check</span><span lang-th>ควรตรวจสอบ</span></span>
+          <span class="msg"><span lang-en>Opening hours for Longshan Temple were never verified. Confirm them
+            yourself, or plan a fallback.</span>
+            <span lang-th>ยังไม่ได้ยืนยันเวลาเปิดของวัดหลงซาน กรุณาตรวจสอบเอง หรือเตรียมแผนสำรอง</span></span></div>
+        <div class="ban note"><span class="lvl"><span lang-en>Note</span><span lang-th>หมายเหตุ</span></span>
+          <span class="msg"><span lang-en>A dense city takes about 34 seconds to search. You can leave this
+            page; the result is saved either way.</span>
+            <span lang-th>เมืองใหญ่ใช้เวลาค้นหาราว 34 วินาที ออกจากหน้านี้ได้ ผลลัพธ์จะถูกบันทึกไว้</span></span></div>
+      </div>
+    </div>
+
+    <!-- ============ 2 · disabled with reason ============ -->
+    <div class="sect">
+      <div class="h"><h2><span lang-en>Disabled, always with a reason</span><span lang-th>ปิดใช้งาน พร้อมเหตุผลเสมอ</span></h2>
+        <span class="tag">NEW</span></div>
+      <p class="lead"><span lang-en><span class="num">index.css</span> has no
+        <span class="num">:disabled</span> rule anywhere, and the planner disables a primary action in
+        <b>10</b> places. “A disabled action always says why” is a must-survive behaviour, so the reason line is
+        part of the element — not an optional extra.</span>
+        <span lang-th><span class="num">index.css</span> ไม่มีกฎ <span class="num">:disabled</span> เลย
+        และแอปปิดใช้งานปุ่มหลักอยู่ <b>10</b> จุด “ปุ่มที่ปิดใช้งานต้องบอกเหตุผลเสมอ” เป็นพฤติกรรมที่ต้องคงไว้
+        บรรทัดเหตุผลจึงเป็นส่วนหนึ่งขององค์ประกอบ ไม่ใช่ของเสริม</span></p>
+      <div class="stack">
+        <div class="act">
+          <button class="primary" disabled><span lang-en>Activate this plan</span><span lang-th>ใช้แผนนี้</span></button>
+          <div class="why"><b><span lang-en>Why not:</span><span lang-th>เพราะ:</span></b>
+            <span lang-en>only a fully validated <b>Ready</b> variant can become active. This one is
+              <b>Needs attention</b>.</span>
+            <span lang-th>เฉพาะรูปแบบที่ตรวจสอบครบและอยู่สถานะ <b>พร้อม</b> จึงใช้งานได้ รูปแบบนี้อยู่สถานะ
+              <b>ต้องตรวจสอบ</b></span></div>
+        </div>
+        <div class="act">
+          <button disabled><span lang-en>Refresh opening hours · US$0.13</span><span lang-th>ดึงเวลาเปิด · US$0.13</span></button>
+          <div class="why"><b><span lang-en>Why not:</span><span lang-th>เพราะ:</span></b>
+            <span lang-en>this month's paid spend has reached the <span class="num">US$10.00</span> cap.
+              Raise the cap in settings if you want to continue.</span>
+            <span lang-th>ค่าใช้จ่ายแบบมีค่าบริการเดือนนี้ถึงเพดาน <span class="num">US$10.00</span> แล้ว
+              หากต้องการดำเนินการต่อ ให้ปรับเพดานในการตั้งค่า</span></div>
+          <div class="meter"><i style="width:100%;background:var(--color-danger)"></i></div>
+        </div>
+        <div class="act">
+          <button><span lang-en>Enrich this place · US$0.13</span><span lang-th>เพิ่มข้อมูลสถานที่ · US$0.13</span></button>
+          <div class="why"><span lang-en><b><span class="num">US$8.20</span> of <span class="num">US$10.00</span>
+            used this month.</b> Still allowed, but close to the cap.</span>
+            <span lang-th><b>ใช้ไป <span class="num">US$8.20</span> จาก <span class="num">US$10.00</span> เดือนนี้</b>
+            ยังทำได้ แต่ใกล้เพดานแล้ว</span></div>
+          <div class="meter"><i style="width:82%;background:var(--color-warning)"></i></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 3 · requires network ============ -->
+    <div class="sect">
+      <div class="h"><h2><span lang-en>Requires network</span><span lang-th>ต้องใช้อินเทอร์เน็ต</span></h2>
+        <span class="tag">NEW</span></div>
+      <p class="lead"><span lang-en>The offline contract says a control whose action needs a network says so
+        <b>before</b> it is pressed — the same courtesy the app already extends to money. Not a disabled state:
+        the action is allowed, it just cannot succeed on a plane.</span>
+        <span lang-th>ข้อตกลงการใช้งานออฟไลน์กำหนดว่า ปุ่มที่ต้องใช้อินเทอร์เน็ตต้องแจ้ง<b>ก่อน</b>กด
+        เช่นเดียวกับที่แอปแจ้งค่าใช้จ่ายอยู่แล้ว ไม่ใช่สถานะปิดใช้งาน — กดได้ แต่จะไม่สำเร็จบนเครื่องบิน</span></p>
+      <div class="act">
+        <button><span lang-en>Discover places in Taipei</span><span lang-th>ค้นหาสถานที่ในไทเป</span></button>
+        <div class="why"><b><span lang-en>Needs a network.</span><span lang-th>ต้องใช้อินเทอร์เน็ต</span></b>
+          <span lang-en>Everything else on this trip works offline — viewing the plan, re-optimizing,
+            recording spend, and every export.</span>
+          <span lang-th>ส่วนอื่นของทริปนี้ใช้งานออฟไลน์ได้ทั้งหมด — ดูแผน จัดแผนใหม่ บันทึกค่าใช้จ่าย
+            และการส่งออกทุกรูปแบบ</span></div>
+      </div>
+    </div>
+
+    <!-- ============ 4 · field error ============ -->
+    <div class="sect">
+      <div class="h"><h2><span lang-en>Inline field error</span><span lang-th>ข้อผิดพลาดในช่องกรอก</span></h2>
+        <span class="tag">NEW</span></div>
+      <p class="lead"><span lang-en>The donor's only in-page validation surface is
+        <span class="num">.manual-validation-panel</span>, which reports the whole form at once. A field error
+        belongs on the field.</span>
+        <span lang-th>พื้นที่ตรวจสอบในหน้าเดียวของต้นแบบมีเพียง
+        <span class="num">.manual-validation-panel</span> ซึ่งรายงานทั้งฟอร์มรวมกัน
+        ข้อผิดพลาดของช่องกรอกควรอยู่ที่ช่องนั้น</span></p>
+      <div class="stack">
+        <div class="field bad">
+          <label><span lang-en>Opening time</span><span lang-th>เวลาเปิด</span></label>
+          <input value="18:00 – 09:00" aria-invalid="true" aria-describedby="e1">
+          <div class="ferr" id="e1"><span class="l"><span lang-en>Fix:</span><span lang-th>แก้ไข:</span></span>
+            <span><span lang-en>the start must come before the end.</span>
+              <span lang-th>เวลาเริ่มต้องมาก่อนเวลาสิ้นสุด</span></span></div>
+        </div>
+        <div class="field">
+          <label><span lang-en>Monthly paid cap (USD)</span><span lang-th>เพดานค่าบริการต่อเดือน (USD)</span></label>
+          <input value="10.00">
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 5 · blocked stage ============ -->
+    <div class="sect">
+      <div class="h"><h2><span lang-en>Blocked stage — one clear next step</span><span lang-th>ขั้นตอนที่ยังไปไม่ถึง — บอกขั้นถัดไปชัดเจน</span></h2>
+        <span class="tag">NEW</span></div>
+      <p class="lead"><span lang-en>What <span class="num">require()</span> renders today, and what
+        <span class="num">&lt;StageGate&gt;</span> will render in place. <b>It explains rather than redirects</b>
+        — you asked for this stage, so the URL stays and the page tells you what is missing.</span>
+        <span lang-th>สิ่งที่ <span class="num">require()</span> แสดงอยู่ในปัจจุบัน และที่
+        <span class="num">&lt;StageGate&gt;</span> จะแสดงแทน <b>อธิบาย ไม่ใช่พาไปที่อื่น</b> —
+        คุณเลือกขั้นตอนนี้ URL จึงคงเดิม และหน้าจอบอกว่าขาดอะไร</span></p>
+      <div class="blocked">
+        <div class="t"><span lang-en>Optimization is not ready yet</span><span lang-th>ยังจัดแผนไม่ได้</span></div>
+        <div class="b"><span lang-en>Finish <b>Places</b> first — choose at least one Must do, Interested or
+          Maybe place. Nothing here is lost; this stage will open as soon as that is done.</span>
+          <span lang-th>ทำขั้น <b>สถานที่</b> ให้เสร็จก่อน — เลือกอย่างน้อยหนึ่งแห่งที่ ต้องไป สนใจ หรือ อาจไป
+          ข้อมูลที่มีอยู่ไม่หาย ขั้นตอนนี้จะเปิดทันทีเมื่อทำเสร็จ</span></div>
+        <div class="go"><button class="primary"><span lang-en>Go to Places</span><span lang-th>ไปที่สถานที่</span></button></div>
+      </div>
+    </div>
+
+    <!-- ============ 6 · confirm ============ -->
+    <div class="sect">
+      <div class="h"><h2><span lang-en>Confirm — replaces window.confirm()</span><span lang-th>ยืนยัน — แทน window.confirm()</span></h2>
+        <span class="tag">NEW</span></div>
+      <p class="lead"><span lang-en>The donor has <b>5</b> <span class="num">window.confirm()</span> calls. A
+        native dialog cannot be styled, cannot be bilingual, and blocks the whole page. This one
+        <b>names the consequence</b> rather than asking “are you sure?”.</span>
+        <span lang-th>ต้นแบบใช้ <span class="num">window.confirm()</span> อยู่ <b>5</b> จุด
+        ไดอะล็อกของเบราว์เซอร์จัดรูปแบบไม่ได้ ทำสองภาษาไม่ได้ และบล็อกทั้งหน้า
+        แบบนี้<b>บอกผลที่จะเกิด</b> แทนการถามว่า “แน่ใจหรือไม่”</span></p>
+      <button class="destructive" id="open"><span lang-en>Delete this trip</span><span lang-th>ลบทริปนี้</span></button>
+    </div>
+
+    <!-- ============ 7 · missing copy fallback ============ -->
+    <div class="sect">
+      <div class="h"><h2><span lang-en>Missing copy — the fallback must look wrong</span><span lang-th>ข้อความหาย — ตัวสำรองต้องดูผิดชัดเจน</span></h2>
+        <span class="tag">NEW</span></div>
+      <p class="lead"><span lang-en>When the core emits a code nobody catalogued, the fallback renders the code
+        itself. It must be <b>obviously machine output</b> — the old prettifier turned
+        <span class="num">ACCESS_UNVERIFIED</span> into “Access unverified”, which read as real copy and hid
+        24 missing English strings for months.</span>
+        <span lang-th>เมื่อระบบส่งรหัสที่ยังไม่มีข้อความรองรับ ตัวสำรองจะแสดงรหัสนั้น
+        และต้อง<b>ดูเป็นผลจากเครื่องอย่างชัดเจน</b> — ตัวเดิมแปลง
+        <span class="num">ACCESS_UNVERIFIED</span> เป็น “Access unverified” ซึ่งอ่านเหมือนข้อความจริง
+        และซ่อนข้อความอังกฤษที่ขาดไป 24 รายการไว้หลายเดือน</span></p>
+      <div class="pair">
+        <div class="demo no"><div class="cap"><span lang-en>Was — indistinguishable from copy</span><span lang-th>เดิม — แยกจากข้อความจริงไม่ออก</span></div>
+          <div class="ban check"><span class="lvl"><span lang-en>Check</span><span lang-th>ควรตรวจสอบ</span></span>
+            <span class="msg">Access unverified</span></div></div>
+        <div class="demo yes"><div class="cap"><span lang-en>Now — obviously untranslated</span><span lang-th>ใหม่ — เห็นชัดว่ายังไม่มีคำแปล</span></div>
+          <div class="ban check"><span class="lvl"><span lang-en>Check</span><span lang-th>ควรตรวจสอบ</span></span>
+            <span class="msg num" style="font-weight:700">⚠ ACCESS_UNVERIFIED</span></div></div>
+      </div>
+    </div>
+
+    <!-- ============ 8 · word vs number ============ -->
+    <div class="sect">
+      <div class="h"><h2><span lang-en>A word is a line, a number is a tile</span><span lang-th>คำคือบรรทัด ตัวเลขคือกล่องตัวเลข</span></h2>
+        <span class="tag ext">RULE</span></div>
+      <p class="lead"><span lang-en>The codebase learned this three separate times. Putting a word-valued state
+        in a metric tile clips it and renders it untranslated — the real bug was
+        <span class="num">unavaila…</span> in a quarter-width column. Encoded here once.</span>
+        <span lang-th>โค้ดเบสเรียนรู้เรื่องนี้มาสามครั้ง การใส่สถานะที่เป็นคำในกล่องตัวเลขทำให้ถูกตัดและไม่ถูกแปล
+        ปัญหาจริงคือ <span class="num">unavaila…</span> ในคอลัมน์กว้างหนึ่งในสี่ บันทึกกฎไว้ที่นี่ครั้งเดียว</span></p>
+      <div class="pair">
+        <div class="demo no"><div class="cap"><span lang-en>Never</span><span lang-th>อย่าทำ</span></div>
+          <div class="metric"><div class="k"><span lang-en>Provider</span><span lang-th>แหล่งข้อมูล</span></div>
+            <div class="v">unavailable</div></div></div>
+        <div class="demo yes"><div class="cap"><span lang-en>Always</span><span lang-th>ให้ทำ</span></div>
+          <div class="line"><b><span lang-en>Provider:</span><span lang-th>แหล่งข้อมูล:</span></b>
+            <span class="pill"><span lang-en>Unavailable</span><span lang-th>ใช้งานไม่ได้</span></span></div>
+          <div class="metric" style="margin-top:9px"><div class="k"><span lang-en>Places found</span><span lang-th>พบสถานที่</span></div>
+            <div class="v">0</div></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ react ============ -->
+  <div class="react">
+    <h2>What to react against</h2>
+    <p>Seven calls. Say which are wrong and the family changes.</p>
+    <ol>
+      <li><b>Four levels named Saved / Cannot / Check / Note</b>, and the level word is the carrier. Not
+        Success / Error / Warning / Info, because those name a severity to a developer while these name what
+        happened to the owner. Right words?</li>
+      <li><b>The level word is bold and coloured; there is no icon at all.</b> Exports strip pictographs, so any
+        glyph would vanish in the PDF. Does a bare word read fast enough when you are scanning?</li>
+      <li><b>Disabled = 45% opacity, no shadow, plus a mandatory reason line.</b> Losing the shadow matters in
+        this visual language — the hard offset shadow is what makes a thing look pressable, so removing it says
+        “not pressable” more clearly than grey does. The donor's nearest precedent is its filter dimming at 40%.</li>
+      <li><b>Paid actions state cost on the button and spend beside it</b>, with a meter. Three states: allowed,
+        near the cap at <span class="num">US$8</span>, refused at <span class="num">US$10</span>. Only the
+        refused one is disabled.</li>
+      <li><b>“Requires network” is not a disabled state.</b> The action is allowed — it just cannot succeed
+        offline, and you may be about to reconnect. Is a reason line enough, or does it need its own visual?</li>
+      <li><b>Confirm names the consequence instead of asking “are you sure?”</b> Open the dialog: it says what
+        will be destroyed and what survives, and the destructive button carries the verb, not “OK”.</li>
+      <li><b>The missing-copy fallback is deliberately ugly</b> (<span class="num">⚠ ACCESS_UNVERIFIED</span>).
+        It will occasionally be seen by you. That is the point — the pretty version hid 24 gaps for months.</li>
+    </ol>
+
+    <div class="rejected">
+      <h3>Rejected while building</h3>
+      <ul>
+        <li><b>Toasts.</b> They vanish, and most of these messages are conditions rather than events — a stale
+          preview or an unverified opening time is still true in ten seconds. A banner that persists until the
+          condition clears is the honest form.</li>
+        <li><b>A colour-only severity system.</b> Fails the export path, fails colour-blind readers, and fails
+          the app's own “colour is never the only signal” rule.</li>
+        <li><b>Reusing the donor's <span class="num">.manual-validation-panel</span> for field errors.</b> It
+          reports the whole form in one block, which is why you cannot tell which field it means.</li>
+        <li><b>A generic “are you sure?” confirm.</b> It transfers no information. Every confirm here names what
+          is lost and what is kept.</li>
+        <li><b>Prettifying an unknown code.</b> Tried and rejected on evidence: that is exactly the mechanism
+          that camouflaged 24 missing English strings.</li>
+        <li><b>An <span class="num">alert()</span>-style modal for status.</b> A modal blocks the page for
+          something the owner does not need to acknowledge, and it is on the inventory's dead-weight list.</li>
+      </ul>
+    </div>
+
+    <div class="fid"><b>Fidelity notes.</b> Every element here is new; only the palette, shadows, radius and
+      pill are lifted. Two counts in the ticket were measured lower than stated: the planner emits <b>68</b>
+      status calls (10 success · 23 error · 15 warning · 20 info), not 59, and it disables a primary action in
+      <b>10</b> places, not 5; the donor has <b>27</b> <span class="num">alert()</span> calls, not 33.
+      <b>Plus Jakarta Sans and JetBrains Mono are substituted by a system stack</b> — the woff2 files are not in
+      the repo yet (WF-034) and the artifact runtime blocks font CDNs.</div>
+  </div>
+</div>
+
+<!-- confirm dialog -->
+<div class="scrim" id="scrim" role="dialog" aria-modal="true" aria-labelledby="dt">
+  <div class="dlg">
+    <h3 id="dt"><span lang-en>Delete “Taipei, Taiwan”?</span><span lang-th>ลบ “ไทเป ไต้หวัน” หรือไม่</span></h3>
+    <p><span lang-en>This is the only trip in the app.</span><span lang-th>นี่เป็นทริปเดียวในแอป</span></p>
+    <div class="conseq"><span lang-en><b>Deleted for good:</b> 3 plan versions, 5 chosen places,
+      4 discovery runs, and 50 recorded paid calls. Plan history is normally permanent — deleting the trip is
+      the one action that removes it.</span>
+      <span lang-th><b>จะถูกลบอย่างถาวร:</b> แผน 3 เวอร์ชัน สถานที่ที่เลือก 5 แห่ง การค้นหา 4 ครั้ง
+      และบันทึกค่าบริการ 50 รายการ ปกติประวัติแผนจะถูกเก็บถาวร การลบทริปเป็นการกระทำเดียวที่ลบได้</span></div>
+    <div class="row">
+      <button id="cancel"><span lang-en>Keep the trip</span><span lang-th>เก็บทริปไว้</span></button>
+      <button class="destructive"><span lang-en>Delete the trip and its history</span><span lang-th>ลบทริปและประวัติ</span></button>
+    </div>
+  </div>
+</div>
+
+<script>
+const root=document.documentElement, body=document.body;
+const t=document.getElementById('theme'), l=document.getElementById('lang');
+const dark=matchMedia('(prefers-color-scheme:dark)').matches;
+root.dataset.theme=dark?'dark':'light';
+t.setAttribute('aria-pressed',String(dark)); t.textContent=dark?'Light':'Dark';
+t.onclick=()=>{const d=root.dataset.theme!=='dark';root.dataset.theme=d?'dark':'light';
+  t.setAttribute('aria-pressed',String(d));t.textContent=d?'Light':'Dark';};
+l.onclick=()=>{const th=body.classList.toggle('th');
+  l.setAttribute('aria-pressed',String(th));l.textContent=th?'English':'ไทย';};
+const scrim=document.getElementById('scrim');
+document.getElementById('open').onclick=()=>{scrim.setAttribute('open','');
+  document.getElementById('cancel').focus();};
+const close=()=>scrim.removeAttribute('open');
+document.getElementById('cancel').onclick=close;
+scrim.onclick=e=>{if(e.target===scrim)close();};
+addEventListener('keydown',e=>{if(e.key==='Escape')close();});
+</script>

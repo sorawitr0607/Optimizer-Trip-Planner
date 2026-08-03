@@ -90,3 +90,14 @@ Nothing above is reversed: `exceljs` and `file-saver` still never join `web/`, t
 survive, and **exporting a backup JSON per trip before the donor is archived is still a dated obligation.**
 What changes is only what the file is for — it is kept as a **record**, and nothing reads it. Calling it "the
 migration channel" overstated what gets built; the channel exists and carries an archive.
+
+### 2026-08-03 — Amended by the slice plan: the PDF and poster are dropped
+
+[Lock the Phase 2 slice plan and validation scorecard](033-lock-the-phase-2-slice-plan-and-validation-scorecard.md)
+records an owner decision to **drop the PDF and the 9:16 poster**. The workbook and ICS survive.
+
+Nothing above is reversed — Python still owns generation, `excelExporter.js` is still deleted, `exceljs` and
+`file-saver` still never join `web/`, and the `GET` download routes still stand. What changes is the output
+set: **two workbooks and an ICS, no rendered documents**, so `pillow` and `fpdf2` leave `pyproject.toml` and
+the download routes shrink accordingly. The argument that only Python had PDF and poster is now moot, but its
+conclusion holds for the workbook on the other grounds — the one-snapshot rule and 25 tests against zero.

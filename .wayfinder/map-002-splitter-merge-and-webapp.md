@@ -267,6 +267,29 @@ resolving tickets are throwaway artifacts, not the build.
   on top, extending the app's existing TripAdvisor/Wikimedia redirect pattern; two traps are recorded for the
   build — **Amap takes longitude first, and expects GCJ-02 while ours are WGS-84**, so unconverted the pin lands
   100–500 m off, and only mainland China switches provider.
+- [Design the feedback, confirm, and disabled elements Auto-Bill never had](tickets/035-design-the-feedback-confirm-and-disabled-elements.md) —
+  [`035-feedback-element-family.html`](artifacts/035-feedback-element-family.html): four banner levels named
+  **Saved / Cannot / Check / Note**, disabled at 45% with **no shadow and a mandatory reason line**, a
+  requires-network state that is deliberately *not* disabled, an inline field error, the blocked-stage panel, a
+  real confirm that **names the consequence**, and the deliberately ugly `⚠ CODE` fallback. **All seven calls
+  confirmed.** Two counts were measured lower than charted: **68** status calls not 59, and **10** disabled
+  actions not 5; the donor has **27** `alert()` not 33, and zero `:disabled` rules. §8 encodes the rule the
+  codebase learned three times — a word gets a pill, a number gets a tile. Toasts were rejected because most of
+  these messages are *conditions*, not events.
+- [Lock the Phase 2 slice plan and validation scorecard](tickets/033-lock-the-phase-2-slice-plan-and-validation-scorecard.md) —
+  **The destination. The map is decision-complete and the Phase 2 code freeze lifts.** Plan and scorecard in
+  [`033-phase-2-slice-plan-and-scorecard.md`](artifacts/033-phase-2-slice-plan-and-scorecard.md).
+  **A scope cut is recorded here by owner decision: the PDF and the 9:16 poster are dropped** — measured, the
+  rendered pair costs ~350 lines, **2 of 4 runtime dependencies**, **the entire font apparatus**, and **16 of
+  the 17 hexes** behind D7, taking `pyproject.toml` down to `streamlit` + `xlsxwriter` and tests to **231**.
+  Defensible because `WF-013` records that the owner made the four reference PDFs themselves by exporting the
+  `.xlsx`, so a PDF is already a rendering of the workbook. Order: **S0 scope cut → S1 foundation → S2 the
+  merge → S3 cheap journey screens → S4 the expensive two → S5 slice 6 → S6 parity and deletion**, each closing
+  with its own runnable check. **Two answers conflicted and the resolution is recorded**: thin-walkable-path
+  put money at S4 while the split ledger was wanted early, so money moved to **S2** and the journey screens
+  shifted back one. **S4 is where the webapp first works end to end**, and it is what 1 November measures.
+  Deferred past the pilot: GenAI revision, the ranked candidate card grid, voided rows in exports, and
+  per-person figures feeding upstream.
 - [Decide the offline asset policy for the webapp](tickets/034-decide-the-offline-asset-policy-for-the-webapp.md) —
   **The largest item in the ticket turned out not to exist.** Map tiles were called the biggest remote
   dependency, but the exports contain **no map at all** — just numbered stops with coordinates as text — and the

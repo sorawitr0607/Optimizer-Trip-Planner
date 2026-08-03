@@ -270,11 +270,17 @@ and `streamlit` is the only one for the *interface*. Keep it that way.
 
 ## Phase 2 is being planned, not built — do not implement it yet
 
-`WF-MAP-002` is **open and unfinished**: 19 tickets, **16 closed, 3 open**, 1 of those on the frontier.
-**All decision and research work is done.** What remains is `WF-035` (design the feedback/confirm/disabled
-elements), `WF-036` behind it, and `WF-033`, the final slice plan — now unblocked.
-The token contract was reopened on 2026-07-31 and **completed on 2026-08-03**: §10 of its artifact extracts
-the inline-only layer, and its seven ambiguities are all ruled on — do not re-litigate them.
+`WF-MAP-002` is **decision-complete as of 2026-08-03**: 19 tickets, **18 closed, 1 open**. The one open
+ticket, `Prototype the ranked candidate card grid`, is **deferred past the pilot by decision** rather than
+outstanding. `Lock the Phase 2 slice plan and validation scorecard` is the destination artifact — read it
+first: `.wayfinder/artifacts/033-phase-2-slice-plan-and-scorecard.md`.
+
+**The Phase 2 code freeze has lifted.** S0 of the slice plan is the first thing that may be built.
+
+**A scope cut landed with the slice plan: the PDF and the 9:16 poster are dropped.** `pyproject.toml` goes to
+**two** runtime dependencies (`streamlit`, `xlsxwriter`), the whole export-font apparatus is void — do not
+build the merged Noto pipeline — and tests go to **231**. The workbook and ICS survive.
+
 The destination is a decision-complete specification, exactly as Phase 1's was, so **no Phase 2 code gets
 written until the map has no unresolved decisions**. Until then the Phase 1 out-of-scope rule above still
 binds: today those four remain the only runtime dependencies, and there is no `api/` and no `web/`. The
