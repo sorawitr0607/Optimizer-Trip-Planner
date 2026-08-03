@@ -17,6 +17,13 @@ replacing the Streamlit UI with a local React webapp whose visual design is anch
 Implementation begins only after this map has no unresolved decisions. Prototypes produced while
 resolving tickets are throwaway artifacts, not the build.
 
+> **Reached 2026-08-03. This map is decision-complete and the Phase 2 code freeze has lifted.**
+> [Lock the Phase 2 slice plan and validation scorecard](tickets/033-lock-the-phase-2-slice-plan-and-validation-scorecard.md)
+> is the handoff artifact — read it first. **It stays `status: open` deliberately**, by owner decision, because
+> [Prototype the ranked candidate card grid](tickets/036-prototype-the-ranked-candidate-card-grid.md) is
+> **deferred past the pilot** and will be built later. An open map here means outstanding *prototype* work, not
+> outstanding decisions: 18 of 19 tickets are closed and nothing on the frontier is a decision.
+
 ## Notes
 
 - Domain: local, owner-led trip planning plus group expense splitting, one repository, Python planning
