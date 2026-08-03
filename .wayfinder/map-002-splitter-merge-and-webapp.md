@@ -240,6 +240,19 @@ resolving tickets are throwaway artifacts, not the build.
   the twelve before it, since WF-022 removed the downgrade path, so a pre-bump copy is the only way back. The
   ticket's downgrade question is **void** (there is no frozen app to return to), and its mid-trip question is
   answered by a rule: **no schema change between 29 December 2026 and 4 January 2027.**
+- [Prototype the merged cost and split screen](tickets/031-prototype-the-merged-cost-and-split-screen.md) —
+  Built as **two** screens per WF-028, not one:
+  [`031-money-screens-prototype.html`](artifacts/031-money-screens-prototype.html), throwaway, EN/TH,
+  light/dark, phone width, no external requests. Tokens are the extracted contract with D1/D2/D5/D8 applied and
+  the five concatenated alphas replaced by named tints. **Nine decisions were put up for reaction and all nine
+  confirmed**, so the arrangement stands: two per-person numbers computed differently and kept visibly
+  distinct; the reversed "you pay Dad" direction as a warning; settled as a marker that does not move the
+  balance; suggestions-not-debts as a standing panel; unclaimed-paid warnings on the planned screen; missing
+  rates excluded rather than guessed; voided rows visible; the claim link as a text action; and the accent as
+  destination-driven teal rather than house red. **The one gap reacted against was filtering** — which was the
+  right catch and the largest miss available, since **6 of the 23 inline-only classes are the filter
+  interaction**, the biggest stylesheet-invisible group in the extraction. Added with its recovered values,
+  dimming rather than hiding so a moved total stays explainable.
 - [Decide the offline asset policy for the webapp](tickets/034-decide-the-offline-asset-policy-for-the-webapp.md) —
   **The largest item in the ticket turned out not to exist.** Map tiles were called the biggest remote
   dependency, but the exports contain **no map at all** — just numbered stops with coordinates as text — and the

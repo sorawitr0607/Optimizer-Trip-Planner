@@ -1,0 +1,525 @@
+<title>Cost & Split screens — throwaway prototype (WF-031)</title>
+
+<style>
+/* ============================================================
+   Auto-Bill token contract, applied as extracted (WF-020 §1).
+   Accent is DESTINATION-DRIVEN: Taipei -> Taiwan teal #0d9488.
+   Deviations applied: D1 dark accent works, D2 radius 2px,
+   D5 violet tokenised, D8 real mono 700.
+   ============================================================ */
+:root{
+  --bg-primary:#FCFBF9; --bg-secondary:#F3F1EC; --bg-card:#FFFFFF;
+  --bg-card-border:#1A1A1A;
+  --text-primary:#1A1A1A; --text-secondary:#4D4D4D; --text-muted:#737373;
+  --color-accent:#0d9488; --color-accent-hover:#0f766e;
+  --color-accent-light:rgba(13,148,136,.12);
+  --color-success:#006644; --color-success-light:#EAF5F0;
+  --color-danger:#D11A2A;  --color-danger-light:#FCECEE;
+  --color-warning:#C46200; --color-warning-light:#FAF3EC;
+  --color-violet:#8b5cf6;  --color-violet-light:rgba(139,92,246,.15);
+  --shadow-sm:1px 1px 0 0 var(--bg-card-border);
+  --shadow-md:3px 3px 0 0 var(--bg-card-border);
+  --shadow-lg:5px 5px 0 0 var(--bg-card-border);
+  --radius:2px; --pill:9999px;
+  --tint-sel:rgba(13,148,136,.08);   /* was `${color}12` */
+  --tint-bdr:rgba(13,148,136,.25);   /* was `${color}40` */
+  --dim:.4; --dim-strong:.35;
+  --t-fast:.2s ease; --t-slow:.3s ease;
+  --sans:"Plus Jakarta Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){ :root{
+  --bg-primary:#121212; --bg-secondary:#1C1C1C; --bg-card:#181818;
+  --bg-card-border:#3A3A3A;
+  --text-primary:#F5F5F5; --text-secondary:#A3A3A3; --text-muted:#737373;
+  --color-accent:#14b8a6; --color-accent-hover:#5eead4;
+  --color-accent-light:rgba(20,184,166,.16);
+  --color-success:#38A169; --color-success-light:#1C3B24;
+  --color-danger:#E53E3E;  --color-danger-light:#3B1C1C;
+  --color-warning:#DD6B20; --color-warning-light:#3B2A1C;
+  --tint-sel:rgba(20,184,166,.12); --tint-bdr:rgba(20,184,166,.35);
+}}
+:root[data-theme="dark"]{
+  --bg-primary:#121212; --bg-secondary:#1C1C1C; --bg-card:#181818;
+  --bg-card-border:#3A3A3A;
+  --text-primary:#F5F5F5; --text-secondary:#A3A3A3; --text-muted:#737373;
+  --color-accent:#14b8a6; --color-accent-hover:#5eead4;
+  --color-accent-light:rgba(20,184,166,.16);
+  --color-success:#38A169; --color-success-light:#1C3B24;
+  --color-danger:#E53E3E;  --color-danger-light:#3B1C1C;
+  --color-warning:#DD6B20; --color-warning-light:#3B2A1C;
+  --tint-sel:rgba(20,184,166,.12); --tint-bdr:rgba(20,184,166,.35);
+}
+:root[data-theme="light"]{
+  --bg-primary:#FCFBF9; --bg-secondary:#F3F1EC; --bg-card:#FFFFFF;
+  --bg-card-border:#1A1A1A;
+  --text-primary:#1A1A1A; --text-secondary:#4D4D4D; --text-muted:#737373;
+  --color-accent:#0d9488; --color-accent-hover:#0f766e;
+  --color-accent-light:rgba(13,148,136,.12);
+  --color-success:#006644; --color-success-light:#EAF5F0;
+  --color-danger:#D11A2A;  --color-danger-light:#FCECEE;
+  --color-warning:#C46200; --color-warning-light:#FAF3EC;
+  --tint-sel:rgba(13,148,136,.08); --tint-bdr:rgba(13,148,136,.25);
+}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg-secondary);color:var(--text-primary);
+  font-family:var(--sans);font-size:15px;line-height:1.5;
+  -webkit-font-smoothing:antialiased}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.b7{font-weight:700}                                  /* D8: a real weight */
+
+.wrap{max-width:1180px;margin:0 auto;padding:28px 20px 72px}
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;
+  padding:14px 16px;margin-bottom:26px;background:var(--bg-card);
+  border:1px solid var(--bg-card-border);border-radius:var(--radius);
+  box-shadow:var(--shadow-sm)}
+.bar h1{margin:0;font-size:15px;font-weight:800;letter-spacing:-.01em;flex:1 1 260px}
+.bar .meta{font-size:12px;color:var(--text-muted);flex:1 1 100%;margin-top:2px}
+button{font:inherit;font-size:12px;font-weight:600;cursor:pointer;
+  padding:5px 11px;border-radius:var(--radius);
+  border:1px solid var(--bg-card-border);background:var(--bg-card);
+  color:var(--text-primary);transition:transform var(--t-fast),box-shadow var(--t-fast)}
+button:hover{box-shadow:var(--shadow-sm);transform:translate(-1px,-1px)}
+button[aria-pressed="true"]{background:var(--color-accent);color:#fff;border-color:var(--color-accent)}
+button:focus-visible{outline:2.5px solid var(--color-violet);outline-offset:2.5px}
+
+.screens{display:grid;gap:26px;grid-template-columns:1fr}
+@media (min-width:993px){ .screens.desktop{grid-template-columns:1fr 1fr} }
+body.phone .screens{grid-template-columns:1fr;max-width:420px;margin:0 auto}
+
+.card{background:var(--bg-card);border:1px solid var(--bg-card-border);
+  border-radius:var(--radius);box-shadow:var(--shadow-md)}
+.route{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;
+  padding:12px 16px;border-bottom:1px solid var(--bg-card-border)}
+.route code{font-family:var(--mono);font-size:11.5px;color:var(--color-accent);font-weight:600}
+.route h2{margin:0;font-size:14px;font-weight:800}
+.route .sub{font-size:11.5px;color:var(--text-muted);flex:1 1 100%}
+.body{padding:14px 16px;display:flex;flex-direction:column;gap:14px}
+
+.eyebrow{font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--text-muted)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:right;font-size:10.5px;font-weight:700;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--text-muted);padding:0 0 6px}
+th:first-child{text-align:left}
+td{padding:7px 0;border-top:1px dashed var(--bg-card-border);text-align:right}
+td:first-child{text-align:left}
+tfoot td{border-top:1.5px solid var(--bg-card-border);font-weight:700}
+.pos{color:var(--color-danger)} .neg{color:var(--color-success)}
+
+.rowline{display:flex;gap:10px;align-items:flex-start;padding:9px 0;
+  border-top:1px dashed var(--bg-card-border)}
+.rowline:first-of-type{border-top:0}
+.grow{flex:1 1 auto;min-width:0}
+.who{font-size:11.5px;color:var(--text-secondary)}
+.tag{display:inline-block;font-size:10px;font-weight:700;padding:1px 6px;
+  border-radius:var(--pill);background:var(--bg-secondary);
+  border:1px solid var(--bg-card-border);color:var(--text-secondary)}
+.void{opacity:var(--dim)}
+.void .amt{text-decoration:line-through}
+.linked{border-left:4px solid var(--color-accent);padding-left:8px}
+
+.note{display:flex;gap:8px;padding:9px 11px;border-radius:var(--radius);
+  font-size:12px;border:1px solid}
+.note b{font-weight:700}
+.warn{background:var(--color-warning-light);border-color:var(--color-warning);color:var(--text-primary)}
+.info{background:var(--color-accent-light);border-color:var(--color-accent)}
+.sugg{background:var(--bg-secondary);border-color:var(--bg-card-border)}
+
+.tiles{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(120px,1fr))}
+.tile{padding:10px 11px;border:1px solid var(--bg-card-border);border-radius:var(--radius);
+  background:var(--bg-card);box-shadow:var(--shadow-sm)}
+.tile .k{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--text-muted)}
+.tile .v{font-size:19px;font-weight:700;font-family:var(--mono);font-variant-numeric:tabular-nums;
+  margin-top:3px}
+.tile .h{font-size:10.5px;color:var(--text-muted);margin-top:2px}
+
+.settle{display:flex;flex-direction:column;gap:0}
+.settle .r{display:flex;gap:10px;align-items:center;padding:9px 0;
+  border-top:1px dashed var(--bg-card-border)}
+.settle .r:first-child{border-top:0}
+.chip{width:26px;height:26px;border-radius:var(--pill);display:grid;place-items:center;
+  font-size:11px;font-weight:700;color:#fff;flex:none}
+.done{background:var(--color-success-light);border-color:var(--color-success)}
+
+.meter{height:6px;border-radius:3px;background:var(--bg-secondary);
+  border:1px solid var(--bg-card-border);overflow:hidden;margin-top:5px}
+.meter i{display:block;height:100%;background:var(--color-accent)}
+
+.react{margin-top:30px;padding:16px;background:var(--bg-card);
+  border:1px solid var(--bg-card-border);border-radius:var(--radius);box-shadow:var(--shadow-sm)}
+.react h2{margin:0 0 4px;font-size:14px;font-weight:800}
+.react p{margin:0 0 12px;font-size:12.5px;color:var(--text-muted)}
+.react ol{margin:0;padding-left:20px;font-size:13px;display:flex;flex-direction:column;gap:7px}
+.react li b{font-weight:700}
+.sub-note{margin-top:14px;font-size:11.5px;color:var(--text-muted);line-height:1.55}
+.filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center;
+  padding:9px 0;border-top:1px dashed var(--bg-card-border)}
+.fgroup{display:flex;flex-wrap:wrap;gap:4px;align-items:center;flex:1 1 auto}
+.flabel{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--text-muted);margin-right:2px}
+/* Auto-Bill's real values: 1.5px border, tint fill, 800 when selected, 0.4 when dimmed */
+.fchip{font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:var(--pill);
+  border:1.5px solid transparent;background:var(--bg-secondary);color:var(--text-secondary);
+  transition:opacity var(--t-fast),background var(--t-fast)}
+.fchip:hover{box-shadow:none;transform:none;border-color:var(--tint-bdr)}
+.fchip[aria-pressed="true"]{font-weight:800;color:var(--color-accent);
+  background:var(--tint-sel);border-color:var(--color-accent)}
+.filters.on .fchip:not([aria-pressed="true"]){opacity:var(--dim)}
+.fclear{font-size:11px;padding:2px 8px;border-radius:var(--pill);
+  color:var(--text-muted);flex:none}
+.rowline.dimmed{opacity:var(--dim-strong)}
+[lang-th]{display:none}
+body.th [lang-en]{display:none}
+body.th [lang-th]{display:revert}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+
+  <div class="bar">
+    <h1>Cost &amp; Split — throwaway prototype</h1>
+    <button id="lang" aria-pressed="false">ไทย</button>
+    <button id="theme" aria-pressed="false">Dark</button>
+    <button id="phone" aria-pressed="false">Phone</button>
+    <div class="meta">
+      WF-031 · Taipei trip · accent is destination-driven (Taiwan <span class="num">#0d9488</span>) ·
+      NT$ at <span class="num">1.12</span> THB · arrangement only, not code
+    </div>
+  </div>
+
+  <div class="screens desktop">
+
+    <!-- ================= /costs ================= -->
+    <section class="card">
+      <div class="route">
+        <code>/trips/taipei/costs</code>
+        <h2><span lang-en>Planned cost</span><span lang-th>ค่าใช้จ่ายที่วางแผน</span></h2>
+        <div class="sub">
+          <span lang-en>What this drafted plan is expected to cost. Estimates only.</span>
+          <span lang-th>ประมาณการค่าใช้จ่ายของแผนนี้ ยังไม่ใช่ยอดจริง</span>
+        </div>
+      </div>
+      <div class="body">
+
+        <div class="eyebrow"><span lang-en>By category</span><span lang-th>แยกตามหมวด</span></div>
+        <div style="overflow-x:auto">
+        <table>
+          <thead><tr>
+            <th><span lang-en>Category</span><span lang-th>หมวด</span></th>
+            <th><span lang-en>Planned</span><span lang-th>วางแผน</span></th>
+            <th><span lang-en>Actual</span><span lang-th>ใช้จริง</span></th>
+            <th><span lang-en>Diff</span><span lang-th>ต่าง</span></th>
+          </tr></thead>
+          <tbody>
+            <tr><td><span lang-en>Accommodation</span><span lang-th>ที่พัก</span></td>
+              <td class="num">12,000</td><td class="num">11,450</td><td class="num neg">−550</td></tr>
+            <tr><td><span lang-en>Activity</span><span lang-th>กิจกรรม</span></td>
+              <td class="num">8,400</td><td class="num">9,120</td><td class="num pos">+720</td></tr>
+            <tr><td><span lang-en>Food</span><span lang-th>อาหาร</span></td>
+              <td class="num">9,000</td><td class="num">6,880</td><td class="num neg">−2,120</td></tr>
+            <tr><td><span lang-en>Transport</span><span lang-th>เดินทาง</span></td>
+              <td class="num">6,500</td><td class="num">2,240</td><td class="num neg">−4,260</td></tr>
+            <tr><td><span lang-en>Fees</span><span lang-th>ค่าธรรมเนียม</span></td>
+              <td class="num">1,800</td><td class="num" style="color:var(--text-muted)">—</td>
+              <td class="num" style="color:var(--text-muted)">—</td></tr>
+          </tbody>
+          <tfoot><tr>
+            <td><span lang-en>Total</span><span lang-th>รวม</span></td>
+            <td class="num">37,700</td><td class="num">29,690</td><td class="num neg">−8,010</td>
+          </tr></tfoot>
+        </table>
+        </div>
+
+        <div class="tiles">
+          <div class="tile">
+            <div class="k"><span lang-en>Planned per person</span><span lang-th>ต่อคน (ประมาณ)</span></div>
+            <div class="v">12,567</div>
+            <div class="h"><span lang-en>37,700 ÷ 3 travellers</span><span lang-th>37,700 ÷ 3 คน</span></div>
+          </div>
+          <div class="tile">
+            <div class="k"><span lang-en>Spent so far</span><span lang-th>ใช้ไปแล้ว</span></div>
+            <div class="v">29,690</div>
+            <div class="h"><span lang-en>79% of plan</span><span lang-th>79% ของแผน</span>
+              <div class="meter"><i style="width:79%"></i></div></div>
+          </div>
+        </div>
+
+        <div class="note warn">
+          <b>⚠</b><div>
+          <span lang-en><b>2 paid cost rows are not claimed by any split row.</b>
+            Their amounts count as actual here, so they are not double counted — but nobody is sharing them.</span>
+          <span lang-th><b>มีค่าใช้จ่ายที่จ่ายแล้ว 2 รายการยังไม่ถูกผูกกับรายการแบ่งบิล</b>
+            ยอดถูกนับเป็นยอดจริงแล้ว จึงไม่ซ้ำซ้อน แต่ยังไม่มีการหารกับใคร</span>
+          </div>
+        </div>
+
+        <div class="note warn">
+          <b>⚠</b><div>
+          <span lang-en><b>TWD has no rate in the current snapshot.</b>
+            3 rows are shown in NT$ and left out of every THB total. Nothing is guessed.</span>
+          <span lang-th><b>ยังไม่มีอัตราแลกเปลี่ยน TWD ในชุดข้อมูลปัจจุบัน</b>
+            3 รายการแสดงเป็น NT$ และไม่ถูกรวมในยอด THB ระบบไม่เดาค่าให้</span>
+          </div>
+        </div>
+
+        <div class="eyebrow"><span lang-en>Estimate rows</span><span lang-th>รายการประมาณการ</span></div>
+
+        <div class="rowline">
+          <div class="grow">
+            <div class="b7"><span lang-en>Hotel · 5 nights</span><span lang-th>โรงแรม · 5 คืน</span></div>
+            <div class="who"><span class="tag"><span lang-en>accommodation</span><span lang-th>ที่พัก</span></span>
+              <span lang-en> · paid · claimed by 3 split rows</span><span lang-th> · จ่ายแล้ว · ผูกกับ 3 รายการ</span></div>
+          </div>
+          <div style="text-align:right">
+            <div class="num b7">11,450</div>
+            <div class="who num" style="text-decoration:line-through;color:var(--text-muted)">12,000</div>
+          </div>
+        </div>
+
+        <div class="rowline">
+          <div class="grow">
+            <div class="b7"><span lang-en>Taipei 101 observatory</span><span lang-th>ตึกไทเป 101 จุดชมวิว</span></div>
+            <div class="who"><span class="tag"><span lang-en>activity</span><span lang-th>กิจกรรม</span></span>
+              <span lang-en> · estimate · not yet spent</span><span lang-th> · ประมาณการ · ยังไม่ได้จ่าย</span></div>
+          </div>
+          <div style="text-align:right"><div class="num b7">1,800</div></div>
+        </div>
+
+        <div class="rowline">
+          <div class="grow">
+            <div class="b7"><span lang-en>Din Tai Fung · dinner</span><span lang-th>ติ่นไท่ฟง · มื้อเย็น</span></div>
+            <div class="who"><span class="tag"><span lang-en>food</span><span lang-th>อาหาร</span></span>
+              <span lang-en> · paid · </span><span lang-th> · จ่ายแล้ว · </span>
+              <a href="#" style="color:var(--color-accent);font-weight:700">
+                <span lang-en>record as actually spent →</span><span lang-th>บันทึกเป็นยอดจริง →</span></a></div>
+          </div>
+          <div style="text-align:right"><div class="num b7">1,240</div></div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ================= /split ================= -->
+    <section class="card">
+      <div class="route">
+        <code>/trips/taipei/split</code>
+        <h2><span lang-en>Group spend</span><span lang-th>ค่าใช้จ่ายกลุ่ม</span></h2>
+        <div class="sub">
+          <span lang-en>Bills that were actually paid, split between travellers.</span>
+          <span lang-th>บิลที่จ่ายจริงแล้ว และการหารกันในกลุ่ม</span>
+        </div>
+      </div>
+      <div class="body">
+
+        <div class="tiles">
+          <div class="tile">
+            <div class="k"><span lang-en>Actual spend</span><span lang-th>ยอดจ่ายจริง</span></div>
+            <div class="v">29,690</div>
+            <div class="h"><span lang-en>8 rows · 1 voided</span><span lang-th>8 รายการ · ยกเลิก 1</span></div>
+          </div>
+          <div class="tile">
+            <div class="k"><span lang-en>Your share</span><span lang-th>ส่วนของคุณ</span></div>
+            <div class="v">9,180</div>
+            <div class="h"><span lang-en>from actual participants</span><span lang-th>คำนวณจากผู้ร่วมจ่ายจริง</span></div>
+          </div>
+        </div>
+
+        <div class="note info">
+          <b>ⓘ</b><div>
+          <span lang-en><b>Planned per person was 12,567; your actual share is 9,180.</b>
+            These are different sums — the planned figure divides the plan by 3, the actual figure uses who was
+            really on each bill.</span>
+          <span lang-th><b>ต่อคนตามแผนคือ 12,567 แต่ส่วนจริงของคุณคือ 9,180</b>
+            สองตัวเลขนี้คำนวณต่างกัน ยอดตามแผนหารด้วย 3 เท่ากัน ส่วนยอดจริงใช้ผู้ร่วมจ่ายของแต่ละบิล</span>
+          </div>
+        </div>
+
+        <div class="eyebrow"><span lang-en>Settle up</span><span lang-th>เคลียร์ยอด</span></div>
+
+        <div class="note sugg">
+          <b>◇</b><div>
+          <span lang-en><b>These are suggestions, not debts.</b> Payments between people are never recorded,
+            so these figures stay the same after someone pays you back.</span>
+          <span lang-th><b>นี่คือข้อเสนอแนะ ไม่ใช่ยอดหนี้</b> ระบบไม่บันทึกการโอนเงินระหว่างกัน
+            ตัวเลขจึงไม่เปลี่ยนแม้มีคนจ่ายคืนแล้ว</span>
+          </div>
+        </div>
+
+        <div class="settle">
+          <div class="r">
+            <div class="chip" style="background:#3b82f6">ม</div>
+            <div class="grow">
+              <div class="b7"><span lang-en>Mum pays you</span><span lang-th>แม่จ่ายคืนคุณ</span></div>
+              <div class="who"><span lang-en>her shares 6,240 − she paid out 1,000</span>
+                <span lang-th>ส่วนของแม่ 6,240 − จ่ายไปแล้ว 1,000</span></div>
+            </div>
+            <div class="num b7">5,240</div>
+            <button class="done" aria-pressed="true">✓ <span lang-en>Settled</span><span lang-th>เคลียร์แล้ว</span></button>
+          </div>
+
+          <div class="r">
+            <div class="chip" style="background:#8b5cf6">พ</div>
+            <div class="grow">
+              <div class="b7" style="color:var(--color-warning)">
+                <span lang-en>You pay Dad</span><span lang-th>คุณจ่ายคืนพ่อ</span></div>
+              <div class="who"><span lang-en>he fronted 8,400 cash · his shares were 6,120 — so the
+                cardholder owes him</span>
+                <span lang-th>พ่อออกเงินสดไป 8,400 · ส่วนของพ่อ 6,120 — ผู้ถือบัตรจึงเป็นฝ่ายค้างจ่าย</span></div>
+            </div>
+            <div class="num b7">2,280</div>
+            <button><span lang-en>Mark settled</span><span lang-th>ทำเครื่องหมายว่าเคลียร์แล้ว</span></button>
+          </div>
+        </div>
+
+        <div class="eyebrow"><span lang-en>Transactions</span><span lang-th>รายการ</span></div>
+
+        <!-- Auto-Bill's filter interaction. Recovered from inline styles only:
+             .active-filter .dimmed-filter .active-cat .dimmed-cat .clickable-filter-item
+             .btn-clear-filter-sm — 6 of the 23 classes with no CSS rule. -->
+        <div class="filters" id="filters">
+          <div class="fgroup">
+            <span class="flabel"><span lang-en>Who</span><span lang-th>ใคร</span></span>
+            <button class="fchip" data-k="who" data-v="you"><span lang-en>You</span><span lang-th>คุณ</span></button>
+            <button class="fchip" data-k="who" data-v="mum"><span lang-en>Mum</span><span lang-th>แม่</span></button>
+            <button class="fchip" data-k="who" data-v="dad"><span lang-en>Dad</span><span lang-th>พ่อ</span></button>
+          </div>
+          <div class="fgroup">
+            <span class="flabel"><span lang-en>Category</span><span lang-th>หมวด</span></span>
+            <button class="fchip" data-k="cat" data-v="accommodation"><span lang-en>Hotel</span><span lang-th>ที่พัก</span></button>
+            <button class="fchip" data-k="cat" data-v="transport"><span lang-en>Transport</span><span lang-th>เดินทาง</span></button>
+            <button class="fchip" data-k="cat" data-v="food"><span lang-en>Food</span><span lang-th>อาหาร</span></button>
+          </div>
+          <button class="fclear" id="fclear" hidden>×
+            <span lang-en>Clear</span><span lang-th>ล้าง</span></button>
+        </div>
+
+        <div class="rowline linked" data-who="you" data-cat="accommodation">
+          <div class="grow">
+            <div class="b7"><span lang-en>Hotel · night 1</span><span lang-th>โรงแรม · คืนที่ 1</span></div>
+            <div class="who"><span lang-en>you paid · split 3 ways · </span>
+              <span lang-th>คุณจ่าย · หาร 3 · </span>
+              <span class="tag"><span lang-en>hotel</span><span lang-th>ที่พัก</span></span>
+              <span lang-en> · linked to a planned row</span><span lang-th> · ผูกกับรายการที่วางแผนไว้</span></div>
+          </div>
+          <div style="text-align:right"><div class="num b7 amt">2,290</div>
+            <div class="who num">NT$ 2,045</div></div>
+        </div>
+
+        <div class="rowline" data-who="dad" data-cat="transport">
+          <div class="grow">
+            <div class="b7"><span lang-en>Jiufen day trip · taxi</span><span lang-th>เที่ยวจิ่วเฟิ่น · แท็กซี่</span></div>
+            <div class="who"><span lang-en>Dad paid · split 3 ways · </span>
+              <span lang-th>พ่อจ่าย · หาร 3 · </span>
+              <span class="tag"><span lang-en>transport</span><span lang-th>เดินทาง</span></span></div>
+          </div>
+          <div style="text-align:right"><div class="num b7 amt">2,240</div>
+            <div class="who num">NT$ 2,000</div></div>
+        </div>
+
+        <div class="rowline" data-who="you" data-cat="food">
+          <div class="grow">
+            <div class="b7"><span lang-en>Shilin night market</span><span lang-th>ตลาดกลางคืนซื่อหลิน</span></div>
+            <div class="who"><span lang-en>you paid · Mum and you only · </span>
+              <span lang-th>คุณจ่าย · เฉพาะคุณกับแม่ · </span>
+              <span class="tag"><span lang-en>food</span><span lang-th>อาหาร</span></span></div>
+          </div>
+          <div style="text-align:right"><div class="num b7 amt">896</div>
+            <div class="who num">NT$ 800</div></div>
+        </div>
+
+        <div class="rowline void" data-who="you" data-cat="fees">
+          <div class="grow">
+            <div class="b7"><span lang-en>Longshan Temple donation</span><span lang-th>บริจาควัดหลงซาน</span></div>
+            <div class="who"><span lang-en>removed · kept visible so the total can be explained</span>
+              <span lang-th>ยกเลิกแล้ว · ยังแสดงไว้เพื่ออธิบายยอดรวม</span></div>
+          </div>
+          <div style="text-align:right"><div class="num b7 amt">224</div></div>
+        </div>
+
+      </div>
+    </section>
+  </div>
+
+  <!-- ================= what to react against ================= -->
+  <div class="react">
+    <h2>What to react against</h2>
+    <p>The ticket asks for reactions, not approval. Each of these is a decision made visible — say which are
+      wrong and the arrangement changes.</p>
+    <ol>
+      <li><b>Two numbers that must not look alike.</b> “Planned per person 12,567” and “Your share 9,180” are
+        computed by different mechanisms — headcount versus real participants. They sit on different screens
+        with a note joining them. Is that enough, or does one of them need a different name?</li>
+      <li><b>The reversed direction.</b> “You pay Dad” is coloured as a warning because the cardholder owing a
+        traveller is the surprising case. Auto-Bill could never render it. Too loud, or right?</li>
+      <li><b>Settled is a marker, not a fact.</b> Mum shows ✓ Settled; the balance still reads 5,240 because
+        payments are never recorded. Adding a row involving Mum clears her marker. Does the tick oversell it?</li>
+      <li><b>“Suggestions, not debts” as a standing panel</b> rather than per-row wording. It has to stay true
+        after someone pays you back. Panel, or per row?</li>
+      <li><b>Unclaimed paid rows warn on the planned screen</b>, where the money is double-countable — not on
+        the split screen. Right screen?</li>
+      <li><b>A missing rate keeps rows in NT$</b> and out of every THB total rather than guessing. Is being
+        excluded from the total clear enough, or does it read as a bug?</li>
+      <li><b>The voided row stays in the list</b>, struck through and dimmed. On a long trip these accumulate —
+        does it need a hide control now, or later?</li>
+      <li><b>The claim link is a text action on the planned row</b> (“record as actually spent →”), and a linked
+        split row gets an accent rail. Discoverable enough?</li>
+      <li><b>Filtering dims rather than hides.</b> Added on your note. Auto-Bill's filter interaction is
+        6 of the 23 classes styled only inline, so it exists nowhere in the stylesheet — these are its real
+        values recovered: <span class="num">1.5px</span> border, a tint fill, weight <span class="num">800</span>
+        when selected, <span class="num">0.4</span> on unselected chips and <span class="num">0.35</span> on
+        non-matching rows. Dimming rather than hiding keeps a moved total explainable. Filters combine across
+        Who and Category — click one in each.</li>
+      <li><b>The accent is teal, not the house red</b>, because the destination drives it and this is Taipei.
+        Correct — but worth seeing, since every mockup elsewhere is red.</li>
+    </ol>
+    <div class="sub-note">
+      <b>Fidelity notes.</b> Tokens are the extracted contract (WF-020 §1) with deviations applied:
+      <b>D1</b> the dark accent actually works, <b>D2</b> radius unified at 2px, <b>D5</b> violet tokenised,
+      <b>D8</b> real mono 700 on numerals. The five concatenated alphas are now named tint tokens.
+      <b>Plus Jakarta Sans and JetBrains Mono are substituted by a system stack</b> — the artifact runtime
+      blocks font CDNs and the woff2 files are not in the repo yet (WF-034), so weights and metrics here are
+      approximate. Arrangement is the question; type is not.
+    </div>
+  </div>
+</div>
+
+<script>
+const root=document.documentElement, body=document.body;
+const t=document.getElementById('theme'), l=document.getElementById('lang'), p=document.getElementById('phone');
+const prefersDark=matchMedia('(prefers-color-scheme:dark)').matches;
+root.dataset.theme=prefersDark?'dark':'light';
+t.setAttribute('aria-pressed',String(prefersDark));
+t.textContent=prefersDark?'Light':'Dark';
+t.onclick=()=>{const d=root.dataset.theme!=='dark';root.dataset.theme=d?'dark':'light';
+  t.setAttribute('aria-pressed',String(d));t.textContent=d?'Light':'Dark';};
+l.onclick=()=>{const th=body.classList.toggle('th');
+  l.setAttribute('aria-pressed',String(th));l.textContent=th?'English':'ไทย';};
+p.onclick=()=>{const ph=body.classList.toggle('phone');
+  p.setAttribute('aria-pressed',String(ph));p.textContent=ph?'Desktop':'Phone';};
+
+/* Filter interaction, recovered from inline styles: dim what does not match,
+   never hide it, so a total that moved can still be explained. */
+const fbox=document.getElementById('filters'), fclear=document.getElementById('fclear');
+const chips=[...fbox.querySelectorAll('.fchip')];
+const rows=[...document.querySelectorAll('.rowline[data-who]')];
+const active={};
+function apply(){
+  const on=Object.keys(active).length>0;
+  fbox.classList.toggle('on',on); fclear.hidden=!on;
+  rows.forEach(r=>{
+    const miss=Object.entries(active).some(([k,v])=>r.dataset[k]!==v);
+    r.classList.toggle('dimmed',on&&miss);
+  });
+}
+chips.forEach(c=>c.onclick=()=>{
+  const {k,v}=c.dataset;
+  if(active[k]===v){delete active[k];} else {active[k]=v;}
+  chips.forEach(o=>o.setAttribute('aria-pressed',String(active[o.dataset.k]===o.dataset.v)));
+  apply();
+});
+fclear.onclick=()=>{Object.keys(active).forEach(k=>delete active[k]);
+  chips.forEach(o=>o.setAttribute('aria-pressed','false')); apply();};
+</script>

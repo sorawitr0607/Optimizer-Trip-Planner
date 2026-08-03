@@ -1,11 +1,11 @@
 ---
 id: WF-031
 title: Prototype the merged cost and split screen
-status: open
+status: closed
 labels:
   - "wayfinder:prototype"
 parent: WF-MAP-002
-assignee:
+assignee: user-and-root
 blocked_by:
   - WF-023
   - WF-025
@@ -61,3 +61,50 @@ is never recorded, and rendering a reversed owe-direction in both languages.
 
 Produce a throwaway prototype and link it from this ticket. Record what the owner reacted against, not just
 what was built.
+
+## Resolution comments
+
+### 2026-08-03 — Prototyped and reviewed
+
+Prototype: [`031-money-screens-prototype.html`](../artifacts/031-money-screens-prototype.html) — one
+self-contained file, EN/TH and light/dark toggles, a phone width, and no external requests. Throwaway per the
+map, so nothing landed in `web/` and the Phase 2 code freeze holds.
+
+It renders **two** screens, not one, following
+[Map every stage to its webapp screen and route](028-map-every-stage-to-its-webapp-screen-and-route.md):
+`/costs` carries planned/actual/diff by category plus the estimated per-person figure, `/split` carries the
+transaction list, aggregates, settlement and the recovered filter interaction. Tokens are the extracted
+contract with deviations **D1, D2, D5, D8** applied, and the five concatenated alphas are named tint tokens.
+
+**Nine decisions were put up for reaction. All nine were confirmed**, so the arrangement stands as built:
+
+1. Two per-person numbers computed differently (headcount vs real participants) sitting on different screens
+   with a note joining them — **approved**.
+2. The reversed direction ("You pay Dad") coloured as a warning, since the cardholder owing a traveller is the
+   surprising case Auto-Bill could never render — **approved, with one addition (below)**.
+3. Settled as an owner marker that does not change the balance, cleared when a row involving that traveller
+   changes — approved.
+4. "Suggestions, not debts" as a standing panel rather than per-row wording — approved.
+5. Unclaimed-paid-row warnings on the planned screen, where the double-count risk lives — approved.
+6. A missing rate keeping rows in NT$ and out of every THB total rather than guessing — approved.
+7. Voided rows staying visible, struck through and dimmed — approved.
+8. The claim link as a text action on the planned row, with an accent rail on the linked split row — approved.
+9. The accent being destination-driven teal rather than the house red — approved.
+
+**The one thing reacted against: filtering was missing.** That is the right catch, and it was the largest gap
+in the prototype rather than a detail — **6 of the 23 classes styled only inline are the filter interaction**
+(`.active-filter`, `.dimmed-filter`, `.active-cat`, `.dimmed-cat`, `.active-bar`, `.dimmed-bar`), the biggest
+recoverable group in the whole extraction, and this ticket's own Context lists Auto-Bill's traveller / day /
+category filters as something "worth reacting to directly." Omitting it left the single most
+stylesheet-invisible behaviour untested by the prototype.
+
+Added, using the values recovered in
+[`020-auto-bill-token-contract.md` §10e](../artifacts/020-auto-bill-token-contract.md): a `1.5px` border and
+tint fill on the selected chip, weight `800` when selected, `0.4` on unselected chips and `0.35` on
+non-matching rows. Filters combine across Who and Category, and **dim rather than hide** — which is the
+behaviour that keeps a total that moved explainable, and is consistent with voided rows staying visible.
+
+Two fidelity limits are recorded on the page itself so nobody mistakes them for decisions: **Plus Jakarta Sans
+and JetBrains Mono are substituted by a system stack**, because the woff2 files are not in the repo yet
+(`WF-034`) and the artifact runtime blocks font CDNs — so weights and metrics are approximate; and the day
+filter is present as a group but the sample data carries only one day.
