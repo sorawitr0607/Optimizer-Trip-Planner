@@ -9,7 +9,7 @@ npm --prefix web install                                             # first web
 uv run --locked python -m api                                        # production shell on 127.0.0.1:8765
 uv run streamlit run app.py                                          # temporary Phase 1 POC
 uv run --locked python scripts/check.py                              # every free Python + web gate
-uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 248 tests, ~10s
+uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 287 tests, ~10s
 uv run --locked python -m unittest tests.test_optimizer.OptimizerCoreTest.test_safe_route_and_weather_fallback_are_selected  # one test
 python3 scripts/validate_regression_fixtures.py                      # fixture catalog structure
 uv run --locked python scripts/run_optimizer_regressions.py          # 27 historic cases through the real optimizer
@@ -249,9 +249,10 @@ readiness ICS — both snapshot-in, bytes-out. **The 9:16 poster and the trip PD
 (2026-08-03), and with them the whole export-font apparatus. `checklist.py` generates the readiness board and `costs.py` converts owner-recorded
 expenses into THB against an owner-editable, timestamped rate snapshot; a paid charge locks its actual
 THB so a later rate cannot rewrite it, and a missing rate stays a visible gap rather than a guess.
-**Phase 2 S1 is complete:** `api/` owns the 51-method localhost boundary and downloads, `web/` owns the nine
-routes and in-place `StageGate`, and `scripts/check.py` is the one free green command. Stage pages are stubs
-until their assigned slices. **Slice 6's core exists but only behind the POC UI:** `revision.py`'s non-AI quick actions (`a7ad537`) and
+**Phase 2 S1 is complete:** `api/` owns the localhost boundary and downloads, `web/` owns the nine
+routes and in-place `StageGate`, and `scripts/check.py` is the one free green command. The allowlist is
+**56 methods** after S2 added five split-ledger ones (it was 51 at S1), with 28 refusal codes. Stage pages
+are stubs until their assigned slices; `/costs` and `/split` are real as of S2. **Slice 6's core exists but only behind the POC UI:** `revision.py`'s non-AI quick actions (`a7ad537`) and
 `interpret.py`'s constrained GenAI revision (`a2d59f6`) landed 2026-07-29 with tests, wired into
 `views/revise.py`. The pure modules survive the redesign; their Streamlit surfaces are POC code awaiting
 deletion, so **slice 6 still has to be built in the webapp** and the live pilot remains unbuilt. Every new
@@ -277,7 +278,33 @@ ticket, `Prototype the ranked candidate card grid`, is **deferred past the pilot
 outstanding. `Lock the Phase 2 slice plan and validation scorecard` is the destination artifact — read it
 first: `.wayfinder/artifacts/033-phase-2-slice-plan-and-scorecard.md`.
 
-**The Phase 2 code freeze has lifted.** S0 and S1 are complete; S2 is the next allowed slice.
+**The Phase 2 code freeze has lifted.** S0, S1 and S2 are complete; **S3 is the next allowed slice** —
+the cheap journey screens (`setup`, `optimize`, app chrome, sidebar navigation).
+
+**S2 landed the merge on 2026-08-03** (evidence: `artifacts/validation/2026-08-03-slice-2/notes.md`).
+Four things from it bind later work:
+
+- **`travel_planner/split.py` owns all split math** and is pure like the rest of the core. Shares are
+  **recomputed on read, never stored**, so there is exactly one rounding rule: the division happens in
+  integer satang and the remainder spreads one satang at a time over the first participants in the
+  row's own order. That deviates from the donor's dump-it-on-the-first-person and is recorded as a
+  deviation, not drift.
+- **Schema is 13.** `split_rows` and `split_settled_markers` carry **no append-only triggers** by
+  decision. `store._copy_before_bump()` copies to `data/tourist-pre-v<n>-<date>.sqlite3` before any
+  bump and raises rather than migrating if the copy fails. It is gated on
+  `0 < on_disk_version < SCHEMA_VERSION`: version 0 is a database being created and an equal version
+  is not a bump, and without that gate every temp database in the suite would leave a junk copy.
+  **`data/tourist.sqlite3` is still at 12 and was deliberately not bumped** — that is a one-way change
+  to the only real trip in the file and needs to be the owner's deliberate act.
+- **Claimed-ness is derived in exactly one place: `costs.totals()`**, which returns `claimed_cost_ids`
+  for the screen to read. Do not add a second derivation — `split.py` had one and it was deleted for
+  the vocabulary-drift reason `WF-018` names. Dependency direction is `split.py → costs.py`; the
+  reverse is a cycle, which is why the tag → category map lives in `split.py` and `apply_rates()`
+  stamps a resolved `category` before `costs.totals()` sees the row.
+- **The settled marker stores the balance it settled**, not a payment, and `settled` is derived by
+  comparing it to the current net. So a marker goes stale silently the moment the arithmetic moves,
+  with no write-time cascade to keep in sync. **The owner is the cardholder** (`PlannerActions.CARDHOLDER`);
+  there is no stored setting and no `delete_split_row` — removing a row voids it.
 
 **A scope cut landed with the slice plan: the PDF and the 9:16 poster are dropped.** `pyproject.toml` goes to
 **two** runtime dependencies (`streamlit`, `xlsxwriter`), the whole export-font apparatus is void — do not
@@ -302,7 +329,8 @@ Locked by the destination interview, so not open for re-litigation inside a tick
 
 - The planning core, `actions.py`, and `store.py` remain the domain layer behind a thin local HTTP layer.
   React replaces the `views/`, `app.py`, and `ui/` presentation surface. The deterministic optimizer, the
-  hash gates, the append-only plan history, and the 248 current tests all survive the redesign.
+  hash gates, the append-only plan history, and the 248 current tests all survive the redesign. *(248 was
+  the count when this was locked; the suite is 287 after S2 and none of the originals were rewritten.)*
 - **Two linked ledgers**, not one merged record: cost rows stay the budget and estimate truth, the split
   ledger records actual group spend. Reconciling them is now **decided**, not open — see the claim rule below.
 - Everything lands in this repository (`api/` + `web/`). `Auto-Bill-Splitter` is a read-only donor, then

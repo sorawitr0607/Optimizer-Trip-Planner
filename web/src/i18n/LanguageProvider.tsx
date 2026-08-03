@@ -10,8 +10,11 @@ interface LanguageState {
 
 const LanguageContext = createContext<LanguageState | null>(null);
 
-export function LanguageProvider({ children }: PropsWithChildren) {
-  const [language, setLanguage] = useState<Language>("en");
+export function LanguageProvider({
+  children,
+  initial = "en",
+}: PropsWithChildren<{ initial?: Language }>) {
+  const [language, setLanguage] = useState<Language>(initial);
   useEffect(() => {
     document.documentElement.lang = language;
   }, [language]);

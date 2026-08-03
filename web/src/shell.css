@@ -193,3 +193,367 @@
     margin-top: 20px;
   }
 }
+
+/* Money screens. Tokens only: no literal colour, radius or shadow appears
+   below, so the parity gate's token allowlist stays clean. */
+.money-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.money-head h1 {
+  margin: 0;
+}
+
+.money-head p {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  margin: 2px 0 0;
+}
+
+.money-eyebrow {
+  color: var(--text-muted);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-selected);
+  letter-spacing: 0.09em;
+  margin: 6px 0 0;
+  text-transform: uppercase;
+}
+
+.money-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.money-table-scroll {
+  overflow-x: auto;
+}
+
+.money-table {
+  border-collapse: collapse;
+  font-size: var(--text-base);
+  width: 100%;
+}
+
+.money-table th {
+  color: var(--text-muted);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-selected);
+  letter-spacing: 0.06em;
+  padding: 0 0 6px;
+  text-align: right;
+  text-transform: uppercase;
+}
+
+.money-table td {
+  border-top: 1px dashed var(--bg-card-border);
+  padding: 7px 0;
+  text-align: right;
+}
+
+.money-table th:first-child,
+.money-table td:first-child {
+  text-align: left;
+}
+
+.money-table tfoot td {
+  border-top: 1.5px solid var(--bg-card-border);
+  font-weight: var(--weight-selected);
+}
+
+.money-over {
+  color: var(--color-danger);
+}
+
+.money-under {
+  color: var(--color-success);
+}
+
+.money-tiles {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.money-tile {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius-house);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  padding: 10px 11px;
+}
+
+.money-tile-label {
+  color: var(--text-muted);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-selected);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.money-tile-value {
+  font-family: var(--font-mono);
+  font-size: var(--text-4xl);
+  font-variant-numeric: tabular-nums;
+  margin-top: 3px;
+}
+
+.money-tile-hint {
+  color: var(--text-muted);
+  font-size: var(--text-2xs);
+  margin-top: 2px;
+}
+
+.money-meter {
+  background: var(--bg-secondary);
+  border: 1px solid var(--bg-card-border);
+  display: block;
+  height: 6px;
+  margin-top: 5px;
+  overflow: hidden;
+}
+
+.money-meter i {
+  background: var(--color-accent);
+  display: block;
+  height: 100%;
+}
+
+.money-note {
+  border: 1px solid;
+  border-radius: var(--radius-house);
+  display: flex;
+  font-size: var(--text-sm);
+  gap: 8px;
+  margin: 0;
+  padding: 9px 11px;
+}
+
+.money-note-warn {
+  background: var(--color-warning-light);
+  border-color: var(--color-warning);
+}
+
+.money-note-info {
+  background: var(--color-accent-light);
+  border-color: var(--color-accent);
+}
+
+.money-note-plain {
+  background: var(--bg-secondary);
+  border-color: var(--bg-card-border);
+}
+
+.money-tag {
+  background: var(--bg-secondary);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius-pill);
+  display: inline-block;
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-selected);
+  padding: 1px 6px;
+}
+
+.money-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.money-row {
+  align-items: flex-start;
+  border-top: 1px dashed var(--bg-card-border);
+  display: flex;
+  gap: 10px;
+  padding: 9px 0;
+}
+
+.money-row:first-child {
+  border-top: 0;
+}
+
+.money-row-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.money-row-main strong {
+  display: block;
+}
+
+.money-row-meta,
+.money-row-note {
+  color: var(--text-secondary);
+  display: block;
+  font-size: var(--text-xs);
+}
+
+.money-row-note {
+  color: var(--text-muted);
+}
+
+.money-row-amounts {
+  align-items: flex-end;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: right;
+}
+
+.money-was {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+/* A voided row stays in the list so a total that moved can be explained. */
+.money-row.voided {
+  opacity: var(--opacity-dim-strong);
+}
+
+.money-row.voided .money-amount {
+  text-decoration: line-through;
+}
+
+.money-row.linked {
+  border-left: 4px solid var(--color-accent);
+  padding-left: 8px;
+}
+
+.money-row.dimmed {
+  opacity: var(--opacity-dim);
+}
+
+.money-reversed {
+  color: var(--color-warning);
+}
+
+.money-settled {
+  background: var(--color-success-light);
+  border-color: var(--color-success);
+}
+
+.money-empty {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+.money-filters {
+  align-items: center;
+  border-top: 1px dashed var(--bg-card-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 9px 0;
+}
+
+.money-filter-label {
+  color: var(--text-muted);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-selected);
+  letter-spacing: 0.07em;
+  margin-right: 2px;
+  text-transform: uppercase;
+}
+
+.money-chip {
+  background: var(--bg-secondary);
+  border: 1.5px solid transparent;
+  border-radius: var(--radius-pill);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-secondary);
+  padding: 2px 8px;
+  transition: opacity var(--duration-fast) ease, background var(--duration-fast) ease;
+}
+
+.money-chip[aria-pressed="true"] {
+  background: var(--color-accent-light);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  font-weight: var(--weight-selected);
+}
+
+.money-filters.filtering .money-chip:not([aria-pressed="true"]) {
+  opacity: var(--opacity-dim-strong);
+}
+
+.money-chip-clear {
+  background: none;
+  border: 0;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  padding: 2px 8px;
+}
+
+.money-form {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.money-form label,
+.money-participants label {
+  display: flex;
+  flex-direction: column;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-secondary);
+  gap: 4px;
+}
+
+.money-form input,
+.money-form select {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius-house);
+  color: var(--text-primary);
+  padding: 6px 8px;
+}
+
+.money-participants {
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius-house);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  grid-column: 1 / -1;
+  padding: 8px 10px;
+}
+
+.money-participants label {
+  flex-direction: row;
+  gap: 5px;
+}
+
+.money-form > button[type="submit"] {
+  background: var(--color-accent);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius-house);
+  color: var(--color-on-accent);
+  cursor: pointer;
+  font-weight: var(--weight-secondary);
+  grid-column: 1 / -1;
+  justify-self: start;
+  padding: 6px 14px;
+}
+
+.money-row button {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius-house);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-secondary);
+  padding: 3px 8px;
+}
+
+.money-form .field-error {
+  grid-column: 1 / -1;
+  margin: 0;
+}

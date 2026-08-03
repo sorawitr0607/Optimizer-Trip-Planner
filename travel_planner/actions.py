@@ -26,7 +26,7 @@ from .core import (
     new_setup_draft,
     new_trip,
 )
-from . import checklist, costs, exports, interpret, opening, revision, usage
+from . import checklist, costs, exports, interpret, opening, revision, split, usage
 from .discovery import build_candidate_catalog
 from .optimizer import date_range, optimize_trip
 from .providers import (
@@ -1556,7 +1556,130 @@ class PlannerActions:
         self.store.delete_cost_item(trip_id, cost_id)
 
     def cost_totals(self, trip_id: str) -> dict[str, Any]:
-        return costs.totals(self.list_cost_items(trip_id))
+        """Planned versus actual, read across both ledgers per artifact 023."""
+
+        return costs.totals(
+            self.list_cost_items(trip_id),
+            self.list_split_rows(trip_id),
+            len(self._roster(trip_id)),
+        )
+
+    # ponytail: the owner is the cardholder. Auto-Bill made it selectable, but
+    # this app is owner-led and single-card, and every line of artifact 031's
+    # wording says "you" -- store a setting only if that stops being true.
+    CARDHOLDER = "owner"
+
+    def _roster(self, trip_id: str) -> tuple[str, ...]:
+        """Traveller ids a split row may name: the owner plus recorded members."""
+
+        setup = self.store.get_setup(trip_id)
+        if setup is None:
+            return (self.CARDHOLDER,)
+        return (
+            self.CARDHOLDER,
+            *(
+                str(member["traveller_id"])
+                for member in setup.snapshot.as_dict().get("travellers", ())
+            ),
+        )
+
+    def save_split_row(
+        self, *, trip_id: str, row: Mapping[str, Any], split_id: str | None = None
+    ) -> dict[str, Any]:
+        """Record or correct one bill that was actually paid."""
+
+        if self.store.get_trip(trip_id) is None:
+            raise PlannerRefusal("unknown_trip", trip_id=trip_id)
+        roster = self._roster(trip_id)
+        payload = {
+            "label": "",
+            "mode": "equal_all",
+            "paid_by": self.CARDHOLDER,
+            "participants": list(roster),
+            "tag": split.DEFAULT_CATEGORY,
+            "original_amount": 0,
+            "original_currency": costs.BASE_CURRENCY,
+            "actual_thb": None,
+            "cost_id": None,
+            "plan_day": None,
+            "place_id": None,
+            "voided": False,
+            **dict(row),
+        }
+        clean = split.validate_row(payload, roster)
+        return self.store.upsert_split_row(
+            row_id=split_id or clean.get("split_id"),
+            trip_id=trip_id,
+            snapshot=freeze_snapshot(
+                {k: v for k, v in clean.items() if k not in {"split_id", "updated_at"}}
+            ),
+            now=datetime.now(timezone.utc).isoformat(),
+        )
+
+    def list_split_rows(self, trip_id: str) -> list[dict[str, Any]]:
+        """Split rows in THB, resolved without the estimate buffer."""
+
+        return split.apply_rates(
+            self.store.list_split_rows(trip_id), self.store.get_rate_snapshot(trip_id)
+        )
+
+    def set_split_voided(
+        self, *, trip_id: str, split_id: str, voided: bool = True
+    ) -> dict[str, Any]:
+        """Remove a row by voiding it, so a total that moved stays explainable."""
+
+        stored = {row["split_id"]: row for row in self.store.list_split_rows(trip_id)}
+        row = stored.get(split_id)
+        if row is None:
+            raise PlannerRefusal("unknown_split_row", split_id=split_id)
+        return self.save_split_row(
+            trip_id=trip_id,
+            split_id=split_id,
+            row={
+                **{k: v for k, v in row.items() if k not in {"split_id", "updated_at"}},
+                "voided": bool(voided),
+            },
+        )
+
+    def split_summary(self, trip_id: str) -> dict[str, Any]:
+        """Actual group spend, per-traveller balances, and the star settlement."""
+
+        return split.summary(
+            self.list_split_rows(trip_id),
+            travellers=self._roster(trip_id),
+            cardholder=self.CARDHOLDER,
+            settled=self.store.list_settled_markers(trip_id),
+        )
+
+    def set_split_settled(
+        self, *, trip_id: str, traveller_id: str, settled: bool = True
+    ) -> dict[str, Any]:
+        """Mark a balance settled, or drop the marker.
+
+        The marker records the balance the owner called settled, not a payment,
+        so any later change to that balance silently supersedes it.
+        """
+
+        if traveller_id not in self._roster(trip_id):
+            raise PlannerRefusal("unknown_traveller", traveller_id=traveller_id)
+        if not settled:
+            self.store.clear_settled_marker(trip_id, traveller_id)
+            return self.split_summary(trip_id)
+        current = next(
+            (
+                entry
+                for entry in self.split_summary(trip_id)["balances"]
+                if entry["traveller_id"] == traveller_id
+            ),
+            {},
+        )
+        self.store.save_settled_marker(
+            trip_id=trip_id,
+            traveller_id=traveller_id,
+            net_thb=float(current.get("net_thb") or 0.0),
+            now=datetime.now(timezone.utc).isoformat(),
+        )
+        return self.split_summary(trip_id)
 
     def quick_actions(self, trip_id: str) -> list[dict[str, Any]]:
         """Actions offered for the active plan. None of them needs a model."""

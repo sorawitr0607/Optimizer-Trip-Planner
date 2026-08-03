@@ -1,0 +1,129 @@
+{
+  "slice": 2,
+  "title": "The merge: split ledger, the claim rule, and the money screens",
+  "date": "2026-08-03",
+  "closes": ".wayfinder/artifacts/033-phase-2-slice-plan-and-scorecard.md S2 row",
+  "paid_calls": 0,
+  "paid_spend_usd": 0.0,
+  "check_script": {
+    "command": "uv run --locked python scripts/check.py",
+    "stages_passed": 8,
+    "seconds": 14.9
+  },
+  "tests": {
+    "python_total": 287,
+    "python_total_at_slice_1": 248,
+    "python_added": 39,
+    "new_suites": {
+      "tests/test_split.py": 21,
+      "tests/test_costs.py::ReconciliationTest": 9,
+      "tests/test_setup_discovery.py::SchemaMigrationTest": 4,
+      "tests/test_api.py::SplitWireShapeTest": 5
+    },
+    "web_total": 12,
+    "web_total_at_slice_1": 2,
+    "web_added": 10,
+    "python_seconds": 10.1,
+    "web_seconds": 0.3
+  },
+  "closing_checks": {
+    "split_unit_tests_including_rounding_remainder_and_star_settlement": "pass",
+    "claimed_cost_row_contributes_its_actual_once": "pass",
+    "both_screens_render_in_en_and_th": "pass",
+    "pre_bump_copy_exists_and_migration_refuses_without_it": "pass"
+  },
+  "schema": {
+    "version_before": 12,
+    "version_after": 13,
+    "tables_added": ["split_rows", "split_settled_markers"],
+    "append_only_triggers_added": 0,
+    "pre_bump_copy_pattern": "data/tourist-pre-v13-<date>.sqlite3",
+    "copy_gate": "0 < on_disk_version < SCHEMA_VERSION",
+    "pilot_database_bumped": false
+  },
+  "api": {
+    "allowlisted_actions_before": 51,
+    "allowlisted_actions_after": 56,
+    "actions_added": [
+      "save_split_row",
+      "list_split_rows",
+      "set_split_voided",
+      "split_summary",
+      "set_split_settled"
+    ],
+    "refusal_codes_before": 26,
+    "refusal_codes_after": 28,
+    "refusal_codes_added": ["unknown_split_row", "unknown_traveller"],
+    "delete_split_row_exists": false,
+    "new_runtime_dependencies": 0
+  },
+  "copy": {
+    "text_keys_before": 528,
+    "text_keys_after": 592,
+    "keys_added": 64,
+    "languages": ["en", "th"],
+    "parity": "pass"
+  },
+  "code": {
+    "travel_planner/split.py": 245,
+    "tests/test_split.py": 234,
+    "web/src/stages/CostsPage.tsx": 181,
+    "web/src/stages/SplitPage.tsx": 406,
+    "web/src/stages/money.tsx": 74,
+    "web/src/stages/money.test.tsx": 307,
+    "web/src/shell.css_lines_added": 364,
+    "tracked_insertions": 1270,
+    "tracked_deletions": 14
+  },
+  "live_walkthrough": {
+    "database": "scratch copy, not data/tourist.sqlite3",
+    "server": "uv run --locked python -m api --port 8799",
+    "cost_rows": 6,
+    "split_rows_seeded": 7,
+    "split_rows_voided": 1,
+    "planned_thb": 37700.0,
+    "actual_thb": 18976.8,
+    "actual_from_split_rows_thb": 17176.8,
+    "actual_from_unclaimed_paid_cost_rows_thb": 1800.0,
+    "claimed_cost_rows": 1,
+    "claimed_cost_row_own_actual_thb_deferred": 11450.0,
+    "unclaimed_paid_rows": 1,
+    "missing_rates": ["JPY"],
+    "planned_per_person_thb": 12566.67,
+    "settlement": [
+      {
+        "traveller": "member_1",
+        "direction": "traveller_pays_cardholder",
+        "amount_thb": 5541.61
+      },
+      {
+        "traveller": "member_2",
+        "direction": "cardholder_pays_traveller",
+        "amount_thb": 2406.42
+      }
+    ],
+    "marker_staleness_observed": {
+      "before_amount_thb": 5541.61,
+      "before_settled": true,
+      "after_amount_thb": 5991.61,
+      "after_settled": false,
+      "trigger": "a new 900 THB row shared by owner and member_1"
+    },
+    "form_write_round_trip": "pass"
+  },
+  "graph": {
+    "check_command": "python3 scripts/build_project_graph.py --check",
+    "result": "pass",
+    "nodes": 1358,
+    "directed_edges": 3185,
+    "rebuilt": false,
+    "rebuild_cost_usd": 0.0
+  },
+  "captures": [
+    "captures/costs-en-light.jpg",
+    "captures/costs-th-dark.jpg",
+    "captures/split-en-light.jpg",
+    "captures/split-th-dark.jpg",
+    "captures/split-en-light-rows-and-form.jpg"
+  ]
+}

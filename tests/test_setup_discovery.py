@@ -237,9 +237,85 @@ class SchemaMigrationTest(unittest.TestCase):
                     "place_evidence",
                     "revision_drafts",
                     "plan_revisions",
+                    "split_rows",
+                    "split_settled_markers",
                 }
                 <= tables
             )
+
+    @staticmethod
+    def _legacy(directory: str, version: int) -> Path:
+        path = Path(directory) / "tourist.sqlite3"
+        connection = sqlite3.connect(path)
+        try:
+            connection.execute("CREATE TABLE legacy_marker (value TEXT)")
+            connection.execute("INSERT INTO legacy_marker VALUES ('the pilot trip')")
+            connection.execute(f"PRAGMA user_version = {version}")
+            connection.commit()
+        finally:
+            connection.close()
+        return path
+
+    @staticmethod
+    def _version(path: Path) -> int:
+        connection = sqlite3.connect(path)
+        try:
+            return connection.execute("PRAGMA user_version").fetchone()[0]
+        finally:
+            connection.close()
+
+    def test_a_bump_copies_the_database_before_writing_anything(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = self._legacy(directory, SCHEMA_VERSION - 1)
+
+            SQLiteStore(path)
+
+            copies = sorted(Path(directory).glob("tourist-pre-v*.sqlite3"))
+            self.assertEqual(1, len(copies), copies)
+            self.assertRegex(
+                copies[0].name,
+                rf"^tourist-pre-v{SCHEMA_VERSION}-\d{{4}}-\d{{2}}-\d{{2}}\.sqlite3$",
+            )
+            # The copy holds the pre-bump state, which is the only way back.
+            self.assertEqual(SCHEMA_VERSION - 1, self._version(copies[0]))
+            self.assertEqual(SCHEMA_VERSION, self._version(path))
+
+    def test_a_failed_copy_refuses_the_migration_and_leaves_the_schema_alone(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = self._legacy(directory, SCHEMA_VERSION - 1)
+
+            with patch(
+                "travel_planner.store.shutil.copy2",
+                side_effect=OSError("No space left on device"),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "Refusing to migrate"):
+                    SQLiteStore(path)
+
+            self.assertEqual(SCHEMA_VERSION - 1, self._version(path))
+            self.assertEqual([], sorted(Path(directory).glob("tourist-pre-v*.sqlite3")))
+            connection = sqlite3.connect(path)
+            try:
+                tables = {
+                    row[0]
+                    for row in connection.execute(
+                        "SELECT name FROM sqlite_master WHERE type = 'table'"
+                    )
+                }
+            finally:
+                connection.close()
+            self.assertNotIn("split_rows", tables)
+
+    def test_a_new_database_and_a_current_one_are_never_copied(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "tourist.sqlite3"
+
+            SQLiteStore(path)
+            SQLiteStore(path)
+
+            # Version 0 has nothing to preserve and an equal version is not a
+            # bump. Without this gate every temp database in the suite would
+            # leave a junk copy beside it.
+            self.assertEqual([], sorted(Path(directory).glob("tourist-pre-v*.sqlite3")))
 
 
 class ConcreteProviderTest(unittest.TestCase):

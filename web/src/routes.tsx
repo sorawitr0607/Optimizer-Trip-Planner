@@ -8,6 +8,8 @@ import { copy } from "./i18n/copy";
 import { useLanguage } from "./i18n/LanguageProvider";
 import { AppShell } from "./shared/AppShell";
 import { StageGate } from "./shared/StageGate";
+import { CostsPage } from "./stages/CostsPage";
+import { SplitPage } from "./stages/SplitPage";
 import { StagePage } from "./stages/StagePage";
 
 function Landing() {
@@ -107,8 +109,22 @@ export const router = createBrowserRouter([
       { path: "optimize", element: gated("optimize", "optimize") },
       { path: "itinerary", element: gated("itinerary", "itinerary") },
       { path: "readiness", element: gated("readiness", "setup") },
-      { path: "costs", element: gated("costs", "setup") },
-      { path: "split", element: gated("split", "setup") },
+      {
+        path: "costs",
+        element: (
+          <StageGate stage="setup">
+            <CostsPage />
+          </StageGate>
+        ),
+      },
+      {
+        path: "split",
+        element: (
+          <StageGate stage="setup">
+            <SplitPage />
+          </StageGate>
+        ),
+      },
       { path: "revise", element: gated("revise", "itinerary") },
     ],
   },

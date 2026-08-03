@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from datetime import date
 from hashlib import sha256
 from pathlib import Path
+import shutil
 import sqlite3
 from uuid import uuid4
 from typing import Any, Iterator
@@ -23,7 +25,7 @@ from .core import (
 )
 
 
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS trips (
     id TEXT PRIMARY KEY,
@@ -149,6 +151,32 @@ CREATE TABLE IF NOT EXISTS exchange_rate_snapshots (
     snapshot_json TEXT NOT NULL,
     snapshot_sha256 TEXT NOT NULL,
     updated_at TEXT NOT NULL,
+    FOREIGN KEY (trip_id) REFERENCES trips(id)
+);
+
+-- Actual group spend. Deliberately no append-only triggers: corrections happen
+-- constantly during a trip, so this follows the readiness board's mutable,
+-- void-not-delete precedent rather than plan_versions' immutability. Data entry
+-- is not a decision the optimizer produced.
+CREATE TABLE IF NOT EXISTS split_rows (
+    id TEXT PRIMARY KEY,
+    trip_id TEXT NOT NULL,
+    snapshot_json TEXT NOT NULL,
+    snapshot_sha256 TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (trip_id) REFERENCES trips(id)
+);
+
+-- The owner's per-traveller "I consider this settled" marker. It stores the
+-- balance that was settled, not a payment: comparing it to the current balance
+-- is what makes a marker go stale the moment the arithmetic moves.
+CREATE TABLE IF NOT EXISTS split_settled_markers (
+    trip_id TEXT NOT NULL,
+    traveller_id TEXT NOT NULL,
+    settled_net_thb REAL NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (trip_id, traveller_id),
     FOREIGN KEY (trip_id) REFERENCES trips(id)
 );
 
@@ -333,8 +361,33 @@ class SQLiteStore:
                 raise RuntimeError(
                     f"Database schema {version} is newer than supported {SCHEMA_VERSION}"
                 )
+            # Version 0 is a database this call is creating, which has nothing
+            # worth copying; an equal version is not a bump. Only a real
+            # forward move is gated.
+            if 0 < version < SCHEMA_VERSION:
+                self._copy_before_bump(version)
             connection.executescript(SCHEMA)
             connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+
+    def _copy_before_bump(self, version: int) -> None:
+        """Copy the database before an irreversible bump, or refuse to migrate.
+
+        There is no downgrade tool and no restorable old checkout by decision,
+        so this copy is the only way back. A failed copy therefore has to stop
+        the migration rather than be warned about.
+        """
+
+        target = self.path.with_name(
+            f"{self.path.stem}-pre-v{SCHEMA_VERSION}"
+            f"-{date.today().isoformat()}{self.path.suffix}"
+        )
+        try:
+            shutil.copy2(self.path, target)
+        except OSError as error:
+            raise RuntimeError(
+                f"Refusing to migrate {self.path} from schema {version} to "
+                f"{SCHEMA_VERSION}: the pre-bump copy to {target} failed ({error})"
+            ) from error
 
     def add_trip(self, trip: Trip) -> Trip:
         with self.connect() as connection:
@@ -732,6 +785,85 @@ class SQLiteStore:
         return self._verified_snapshot(
             row["snapshot_json"], row["snapshot_sha256"], "Exchange-rate snapshot"
         ).as_dict()
+
+    # No delete_split_row by decision: removing a row voids it, so a total stays
+    # explainable. Voiding is an ordinary upsert of the same row.
+    def upsert_split_row(
+        self, *, row_id: str | None, trip_id: str, snapshot: FrozenSnapshot, now: str
+    ) -> dict[str, Any]:
+        with self.connect() as connection:
+            existing = (
+                connection.execute(
+                    "SELECT id, created_at FROM split_rows WHERE id = ? AND trip_id = ?",
+                    (row_id, trip_id),
+                ).fetchone()
+                if row_id
+                else None
+            )
+            resolved = existing["id"] if existing else (row_id or f"split_{uuid4().hex}")
+            created = existing["created_at"] if existing else now
+            connection.execute(
+                """
+                INSERT INTO split_rows (
+                    id, trip_id, snapshot_json, snapshot_sha256, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT (id) DO UPDATE SET
+                    snapshot_json = excluded.snapshot_json,
+                    snapshot_sha256 = excluded.snapshot_sha256,
+                    updated_at = excluded.updated_at
+                """,
+                (resolved, trip_id, snapshot.canonical_json, snapshot.sha256, created, now),
+            )
+        return {**snapshot.as_dict(), "split_id": resolved, "updated_at": now}
+
+    def list_split_rows(self, trip_id: str) -> list[dict[str, Any]]:
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM split_rows WHERE trip_id = ? ORDER BY created_at, id",
+                (trip_id,),
+            ).fetchall()
+        return [
+            {
+                **self._verified_snapshot(
+                    row["snapshot_json"], row["snapshot_sha256"], "Split row"
+                ).as_dict(),
+                "split_id": row["id"],
+                "updated_at": row["updated_at"],
+            }
+            for row in rows
+        ]
+
+    def save_settled_marker(
+        self, *, trip_id: str, traveller_id: str, net_thb: float, now: str
+    ) -> None:
+        with self.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO split_settled_markers (
+                    trip_id, traveller_id, settled_net_thb, updated_at
+                ) VALUES (?, ?, ?, ?)
+                ON CONFLICT (trip_id, traveller_id) DO UPDATE SET
+                    settled_net_thb = excluded.settled_net_thb,
+                    updated_at = excluded.updated_at
+                """,
+                (trip_id, traveller_id, float(net_thb), now),
+            )
+
+    def clear_settled_marker(self, trip_id: str, traveller_id: str) -> None:
+        with self.connect() as connection:
+            connection.execute(
+                "DELETE FROM split_settled_markers WHERE trip_id = ? AND traveller_id = ?",
+                (trip_id, traveller_id),
+            )
+
+    def list_settled_markers(self, trip_id: str) -> dict[str, float]:
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT traveller_id, settled_net_thb FROM split_settled_markers"
+                " WHERE trip_id = ?",
+                (trip_id,),
+            ).fetchall()
+        return {row["traveller_id"]: float(row["settled_net_thb"]) for row in rows}
 
     def save_revision_draft(
         self, *, trip_id: str, base_version_id: str | None, draft: dict[str, Any], now: str

@@ -11,7 +11,7 @@ import zipfile
 
 from streamlit.testing.v1 import AppTest
 
-from travel_planner import costs
+from travel_planner import costs, split
 from travel_planner.actions import PlannerActions
 from travel_planner.exporters import plan_workbook_xlsx
 from travel_planner.optimizer import optimize_trip
@@ -381,6 +381,134 @@ class CostViewTest(unittest.TestCase):
                 app.radio[0].set_value("th").run()
                 self.assertFalse(app.exception)
                 self.assertIn("ค่าใช้จ่าย", [item.value for item in app.subheader])
+
+
+class ReconciliationTest(unittest.TestCase):
+    """Artifact 023: planned versus actual across the two linked ledgers."""
+
+    TRAVELLERS = ("owner", "member_1", "member_2")
+
+    def cost(self, **overrides) -> dict:
+        payload = {
+            "cost_id": "cost_hotel",
+            "label": "Hotel · 5 nights",
+            "category": "accommodation",
+            "original_amount": 1200.0,
+            "original_currency": "THB",
+            "payment_state": "paid",
+            "actual_thb": 1150.0,
+        }
+        payload.update(overrides)
+        return costs.validate_cost(payload) | {"cost_id": payload["cost_id"]}
+
+    def spend(self, **overrides) -> dict:
+        payload = {
+            "label": "Hotel · night 1",
+            "mode": "equal_all",
+            "paid_by": "owner",
+            "participants": list(self.TRAVELLERS),
+            "tag": "accommodation",
+            "original_amount": 600.0,
+            "original_currency": "THB",
+        }
+        payload.update(overrides)
+        return split.validate_row(payload, self.TRAVELLERS)
+
+    def totals(self, cost_rows, split_rows=(), headcount=None) -> dict:
+        snapshot = rates()
+        return costs.totals(
+            costs.apply_rates(list(cost_rows), snapshot),
+            split.apply_rates(list(split_rows), snapshot),
+            headcount,
+        )
+
+    def test_a_claimed_cost_row_contributes_its_actual_exactly_once(self) -> None:
+        # The cost row locked 1,150; the split rows that claim it total 1,000.
+        # Whichever side wins, the answer must be one of them and never the sum.
+        result = self.totals(
+            [self.cost()],
+            [
+                self.spend(cost_id="cost_hotel", original_amount=600.0),
+                self.spend(cost_id="cost_hotel", original_amount=400.0),
+            ],
+        )
+        self.assertEqual(1000.0, result["actual_thb"])
+        self.assertEqual(["cost_hotel"], result["claimed_cost_ids"])
+        self.assertEqual(0, result["unclaimed_paid_rows"])
+
+    def test_an_unclaimed_paid_row_supplies_its_own_actual(self) -> None:
+        result = self.totals([self.cost()])
+
+        self.assertEqual(1150.0, result["actual_thb"])
+        self.assertEqual(1, result["unclaimed_paid_rows"])
+        self.assertEqual([], result["claimed_cost_ids"])
+
+    def test_voiding_the_claim_hands_the_cost_row_back(self) -> None:
+        result = self.totals(
+            [self.cost()],
+            [self.spend(cost_id="cost_hotel", original_amount=600.0, voided=True)],
+        )
+        # Never 1,750 (both sides) and never 0 (neither): a voided claim
+        # releases the cost row, so exactly one side supplies the actual.
+        self.assertEqual(1150.0, result["actual_thb"])
+        self.assertEqual(1, result["unclaimed_paid_rows"])
+
+    def test_planned_keeps_every_row_including_the_ones_later_paid(self) -> None:
+        result = self.totals([self.cost()])
+
+        self.assertEqual(1200.0, result["planned_thb"])
+        self.assertEqual(1150.0, result["actual_thb"])
+        # The existing key still means "still to pay", so a paid row is absent
+        # from it. That is why planned_thb had to be added rather than reused.
+        self.assertEqual(0.0, result["estimated_thb"])
+
+    def test_no_existing_total_changes_meaning(self) -> None:
+        rows = [
+            self.cost(),
+            self.cost(cost_id="cost_ticket", label="Taipei 101", category="activity",
+                      original_amount=1800.0, payment_state="estimate", actual_thb=None),
+        ]
+        before = costs.totals(costs.apply_rates(rows, rates()))
+        after = self.totals(rows, [self.spend(cost_id="cost_hotel")])
+
+        for key in ("estimated_thb", "paid_thb", "total_thb", "by_category", "rows"):
+            self.assertEqual(before[key], after[key], key)
+        self.assertEqual(1150.0, before["paid_thb"])
+        self.assertEqual(1800.0, before["estimated_thb"])
+
+    def test_a_category_with_spend_and_no_plan_is_not_a_zero(self) -> None:
+        result = self.totals(
+            [self.cost()],
+            [self.spend(tag="food", original_amount=880.0, cost_id=None)],
+        )
+        comparison = result["by_category_comparison"]
+        self.assertEqual(["food"], result["categories_without_plan"])
+        self.assertFalse(comparison["food"]["planned"])
+        self.assertTrue(comparison["food"]["actual"])
+        self.assertEqual(880.0, comparison["food"]["actual_thb"])
+        # Accommodation planned 1,200 and the unclaimed paid row supplied 1,150.
+        self.assertEqual(-50.0, comparison["accommodation"]["difference_thb"])
+
+    def test_planned_per_person_divides_by_headcount(self) -> None:
+        result = self.totals([self.cost()], headcount=3)
+
+        self.assertEqual(400.0, result["planned_per_person_thb"])
+        # The trap named in artifact 023: group_preference_weights gives the
+        # owner 0.5 and would charge them half the trip regardless of headcount.
+        self.assertNotEqual(600.0, result["planned_per_person_thb"])
+
+    def test_a_trip_with_no_members_divides_by_one(self) -> None:
+        self.assertEqual(1200.0, self.totals([self.cost()], headcount=1)["planned_thb"])
+        self.assertEqual(
+            1200.0, self.totals([self.cost()], headcount=0)["planned_per_person_thb"]
+        )
+
+    def test_an_empty_split_ledger_leaves_the_actual_at_the_cost_side(self) -> None:
+        # The ledger starts empty by decision, so this is the state on day one.
+        result = self.totals([self.cost(payment_state="estimate", actual_thb=None)])
+        self.assertEqual(1200.0, result["planned_thb"])
+        self.assertEqual(0.0, result["actual_thb"])
+        self.assertEqual(0, result["unclaimed_paid_rows"])
 
 
 if __name__ == "__main__":

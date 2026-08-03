@@ -152,8 +152,22 @@ def apply_rates(
     return resolved
 
 
-def totals(items: list[dict[str, Any]]) -> dict[str, Any]:
-    """Estimated and paid THB totals, plus the rows no rate could cover."""
+def totals(
+    items: list[dict[str, Any]],
+    split_rows: list[dict[str, Any]] | None = None,
+    headcount: int | None = None,
+) -> dict[str, Any]:
+    """Estimated and paid THB totals, plus the rows no rate could cover.
+
+    ``planned_thb`` and ``actual_thb`` are additions, not redefinitions.
+    ``estimated_thb`` remains the sum of non-paid rows -- what is still to pay --
+    which is why it cannot serve as the plan figure once a row is marked paid.
+
+    A split row claims a cost row through its ``cost_id``, and a claimed row
+    defers its actual to the split side.  So a paid cost row either supplies its
+    own actual or a split row does, never both, and double counting is
+    structurally impossible rather than merely avoided.
+    """
 
     resolved = [item for item in items if item.get("reported_thb") is not None]
     paid = [item for item in resolved if item.get("payment_state") in LOCKED_STATES]
@@ -173,6 +187,54 @@ def totals(items: list[dict[str, Any]]) -> dict[str, Any]:
         for item in items
         if item.get("rate_missing")
     ]
+
+    # Claimed-ness is derived here and nowhere else, so there is no second state
+    # to keep in sync. Voiding a split row releases its claim by the same rule.
+    live_split = [row for row in (split_rows or ()) if not row.get("voided")]
+    claimed = {str(row["cost_id"]) for row in live_split if row.get("cost_id")}
+    counted_split = [row for row in live_split if row.get("reported_thb") is not None]
+    unclaimed_paid = [
+        item for item in paid if str(item.get("cost_id") or "") not in claimed
+    ]
+    # The plan figure is every row's estimate at the current rate, including
+    # rows later marked paid -- not `reported_thb`, which for a paid row is the
+    # locked charge and so would compare the actual against itself.
+    planned_rows = [item for item in items if item.get("converted_thb") is not None]
+
+    planned_by: dict[str, list[float]] = {}
+    for item in planned_rows:
+        planned_by.setdefault(str(item.get("category") or "other"), []).append(
+            float(item["converted_thb"])
+        )
+    actual_by: dict[str, list[float]] = {}
+    for row in counted_split:
+        actual_by.setdefault(str(row.get("category") or "other"), []).append(
+            float(row["reported_thb"])
+        )
+    for item in unclaimed_paid:
+        actual_by.setdefault(str(item.get("category") or "other"), []).append(
+            float(item["reported_thb"])
+        )
+    comparison = {}
+    for key in sorted(set(planned_by) | set(actual_by)):
+        planned_value = round(sum(planned_by.get(key, ())), 2)
+        actual_value = round(sum(actual_by.get(key, ())), 2)
+        comparison[key] = {
+            "planned_thb": planned_value,
+            "actual_thb": actual_value,
+            "difference_thb": round(actual_value - planned_value, 2),
+            # A category with a plan and no spend is not the same as one with
+            # spend and no plan; a zero in either column would say it was.
+            "planned": key in planned_by,
+            "actual": key in actual_by,
+        }
+
+    planned_total = round(sum(float(item["converted_thb"]) for item in planned_rows), 2)
+    actual_total = round(
+        sum(float(row["reported_thb"]) for row in counted_split)
+        + sum(float(item["reported_thb"]) for item in unclaimed_paid),
+        2,
+    )
     return {
         "base_currency": BASE_CURRENCY,
         "estimated_thb": round(sum(float(item["reported_thb"]) for item in unpaid), 2),
@@ -185,6 +247,26 @@ def totals(items: list[dict[str, Any]]) -> dict[str, Any]:
             {str(item["original_currency"]) for item in missing}
         ),
         "unconvertible": missing,
+        "planned_thb": planned_total,
+        "actual_thb": actual_total,
+        "by_category_comparison": comparison,
+        "claimed_cost_ids": sorted(claimed),
+        # Paid rows nobody is sharing. Their money counts as actual, so it is
+        # not double counted -- the gap is that it is not being split.
+        "unclaimed_paid_rows": len(unclaimed_paid),
+        "categories_without_plan": [
+            key for key, entry in comparison.items() if not entry["planned"]
+        ],
+        # An estimate has no participants, so headcount is all there is. The
+        # actual per person comes from split.py's resolved shares instead, and
+        # the two must never be presented as the same kind of number.
+        # None means the caller did not ask. A trip with no members recorded
+        # still divides by one rather than vanishing.
+        "planned_per_person_thb": (
+            None
+            if headcount is None
+            else round(planned_total / max(int(headcount), 1), 2)
+        ),
     }
 
 

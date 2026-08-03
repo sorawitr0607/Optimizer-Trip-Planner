@@ -98,11 +98,23 @@ class JsonableContractTest(unittest.TestCase):
 class DispatchContractTest(unittest.TestCase):
     def test_allowlist_is_literal_and_excludes_internal_writes(self) -> None:
         self.assertIsInstance(ACTIONS, tuple)
-        self.assertEqual(51, len(ACTIONS))
+        self.assertEqual(56, len(ACTIONS))
         self.assertEqual(len(ACTIONS), len(set(ACTIONS)))
         self.assertNotIn("save_plan_version", ACTIONS)
         self.assertNotIn("record_paid_call", ACTIONS)
-        self.assertEqual(26, len(REFUSAL_STATUS))
+        self.assertEqual(28, len(REFUSAL_STATUS))
+
+    def test_the_split_ledger_is_reachable_but_deletion_is_not(self) -> None:
+        for name in (
+            "save_split_row",
+            "list_split_rows",
+            "set_split_voided",
+            "split_summary",
+            "set_split_settled",
+        ):
+            self.assertIn(name, ACTIONS)
+        # Removing a row voids it, so no delete exists to expose.
+        self.assertFalse(hasattr(PlannerActions, "delete_split_row"))
 
     def test_no_action_accepts_a_snapshot_hash(self) -> None:
         for name in ACTIONS:
@@ -116,6 +128,92 @@ class DispatchContractTest(unittest.TestCase):
         with TemporaryDirectory() as directory:
             actions = PlannerActions(Path(directory) / "planner.sqlite3")
             self.assertEqual([], dispatch(actions, "list_trips", {}))
+
+
+class SplitWireShapeTest(unittest.TestCase):
+    """The wire shape is implicit, so these tests are what catch a rename."""
+
+    def setUp(self) -> None:
+        self.directory = TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.actions = PlannerActions(Path(self.directory.name) / "planner.sqlite3")
+        trip = dispatch(
+            self.actions, "create_trip", {"name": "Taipei", "destination": "Taipei, Taiwan"}
+        )
+        self.trip_id = trip["trip_id"]
+
+    def save(self, **row) -> dict:
+        return dispatch(
+            self.actions,
+            "save_split_row",
+            {"trip_id": self.trip_id, "row": {"label": "Hotel", "original_amount": 900, **row}},
+        )
+
+    def test_a_saved_row_carries_its_id_and_no_resolved_shares(self) -> None:
+        saved = self.save()
+
+        self.assertIn("split_id", saved)
+        self.assertEqual("owner", saved["paid_by"])
+        self.assertEqual(["owner"], saved["participants"])
+        self.assertFalse(saved["voided"])
+        # Shares are recomputed on read, never stored, so one rounding rule
+        # cannot be bypassed by a row that carries its own numbers.
+        self.assertNotIn("shares", saved)
+        self.assertNotIn("shares_thb", saved)
+
+    def test_the_summary_shape_is_stable(self) -> None:
+        self.save()
+        summary = dispatch(self.actions, "split_summary", {"trip_id": self.trip_id})
+
+        self.assertEqual(
+            {
+                "base_currency", "cardholder", "actual_thb", "by_category", "rows",
+                "voided_rows", "balances", "settlement", "unconvertible_rows",
+                "missing_rates", "unconvertible",
+            },
+            set(summary),
+        )
+        self.assertEqual("owner", summary["cardholder"])
+        self.assertEqual(
+            {"traveller_id", "shares_thb", "paid_out_thb", "net_thb"},
+            set(summary["balances"][0]),
+        )
+
+    def test_cost_totals_gains_the_two_figures_without_losing_any(self) -> None:
+        totals = dispatch(self.actions, "cost_totals", {"trip_id": self.trip_id})
+
+        for key in ("planned_thb", "actual_thb", "by_category_comparison",
+                    "claimed_cost_ids", "unclaimed_paid_rows", "planned_per_person_thb"):
+            self.assertIn(key, totals)
+        for key in ("estimated_thb", "paid_thb", "total_thb", "by_category"):
+            self.assertIn(key, totals)
+
+    def test_voiding_an_unknown_row_refuses_with_a_stable_code(self) -> None:
+        with self.assertRaises(Exception) as caught:
+            dispatch(
+                self.actions,
+                "set_split_voided",
+                {"trip_id": self.trip_id, "split_id": "split_nope"},
+            )
+        self.assertEqual("unknown_split_row", caught.exception.code)
+        self.assertEqual(404, REFUSAL_STATUS["unknown_split_row"])
+
+    def test_a_marker_is_stored_against_the_balance_it_settled(self) -> None:
+        self.save()
+        marked = dispatch(
+            self.actions,
+            "set_split_settled",
+            {"trip_id": self.trip_id, "traveller_id": "owner"},
+        )
+        # The owner is the cardholder, so they never appear in settlement.
+        self.assertEqual([], marked["settlement"])
+        with self.assertRaises(Exception) as caught:
+            dispatch(
+                self.actions,
+                "set_split_settled",
+                {"trip_id": self.trip_id, "traveller_id": "mum"},
+            )
+        self.assertEqual("unknown_traveller", caught.exception.code)
 
 
 class SocketGuardTest(unittest.TestCase):
