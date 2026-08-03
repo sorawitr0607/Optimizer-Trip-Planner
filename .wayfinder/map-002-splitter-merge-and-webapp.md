@@ -206,6 +206,21 @@ resolving tickets are throwaway artifacts, not the build.
   ported strings is machine-drafted and reviewed with provenance flagged, except the copy-memo template which
   is owner-written because it is pasted into a real chat about real money. Emoji decorate only; **country flags
   are the hard case**, since a flag-only cell becomes an empty cell in the PDF.
+- [Decide the test strategy after Streamlit AppTest dies](tickets/029-decide-the-test-strategy-after-apptest-dies.md) —
+  **`AppTest` exposure is 7%, not 80%.** The "12 of 15 files" figure is true per file and misleading: measured
+  per test, **18 of 235** depend on it, so 217 survive untouched. Classified by the lowest layer that can
+  assert the same thing, **14 are portable** to actions/core/exports, **3 are genuinely UI**, and **1 simply
+  dies** — the `$`-as-LaTeX workaround. **Most were never UI tests**; they assert product logic through a UI
+  because that was the only surface available, and three are portable only because WF-028 made `journey()` a
+  real method. Survey and classification in
+  [`029-test-strategy-after-apptest.md`](artifacts/029-test-strategy-after-apptest.md). The 14 are ported
+  **before** anything is deleted so coverage never dips. API contract tests are `unittest` at two levels —
+  dispatch directly, plus a real server on **port 0**, because the `Content-Type` and `Host` guards and the
+  bare-`GET` rule are **security controls** unreachable without a socket, and a guard nobody tests is a guard
+  someone relaxes. **Vitest** for frontend units (one dev dep, ships with Vite), while **the journey walk comes
+  free** from WF-025's parity harness, which already navigates all 9 routes in both themes and languages. One
+  green command, `scripts/check.py`, one exit code, reporting stage by stage and skipping frontend steps while
+  `web/` does not exist.
 
 ## Not yet specified
 

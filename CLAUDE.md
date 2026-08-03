@@ -270,7 +270,7 @@ and `streamlit` is the only one for the *interface*. Keep it that way.
 
 ## Phase 2 is being planned, not built — do not implement it yet
 
-`WF-MAP-002` is **open and unfinished**: 19 tickets, **10 closed, 9 open**, 6 of those on the frontier.
+`WF-MAP-002` is **open and unfinished**: 19 tickets, **11 closed, 8 open**, 5 of those on the frontier.
 `Extract the Auto-Bill design token contract` was **reopened** on 2026-07-31: the parity gate made it the
 target the rebuild is measured against, and it is incomplete for 39 inline-only classes and 114 inline style
 sites. Its ambiguities are already ruled on — do not re-litigate them; the remaining scope and its
@@ -382,6 +382,13 @@ Already decided, and binding on any future implementation:
   the one documented exemption, with derived English plus a `place_of_worship` override. **Emoji decorate and
   never carry meaning alone** — a flag-only cell becomes an empty cell in the PDF. See
   `.wayfinder/artifacts/027-bilingual-copy-pipeline.md`.
+- Testing after `AppTest`: exposure is **7%** — 18 of 235 tests, not 12 of 15 files — so 217 survive
+  untouched. Of the 18, **14 port down** to actions/core/exports and are moved **before** anything is deleted,
+  **3 are genuinely UI**, and 1 dies with Streamlit's `$`-as-LaTeX workaround. API contract tests are
+  `unittest` at two levels: dispatch directly, plus a real server on **port 0**, because the `Content-Type`
+  guard, the `Host` allowlist and the bare-`GET` rule are **security controls** unreachable without a socket.
+  **Vitest** for frontend units; the journey walk comes free from the parity harness. One green command,
+  `scripts/check.py`. See `.wayfinder/artifacts/029-test-strategy-after-apptest.md`.
 - **Two things must be taken from `Auto-Bill-Splitter` before it is archived**: a backup JSON per trip (the
   migration channel — a file survives archiving, `localStorage` does not) and the 41 lifted element captures
   for the parity gate. Both need the donor runnable.
