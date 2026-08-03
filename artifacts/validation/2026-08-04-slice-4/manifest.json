@@ -32,7 +32,7 @@
     }
   },
   "closing_checks": {
-    "real_taipei_setup_through_export": "pass through production server transport; visual browser witness pending",
+    "real_taipei_setup_through_export": "pass through production server transport and a live browser walk",
     "all_six_itinerary_row_types": "pass",
     "bilingual_places_and_itinerary": "pass",
     "true_relative_coordinate_map_and_duplicated_stop_status": "pass",
@@ -114,17 +114,23 @@
     "javascript_gzip_kb": 142.04
   },
   "visual_validation": {
+    "obtained": true,
+    "date": "2026-08-04",
+    "method": "live browser walk against a fresh copy of data/tourist.sqlite3 on port 8801",
+    "original_database_opened": false,
+    "original_database_user_version": 12,
+    "copy_user_version_after_open": 13,
+    "copy_pre_bump_backup": "s4-pre-v13-2026-08-04.sqlite3 at user_version 12",
+    "note": "First time S2's refuse-on-failure migration ran against real pilot content; S2 had only exercised it on a synthetic fixture.",
+    "paid_button_pressed": false,
     "production_shell_served": true,
     "places_and_itinerary_render_tests": 5,
-    "captures": [],
-    "capture_status": "pending",
-    "capture_reason": "in-app browser connector rejected the session metadata: codex/sandbox-state-meta missing field sandboxPolicy"
+    "previously_owed_because": "the in-app browser connector rejected its session metadata (codex/sandbox-state-meta missing field sandboxPolicy) during the 2026-08-04 build run"
   },
   "known_limits": [
     "A newly created trip still needs the route-evidence surface before optimization; the S4 gate intentionally uses the saved real Taipei trip with existing route evidence.",
     "The full ranked card grid remains deferred past the pilot; S4 ships the locked functional ranked-list scope.",
-    "The graph integrity check passes, but the paid graph snapshot was not rebuilt.",
-    "No S4 screen capture is claimed until the in-app browser connector is available."
+    "The graph integrity check passes, but the paid graph snapshot was not rebuilt."
   ],
   "graph": {
     "check_command": "python3 scripts/build_project_graph.py --check",
@@ -132,5 +138,61 @@
     "nodes": 1358,
     "directed_edges": 3185,
     "rebuilt": false
-  }
+  },
+  "reproduction": {
+    "committed_database_active_plan": {
+      "days": 7,
+      "rows": 8,
+      "row_types": [
+        "buffer",
+        "travel",
+        "visit"
+      ],
+      "readiness_items": 0
+    },
+    "after_rerunning_steps_3_to_5": {
+      "days": 8,
+      "rows": 69,
+      "row_types": [
+        "buffer",
+        "logistics",
+        "meal",
+        "preparation",
+        "travel",
+        "visit"
+      ],
+      "readiness_items": 13,
+      "variants": 3,
+      "scheduled_visits": 4
+    },
+    "note": "The walkthrough figures come from re-running optimize, activate and the readiness proposal, which the notes list as steps. Opening the committed database alone gives the sparser stored plan, so the figures are reproducible rather than inspectable."
+  },
+  "download_contract": {
+    "workbook": {
+      "status": 200,
+      "bytes": 23574,
+      "filename": "Taipei-Taiwan-plan.xlsx",
+      "zip_valid": true,
+      "worksheets": 7
+    },
+    "calendar": {
+      "status": 200,
+      "bytes": 5073,
+      "filename": "Taipei-Taiwan-readiness.ics",
+      "starts": "BEGIN:VCALENDAR"
+    },
+    "bare_get_to_a_mutation": {
+      "path": "/api/delete_trip",
+      "status": 404
+    },
+    "note": "Workbook byte count is run-dependent: the plan version id inside the file differs per run."
+  },
+  "captures": [
+    "captures/places-coverage-and-lane-en-light.jpg",
+    "captures/places-card-paid-preflight-en-light.jpg",
+    "captures/itinerary-day-totals-en-light.jpg",
+    "captures/itinerary-row-types-en-light.jpg",
+    "captures/itinerary-map-and-stop-list-en-light.jpg",
+    "captures/itinerary-th-light.jpg"
+  ]
 }

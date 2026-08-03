@@ -298,9 +298,16 @@ route-evidence surface assigned to parity work.
   was exposed and no runtime dependency was added.
 - **Five more portable behaviours now live below Streamlit; four remain.** No `AppTest` original is
   deleted before S6.
-- **The exact visual witness is still owed.** The in-app browser connector was unavailable during the
-  S4 run, so production build, server/API transport, SSR render tests and export validation are retained,
-  but no S4 screen capture is claimed.
+- **The visual witness was obtained 2026-08-04 and Gate 1 is now assessable.** Six captures across
+  `places` and `itinerary` in both languages, the tile-free numbered map with its duplicated stop list,
+  and both `GET` downloads verified over the socket with a bare `GET` to a mutation still refused.
+- **The walkthrough figures are reproducible, not inspectable.** Opening `data/tourist.sqlite3` as-is
+  gives the sparser stored plan (7 days, 8 rows, three row types, no readiness). The 8 days / 69 rows /
+  six row types / 13 readiness items come from re-running optimize → activate → readiness proposal,
+  which is what the evidence steps describe. Re-run them before doubting the numbers.
+- **Never open `data/tourist.sqlite3` to demonstrate something.** Copy it first. The witness ran on a
+  copy, which bumped to 13 and left its own `-pre-v13-` backup at 12 while the original stayed at 12 —
+  the first time S2's refuse-on-failure migration ran against real pilot content rather than a fixture.
 
 **S3 landed the cheap journey screens on 2026-08-03**
 (evidence: `artifacts/validation/2026-08-03-slice-3/notes.md`). Five things from it bind later work:

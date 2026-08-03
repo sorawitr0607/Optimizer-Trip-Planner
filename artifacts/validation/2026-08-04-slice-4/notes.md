@@ -64,12 +64,52 @@ fallback placement, downloads, coordinate geometry and the textual stop-status d
 portable behaviours now live below Streamlit, leaving four on the S6 deletion checklist. No `AppTest` original
 was deleted.
 
-## What remains explicit
+## The browser witness, obtained 2026-08-04
 
-- **Visual witness/captures:** the in-app browser connector rejected its session metadata (`sandboxPolicy`
-  was missing), so no S4 screen image is retained. SSR render tests, the production build, production server
-  transport and real export files passed; a browser walk and captures still need to be added when the connector
-  is available.
+**This closes the item the rest of this bundle recorded as owed.** The connector became available, so the
+walk was driven in a real browser against a fresh copy of `data/tourist.sqlite3`. Six captures are retained
+in `captures/`.
+
+The copy was served on port 8801 and **the original was never opened**: it is still at schema 12 while the
+copy bumped to 13 and left `s4-pre-v13-2026-08-04.sqlite3` at 12 beside it. That is S2's refuse-on-failure
+migration path running against real pilot content for the first time — S2 only ever exercised it on a
+synthetic fixture.
+
+**A reproduction note this bundle should have carried from the start.** The numbers above are not in the
+committed database. Opening `data/tourist.sqlite3` as-is gives a sparser stored plan — 7 days, 8 rows, three
+row types, no readiness items. The 8 days / 69 rows / 13 readiness items / six row types come from *re-running*
+steps 3 to 5, which activates a new plan version and applies a readiness proposal. Those steps are listed
+above, so nothing here was overstated, but a reader who only opened the database would have thought the
+figures were wrong. Re-running them reproduced every figure exactly: three provisional valid variants at 4
+scheduled visits, 8 days, 69 rows, all six row types, 13 readiness items.
+
+What the captures show, each against the rule it has to satisfy:
+
+| Capture | What it witnesses |
+|---|---|
+| `places-coverage-and-lane-en-light.jpg` | 832 candidates, 6 merged duplicates, 9 geographic cells, provider `Verified`, the 525-card lane, ODbL attribution as a link (element 22), and the two raw-report disclosures |
+| `places-card-paid-preflight-en-light.jpg` | Element 16 — "estimated maximum US$0.075" sits immediately above the spending button. Element 14 — the rejection reason is inside the *Not for trip* disclosure, not above the three plain choices. Element 12 — explanations collapsed so the choices stay above the fold. Element 21 — `Liufenshan · 六分山` |
+| `itinerary-day-totals-en-light.jpg` | The one-snapshot banner, the evidence-gap disclosure, day totals across all eight metrics, and the highest-risk line |
+| `itinerary-row-types-en-light.jpg` | Stop, travel, buffer and meal rows with state carried **in words** (`⚠️ Unverified / conflict`, `✅ Confirmed`), never colour alone |
+| `itinerary-map-and-stop-list-en-light.jpg` | Artifact 034 — a tile-free numbered map, no network. Element 15 — the textual stop list repeats every marker's meaning with coordinates, so a prettier map could not drop it. Marker geometry matches the real longitudes |
+| `itinerary-th-light.jpg` | The same screen fully in Thai, including day totals, the risk line, tabs and map |
+
+The paid button was deliberately **not** pressed: it spends real money and needs credentials, and nothing in
+this gate requires it.
+
+The `GET` download contract was verified over the socket rather than inferred. Both routes answer 200 with
+server-side filenames — `Taipei-Taiwan-plan.xlsx` (23,574 bytes, valid ZIP, 7 worksheets) and
+`Taipei-Taiwan-readiness.ics` (5,073 bytes, `BEGIN:VCALENDAR`) — and **a bare `GET` to `/api/delete_trip`
+returns 404**, so `WF-030`'s "downloads and nothing else" rule holds. *(The workbook is 23,574 bytes here
+against 23,571 in the run above; the plan version id inside the file differs per run, so that figure is
+run-dependent rather than a fixed expectation.)*
+
+One behaviour worth recording because it first looked like a defect: the itinerary opens on the trip's first
+day, which schedules nothing, and offers only the workbook until readiness items exist. Both are correct —
+the empty day states "No visit is scheduled on this day; choose another day or a denser variant", and the
+`.ics` button appears as soon as the readiness board is generated.
+
+## What remains explicit
 - **Fresh-trip route evidence:** S4's locked gate is the saved real Taipei trip, which already has route
   evidence. A newly created trip cannot yet acquire that evidence through the React UI because `evidence`
   remains a stub. Do not weaken the optimizer's route-evidence hard constraint to disguise that missing
