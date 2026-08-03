@@ -1,11 +1,11 @@
 ---
 id: WF-027
 title: Decide the bilingual copy pipeline for the webapp
-status: open
+status: closed
 labels:
   - "wayfinder:grilling"
 parent: WF-MAP-002
-assignee:
+assignee: user-and-root
 blocked_by:
   - WF-026
 ---
@@ -45,3 +45,50 @@ Decide at least: whether Python stays copy truth and serves or generates the fro
 catalogue moves to the frontend and Python keeps only codes; the file format and where it lives; how the
 parity test runs against the new location; whether a translation library is used at all; and who authors
 Thai copy for the newly ported splitter elements.
+
+## Resolution comments
+
+### 2026-08-03 — Decided through the copy-pipeline interview
+
+The measured table survey, the work it creates and what is left open are in
+[`027-bilingual-copy-pipeline.md`](../artifacts/027-bilingual-copy-pipeline.md).
+
+**A live defect surfaced while measuring, and it reframes the ticket.** `ui/text.py` holds **eight**
+bilingual tables and the parity rule is enforced for exactly **one** — `tests/test_foundation.py:346` checks
+`TEXT` only. Two of the seven unchecked tables are asymmetric, and **24 optimizer codes have Thai text and no
+English**. The asymmetry runs *against English*, the reverse of what `CLAUDE.md` warns about, and it is
+invisible because every consumer prettifies rather than raising: an English owner reads `Access unverified`,
+`Closed at available time` — machine output that looks exactly like intentional copy. **The fallback is the
+camouflage**, which is what this ticket removes, not just the strings.
+
+- **One JSON catalogue that both renderers read.** This follows from a fact rather than a preference:
+  `WF-030` kept the Python exporters and `_export_labels()` is literally
+  `TEXT[language] | OPTIMIZER_CODE_TEXT[language]`, so Python needs the copy for the PDF, poster and workbook
+  regardless of where React reads it. Moving it to the frontend would duplicate the need, not remove it. Same
+  shape as `WF-025`'s single colour source, for the same reason.
+- **The parity test grows to all eight tables, and the fallback stops lying** — it renders as
+  `⚠ ACCESS_UNVERIFIED`, not `Access unverified`. A fallback is still needed because the core can emit an
+  uncatalogued code, and crashing mid-trip is worse than an ugly label; but it must be obviously not-copy.
+  **Mandatory consequence:** the 24 missing English strings, plus `WF-019`'s 26 refusal codes and the 6
+  `interpret.py` causes, must be written before the test can go green.
+- **Plain JSON, no library.** Two locales, ~640 existing keys, and Thai has no plural forms — a library would
+  be a seventh runtime dependency for unused machinery. The decisive property is the opposite of what a
+  library offers: **TypeScript importing JSON `as const` checks keys at compile time**, which is stronger than
+  runtime lookup, and runtime lookup is precisely what let 24 gaps hide. `ui/text.py`'s inline comments are
+  design record and move to a sibling notes file rather than into the catalogue.
+- **Thai for the ~120 ported strings is machine-drafted and owner-reviewed; the copy-memo template is written
+  by hand**, because it is pasted into a real chat asking real people for money and Thai carries registers a
+  translation gets subtly wrong. Machine-drafted entries are **flagged until reviewed**, so "reviewed" is a
+  visible state rather than an assumption — the direct mitigation for the review-fatigue risk that choice
+  accepts.
+- **`CATEGORY_TEXT`'s English stays derived, with one override.** The title-case fallback is correct for
+  **24 of 25** categories; only `place_of_worship` renders wrongly as "Place Of Worship". Writing all 25 would
+  retype what the machine already gets right and would make every new OSM category need a string first. So it
+  is the **one documented exemption** from key parity, and it gets a stronger test in exchange: assert every
+  Thai key renders acceptable English through override-then-title-case, checking the rendered output rather
+  than key equality.
+- **Emoji decorate; wording always carries the meaning.** The rule already exists in `exporters._labels()`,
+  whose docstring is the rationale, and it is directly testable by stripping pictographs and asserting nothing
+  becomes empty. **Country flags are the hard case** — a flag-only cell becomes an empty cell in the PDF — so
+  those elements need a text name or a non-emoji asset, which lands with the offline asset ticket that already
+  owns replacing `flagcdn.com`.

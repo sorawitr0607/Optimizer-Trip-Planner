@@ -190,6 +190,22 @@ resolving tickets are throwaway artifacts, not the build.
   WF-023, resolved explicitly: planned-versus-actual lands in the plan workbook's Costs sheet as **values, not
   formulas**, since there is nothing in the same file to point at — so an export is a snapshot of a plan
   version, not a live document, and the sheet must say so.
+- [Decide the bilingual copy pipeline for the webapp](tickets/027-decide-the-bilingual-copy-pipeline-for-the-webapp.md) —
+  **One JSON catalogue that both renderers read**, forced by a fact rather than chosen: `WF-030` kept the
+  Python exporters and `_export_labels()` is `TEXT[lang] | OPTIMIZER_CODE_TEXT[lang]`, so moving copy to the
+  frontend would duplicate Python's need rather than remove it. No i18n library — **TypeScript importing JSON
+  `as const` checks keys at compile time**, which beats runtime lookup and is free. Details in
+  [`027-bilingual-copy-pipeline.md`](artifacts/027-bilingual-copy-pipeline.md). **A live defect surfaced while
+  measuring**: `ui/text.py` has eight bilingual tables, the parity rule covers exactly **one**, and **24
+  optimizer codes have Thai and no English** — invisible because every consumer prettifies the code, so an
+  English owner reads `Access unverified` and cannot tell it from real copy. **The fallback is the camouflage**,
+  so the test grows to all eight tables and the fallback becomes visibly machine output (`⚠ ACCESS_UNVERIFIED`).
+  Those 24 strings, plus WF-019's 26 refusal codes and the 6 `interpret.py` causes, are mandatory before it
+  goes green. `CATEGORY_TEXT` is the **one documented exemption** — its English is derived and correct for 24 of
+  25, so it gets one override for `place_of_worship` and a stronger test on rendered output. Thai for the ~120
+  ported strings is machine-drafted and reviewed with provenance flagged, except the copy-memo template which
+  is owner-written because it is pasted into a real chat about real money. Emoji decorate only; **country flags
+  are the hard case**, since a flag-only cell becomes an empty cell in the PDF.
 
 ## Not yet specified
 

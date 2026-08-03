@@ -163,6 +163,15 @@ never put display text in the core or a language check in a scoring path. New us
 add both `en` and `th`; a test asserts `TEXT["en"]` and `TEXT["th"]` carry the same keys, because a
 missing `th` key is a `KeyError` in front of a Thai owner rather than a typo.
 
+**That test covers `TEXT` only — one of eight bilingual tables — and two of the other seven are asymmetric.**
+`CATEGORY_TEXT["en"]` is empty by design (the title-case fallback is the English), but
+`OPTIMIZER_CODE_TEXT` has **24 codes with Thai and no English**. It is invisible because every consumer
+prettifies the code instead of raising (`shared.py:266`, `exporters.py:991`), so an English owner reads
+`Access unverified` and cannot tell it from real copy — the asymmetry runs *against English*, the reverse of
+the warning above. This is a **Phase 1 defect**, so like the `PlannerRefusal` migration it is not gated by
+the Phase 2 decision gate. `WF-027` decided the fix: the test grows to all eight tables and the fallback
+becomes visibly machine output.
+
 ### Tests
 
 `unittest` only, plus `streamlit.testing.v1.AppTest` for UI paths (`AppTest.from_file(ROOT / "app.py")`
@@ -261,7 +270,7 @@ and `streamlit` is the only one for the *interface*. Keep it that way.
 
 ## Phase 2 is being planned, not built — do not implement it yet
 
-`WF-MAP-002` is **open and unfinished**: 19 tickets, **9 closed, 10 open**, 7 of those on the frontier.
+`WF-MAP-002` is **open and unfinished**: 19 tickets, **10 closed, 9 open**, 6 of those on the frontier.
 `Extract the Auto-Bill design token contract` was **reopened** on 2026-07-31: the parity gate made it the
 target the rebuild is measured against, and it is incomplete for 39 inline-only classes and 114 inline style
 sites. Its ambiguities are already ruled on — do not re-litigate them; the remaining scope and its
@@ -365,6 +374,14 @@ Already decided, and binding on any future implementation:
   convention, and bare `GET` may reach downloads and nothing else**, never a mutation or a paid call, because
   a `GET` carries no `Content-Type` for the guard to check. See
   `.wayfinder/artifacts/030-exporter-and-download-contract.md`.
+- **Copy moves to one JSON catalogue that both renderers read** — Python for the exports, TypeScript for the
+  screen — because `_export_labels()` is `TEXT[lang] | OPTIMIZER_CODE_TEXT[lang]`, so Python needs it whatever
+  React does. **No i18n library**: importing JSON `as const` checks keys at compile time, which beats runtime
+  lookup and is exactly the guarantee whose absence hid the 24 missing English strings. The parity test grows
+  to all eight tables; the fallback becomes visibly machine output (`⚠ ACCESS_UNVERIFIED`); `CATEGORY_TEXT` is
+  the one documented exemption, with derived English plus a `place_of_worship` override. **Emoji decorate and
+  never carry meaning alone** — a flag-only cell becomes an empty cell in the PDF. See
+  `.wayfinder/artifacts/027-bilingual-copy-pipeline.md`.
 - **Two things must be taken from `Auto-Bill-Splitter` before it is archived**: a backup JSON per trip (the
   migration channel — a file survives archiving, `localStorage` does not) and the 41 lifted element captures
   for the parity gate. Both need the donor runnable.
