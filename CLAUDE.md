@@ -270,12 +270,10 @@ and `streamlit` is the only one for the *interface*. Keep it that way.
 
 ## Phase 2 is being planned, not built — do not implement it yet
 
-`WF-MAP-002` is **open and unfinished**: 19 tickets, **13 closed, 6 open**, 3 of those on the frontier. Every
-remaining ticket is research, prototype, or the final slice plan — **the decision work is done**.
-`Extract the Auto-Bill design token contract` was **reopened** on 2026-07-31: the parity gate made it the
-target the rebuild is measured against, and it is incomplete for 39 inline-only classes and 114 inline style
-sites. Its ambiguities are already ruled on — do not re-litigate them; the remaining scope and its
-definition of done are written into the ticket.
+`WF-MAP-002` is **open and unfinished**: 19 tickets, **14 closed, 5 open**, 3 of those on the frontier.
+**All decision and research work is done.** What remains is three prototype tickets and the final slice plan.
+The token contract was reopened on 2026-07-31 and **completed on 2026-08-03**: §10 of its artifact extracts
+the inline-only layer, and its seven ambiguities are all ruled on — do not re-litigate them.
 The destination is a decision-complete specification, exactly as Phase 1's was, so **no Phase 2 code gets
 written until the map has no unresolved decisions**. Until then the Phase 1 out-of-scope rule above still
 binds: today those four remain the only runtime dependencies, and there is no `api/` and no `web/`. The
@@ -407,9 +405,14 @@ Already decided, and binding on any future implementation:
   missing flag shows the country name alone. **Everything local works offline** — the optimizer and
   `revision.py` are pure — **and network-requiring actions say so before being pressed.** The colour source is
   **`tokens.css`, in CSS not JSON**. See `.wayfinder/artifacts/034-offline-asset-policy.md`.
-- **Two things must be taken from `Auto-Bill-Splitter` before it is archived**: a backup JSON per trip (the
-  migration channel — a file survives archiving, `localStorage` does not) and the 41 lifted element captures
-  for the parity gate. Both need the donor runnable.
+- **Two things must be taken from `Auto-Bill-Splitter` before it is archived**: a backup JSON per trip (kept as
+  an archive record — a file survives archiving, `localStorage` does not) and the 41 lifted element captures
+  for the parity gate. Both need the donor runnable. The token extraction is **done**, so it no longer does.
+- The token contract's inline-only layer is extracted (§10). Two counts worth knowing: of the 39 classes with no
+  CSS rule, **only 23 carry any styling** — 16 are bare containers with nothing to port — and **not one
+  hardcoded colour appears in any of the 114 inline sites**, so the off-token colour problem is entirely in the
+  stylesheet (41 literals, 75 uses). Auto-Bill has **no tab element** and `/split`'s allocation-mode views are
+  **bare containers**, so both must be designed rather than recovered.
 - Cost/split reconciliation: **a split row may claim a cost row via one optional `cost_id`, and the claimed
   row defers its actual.** Nothing is added to the cost row and `payment_state` is untouched — claimed-ness is
   derived — so `planned` is every cost row and `actual` is non-voided split rows **plus unclaimed paid cost

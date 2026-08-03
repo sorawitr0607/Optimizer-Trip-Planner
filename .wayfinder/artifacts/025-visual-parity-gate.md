@@ -28,9 +28,9 @@ selector appearing anywhere in `src/index.css`. Reproducible; re-run it if the d
 | Group | Classes | Why it matters |
 |---|---|---|
 | **Filter dimming** | `.active-bar` `.active-cat` `.active-filter` `.dimmed-bar` `.dimmed-cat` `.dimmed-filter` | The entire filter interaction exists nowhere in the stylesheet, exactly as `WF-020` warned |
-| **Split allocation modes** | `.split-view-equal-all` `-equal-selected` `-manual` `-single` `.split-workspace` | The three allocation modes' layout — and `/split` is a decided route |
+| **Split allocation modes** | `.split-view-equal-all` `-equal-selected` `-manual` `-single` `.split-workspace` | ~~The three allocation modes' layout~~ — **corrected 2026-08-03**: these carry no styling at all, in CSS *or* inline. They are bare containers, so the mode layout must be **designed**, not recovered |
 | **Settlement** | `.settlement-card` `.settlement-grid` `.settlement-item` `.main-cardholder-select` | The settlement surface, also on `/split` |
-| **Tab views** | `.overview-tab-view` `.transactions-tab-view` `.settings-tab-view` `.backup-tab-view` | **Auto-Bill does have tabs** — inline-styled, which is why the inventory reported none |
+| **Tab views** | `.overview-tab-view` `.transactions-tab-view` `.settings-tab-view` `.backup-tab-view` | ~~Auto-Bill does have tabs, inline-styled~~ — **corrected 2026-08-03**: they carry no styling at all. The element inventory was right that there is **no tab element to lift**; these are bare containers |
 | **Money display** | `.avatar-cost-thb` `.txn-amount-thb` `.txn-share-badge` `.txn-price-insight` `.donut-subvalue` | Numeral rendering, the JetBrains Mono surface |
 | **Tailwind-shaped names never written** | `.flex-between` `.flex-column` `.grid-2-columns` `.padding-y-4` `.text-bold` `.text-amber` `.text-purple` | **These 7 dissolve into real Tailwind v4 utilities for free** |
 | Remaining | `.chart-card` `.recent-txns-card` `.btn-clear-filter-sm` `.clickable-filter` `.clickable-filter-item` `.hero-stats-info` `.step-badge-indicator` `.wizard-step-content` `.backup-tab-view` … | Card variants and wizard internals |

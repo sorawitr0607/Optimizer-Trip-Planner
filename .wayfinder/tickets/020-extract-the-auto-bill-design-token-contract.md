@@ -1,11 +1,11 @@
 ---
 id: WF-020
 title: Extract the Auto-Bill design token contract
-status: open
+status: closed
 labels:
   - "wayfinder:research"
 parent: WF-MAP-002
-assignee:
+assignee: user-and-root
 blocked_by: []
 ---
 
@@ -190,3 +190,44 @@ its target is the first of its five ordered prerequisites.
 **One ordering constraint carries over:** `WF-025` also requires the 41 lifted elements to be captured from
 the donor **before `Auto-Bill-Splitter` is archived**. That capture and this extraction both need the donor
 runnable, so they should happen together.
+
+### 2026-08-03 — Completed. The inline-only layer is extracted in §10 of the artifact
+
+[`020-auto-bill-token-contract.md` §10](../artifacts/020-auto-bill-token-contract.md) is now the authority
+for everything styled outside `index.css`, with a re-runnable method recorded. The deliverable is the
+completed contract, not a shipped `tokens.css` — `CLAUDE.md` still bars Phase 2 code and there is no `web/`.
+
+**The 39 split 23 / 16, and that split matters more than the total.**
+
+- **16 carry no styling at all** — no CSS rule *and* no inline style. They are bare containers, JS selectors
+  or leftovers, and there is **nothing to port**.
+- **23 are styled only inline** and are the genuine recovery job: the filter selection and dimming families,
+  the settlement surface, the numeral treatments, and four Tailwind-shaped names that dissolve into v4
+  utilities.
+
+**Not one hardcoded colour appears in any of the 114 inline sites.** Every colour is a token reference or a
+JS value, so the off-token colour problem is entirely in the stylesheet — **41 distinct literals across 75
+uses**, led by `#ffffff` (15) and the untokenised `#8b5cf6` (8). That narrows what §9d–9e's warning costs.
+
+**Two claims of mine are corrected by the measurement, and both made the port look easier than it is.**
+
+- **Auto-Bill has no tab element.** I recorded in `WF-025` that the four `*-tab-view` classes were
+  "inline-styled, which is why the inventory reported none." They carry no styling at all. The element
+  inventory was right; there is nothing to lift.
+- **`/split`'s allocation-mode views are bare containers**, not inline-styled layout. Only the settlement
+  group is recoverable from inline styles. So that screen's mode layout must be **designed**, not recovered.
+  `WF-025`'s artifact and the map both now carry the correction.
+
+**The five undocumented alphas are confirmed exactly as suspected — `10 12 15 30 40`** — appended to hex by
+string concatenation, which cannot survive the move to custom properties and so becomes a named tint scale.
+
+**Nine inline font sizes** form a type scale hiding in JSX, three of them (`0.7` / `0.725` / `0.75`) near
+duplicates that read as drift. **Six inline radius values collapse to one** under `WF-025`'s `2px`
+unification — the largest single simplification the extraction produces.
+
+`views/itinerary.py`'s three pin hexes need no replacement after all: `WF-034` removed the tile map and
+`views/` is POC code awaiting deletion, so they die with it. The eight `exporters.py` hexes still converge
+per **D7**.
+
+§10i lists the nine things `tokens.css` must carry beyond the original 23/21 properties; §10j lists what is
+explicitly not a token.

@@ -57,17 +57,21 @@ resolving tickets are throwaway artifacts, not the build.
 <!-- Closed-ticket index. The detailed decision belongs in its ticket. -->
 
 - [Extract the Auto-Bill design token contract](tickets/020-extract-the-auto-bill-design-token-contract.md) —
-  **REOPENED 2026-07-31.** The extraction below stands and its ambiguities are now ruled on, but the parity
-  gate made this contract the *target* the rebuild is measured against, and re-measuring found the blind spot
-  larger than stated: **39** JSX classes have no CSS rule (not ~28) across **114** inline style sites. The gate
-  cannot run until they are absorbed, so the ticket is back on the frontier with the remaining work and its
-  definition of done written into it. Its output shape is now custom properties, not the drafted v3 JS config.
+  **Reopened 2026-07-31, completed 2026-08-03.** The parity gate made this contract the *target* the rebuild
+  is measured against, and re-measuring found the blind spot larger than stated: **39** JSX classes with no CSS
+  rule across **114** inline style sites. §10 of the artifact now extracts that layer, and the split is the
+  finding — **23 styled only inline, 16 carrying no styling at all**, so a third of the "missing" classes were
+  never visual. **No hardcoded colour appears in any inline site**, which puts the off-token colour problem
+  entirely in the stylesheet (41 literals, 75 uses). The five undocumented alphas are confirmed as
+  `10 12 15 30 40`, nine inline font sizes form an unacknowledged type scale, and six inline radii collapse to
+  one under the `2px` unification. It also corrected two of my own earlier claims: Auto-Bill has **no tab
+  element**, and `/split`'s allocation-mode views are **bare containers** whose layout must be designed rather
+  than recovered. Output shape is custom properties in `tokens.css`, not the drafted v3 JS config.
   The visual language is captured in [`020-auto-bill-token-contract.md`](artifacts/020-auto-bill-token-contract.md):
   23 light / 21 dark custom properties, a zero-blur hard-offset shadow scale that must **replace** Tailwind's
-  soft default rather than extend it, 5 desktop-first max-width breakpoints, and a 13-country inline accent
-  override — plus 7 unresolved ambiguities (the dark accent triple is dead code, two radius systems coexist,
-  both fallbacks return blue rather than the house red, bold monospace is faux) and a large body of off-token
-  JSX literals that a CSS-only port would silently lose.
+  soft default rather than extend it, 5 desktop-first max-width breakpoints, a 13-country inline accent
+  override, and — in §10 — the inline-only layer. Its seven ambiguities are **all ruled on**, not open: two
+  dissolve into the `2px` radius unification, four became deviations D1/D3/D5/D6, and faux bold became D8.
 - [Inventory the Auto-Bill elements each planner stage needs](tickets/021-inventory-the-auto-bill-elements-each-stage-needs.md) —
   Auto-Bill supplies 41 reusable elements; 18 planner elements have no counterpart but only the numbered map
   falls outside what the visual language can reach. The biggest design gap is the ranked candidate card, which
@@ -149,9 +153,10 @@ resolving tickets are throwaway artifacts, not the build.
   a parity failure. Full definition, failure conditions and ordered prerequisites in
   [`025-visual-parity-gate.md`](artifacts/025-visual-parity-gate.md). Three findings reshape the work.
   **The inline-only count reconciles to 39, not 18 or 28** — across 114 inline style sites — so the
-  contract's blind spot is larger than either earlier ticket assumed, and `/split`'s entire layout
-  (5 allocation-mode classes, 3 settlement classes, the cardholder selector) exists nowhere in the
-  stylesheet. **Whole-screen diffs against the donor are impossible** — 2 donor screens against 9 routes —
+  contract's blind spot is larger than either earlier ticket assumed. *(Refined 2026-08-03 by the completed
+  extraction: of the 39, **23 are styled inline and 16 carry no styling at all** — so on `/split` the
+  settlement group is inline-only and recoverable, while the allocation-mode views are bare containers whose
+  layout must be designed.)* **Whole-screen diffs against the donor are impossible** — 2 donor screens against 9 routes —
   so element-level parity captures must be taken **before `Auto-Bill-Splitter` is archived**, while
   screen-level baselines (4 per route: light/dark × en/th, with the 13 accents asserted as tokens rather
   than imaged) only catch drift. And **`exporters.py` hardcodes 8 hexes across 17 occurrences in a cool

@@ -1,14 +1,19 @@
 # Auto-Bill design token contract
 
-> ## 2026-07-31 — this contract is incomplete, and by more than it says
+> ## 2026-08-03 — completed. See §10.
+>
+> The inline-only layer is now extracted and measured in **§10**, which is the authority for it. The
+> summary of the gap that prompted the reopen is kept below for context.
+>
+> ## 2026-07-31 — this contract was incomplete, and by more than it said
 >
 > [Define the visual parity gate for the Tailwind rebuild](025-visual-parity-gate.md) re-measured the
 > blind spot against the sources. **39** JSX classes have no CSS rule at all — not the ~28 estimated
 > here, nor the 18 in the element inventory — spread across **114** inline `style={{…}}` sites, against
 > **250** distinct class selectors in `index.css`. Neither earlier figure was wrong for what it measured;
-> both undercount. **The parity gate is blocked until this contract absorbs those 39 classes, the 114
+> both undercount. **The parity gate was blocked until this contract absorbed those 39 classes, the 114
 > inline sites, the off-token literals in §9d–9e, and the three hardcoded pin hexes in the planner's
-> `views/itinerary.py:94,104`.**
+> `views/itinerary.py:94,104`.** §10 does that.
 >
 > Two further corrections to what is written below:
 >
@@ -954,3 +959,175 @@ Two things that cannot be expressed in `theme.extend` and must be hand-written C
 - **13** countries × 8 fields, **2** divergent fallbacks, **3** overwritten properties.
 - **13** category/participant palette colours in JSX, one array duplicated across 2 files.
 - **7** ambiguities left unresolved (numbered above).
+
+---
+
+# 10. The inline-only layer, extracted (2026-08-03)
+
+Completes the reopen. This section is the authority for everything styled outside `index.css`.
+
+## 10a. Method, so it can be re-run
+
+Every JSX opening tag in `src/**/*.jsx` was parsed brace-aware (so `style={{…}}` containing nested braces
+is captured whole), then for each tag its `className` tokens were paired with the `style` prop on the *same
+element*. A class counts as unstyled when no `.class` selector appears anywhere in `src/index.css`.
+
+| Measure | Value |
+|---|---|
+| Inline `style={{…}}` sites | **114** |
+| Distinct declarations inside them | **143** |
+| JSX classes with no CSS rule | **39** |
+| — carrying an inline style on the same element | **23** |
+| — carrying no styling at all | **16** |
+| Distinct class selectors in `index.css` | 250 |
+
+## 10b. 16 of the 39 are pure markup hooks — nothing to port
+
+No CSS rule *and* no inline style. They are JS selectors, layout containers, or leftovers:
+
+```
+backup-tab-view   overview-tab-view   settings-tab-view   transactions-tab-view
+split-view-equal-all   split-view-equal-selected   split-view-manual   split-view-single
+split-workspace   chart-card   recent-txns-card   hero-stats-info
+padding-y-4   text-amber   text-purple   wizard-step-content
+```
+
+**Two earlier claims are corrected by this.**
+
+- **Auto-Bill does not "have tabs, styled inline".** The four `*-tab-view` classes carry *no styling at
+  all* — they are bare containers. `WF-025`'s note that the element inventory "reported none because they
+  are inline-styled" was wrong: the inventory was right, and there is no tab element to lift.
+- **`/split`'s allocation-mode views are unstyled containers, not inline-styled layout.** The five
+  `split-view-*` / `split-workspace` classes have no styling either. What *is* inline-only on that screen is
+  the **settlement** group (§10c). So the split screen needs its mode layout designed, not recovered.
+
+Four of the seven "Tailwind-shaped names that were never written" live here (`padding-y-4`, `text-amber`,
+`text-purple`, plus `flex-*` in §10c) — they dissolve into Tailwind v4 utilities and need no token.
+
+## 10c. 23 of the 39 carry visual information that exists nowhere in CSS
+
+```
+active-bar  active-cat  active-filter          ← filter selection
+dimmed-bar  dimmed-cat  dimmed-filter          ← filter dimming
+settlement-card  settlement-grid  settlement-item  main-cardholder-select   ← the settlement surface
+txn-amount-thb  txn-share-badge  txn-price-insight  avatar-cost-thb  donut-subvalue   ← numerals
+btn-clear-filter-sm  clickable-filter  clickable-filter-item  step-badge-indicator
+flex-between  flex-column  grid-2-columns  text-bold
+```
+
+## 10d. The 143 declarations, classified
+
+| Class of declaration | Distinct | Token relevance |
+|---|---|---|
+| **Literal colour** (hex / rgb / rgba) | **0** | — |
+| Already tokenised (`var(--…)`) | 16 | none needed |
+| Dynamic (a JS value) | 29 | §10e |
+| Size / duration literals | 54 | §10f |
+| Other literals (weight, opacity, …) | 14 | §10f |
+| Layout / structural | 30 | component CSS, **not tokens** |
+
+> **The headline: not one hardcoded colour appears in any of the 114 inline sites.** Every colour is either a
+> token reference or a JS value. So the off-token colour problem is entirely in the **stylesheet** (§10g),
+> not in the inline layer — which narrows what §9d–9e's warning actually costs.
+
+## 10e. The dynamic values are the interaction contract
+
+These are not tokens in the ordinary sense; they are the rules the filter and selection behaviour encode.
+
+**The five alpha suffixes are confirmed exactly as §9e suspected — `10`, `12`, `15`, `30`, `40`:**
+
+```js
+`${catColor}15`  `${color}10`  `${color}12`  `${catColor}30`  `${color}40`  `${pColor}15`
+```
+
+They are 8-digit-hex alpha appended by string concatenation, i.e. 6%, 7%, 8%, 19%, 25% opacity. **In the
+rebuild these become named tokens** — a tint scale — because string-concatenating alpha onto a hex cannot
+survive a move to CSS custom properties, where the colour may be any format.
+
+| Behaviour | Values found |
+|---|---|
+| Dimmed vs active opacity | `0.35`, `0.4` dimmed · `1` active |
+| Selected vs unselected weight | `800` selected · `500` / `600` not |
+| Selected border | `1.5px solid <colour>` · `transparent` unselected |
+| Selected fill | `<colour>` + alpha `10` / `12` / `15` |
+| Selected border tint | alpha `30` / `40` |
+
+## 10f. Size, weight and motion literals worth tokenising
+
+**Font size — 9 distinct values appear inline, none of them tokens:**
+`0.6875` · `0.7` · `0.725` · `0.75` · `0.8125` · `0.85` · `0.875` · `0.9375` · `1.1` rem
+
+That is a type scale hiding in JSX. `0.7` / `0.725` / `0.75` are three near-identical sizes, which is drift
+rather than intent — the rebuild should collapse them.
+
+**Font weight:** `600`, `700`, `800` inline, and `700`/`800` are exactly the faux-bold uses `WF-034`
+resolved by shipping a real 700 (deviation **D8**).
+
+**Border radius — 6 distinct inline values:** `2px` · `3px` · `4px` · `6px` · `0.375rem` · `0.5rem`.
+**`WF-025` unified radius on `2px`, so all six collapse to one** (pills excepted). This is the largest single
+simplification the extraction produces.
+
+**Motion:** `all 0.2s ease` and `all 0.3s ease` — two durations, worth a token pair.
+
+**Opacity:** `0.8` decorative, plus the dimming values in §10e.
+
+## 10g. Off-token colour literals in the stylesheet: 41 distinct, 75 uses
+
+Measured outside the `:root` / `:root.dark` blocks, so these are genuinely untokenised:
+
+| Uses | Literal | Note |
+|---|---|---|
+| **15** | `#ffffff` | on-accent text; needs a token, it is the single most repeated literal |
+| **8** | `#8b5cf6` | the untokenised fifth semantic colour — deviation **D5** tokenises it |
+| 3 | `#111111`, `#000000` | hero panel; `#000000` is `.btn-hero-cta`'s deliberate black shadow |
+| 3 | `rgba(139,92,246,0.15)` | the violet focus ring, i.e. `#8b5cf6` at 15% — folds into D5 |
+| 2 | `#60a5fa`, `#a78bfa`, `#9ca3af`, `#0f172a` | hero badge / gradient / body; tooltip |
+| 1 | `#121212`, `#f3f4f6`, `#6b7280`, `#e5e5e5` | hero panel palette |
+| 1 | `#1A1A1A` | the border colour, hardcoded once instead of using its own token |
+| 2 | `rgba(59,130,246,0.15)` · `rgba(59,130,246,0.03)` | **stale blue** — deviation **D4** removes both |
+| 1 | `rgba(239,68,68,0.2)` · `rgba(16,185,129,0.2)` | validation borders that should be danger/success tokens |
+| 12 | `rgba(255,255,255,0.02 … 0.95)` | 12 distinct white alphas, all hero-panel overlays |
+| 6 | `rgba(0,0,0,0.1 … 0.75)` | 6 distinct black alphas, shadows and scrims |
+
+Plus five `rgb(var(--hero-panel-*-rgb))` wrappers, which *are* tokenised — the hero panel stores triples so
+it can compose alpha, which is the pattern §10e's concatenated alphas should have used.
+
+**The hero panel is a second palette, always dark regardless of theme**, and it accounts for most of the
+white/black alpha spread. It is a self-contained marketing surface, and the planner has no equivalent screen —
+so it is the one group the rebuild may reasonably decline to port rather than tokenise.
+
+## 10h. The planner's own hardcoded colours, absorbed as asked
+
+The element inventory asked this contract to take these in:
+
+| Where | Literals | Role |
+|---|---|---|
+| `views/itinerary.py:94,104` | `#2A6FB4` flexible · `#B4532A` locked | map pin status |
+| `views/itinerary.py` | `#E0A32E` | hotel anchor |
+| `exporters.py` (17 uses) | `#F2F5F7` `#A9BECD` `#8FB8D8` `#2A3B49` `#101820` `#F2C14E` `#E8EEF3` `#6C8598` | the export palette |
+
+`WF-025` deviation **D7** converges the export palette with the UI tokens, and `WF-034` fixed the source as
+`tokens.css`. **`views/itinerary.py`'s three pin hexes need no replacement at all** — `WF-034` removed the
+tile map, and `views/` is POC code awaiting deletion, so they die with it. The stop-list statuses take their
+colour from the accent/success/warning tokens.
+
+## 10i. What `tokens.css` must therefore carry
+
+Beyond §1's 23 light / 21 dark custom properties and §2's shadow scale:
+
+1. **A tint scale** replacing the five concatenated alphas (`10 12 15 30 40`).
+2. **A type scale** replacing the 9 inline font sizes, collapsing the `0.7`/`0.725`/`0.75` near-duplicates.
+3. **One radius** (`2px`) plus the pill exception — replacing 11 CSS values and 6 inline ones.
+4. **Two motion durations** (`0.2s`, `0.3s`).
+5. **An on-accent text token** for the 15 `#ffffff` uses.
+6. **The fifth semantic colour** `#8b5cf6` and its light tint (**D5**).
+7. **Danger and success border tints**, replacing the two `rgba(…,0.2)` validation literals.
+8. **The dimming and selection scale** from §10e — opacity `0.35`/`0.4`, weights `500`/`600`/`800`.
+9. **The export palette**, converged per **D7**.
+
+## 10j. Explicitly not tokens
+
+- The **30 layout declarations** (`display`, `flex`, `gap`, `position`, …) are component CSS.
+- The **16 pure markup hooks** in §10b.
+- The **hero panel's** second palette, unless that surface is ported at all.
+- **`views/itinerary.py`'s pin hexes**, which die with the POC.
