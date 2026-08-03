@@ -955,3 +955,414 @@
     display: flex;
   }
 }
+
+/* S4 journey screens. A4's full ranked-card grid stays deferred; this keeps one
+   comparable card visible while reusing the existing table, tile, and button families. */
+.places-screen,
+.itinerary-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.places-status,
+.places-screen details,
+.itinerary-screen details {
+  font-size: var(--text-sm);
+}
+
+.places-screen summary,
+.itinerary-screen summary {
+  cursor: pointer;
+  font-weight: var(--weight-selected);
+}
+
+.places-json {
+  background: var(--bg-secondary);
+  border: 1px solid var(--bg-card-border);
+  max-height: 280px;
+  overflow: auto;
+  padding: 10px;
+  white-space: pre-wrap;
+}
+
+.places-pickers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.place-card {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius-house);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+}
+
+.place-card-head {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.place-card-head h3,
+.place-card-head p,
+.place-card p,
+.place-card h4 {
+  margin: 0;
+}
+
+.place-card-head p {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.place-score {
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-4xl);
+  font-variant-numeric: tabular-nums;
+}
+
+.place-score small {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.place-card-facts {
+  color: var(--text-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: var(--text-xs);
+  gap: 12px;
+}
+
+.place-paid-action,
+.place-insight {
+  background: var(--bg-secondary);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius-house);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+}
+
+.place-paid-action button,
+.place-choice-actions button,
+.place-choice-actions select {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius-house);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  padding: 6px 10px;
+}
+
+.place-paid-action button {
+  align-self: flex-start;
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.place-paid-action button:disabled,
+.place-choice-actions button:disabled,
+.optimize-actions button:disabled {
+  cursor: default;
+  opacity: var(--opacity-disabled);
+}
+
+.place-insight img {
+  border: 1px solid var(--bg-card-border);
+  max-height: 360px;
+  object-fit: contain;
+  width: 100%;
+}
+
+.place-insight blockquote {
+  border-left: 3px solid var(--color-accent);
+  margin: 0;
+  padding-left: 9px;
+}
+
+.place-insight footer {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.place-choice-actions {
+  align-items: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.place-choice-actions details {
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius-house);
+  padding: 5px 8px;
+}
+
+.place-choice-actions details label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 7px 0;
+}
+
+.place-detail-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 9px;
+}
+
+.place-detail-grid > div {
+  background: var(--bg-secondary);
+  border: 1px solid var(--bg-card-border);
+  padding: 9px;
+}
+
+.place-detail-grid ul {
+  margin: 5px 0 0;
+  padding-left: 17px;
+}
+
+/* A2 timeline rows: one stable frame, six domain variants. */
+.plan-stamp,
+.plan-day-summary {
+  background: var(--bg-secondary);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius-house);
+  display: flex;
+  flex-direction: column;
+  font-size: var(--text-xs);
+  gap: 3px;
+  padding: 10px 12px;
+}
+
+.plan-stamp code,
+.plan-day-summary strong {
+  font-family: var(--font-mono);
+}
+
+.plan-tabs {
+  border-bottom: 1px solid var(--bg-card-border);
+  display: flex;
+  gap: 3px;
+}
+
+.plan-tabs button {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-bottom: 0;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-weight: var(--weight-secondary);
+  padding: 7px 13px;
+}
+
+.plan-tabs button[aria-selected="true"] {
+  background: var(--color-accent-light);
+  color: var(--color-accent);
+}
+
+.plan-timeline > section {
+  margin-top: 12px;
+}
+
+.plan-row {
+  border-left: 4px solid var(--color-accent);
+  border-top: 1px dashed var(--bg-card-border);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 118px minmax(0, 1fr);
+  padding: 10px 10px 10px 12px;
+}
+
+.plan-row.travel {
+  border-left-color: var(--color-success);
+}
+
+.plan-row.buffer {
+  border-left-color: var(--text-muted);
+}
+
+.plan-row.meal {
+  border-left-color: var(--color-warning);
+}
+
+.plan-row.preparation,
+.plan-row.logistics {
+  border-left-color: var(--color-accent);
+}
+
+.plan-row time {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--weight-selected);
+}
+
+.plan-row time small {
+  color: var(--text-muted);
+  display: block;
+  font-size: var(--text-2xs);
+}
+
+.plan-row-kind {
+  color: var(--text-muted);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-selected);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.plan-row h3,
+.plan-row p {
+  margin: 2px 0;
+}
+
+.plan-row p {
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+.plan-row details {
+  margin-top: 5px;
+}
+
+.plan-row ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.plan-fallback {
+  background: var(--color-warning-light);
+  border: 1px solid var(--color-warning);
+  border-left-width: 4px;
+  display: flex;
+  flex-direction: column;
+  font-size: var(--text-xs);
+  gap: 3px;
+  margin: 7px 0;
+  padding: 9px 11px;
+}
+
+/* A1 coordinate plot: local SVG only. The legend-shaped list repeats status in text. */
+.plan-map svg {
+  background: var(--bg-secondary);
+  border: 1px solid var(--bg-card-border);
+  box-shadow: var(--shadow-sm);
+  display: block;
+  margin-top: 8px;
+  width: 100%;
+}
+
+.plan-map-route {
+  fill: none;
+  stroke: var(--color-accent);
+  stroke-dasharray: 5 4;
+  stroke-width: 2;
+}
+
+.plan-map-point circle {
+  fill: var(--color-accent);
+  stroke: var(--bg-card-border);
+  stroke-width: 1.5;
+}
+
+.plan-map-point.locked circle {
+  fill: var(--color-danger);
+}
+
+.plan-map-point.recheck circle,
+.plan-map-point.unverified_conflict circle {
+  fill: var(--color-warning);
+}
+
+.plan-map-point.tradeoff_accepted circle {
+  fill: var(--color-success);
+}
+
+.plan-map-point text {
+  fill: var(--color-on-accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-selected);
+}
+
+.plan-stops {
+  list-style: none;
+  margin: 9px 0 0;
+  padding: 0;
+}
+
+.plan-stops li {
+  align-items: center;
+  border-top: 1px dashed var(--bg-card-border);
+  display: grid;
+  gap: 7px;
+  grid-template-columns: 10px 20px minmax(0, 1fr) auto;
+  padding: 7px 0;
+}
+
+.plan-stops i {
+  background: var(--color-accent);
+  border-radius: var(--radius-pill);
+  height: 8px;
+  width: 8px;
+}
+
+.plan-stops i.locked {
+  background: var(--color-danger);
+}
+
+.plan-stops i.recheck,
+.plan-stops i.unverified_conflict {
+  background: var(--color-warning);
+}
+
+.plan-stops i.tradeoff_accepted {
+  background: var(--color-success);
+}
+
+.plan-stops code {
+  color: var(--text-muted);
+  font-size: var(--text-2xs);
+}
+
+.plan-downloads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.plan-unscheduled {
+  border: 1px solid var(--color-warning);
+  padding: 10px;
+}
+
+@media (max-width: 768px) {
+  .place-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .plan-row {
+    grid-template-columns: 1fr;
+  }
+
+  .plan-stops li {
+    grid-template-columns: 10px 20px minmax(0, 1fr);
+  }
+
+  .plan-stops code {
+    grid-column: 3;
+  }
+}

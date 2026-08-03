@@ -9,7 +9,9 @@ import { useLanguage } from "./i18n/LanguageProvider";
 import { AppShell } from "./shared/AppShell";
 import { StageGate } from "./shared/StageGate";
 import { CostsPage } from "./stages/CostsPage";
+import { ItineraryPage } from "./stages/ItineraryPage";
 import { OptimizePage } from "./stages/OptimizePage";
+import { PlacesPage } from "./stages/PlacesPage";
 import { SetupPage } from "./stages/SetupPage";
 import { SplitPage } from "./stages/SplitPage";
 import { StagePage } from "./stages/StagePage";
@@ -106,7 +108,14 @@ export const router = createBrowserRouter([
     element: <AppShell />,
     children: [
       { path: "setup", element: <SetupPage /> },
-      { path: "places", element: gated("places", "places") },
+      {
+        path: "places",
+        element: (
+          <StageGate stage="places">
+            <PlacesPage />
+          </StageGate>
+        ),
+      },
       { path: "evidence", element: gated("evidence", "evidence") },
       {
         path: "optimize",
@@ -116,7 +125,14 @@ export const router = createBrowserRouter([
           </StageGate>
         ),
       },
-      { path: "itinerary", element: gated("itinerary", "itinerary") },
+      {
+        path: "itinerary",
+        element: (
+          <StageGate stage="itinerary">
+            <ItineraryPage />
+          </StageGate>
+        ),
+      },
       { path: "readiness", element: gated("readiness", "setup") },
       {
         path: "costs",

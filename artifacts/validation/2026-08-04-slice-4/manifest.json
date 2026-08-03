@@ -1,0 +1,136 @@
+{
+  "slice": 4,
+  "title": "The expensive journey screens: places and itinerary",
+  "date": "2026-08-04",
+  "closes": ".wayfinder/artifacts/033-phase-2-slice-plan-and-scorecard.md S4 implementation",
+  "paid_calls": 0,
+  "paid_spend_usd": 0.0,
+  "s3_review": {
+    "result": "valid",
+    "targeted_python_tests": 19,
+    "web_tests": 21,
+    "check_stages": 8,
+    "defect_found_and_fixed": "OptimizePage looked refusal codes up in TEXT instead of OPTIMIZER_CODE_TEXT",
+    "domain_or_storage_change": false
+  },
+  "check_script": {
+    "command": "uv run --locked python scripts/check.py",
+    "stages_passed": 8,
+    "elapsed_seconds": 19.2
+  },
+  "tests": {
+    "python_total": 312,
+    "python_total_at_slice_3": 306,
+    "python_added": 6,
+    "web_total": 26,
+    "web_total_at_slice_3": 21,
+    "web_added": 5,
+    "new_suites": {
+      "tests/test_ported_behaviours.py::S4PortedBehaviourTest": 5,
+      "tests/test_api.py::SocketGuardTest::test_s4_taipei_journey_reaches_activation_and_both_downloads": 1,
+      "web/src/stages/s4.test.tsx": 5
+    }
+  },
+  "closing_checks": {
+    "real_taipei_setup_through_export": "pass through production server transport; visual browser witness pending",
+    "all_six_itinerary_row_types": "pass",
+    "bilingual_places_and_itinerary": "pass",
+    "true_relative_coordinate_map_and_duplicated_stop_status": "pass",
+    "workbook_and_readiness_calendar": "pass"
+  },
+  "real_taipei_walkthrough": {
+    "database": "scratch copy of data/tourist.sqlite3; repository database untouched",
+    "discovery_provider": "openstreetmap",
+    "discovery_status": "verified cached result",
+    "candidates": 832,
+    "duplicates_merged": 6,
+    "geographic_cells_with_candidates": 9,
+    "ranking_cards": 832,
+    "main_queue": 525,
+    "considered_choices": 4,
+    "preview_variants": 3,
+    "preview_variant_status": "provisional",
+    "preview_variants_valid": 3,
+    "activated_variant": "best_balance",
+    "scheduled_visits": 4,
+    "export_days": 8,
+    "export_items": 69,
+    "row_types": [
+      "buffer",
+      "logistics",
+      "meal",
+      "preparation",
+      "travel",
+      "visit"
+    ],
+    "checklist_items": 13,
+    "readiness": "action_needed",
+    "capability_gaps": [
+      "ACCOMMODATION_BASE_UNCONFIRMED",
+      "OPENING_EVIDENCE_MISSING"
+    ],
+    "journey_next": "itinerary",
+    "all_five_journey_gates_done": true
+  },
+  "exports": {
+    "workbook_bytes": 23571,
+    "workbook_zip_test": "pass",
+    "calendar_bytes": 5073,
+    "calendar_prefix": "BEGIN:VCALENDAR"
+  },
+  "ported_behaviours": {
+    "ported_in_s4": 5,
+    "still_owed_after_s4": 4,
+    "apptest_originals_deleted": 0
+  },
+  "api": {
+    "planner_actions_public_methods": 63,
+    "allowlisted_actions_before": 57,
+    "allowlisted_actions_after": 59,
+    "actions_added": [
+      "check_paid_call",
+      "build_export_snapshot"
+    ],
+    "refusal_codes": 28,
+    "new_runtime_dependencies": 0
+  },
+  "copy": {
+    "text_keys": 593,
+    "optimizer_code_keys": 68,
+    "new_bilingual_keys": 7,
+    "obsolete_export_help_corrected": true
+  },
+  "code": {
+    "web/src/stages/PlacesPage.tsx": 358,
+    "web/src/stages/ItineraryPage.tsx": 305,
+    "web/src/stages/s4.test.tsx": 239,
+    "tests/test_api.py": 387,
+    "tests/test_ported_behaviours.py": 606
+  },
+  "production_build": {
+    "modules": 1903,
+    "css_kb": 30.14,
+    "javascript_kb": 484.0,
+    "javascript_gzip_kb": 142.04
+  },
+  "visual_validation": {
+    "production_shell_served": true,
+    "places_and_itinerary_render_tests": 5,
+    "captures": [],
+    "capture_status": "pending",
+    "capture_reason": "in-app browser connector rejected the session metadata: codex/sandbox-state-meta missing field sandboxPolicy"
+  },
+  "known_limits": [
+    "A newly created trip still needs the route-evidence surface before optimization; the S4 gate intentionally uses the saved real Taipei trip with existing route evidence.",
+    "The full ranked card grid remains deferred past the pilot; S4 ships the locked functional ranked-list scope.",
+    "The graph integrity check passes, but the paid graph snapshot was not rebuilt.",
+    "No S4 screen capture is claimed until the in-app browser connector is available."
+  ],
+  "graph": {
+    "check_command": "python3 scripts/build_project_graph.py --check",
+    "result": "pass",
+    "nodes": 1358,
+    "directed_edges": 3185,
+    "rebuilt": false
+  }
+}

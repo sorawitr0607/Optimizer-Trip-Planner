@@ -47,9 +47,10 @@ used* would need one, so it is deliberately not done.
 
 ## Trip identity lives in the path
 
-Every one of the 51 allowlisted methods takes `trip_id`, so the frontend must always know it. *(51 was
-the count when this was decided; the allowlist is 57 after S2's five split-ledger methods and S3's
-`setup_vocabulary`. The argument is unaffected — every trip-scoped method still takes `trip_id`.)*
+Every trip-scoped allowlisted method takes `trip_id`, so the frontend must always know it. *(51 was
+the total allowlist count when this was decided; it is 59 after S2's five split-ledger methods, S3's
+`setup_vocabulary`, and S4's `check_paid_call` / `build_export_snapshot` reads. The argument is
+unaffected — every trip-scoped method still takes `trip_id`.)*
 Reading it
 from `useParams` rather than from ambient context buys three things:
 

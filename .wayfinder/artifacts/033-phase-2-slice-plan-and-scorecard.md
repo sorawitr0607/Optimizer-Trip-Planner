@@ -68,7 +68,7 @@ cheap-before-expensive *within* the journey while proving the merge early.
 | **S1** | **Foundation.** `api/` transport (dispatch, 51-method allowlist, `jsonable()`, error map, boundary guard, `GET` downloads) · `PlannerActions.journey()` · `tokens.css` · the JSON copy catalogue · `web/` shell with routing and `<StageGate>` · `scripts/check.py` | **Done 2026-08-03.** [Evidence](../../artifacts/validation/2026-08-03-slice-1/notes.md): 248 Python + 2 web tests; all 8 check stages, live shell/API round-trip, and the 1358-node directed graph pass. |
 | **S2** | **The merge.** `split.py` · the split-ledger table with its pre-bump database copy · `costs.totals()` gaining `planned_thb` / `actual_thb` · `/costs` and `/split` screens | **Done 2026-08-03.** [Evidence](../../artifacts/validation/2026-08-03-slice-2/notes.md): 287 Python + 12 web tests; all 8 check stages green in 14.9 s; schema 13 with its refuse-on-failure copy; the claim rule proved at 1,000 against a 1,150 locked row; both screens captured in `en`/`th` × light/dark. The per-traveller settled marker landed in the same bump by owner decision, so the ledger needs no third one-way schema change. |
 | **S3** | **The cheap journey screens.** `setup` (5 steps, one whole draft) · `optimize` · app chrome · the sidebar navigation | **Done 2026-08-03.** [Evidence](../../artifacts/validation/2026-08-03-slice-3/notes.md): 306 Python + 21 web tests; all 8 check stages green; the setup draft round-trips to a fixed-point hash including the two nationality fields the POC drops; a `ready` variant activates and a moved input hash refuses with `preview_stale` writing nothing. *(Two of the "14" portable behaviours were already at actions level, so 12 were outstanding and 9 remain — see the notes.)* |
-| **S4** | **The expensive journey screens.** `places` (570 lines, nearly all-new) · `itinerary` (the six row types, the stop list, the coordinate map) | **Gate 1 becomes assessable**: the real Taipei trip walks setup → discovery → ranking → optimize → activate → export in the webapp |
+| **S4** | **The expensive journey screens.** `places` (570 lines, nearly all-new) · `itinerary` (the six row types, the stop list, the coordinate map) | **Implementation complete 2026-08-04.** [Evidence](../../artifacts/validation/2026-08-04-slice-4/notes.md): 312 Python + 26 web tests and all 8 check stages green; the copied real Taipei record walked cached discovery (832 candidates) → ranking → three valid provisional variants → activation → a 69-row shared snapshot → valid XLSX and ICS with no paid call. The production shell and transport passed, but the in-app browser connector was unavailable, so the exact visual witness/captures remain explicitly owed. |
 | **S5** | **Slice 6 and the rest.** Non-AI quick actions · `revise` · `readiness` | Quick actions produce a rebuilt variant with consequences shown; a revision applies and restores; the readiness board generates and applies |
 | **S6** | **Parity and deletion.** The parity harness green · the remaining ported behaviours · delete `views/`, `app.py`, `ui/` | Element diffs within tolerance for all 41 lifted elements; 36 screen baselines approved; token allowlist clean; deviation register D1–D10 complete; `check.py` green with `AppTest` gone |
 
@@ -77,7 +77,7 @@ checkpoint actually measures.
 
 ### Accepted costs of this order
 
-- **`places` and `itinerary` are stubs until S4** — and they are the two screens looked at most.
+- **`places` and `itinerary` stayed stubs until S4** — and they are the two screens looked at most.
 - **The irreversible schema bump lands at S2**, when coverage of the new stack is thinnest. `WF-024`'s
   pre-bump copy that refuses on failure is therefore load-bearing, not a formality.
 - **S1 must be a fuller foundation than the word implies** — routing and `<StageGate>` have to ship in it,
@@ -103,7 +103,7 @@ S6's parity baselines have a history rather than appearing from nowhere.
 
 | Gate | Command or rule |
 |---|---|
-| Unit tests | `unittest discover -s tests` — charted at 202, **230** after S0, **248** after S1, **287** after S2, **306** after S3. The gate is that they all pass; the count moves with the suite |
+| Unit tests | `unittest discover -s tests` — charted at 202, **230** after S0, **248** after S1, **287** after S2, **306** after S3, **312** after S4. The gate is that they all pass; the count moves with the suite |
 | Historic regressions | `scripts/run_optimizer_regressions.py` — 27 cases, 20 atomic + 7 interaction |
 | Fixture structure | `scripts/validate_regression_fixtures.py` |
 | Copy parity | `en`/`th` key-for-key across **all 8 tables**, with `CATEGORY_TEXT` exempted and tested on rendered output |
@@ -130,7 +130,8 @@ S6's parity baselines have a history rather than appearing from nowhere.
 1. **The real Taipei trip planned end to end in the webapp.** Not a fixture.
 2. **Exports verified against the four reference workbooks** — now the workbook and ICS only, since the PDF and
    poster are gone.
-3. **The full current Python suite green** — 248 tests at S1 closure, **287 after S2 and 306 after S3**.
+3. **The full current Python suite green** — 248 tests at S1 closure, **287 after S2, 306 after S3,
+   and 312 after S4**.
    The gate is "all of them pass", so the number moves with the suite rather than being a target.
 
 Not on track ⇒ Taipei is planned by hand in Excel, as the four reference trips were.
@@ -147,7 +148,7 @@ Not on track ⇒ Taipei is planned by hand in Excel, as the four reference trips
 ## 5. The calendar, stated plainly
 
 **13 weeks** from 2026-08-03 to the 1 November checkpoint. Seven slices, so **under two weeks each**, with
-zero webapp code written today. Gate 1 is not assessable until **S4** — the fifth slice.
+zero webapp code written that day. Gate 1 became assessable with **S4** — the fifth slice.
 
 That is tight, and the plan does not pretend otherwise. Three things make it survivable:
 

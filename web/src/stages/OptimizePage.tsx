@@ -111,7 +111,7 @@ export function OptimizePage() {
 
       {refusal ? (
         <p className="field-error" aria-live="polite">
-          ⚠ {copy(refusal, language)}
+          ⚠ {copyFrom("OPTIMIZER_CODE_TEXT", refusal, language)}
         </p>
       ) : null}
 

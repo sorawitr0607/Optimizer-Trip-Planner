@@ -32,7 +32,6 @@ WEB_ROOT = REPO_ROOT / "web"
 WEB_DIST = WEB_ROOT / "dist"
 
 # Literal by design. `save_plan_version` and `record_paid_call` must never be here.
-# Downloads replace the snapshot RPC; paid-card preflight joins when that screen lands.
 ACTIONS = (
     "create_trip",
     "list_trips",
@@ -46,12 +45,14 @@ ACTIONS = (
     "clear_candidate_choice",
     "list_candidate_choices",
     "rank_candidates",
+    "check_paid_call",
     "enrich_place_card",
     "generate_plan_preview",
     "get_plan_preview",
     "activate_plan_preview",
     "restore_plan_version",
     "get_active_plan",
+    "build_export_snapshot",
     "propose_checklist",
     "apply_checklist_proposal",
     "list_checklist_items",

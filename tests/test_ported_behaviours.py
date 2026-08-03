@@ -24,9 +24,18 @@ and the sidebar trip selector:
 | `trip_slots_create_switch_and_keep_drafts_independent` | `create_trip` / `get_setup` / `journey` |
 | `deleting_the_last_trip_returns_to_first_trip_setup` | `delete_trip` + `journey` |
 
+Ported here by S4, covering discovery/ranking and the active itinerary:
+
+| Behaviour | Its new home |
+|---|---|
+| `interested_choice_persists_and_ranking_renders_in_thai` | ranking actions + catalogue |
+| `missing_hours_and_hotel_create_a_visible_provisional_plan` | optimizer + export snapshot |
+| `active_plan_renders_timeline_and_map_in_both_languages` | export snapshot + catalogue |
+| `fallback_block_renders_beneath_its_half_day` | export snapshot placement |
+| `a_trip_without_a_plan_is_told_which_stage_to_finish` | `journey()` gate data |
+
 Still owed, each waiting on the slice that builds its screen: the checklist
-board pair, the two export-render pair plus the fallback block, the ranking
-choice, the revision section, the provisional-plan case, and the cost section.
+board pair, the revision section, and the cost section.
 """
 
 from __future__ import annotations
@@ -324,12 +333,159 @@ class ActivationGateTest(unittest.TestCase):
         ):
             self.assertIn(code, REFUSAL_STATUS, code)
 
-        # Refusal codes deliberately have no catalogue entries yet: CLAUDE.md
-        # records the 26-code migration as an open **Phase 1** defect, so a Thai
-        # owner still reads English at a refusal. The screen therefore renders
-        # them through the catalogue's visible-machine-output fallback rather
-        # than inventing copy-looking prose for them here.
+        # Refusal prose lives with the other stable optimizer/action codes, not
+        # in the general interface table. React must use that table explicitly.
         self.assertNotIn("preview_stale", COPY["TEXT"]["en"])
+        self.assertIn("preview_stale", COPY["OPTIMIZER_CODE_TEXT"]["th"])
+
+
+class S4PortedBehaviourTest(unittest.TestCase):
+    """The five AppTest behaviours whose React surfaces land in S4."""
+
+    def test_interested_choice_persists_and_thai_ranking_copy_exists(self) -> None:
+        from tests.test_ranking import RankingActionsTest
+
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "ranking.sqlite3"
+            actions = PlannerActions(path, place_provider=RankingActionsTest.Provider())
+            trip = actions.create_trip(name="Taipei", destination="Taipei, Taiwan")
+            actions.save_setup(
+                trip_id=trip.trip_id,
+                main_style=["sightseeing", "culture"],
+                travellers=[{"label": "Member", "age": 19, "tags": ["nature"]}],
+                confirmed=True,
+            )
+            actions.discover_places(trip_id=trip.trip_id)
+            before = actions.rank_candidates(trip.trip_id)
+            place_id = before["lanes"]["main_queue"][0]["place_id"]
+            actions.save_candidate_choice(
+                trip_id=trip.trip_id, place_id=place_id, action="interested"
+            )
+
+            resumed = PlannerActions(path)
+            after = resumed.rank_candidates(trip.trip_id)
+            self.assertEqual("interested", resumed.list_candidate_choices(trip.trip_id)[0].action)
+            self.assertNotIn(
+                place_id, [item["place_id"] for item in after["lanes"]["main_queue"]]
+            )
+            self.assertIn(place_id, after["lanes"]["browse_all"])
+            self.assertEqual(
+                "การ์ดสถานที่ที่เหมาะกับทริป", COPY["TEXT"]["th"]["ranking_title"]
+            )
+
+    def test_missing_hours_and_hotel_remain_visible_in_a_provisional_export(self) -> None:
+        from tests.test_routes import FakePlaceProvider, FakeRouteProvider
+
+        with TemporaryDirectory() as directory:
+            actions = PlannerActions(
+                Path(directory) / "provisional.sqlite3",
+                place_provider=FakePlaceProvider(),
+                route_provider=FakeRouteProvider(),
+            )
+            trip = actions.create_trip(
+                name="Taipei provisional",
+                destination="Taipei, Taiwan",
+                planning_mode="explore_first",
+            )
+            actions.save_setup(
+                trip_id=trip.trip_id,
+                main_style=["sightseeing"],
+                start_date="2030-01-01",
+                end_date="2030-01-03",
+                accommodation_status="not_booked",
+                confirmed=True,
+            )
+            discovery = actions.discover_places(trip_id=trip.trip_id)
+            for candidate in discovery.candidates.as_dict()["candidates"]:
+                actions.save_candidate_choice(
+                    trip_id=trip.trip_id,
+                    place_id=candidate["place_id"],
+                    action="must_do",
+                )
+            actions.refresh_routes(trip.trip_id)
+
+            proposal = actions.generate_plan_preview(trip.trip_id).proposal.as_dict()
+            variant = proposal["variants"][0]
+            self.assertEqual("provisional", variant["status"])
+            self.assertTrue(variant["validation"]["valid"])
+            actions.activate_plan_preview(
+                trip_id=trip.trip_id, variant_id=variant["variant_id"]
+            )
+            exported = actions.build_export_snapshot(trip.trip_id).as_dict()
+            self.assertEqual("action_needed", exported["readiness"]["state"])
+            self.assertEqual("provisional", exported["readiness"]["variant_status"])
+            self.assertEqual(
+                "provisional_accommodation_base",
+                exported["accommodation"]["anchor"]["subject_id"],
+            )
+
+    def test_active_plan_snapshot_carries_timeline_stops_and_both_languages(self) -> None:
+        from tests.test_exports import plan_payload, planner_input
+
+        plan = plan_payload(planner_input(with_names=True, with_coordinates=True))
+        with TemporaryDirectory() as directory:
+            actions = PlannerActions(Path(directory) / "active.sqlite3")
+            trip = actions.create_trip(name="Tokyo day", destination="Tokyo")
+            actions.save_plan_version(
+                trip_id=trip.trip_id, snapshot=plan, cause="optimizer:best_balance"
+            )
+
+            english = actions.build_export_snapshot(trip.trip_id, language="en").as_dict()
+            thai = actions.build_export_snapshot(trip.trip_id, language="th").as_dict()
+            self.assertTrue(any(day["items"] for day in english["days"]))
+            self.assertTrue(any(day["stops"] for day in english["days"]))
+            self.assertIn(
+                "Shibuya Sky",
+                [item["display_name"] for day in english["days"] for item in day["stops"]],
+            )
+            self.assertIn(
+                "ชิบูยะสกาย",
+                [item["display_name"] for day in thai["days"] for item in day["stops"]],
+            )
+            self.assertEqual(
+                [[item["subject_id"] for item in day["stops"]] for day in english["days"]],
+                [[item["subject_id"] for item in day["stops"]] for day in thai["days"]],
+            )
+
+    def test_fallback_stays_beneath_the_half_day_that_contains_its_replacement(self) -> None:
+        from tests.test_exports import CATALOG, plan_payload
+
+        source = next(
+            item
+            for item in CATALOG["fixtures"]
+            if item["metadata"]["id"] == "ix-jp-rain-fallback-reoptimization"
+        )
+        plan = plan_payload(json.loads(json.dumps(source["planner_input"])))
+        with TemporaryDirectory() as directory:
+            actions = PlannerActions(Path(directory) / "fallback.sqlite3")
+            trip = actions.create_trip(name="Rain day", destination="Tokyo")
+            actions.save_plan_version(
+                trip_id=trip.trip_id, snapshot=plan, cause="optimizer:best_balance"
+            )
+            exported = actions.build_export_snapshot(trip.trip_id).as_dict()
+
+        located = [fallback for day in exported["days"] for fallback in day["fallbacks"]]
+        self.assertTrue(located)
+        for fallback in located:
+            self.assertIn(fallback["half_day"], {"morning", "afternoon"})
+            day = next(item for item in exported["days"] if item["date"] == fallback["date"])
+            replacement = next(
+                item for item in day["items"] if item["item_id"] == fallback["replacement_item_id"]
+            )
+            self.assertEqual(
+                "morning" if replacement["start"] < "12:00" else "afternoon",
+                fallback["half_day"],
+            )
+
+    def test_a_trip_without_a_plan_names_optimize_as_the_itinerary_blocker(self) -> None:
+        with TemporaryDirectory() as directory:
+            actions = PlannerActions(Path(directory) / "blocked.sqlite3")
+            trip = actions.create_trip(name="No plan", destination="Osaka")
+            journey = actions.journey(trip.trip_id)
+
+        itinerary = next(stage for stage in journey["stages"] if stage["key"] == "itinerary")
+        self.assertEqual("optimize", itinerary["blocked_by"])
+        self.assertEqual("setup", journey["next"])
 
 
 class TripSlotTest(unittest.TestCase):

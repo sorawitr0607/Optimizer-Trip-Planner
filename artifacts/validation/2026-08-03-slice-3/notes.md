@@ -4,6 +4,14 @@ Built 2026-08-03. Numbers are in `manifest.json`; this file carries the narrativ
 taken while building. Closes the S3 row of
 `.wayfinder/artifacts/033-phase-2-slice-plan-and-scorecard.md`.
 
+## Post-closure check — 2026-08-04
+
+S3 remains valid: its 19 targeted Python behaviours, the real Taipei setup fixed-point round-trip,
+activation gate, 21 web tests and all eight repository stages passed before S4 work began. The review
+did find one presentation defect: `OptimizePage` looked refusal codes up in `TEXT`, although their Thai
+and English prose lives in `OPTIMIZER_CODE_TEXT`. S4 corrected that shared lookup and the full gate then
+passed at 312 Python and 26 web tests. No S3 domain behaviour or stored data changed.
+
 ## The three closing checks
 
 | Check | Where it lives |

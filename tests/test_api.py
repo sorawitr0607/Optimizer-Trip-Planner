@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from http.client import HTTPConnection
+from io import BytesIO
 import inspect
 import json
 from pathlib import Path
@@ -8,6 +9,7 @@ from tempfile import TemporaryDirectory
 from threading import Thread
 import unittest
 from unittest.mock import patch
+import zipfile
 
 from api import ACTIONS, REFUSAL_STATUS, PlannerHTTPServer, dispatch, jsonable
 from travel_planner.actions import PlannerActions
@@ -98,10 +100,12 @@ class JsonableContractTest(unittest.TestCase):
 class DispatchContractTest(unittest.TestCase):
     def test_allowlist_is_literal_and_excludes_internal_writes(self) -> None:
         self.assertIsInstance(ACTIONS, tuple)
-        self.assertEqual(57, len(ACTIONS))
+        self.assertEqual(59, len(ACTIONS))
         self.assertEqual(len(ACTIONS), len(set(ACTIONS)))
         self.assertNotIn("save_plan_version", ACTIONS)
         self.assertNotIn("record_paid_call", ACTIONS)
+        self.assertIn("check_paid_call", ACTIONS)
+        self.assertIn("build_export_snapshot", ACTIONS)
         self.assertEqual(28, len(REFUSAL_STATUS))
 
     def test_the_split_ledger_is_reachable_but_deletion_is_not(self) -> None:
@@ -300,6 +304,83 @@ class SocketGuardTest(unittest.TestCase):
         )
         self.assertEqual(200, status)
         self.assertEqual("setup", json.loads(body)["next"])
+
+    def test_s4_taipei_journey_reaches_activation_and_both_downloads(self) -> None:
+        """The S4 transport path, with route evidence prepared deterministically."""
+
+        from tests.test_routes import FakePlaceProvider, FakeRouteProvider
+
+        self.actions.place_provider = FakePlaceProvider()
+        self.actions.route_provider = FakeRouteProvider()
+
+        def rpc(method: str, payload: dict) -> object:
+            status, _, body = self.request(
+                "POST",
+                f"/api/{method}",
+                body=json.dumps(payload).encode(),
+                headers={"Content-Type": "application/json"},
+            )
+            self.assertEqual(200, status, (method, body.decode()))
+            return json.loads(body)
+
+        trip = rpc(
+            "create_trip",
+            {
+                "name": "Taipei New Year",
+                "destination": "Taipei, Taiwan",
+                "planning_mode": "explore_first",
+            },
+        )
+        trip_id = trip["trip_id"]
+        rpc(
+            "save_setup",
+            {
+                "trip_id": trip_id,
+                "owner_age": 34,
+                "main_style": ["sightseeing", "culture"],
+                "also_enjoy": ["local_street_food", "photography"],
+                "travellers": [{"label": "Mum", "age": 63, "tags": ["culture"]}],
+                "start_date": "2030-01-01",
+                "end_date": "2030-01-03",
+                "arrival_time": "09:00",
+                "departure_time": "21:00",
+                "accommodation_status": "not_booked",
+                "confirmed": True,
+            },
+        )
+        discovery = rpc("discover_places", {"trip_id": trip_id})
+        ranking = rpc("rank_candidates", {"trip_id": trip_id})
+        self.assertEqual(
+            len(discovery["candidates"]["data"]["candidates"]),
+            len(ranking["lanes"]["browse_all"]),
+        )
+        for place_id in ranking["lanes"]["browse_all"]:
+            rpc(
+                "save_candidate_choice",
+                {"trip_id": trip_id, "place_id": place_id, "action": "must_do"},
+            )
+        rpc("refresh_routes", {"trip_id": trip_id})
+        preview = rpc("generate_plan_preview", {"trip_id": trip_id})
+        variant = preview["proposal"]["data"]["variants"][0]
+        self.assertEqual("provisional", variant["status"])
+        self.assertTrue(variant["validation"]["valid"])
+        rpc(
+            "activate_plan_preview",
+            {"trip_id": trip_id, "variant_id": variant["variant_id"]},
+        )
+        rpc("apply_checklist_proposal", {"trip_id": trip_id})
+        snapshot = rpc("build_export_snapshot", {"trip_id": trip_id, "language": "th"})
+        self.assertEqual(
+            {"buffer", "logistics", "meal", "preparation", "travel", "visit"},
+            {item["type"] for day in snapshot["data"]["days"] for item in day["items"]},
+        )
+
+        status, _, workbook = self.request("GET", f"/api/export/{trip_id}/workbook.xlsx")
+        self.assertEqual(200, status)
+        self.assertTrue(zipfile.is_zipfile(BytesIO(workbook)))
+        status, _, calendar = self.request("GET", f"/api/export/{trip_id}/checklist.ics")
+        self.assertEqual(200, status)
+        self.assertTrue(calendar.startswith(b"BEGIN:VCALENDAR"))
 
 
 if __name__ == "__main__":

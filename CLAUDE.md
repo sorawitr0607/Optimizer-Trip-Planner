@@ -9,7 +9,7 @@ npm --prefix web install                                             # first web
 uv run --locked python -m api                                        # production shell on 127.0.0.1:8765
 uv run streamlit run app.py                                          # temporary Phase 1 POC
 uv run --locked python scripts/check.py                              # every free Python + web gate
-uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 306 tests, ~11s
+uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 312 tests, ~11s
 uv run --locked python -m unittest tests.test_optimizer.OptimizerCoreTest.test_safe_route_and_weather_fallback_are_selected  # one test
 python3 scripts/validate_regression_fixtures.py                      # fixture catalog structure
 uv run --locked python scripts/run_optimizer_regressions.py          # 27 historic cases through the real optimizer
@@ -249,11 +249,12 @@ readiness ICS — both snapshot-in, bytes-out. **The 9:16 poster and the trip PD
 (2026-08-03), and with them the whole export-font apparatus. `checklist.py` generates the readiness board and `costs.py` converts owner-recorded
 expenses into THB against an owner-editable, timestamped rate snapshot; a paid charge locks its actual
 THB so a later rate cannot rewrite it, and a missing rate stays a visible gap rather than a guess.
-**Phase 2 S1 is complete:** `api/` owns the localhost boundary and downloads, `web/` owns the nine
+**Phase 2 S4 is complete:** `api/` owns the localhost boundary and downloads, `web/` owns the nine
 routes and in-place `StageGate`, and `scripts/check.py` is the one free green command. The allowlist is
-**57 methods**: 51 at S1, five split-ledger ones at S2, and `setup_vocabulary` at S3; 28 refusal codes.
-`/costs`, `/split`, `/setup` and `/optimize` are real; `places`, `evidence`, `itinerary`, `readiness` and
-`revise` are still stubs until their assigned slices. **Slice 6's core exists but only behind the POC UI:** `revision.py`'s non-AI quick actions (`a7ad537`) and
+**59 methods**: 51 at S1, five split-ledger ones at S2, `setup_vocabulary` at S3, then the paid-call
+preflight and export-snapshot reads at S4; 28 refusal codes. `/costs`, `/split`, `/setup`, `/places`,
+`/optimize` and `/itinerary` are real; `evidence`, `readiness` and `revise` remain stubs. **Slice 6's
+core exists but only behind the POC UI:** `revision.py`'s non-AI quick actions (`a7ad537`) and
 `interpret.py`'s constrained GenAI revision (`a2d59f6`) landed 2026-07-29 with tests, wired into
 `views/revise.py`. The pure modules survive the redesign; their Streamlit surfaces are POC code awaiting
 deletion, so **slice 6 still has to be built in the webapp** and the live pilot remains unbuilt. Every new
@@ -279,10 +280,27 @@ ticket, `Prototype the ranked candidate card grid`, is **deferred past the pilot
 outstanding. `Lock the Phase 2 slice plan and validation scorecard` is the destination artifact — read it
 first: `.wayfinder/artifacts/033-phase-2-slice-plan-and-scorecard.md`.
 
-**The Phase 2 code freeze has lifted.** S0 through S3 are complete; **S4 is the next allowed slice** —
-the expensive journey screens (`places`, 570 lines and nearly all-new; `itinerary` with its six row
-types, stop list and coordinate map). **S4 is the slice that first makes the webapp usable end to end,
-and it is what the 1 November checkpoint actually measures.**
+**The Phase 2 code freeze has lifted.** S0 through S4 are complete; **S5 is the next allowed slice** —
+the non-AI quick actions plus `revise` and `readiness`. S4 made the saved real Taipei trip assessable
+through discovery, ranking, optimization, activation and export; fresh trips still wait on the
+route-evidence surface assigned to parity work.
+
+**S4 landed the expensive journey screens on 2026-08-04**
+(evidence: `artifacts/validation/2026-08-04-slice-4/notes.md`). Its constraints are:
+
+- **`places` is a functional ranked list, not the deferred card grid.** It preserves all lanes,
+  choices, reasons, score breakdowns, provenance and the owner-triggered paid overlay. Every paid
+  action shows its estimate immediately before its button; insight and photos stay session-only.
+- **`itinerary` reads `build_export_snapshot()`**, never the raw variant. The six row types, fallbacks,
+  bilingual stop list, true-relative coordinate SVG, workbook and readiness calendar therefore share
+  one set of times and statuses.
+- **`check_paid_call` and `build_export_snapshot` are allowlisted reads 58 and 59.** No internal writer
+  was exposed and no runtime dependency was added.
+- **Five more portable behaviours now live below Streamlit; four remain.** No `AppTest` original is
+  deleted before S6.
+- **The exact visual witness is still owed.** The in-app browser connector was unavailable during the
+  S4 run, so production build, server/API transport, SSR render tests and export validation are retained,
+  but no S4 screen capture is claimed.
 
 **S3 landed the cheap journey screens on 2026-08-03**
 (evidence: `artifacts/validation/2026-08-03-slice-3/notes.md`). Five things from it bind later work:
@@ -310,7 +328,7 @@ and it is what the 1 November checkpoint actually measures.**
 
 **`tests/test_ported_behaviours.py` is the S6 deletion checklist.** It holds the actions-level homes for
 behaviours still asserted through `AppTest`, organised by provenance on purpose. Two of artifact 029's
-"14 portable" were already at actions level, so **12 were outstanding and 9 remain**; its module
+"14 portable" were already at actions level, so **12 were outstanding and 4 remain after S4**; its module
 docstring lists what is owed. No `AppTest` original is deleted until `views/` goes at S6.
 
 **S2 landed the merge on 2026-08-03** (evidence: `artifacts/validation/2026-08-03-slice-2/notes.md`).

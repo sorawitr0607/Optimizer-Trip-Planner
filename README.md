@@ -18,10 +18,10 @@ npm --prefix web install             # first run only
 uv run --locked python -m api        # http://127.0.0.1:8765
 ```
 
-The webapp has the shell, the route gates and four real screens — **trip setup** (five steps),
-**optimize**, **costs** and **split**. `places`, `evidence`, `itinerary`, `readiness` and `revise` are
-still stubs until their assigned slices, so **the POC remains the planner UI for now**. It stays
-available with `uv run streamlit run app.py` until parity.
+The webapp has the shell, route gates and six real screens — **trip setup** (five steps), **places**,
+**optimize**, **itinerary**, **costs** and **split**. A saved trip with route evidence can now run through
+discovery, ranking, activation and workbook/calendar export. `evidence`, `readiness` and `revise` remain
+stubs, so **the POC remains available until parity** with `uv run streamlit run app.py`.
 
 Both surfaces use `data/tourist.sqlite3` by default. Copy `secrets.example.json` to
 `secrets.local.json` for optional provider configuration; never commit local secrets.
@@ -55,8 +55,9 @@ Both surfaces use `data/tourist.sqlite3` by default. Copy `secrets.example.json`
   plan; `map-002-splitter-merge-and-webapp.md` is Phase 2 — merging the bill splitter and replacing
   Streamlit with a webapp. **Phase 2 is decision-complete as of 2026-08-03** (18 of 19 tickets closed; the
   one open ticket is deferred past the pilot, not outstanding), **so implementation has begun**: slices
-  **S0 through S3 are done and S4 is next** — the expensive `places` and `itinerary` screens, which are
-  what the 1 November checkpoint measures. Start with
+  **S0 through S4 are done and S5 is next** — non-AI quick actions plus the `revise` and `readiness`
+  screens. S4 made the saved Taipei journey assessable end to end; its retained evidence is in
+  `artifacts/validation/2026-08-04-slice-4/`. Start with
   `.wayfinder/artifacts/033-phase-2-slice-plan-and-scorecard.md`, which carries the build order and
   pass-or-fail gates. The map's *Decisions so far* index links every decision to its artifact.
 
