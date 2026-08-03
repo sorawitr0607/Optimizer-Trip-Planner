@@ -329,8 +329,8 @@ Already decided, and binding on any future implementation:
 
 - Split math lives in a new pure `travel_planner/split.py` beside `costs.py`, under the same no-Streamlit,
   no-SQLite, no-HTTP rule. The API returns resolved shares, balances, and settlement; the frontend renders
-  numbers it was given. One rounding implementation, so the screen, the workbook, and the PDF cannot
-  disagree by a satang.
+  numbers it was given. One rounding implementation, so the screen and the workbook cannot disagree by a
+  satang. (Originally "and the PDF"; the PDF was dropped in S0 and the reasoning is unchanged.)
 - Settlement is a star through the main cardholder with fronted cash netted off. Rows are editable and
   void rather than delete, so the split ledger takes **no** append-only triggers.
 - The local API is a stdlib `ThreadingHTTPServer` with **zero new runtime dependencies**, dispatching
@@ -375,7 +375,8 @@ Already decided, and binding on any future implementation:
   `.wayfinder/artifacts/025-visual-parity-gate.md`.
 - **The Python exporters survive; `excelExporter.js` is deleted and `exceljs`/`file-saver` never join `web/`.**
   One generator is the only way `build_export_snapshot()`'s one-snapshot rule can hold, the 25 export tests
-  have no JS counterpart, and only Python has PDF, poster and ICS. **Two workbooks**: a plan file and a
+  have no JS counterpart, and only Python has the ICS. *(The PDF-and-poster half of that argument died with
+  S0; the conclusion stands on the other two grounds.)* **Two workbooks**: a plan file and a
   shareable money file, both from the same snapshot — so the money file carries no itinerary, no addresses and
   no readiness evidence. Planned-versus-actual lands in the plan workbook's Costs sheet as **values, not
   formulas**, because there is nothing in the same file to point at; an export is a snapshot, not a live
@@ -389,10 +390,11 @@ Already decided, and binding on any future implementation:
   lookup and is exactly the guarantee whose absence hid the 24 missing English strings. The parity test grows
   to all eight tables; the fallback becomes visibly machine output (`⚠ ACCESS_UNVERIFIED`); `CATEGORY_TEXT` is
   the one documented exemption, with derived English plus a `place_of_worship` override. **Emoji decorate and
-  never carry meaning alone** — a flag-only cell becomes an empty cell in the PDF. See
+  never carry meaning alone** — a flag-only cell becomes an empty cell in the **workbook**, since `_labels()`
+  still strips pictographs after S0. See
   `.wayfinder/artifacts/027-bilingual-copy-pipeline.md`.
-- Testing after `AppTest`: exposure is **7%** — 18 of 235 tests at the time of measuring, now 230, not 12 of 15 files — so 217 survive
-  untouched. Of the 18, **14 port down** to actions/core/exports and are moved **before** anything is deleted,
+- Testing after `AppTest`: exposure is **7%** — 18 tests of the 235 that existed when it was measured, not 12
+  of 15 files — so the great majority survive untouched. The suite is **230** after S0. Of the 18, **14 port down** to actions/core/exports and are moved **before** anything is deleted,
   **3 are genuinely UI**, and 1 dies with Streamlit's `$`-as-LaTeX workaround. API contract tests are
   `unittest` at two levels: dispatch directly, plus a real server on **port 0**, because the `Content-Type`
   guard, the `Host` allowlist and the bare-`GET` rule are **security controls** unreachable without a socket.
@@ -411,7 +413,8 @@ Already decided, and binding on any future implementation:
   and the only tile use was `st.map`, so the numbered stop list *is* the map and screen and export agree by
   construction. Fonts **self-host as `woff2`** plus a **merged Noto TTF for exports**, because today exports
   work only on a machine that happens to have proprietary `Arial Unicode.ttf` and `resolve_font()` raises
-  rather than rendering tofu. **Bold monospace becomes real.** `flagcdn.com` becomes a local sprite where a
+  rather than rendering tofu. **Void after S0** — the PDF and poster are gone, so there is no export font at
+  all. Do not build the merged Noto pipeline. **Bold monospace becomes real.** `flagcdn.com` becomes a local sprite where a
   missing flag shows the country name alone. **Everything local works offline** — the optimizer and
   `revision.py` are pure — **and network-requiring actions say so before being pressed.** The colour source is
   **`tokens.css`, in CSS not JSON**. See `.wayfinder/artifacts/034-offline-asset-policy.md`.
@@ -437,8 +440,8 @@ Already decided, and binding on any future implementation:
   `split.py`'s resolved shares.
 - **Colour gets one machine-readable source that both renderers read.** `exporters.py` hardcodes 8 hexes
   across 17 occurrences in a cool blue-grey palette matching nothing in Auto-Bill, and
-  `views/itinerary.py:94,104` adds three pin hexes — so the poster, PDF and workbook currently look like a
-  different product, and `WF-022` already made them a pilot-ready gate. Same reasoning as `WF-018`'s single
+  `views/itinerary.py:94,104` adds three pin hexes — so the workbook looks like a different product
+  *(after S0 only one hex remains, the poster having taken 16 of the 17 with it)*, and `WF-022` already made them a pilot-ready gate. Same reasoning as `WF-018`'s single
   rounding implementation.
 - `.wayfinder/artifacts/` holds the Auto-Bill token contract, the element inventory matrix, the local API
   contract, the POC-retirement decision, the webapp stack, the information architecture, and the parity

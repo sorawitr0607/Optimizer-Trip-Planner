@@ -25,17 +25,23 @@ for optional provider configuration; never commit local secrets.
 - `app.py` — Streamlit entry point.
 - `views/` — one script per journey stage; `ui/` holds every user-facing string and the shared renderers.
 - `travel_planner/` — planner domain logic, storage, providers, ranking, and optimization.
+- `travel_planner/exporters.py` — snapshot-in, bytes-out writers: the six-sheet Excel workbook and the
+  readiness ICS. The 9:16 poster and the trip PDF were dropped in slice S0, and with them the export-font
+  requirement.
 - `travel_planner/destinations.py` — the country/city picker table. A convenience only: both
   dropdowns accept a typed value, so any worldwide destination still works.
 - `tests/` — deterministic unit and UI tests; historic trip regressions are in `tests/fixtures/`.
 - `scripts/` — validation, regression, provider, and Graphify maintenance commands.
 - `data/reference-itineraries/<city>/` — source workbooks and PDF itineraries.
 - `graphify-out/` — checked-in graph snapshot; generated caches are ignored.
+- `artifacts/validation/<date>-*/` — retained evidence bundles: numbers in `manifest.json`, narrative in
+  `notes.md` beside it.
 - `.wayfinder/` — project decisions and implementation tickets. Two maps: `map.md` is the closed Phase 1
-  plan; `map-002-splitter-merge-and-webapp.md` is the open Phase 2 plan for merging the bill splitter and
-  replacing Streamlit with a webapp. **Phase 2 is still being decided — 10 of its 19 tickets are open, so
-  none of it is built.** Decisions and research findings live in `.wayfinder/artifacts/`; read the map's
-  *Decisions so far* index first, then the artifact a decision points at.
+  plan; `map-002-splitter-merge-and-webapp.md` is Phase 2 — merging the bill splitter and replacing
+  Streamlit with a webapp. **Phase 2 is decision-complete as of 2026-08-03** (18 of 19 tickets closed; the
+  one open ticket is deferred past the pilot, not outstanding), **so implementation has begun**: slice S0 is
+  done. Start with `.wayfinder/artifacts/033-phase-2-slice-plan-and-scorecard.md`, which carries the build
+  order and the pass-or-fail gates; the map's *Decisions so far* index links every decision to its artifact.
 
 ## Checks
 
