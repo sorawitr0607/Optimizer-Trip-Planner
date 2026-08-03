@@ -103,7 +103,7 @@ S6's parity baselines have a history rather than appearing from nowhere.
 
 | Gate | Command or rule |
 |---|---|
-| Unit tests | `unittest discover -s tests` — **230** after S0, not the 202 this ticket was charted with |
+| Unit tests | `unittest discover -s tests` — charted at 202, **230** after S0, **248** after S1, **287** after S2, **306** after S3. The gate is that they all pass; the count moves with the suite |
 | Historic regressions | `scripts/run_optimizer_regressions.py` — 27 cases, 20 atomic + 7 interaction |
 | Fixture structure | `scripts/validate_regression_fixtures.py` |
 | Copy parity | `en`/`th` key-for-key across **all 8 tables**, with `CATEGORY_TEXT` exempted and tested on rendered output |
@@ -130,7 +130,8 @@ S6's parity baselines have a history rather than appearing from nowhere.
 1. **The real Taipei trip planned end to end in the webapp.** Not a fixture.
 2. **Exports verified against the four reference workbooks** — now the workbook and ICS only, since the PDF and
    poster are gone.
-3. **The full current Python suite green** — 248 tests at S1 closure.
+3. **The full current Python suite green** — 248 tests at S1 closure, **287 after S2 and 306 after S3**.
+   The gate is "all of them pass", so the number moves with the suite rather than being a target.
 
 Not on track ⇒ Taipei is planned by hand in Excel, as the four reference trips were.
 

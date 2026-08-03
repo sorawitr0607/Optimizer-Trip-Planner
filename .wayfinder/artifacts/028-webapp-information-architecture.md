@@ -47,7 +47,10 @@ used* would need one, so it is deliberately not done.
 
 ## Trip identity lives in the path
 
-Every one of the 51 allowlisted methods takes `trip_id`, so the frontend must always know it. Reading it
+Every one of the 51 allowlisted methods takes `trip_id`, so the frontend must always know it. *(51 was
+the count when this was decided; the allowlist is 57 after S2's five split-ledger methods and S3's
+`setup_vocabulary`. The argument is unaffected — every trip-scoped method still takes `trip_id`.)*
+Reading it
 from `useParams` rather than from ambient context buys three things:
 
 1. **It prevents a whole bug class.** TanStack Query keys must include the trip id; taking it from the

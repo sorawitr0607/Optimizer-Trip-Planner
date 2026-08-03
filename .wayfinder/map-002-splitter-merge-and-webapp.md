@@ -22,8 +22,10 @@ resolving tickets are throwaway artifacts, not the build.
 > is the handoff artifact — read it first. **It stays `status: open` deliberately**, by owner decision, because
 > [Prototype the ranked candidate card grid](tickets/036-prototype-the-ranked-candidate-card-grid.md) is
 > **deferred past the pilot** and will be built later. An open map here means outstanding *prototype* work, not
-> outstanding decisions: 18 of 19 tickets are closed and nothing on the frontier is a decision. **S0 and S1
-> are complete; S2 is next.**
+> outstanding decisions: 18 of 19 tickets are closed and nothing on the frontier is a decision. **S0
+> through S3 are complete; S4 is next** — the expensive `places` and `itinerary` screens, and the slice
+> that first makes the webapp usable end to end. Each closed slice's evidence is in
+> `artifacts/validation/2026-08-03-slice-<n>/`.
 
 ## Notes
 
@@ -97,7 +99,9 @@ resolving tickets are throwaway artifacts, not the build.
 - [Lock the local API contract between the webapp and the planning core](tickets/019-lock-the-local-api-contract-between-webapp-and-core.md) —
   A stdlib `ThreadingHTTPServer` with **zero new runtime dependencies**, dispatching `POST /api/<method>` RPC
   straight onto `PlannerActions`; verified that none of its 56 methods has a positional-only parameter, so the
-  transport can hold no business rule of its own. Full contract, measured counts and status map in
+  transport can hold no business rule of its own. *(56 was the class's public method count when charted, now
+  63 with 57 allowlisted. Re-checked after S3: still no positional-only parameter on any allowlisted method,
+  so the finding stands.)* Full contract, measured counts and status map in
   [`019-local-api-contract.md`](artifacts/019-local-api-contract.md). Three findings outrank the framework
   choice: the exposed surface must be a **literal allowlist**, because `save_plan_version` would write an
   arbitrary snapshot as an activated immutable version with no optimizer validation and `record_paid_call`

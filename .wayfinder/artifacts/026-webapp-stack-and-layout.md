@@ -145,7 +145,8 @@ web/
   src/
     stages/              setup, places, evidence, optimize, itinerary, revise, costs, readiness
     shared/              the ~41 lifted Auto-Bill elements + the 18 with no counterpart
-    api/                 the 51-method client and its response types
+    api/                 the RPC client and its response types (51 methods when
+                         charted; 57 after S2 and S3)
     i18n/                the ui/text.py port (mechanism is WF-027's)
     routes.tsx
   index.html

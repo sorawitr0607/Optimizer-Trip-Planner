@@ -18,10 +18,17 @@ npm --prefix web install             # first run only
 uv run --locked python -m api        # http://127.0.0.1:8765
 ```
 
-The webapp currently provides the S1 shell and route gates; stage surfaces land in later slices. The
-Streamlit POC remains available with `uv run streamlit run app.py` until parity. Both use
-`data/tourist.sqlite3` by default. Copy `secrets.example.json` to `secrets.local.json`
-for optional provider configuration; never commit local secrets.
+The webapp has the shell, the route gates and four real screens — **trip setup** (five steps),
+**optimize**, **costs** and **split**. `places`, `evidence`, `itinerary`, `readiness` and `revise` are
+still stubs until their assigned slices, so **the POC remains the planner UI for now**. It stays
+available with `uv run streamlit run app.py` until parity.
+
+Both surfaces use `data/tourist.sqlite3` by default. Copy `secrets.example.json` to
+`secrets.local.json` for optional provider configuration; never commit local secrets.
+
+> **The database is at schema 12 and the current code is 13.** The first real open bumps it, copying
+> the file to `data/tourist-pre-v13-<date>.sqlite3` first and refusing to migrate if that copy fails.
+> There is no downgrade path by decision, so the copy is the only way back.
 
 ## Repository map
 
@@ -36,6 +43,9 @@ for optional provider configuration; never commit local secrets.
 - `travel_planner/destinations.py` — the country/city picker table. A convenience only: both
   dropdowns accept a typed value, so any worldwide destination still works.
 - `tests/` — deterministic unit and UI tests; historic trip regressions are in `tests/fixtures/`.
+  `tests/test_ported_behaviours.py` is organised by provenance rather than domain on purpose: it holds
+  the actions-level homes for behaviours still asserted through Streamlit `AppTest`, and it is the
+  checklist to read before deleting `views/`.
 - `scripts/` — validation, regression, provider, and Graphify maintenance commands.
 - `data/reference-itineraries/<city>/` — source workbooks and PDF itineraries.
 - `graphify-out/` — checked-in graph snapshot; generated caches are ignored.
@@ -44,10 +54,11 @@ for optional provider configuration; never commit local secrets.
 - `.wayfinder/` — project decisions and implementation tickets. Two maps: `map.md` is the closed Phase 1
   plan; `map-002-splitter-merge-and-webapp.md` is Phase 2 — merging the bill splitter and replacing
   Streamlit with a webapp. **Phase 2 is decision-complete as of 2026-08-03** (18 of 19 tickets closed; the
-  one open ticket is deferred past the pilot, not outstanding), **so implementation has begun**: slices S0
-  and S1 are done. Start with `.wayfinder/artifacts/033-phase-2-slice-plan-and-scorecard.md`, which carries
-  the build order and pass-or-fail gates. The map's *Decisions so far* index links
-  every decision to its artifact.
+  one open ticket is deferred past the pilot, not outstanding), **so implementation has begun**: slices
+  **S0 through S3 are done and S4 is next** — the expensive `places` and `itinerary` screens, which are
+  what the 1 November checkpoint measures. Start with
+  `.wayfinder/artifacts/033-phase-2-slice-plan-and-scorecard.md`, which carries the build order and
+  pass-or-fail gates. The map's *Decisions so far* index links every decision to its artifact.
 
 ## Checks
 
