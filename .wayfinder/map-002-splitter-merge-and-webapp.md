@@ -235,6 +235,25 @@ resolving tickets are throwaway artifacts, not the build.
   the twelve before it, since WF-022 removed the downgrade path, so a pre-bump copy is the only way back. The
   ticket's downgrade question is **void** (there is no frozen app to return to), and its mid-trip question is
   answered by a rule: **no schema change between 29 December 2026 and 4 January 2027.**
+- [Decide the offline asset policy for the webapp](tickets/034-decide-the-offline-asset-policy-for-the-webapp.md) —
+  **The largest item in the ticket turned out not to exist.** Map tiles were called the biggest remote
+  dependency, but the exports contain **no map at all** — just numbered stops with coordinates as text — and the
+  only tile use is `st.map`, which dies with Streamlit. So tiles would be a *new* dependency, and the webapp
+  ships **none**: the numbered stop list is the map, which is what the exports already do, so screen and export
+  agree by construction. Recorded as a real product loss, not just a dependency saved. Details in
+  [`034-offline-asset-policy.md`](artifacts/034-offline-asset-policy.md). Fonts **self-host as `woff2`** and a
+  **merged Noto TTF ships for exports** — measured, exports work today *only* because this Mac has proprietary
+  `Arial Unicode.ttf`, while `resolve_font()` raises rather than rendering tofu, so on any other machine the PDF
+  and poster fail outright; merging is required because no single Noto file covers both Thai and CJK and Pillow
+  cannot fall back. **Bold monospace becomes real**, resolving WF-020's AMBIGUITY 4. `flagcdn.com` becomes a
+  **local sprite**, and the which-countries problem dissolves against our own data: `destinations.COUNTRIES` is
+  a picker convenience and `nationality` is free text, so no sprite can be complete — flag absent shows the name
+  alone, making it an enhancement layer rather than a curation statement. **The offline contract is that
+  everything local works** — the optimizer and `revision.py` are pure, so re-optimizing offline already works —
+  **and network-requiring actions say so before they are pressed**, mirroring the existing rule that paid
+  actions state their cost first. And `tokens.css` is the single colour source **in CSS, not JSON**, because
+  WF-025 chose Tailwind v4 precisely for its native custom-property model. Adds **D8** and **D9** to the parity
+  register.
 
 ## Not yet specified
 

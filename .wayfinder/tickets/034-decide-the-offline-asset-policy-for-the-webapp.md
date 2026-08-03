@@ -1,11 +1,11 @@
 ---
 id: WF-034
 title: Decide the offline asset policy for the webapp
-status: open
+status: closed
 labels:
   - "wayfinder:grilling"
 parent: WF-MAP-002
-assignee:
+assignee: user-and-root
 blocked_by: []
 ---
 
@@ -85,3 +85,54 @@ sequencing note belongs with the asset policy since it decides which renderer ne
 **Still this ticket's to decide:** whether bold monospace becomes a real loaded weight (`WF-025` explicitly
 deferred AMBIGUITY 4 here), what replaces `flagcdn.com`, whether the token source ships as JSON or CSS, the
 map-tile question, and the offline contract itself.
+
+## Resolution comments
+
+### 2026-08-03 — Decided through the offline-assets interview
+
+The measured font survey, the deviations added and what is left open are in
+[`034-offline-asset-policy.md`](../artifacts/034-offline-asset-policy.md).
+
+**The largest item in the Context turned out not to exist.** Map tiles are called "the third remote
+dependency, and the largest" — but the **exports contain no map at all**: `exporters.py` prints numbered stops
+with coordinates as text under a "Day overview" heading (`:347`, `:356`–`364`) and the poster draws a stop
+*number* (`:187`–`188`). The only tile dependency is `st.map` (`views/itinerary.py:115`), which dies with
+Streamlit. So tiles would be a **new** dependency, not a migrated one.
+
+- **Fonts self-host as `woff2`** (Plus Jakarta Sans and JetBrains Mono, 400/500/600/700, dropping the
+  never-used 300), and a **merged Noto TTF ships for the exports** with its OFL licence and the `fonttools`
+  recipe beside it. This removes a hidden machine dependency: measured, exports work **only because this Mac
+  has `Arial Unicode.ttf`** in two places — proprietary and not redistributable — while both Linux candidates
+  are missing, and `resolve_font()` raises rather than rendering tofu, so on any other machine the PDF and
+  poster fail outright. It has to be *merged* because no single Noto file covers both Thai and CJK and Pillow
+  cannot fall back between files. Shipping it makes exports work from a clean clone for the first time.
+- **Bold monospace becomes real.** `.font-mono` is used at 700/800 in six places while only 400/500/600 load,
+  so every bold numeral today is synthesised — and faux bold smears digit shapes at exactly the size where a
+  `3` and an `8` must stay apart. Resolves `WF-020`'s AMBIGUITY 4.
+- **No tile map. The numbered stop list is the map**, which is what the exports already do — so screen and
+  export agree by construction rather than by effort, and the largest remote dependency is never introduced.
+  `WF-021` found the numbered map is the one element the visual language cannot reach, and that the donut
+  legend is structurally the stop list, so this ships the reachable half. **Recorded as a genuine product
+  loss**, not just a dependency saved: coordinates are not spatial reasoning, and the owner will use a phone
+  map instead.
+- **`flagcdn.com` becomes a local SVG sprite** with the country name always beside it. The ticket's hard part
+  — which of three divergent country lists to cover — dissolves against our own data: `destinations.COUNTRIES`
+  holds 32 and is a picker convenience rather than a restriction, and `nationality` is free text. **No fixed
+  sprite can ever be complete, and it does not need to be**: flag present shows flag plus name, flag absent
+  shows the name alone. That also answers the curation concern mechanically — the sprite is an enhancement
+  layer over a name that is always there. Emoji flags were rejected because the export path strips
+  pictographs, so each would become an empty cell in the PDF.
+- **Offline contract: everything local works; network actions say so before they are pressed.** Most of it is
+  already true and merely unstated — the optimizer is deterministic and local and `revision.py` is pure, so
+  **re-optimizing and revising work offline today**. Only discovery, geocoding, opening hours, routes,
+  timezone, enrichment and GenAI need network. Labelling that need mirrors a rule the app already follows for
+  money, where every paid action states its cost immediately before the spending button.
+- **`tokens.css` is the single colour source, in CSS rather than JSON.** `WF-025` chose Tailwind v4 precisely
+  because the tokens already *are* custom properties, so CSS is the source form; generating it from JSON would
+  add a build step and a generated artifact that can go stale, the same failure class as `web/dist`. The repo
+  therefore has two shared-data formats deliberately: copy is JSON for compile-time key checking, tokens are
+  CSS because one consumer has a native preference.
+
+Adds two entries to `WF-025`'s deviation register: **D8** real JetBrains Mono 700, and **D9** local flag
+sprite with a mandatory country name. No tile map is *not* a deviation, since the donor has no spatial
+element to deviate from.

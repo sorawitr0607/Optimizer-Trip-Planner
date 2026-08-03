@@ -270,7 +270,8 @@ and `streamlit` is the only one for the *interface*. Keep it that way.
 
 ## Phase 2 is being planned, not built — do not implement it yet
 
-`WF-MAP-002` is **open and unfinished**: 19 tickets, **12 closed, 7 open**, 4 of those on the frontier.
+`WF-MAP-002` is **open and unfinished**: 19 tickets, **13 closed, 6 open**, 3 of those on the frontier. Every
+remaining ticket is research, prototype, or the final slice plan — **the decision work is done**.
 `Extract the Auto-Bill design token contract` was **reopened** on 2026-07-31: the parity gate made it the
 target the rebuild is measured against, and it is incomplete for 39 inline-only classes and 114 inline style
 sites. Its ambiguities are already ruled on — do not re-litigate them; the remaining scope and its
@@ -398,6 +399,14 @@ Already decided, and binding on any future implementation:
   **no schema change between 29 December 2026 and 4 January 2027**: a one-way bump on the only trip in the
   file, while that trip is happening abroad, is not worth any feature. See
   `.wayfinder/artifacts/024-migration-path.md`.
+- Offline assets: **no tile map.** The exports never had one — they print numbered stops with coordinates —
+  and the only tile use was `st.map`, so the numbered stop list *is* the map and screen and export agree by
+  construction. Fonts **self-host as `woff2`** plus a **merged Noto TTF for exports**, because today exports
+  work only on a machine that happens to have proprietary `Arial Unicode.ttf` and `resolve_font()` raises
+  rather than rendering tofu. **Bold monospace becomes real.** `flagcdn.com` becomes a local sprite where a
+  missing flag shows the country name alone. **Everything local works offline** — the optimizer and
+  `revision.py` are pure — **and network-requiring actions say so before being pressed.** The colour source is
+  **`tokens.css`, in CSS not JSON**. See `.wayfinder/artifacts/034-offline-asset-policy.md`.
 - **Two things must be taken from `Auto-Bill-Splitter` before it is archived**: a backup JSON per trip (the
   migration channel — a file survives archiving, `localStorage` does not) and the 41 lifted element captures
   for the parity gate. Both need the donor runnable.

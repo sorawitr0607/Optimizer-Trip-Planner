@@ -128,6 +128,12 @@ archived afterwards, so this becomes the only record of why the two differ.
 | **D5** | `#8b5cf6` **tokenised** as a fifth semantic colour | Untokenised across 8 uses, so a raw hex would otherwise have to be permitted by the allowlist |
 | **D6** | **One** country→accent mapping | `utils.js` carries a second, larger country table that shadows the accent table (`WF-020` AMBIGUITY 6) |
 | **D7** | The **export palette is re-tokenised** | §7 |
+| **D8** | **JetBrains Mono 700 is a real loaded weight** | Added 2026-08-03 by `Decide the offline asset policy for the webapp`. `.font-mono` is used at 700/800 in six places while only 400/500/600 load, so every bold numeral in the donor is browser-synthesised — and faux bold smears digit shapes at exactly the size where a `3` and an `8` must stay distinguishable. Resolves AMBIGUITY 4 |
+| **D9** | **Flags are a local SVG sprite with a mandatory country name**, not `flagcdn.com` images alone | Added 2026-08-03 by the same ticket. Removes a remote dependency; the name is required by `WF-027` regardless, since a flag-only cell becomes an empty cell in the PDF. Scoped to `destinations.COUNTRIES`' 32 — flag absent shows the name alone |
+
+**Not deviations, decided the same day:** the webapp ships **no tile map** (the donor has no spatial element,
+so there is nothing to deviate from), and the token source is **`tokens.css`** rather than the drafted JS
+config, which is a format decision rather than a visual one.
 
 **Not deviations:**
 
