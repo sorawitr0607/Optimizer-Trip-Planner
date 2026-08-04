@@ -257,13 +257,66 @@ export function ItineraryPage() {
         {copy("days", language)}
         <select value={day.date} onChange={(event) => setChosenDate(event.target.value)}>{plan.days.map((item) => <option key={item.date} value={item.date}>{item.date}</option>)}</select>
       </label>
-      <div className="plan-day-summary">
-        <strong>{day.start}–{day.end}</strong>
-        <span>{copy("scheduled_visits", language)} {totals.scheduled_visits ?? 0} · {copy("visit_minutes", language)} {totals.visit_minutes ?? 0} {copy("minutes", language)} · {copy("travel_minutes", language)} {totals.travel_minutes ?? 0} {copy("minutes", language)}</span>
-        <span>{copy("walking_minutes", language)} {totals.walking_minutes ?? 0} ({copy("rewarding_walking_minutes", language)} {totals.rewarding_walking_minutes ?? 0} · {copy("plain_walking_minutes", language)} {totals.plain_walking_minutes ?? 0}) · {copy("buffer_minutes", language)} {totals.buffer_minutes ?? 0}</span>
-        <span>{copy("meal_minutes", language)} {totals.meal_minutes ?? 0} · {copy("preparation_minutes", language)} {totals.preparation_minutes ?? 0} · {copy("logistics_minutes", language)} {totals.logistics_minutes ?? 0}</span>
+      {/* derives-from: element 13 .hero-banner-image-wrapper, at aspect-ratio
+          3/1 rather than the donor's locked 260px. That is deviation D10: it
+          follows the donor's README over the donor's CSS, at the owner's
+          request, and keeps the column rule unchanged. The ratio is dropped
+          below 720px, where a fixed ratio would crush both columns. */}
+      <div className="dayhead">
+        <div className="dayhead-left">
+          <span className="dayhead-num">
+            {copy("day_of", language)
+              .replace("{current}", String(plan.days.indexOf(day) + 1))
+              .replace("{total}", String(plan.days.length))}
+            {" · "}
+            {copy("active_plan", language)} <code>{versionTag}</code>
+          </span>
+          <strong className="dayhead-date">{day.date}</strong>
+          <span className="dayhead-place">
+            {copy(plan.stamp.variant_status, language)} · {plan.stamp.base_currency}
+          </span>
+          <span className="dayhead-window">
+            {copy("variant", language)}: {copy(plan.stamp.variant_id, language)} ·{" "}
+            {day.start}–{day.end}
+          </span>
+        </div>
+        <div className="dayhead-right">
+          <div className="dayhead-stats">
+            {(
+              [
+                ["scheduled_visits", totals.scheduled_visits ?? 0, ""],
+                ["walking_minutes", totals.walking_minutes ?? 0, copy("minutes", language)],
+                ["travel_minutes", totals.travel_minutes ?? 0, copy("minutes", language)],
+                ["unscheduled_choices", plan.unscheduled.length, ""],
+              ] as const
+            ).map(([label, value, unit]) => (
+              <div className="dayhead-stat" key={label}>
+                <span className="dayhead-stat-k">{copy(label, language)}</span>
+                <strong className="dayhead-stat-v">
+                  {value}
+                  {unit ? <small> {unit}</small> : null}
+                </strong>
+              </div>
+            ))}
+          </div>
+          {day.highest_risk ? (
+            <p className="money-note money-note-warn">
+              <b aria-hidden="true">⚠</b>
+              <span>
+                {copy("highest_risk", language)}: {stateText(day.highest_risk.status, language)}
+              </span>
+            </p>
+          ) : null}
+        </div>
       </div>
-      {day.highest_risk ? <p className="money-note money-note-warn"><b aria-hidden="true">⚠</b>{copy("highest_risk", language)}: {stateText(day.highest_risk.status, language)}</p> : null}
+
+      {/* The full per-day breakdown stays available; the header carries the four
+          numbers a day is actually judged on. */}
+      <details className="plan-day-detail">
+        <summary>{copy("day_totals", language)}</summary>
+        <span>{copy("visit_minutes", language)} {totals.visit_minutes ?? 0} {copy("minutes", language)} · {copy("rewarding_walking_minutes", language)} {totals.rewarding_walking_minutes ?? 0} · {copy("plain_walking_minutes", language)} {totals.plain_walking_minutes ?? 0} · {copy("buffer_minutes", language)} {totals.buffer_minutes ?? 0}</span>
+        <span>{copy("meal_minutes", language)} {totals.meal_minutes ?? 0} · {copy("preparation_minutes", language)} {totals.preparation_minutes ?? 0} · {copy("logistics_minutes", language)} {totals.logistics_minutes ?? 0}</span>
+      </details>
 
       <div className="plan-tabs" role="tablist">
         <button aria-selected={tab === "timeline"} onClick={() => setTab("timeline")} role="tab" type="button">{copy("timeline", language)}</button>

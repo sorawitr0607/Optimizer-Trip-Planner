@@ -925,7 +925,9 @@
       "shopping": "Shopping",
       "open": "Open",
       "required_open": "Required open",
-      "unverified_required": "Required, unverified"
+      "unverified_required": "Required, unverified",
+      "day_of": "Day {current} of {total}",
+      "day_totals": "Full day breakdown"
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -1522,7 +1524,9 @@
       "shopping": "ช้อปปิ้ง",
       "open": "ยังไม่เสร็จ",
       "required_open": "จำเป็นและยังไม่เสร็จ",
-      "unverified_required": "จำเป็นแต่ยังไม่ยืนยัน"
+      "unverified_required": "จำเป็นแต่ยังไม่ยืนยัน",
+      "day_of": "วันที่ {current} จาก {total}",
+      "day_totals": "รายละเอียดทั้งวัน"
     }
   }
 }

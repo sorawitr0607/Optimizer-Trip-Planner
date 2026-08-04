@@ -201,6 +201,22 @@ describe("ItineraryPage", () => {
     expectNoMissingCopy(html);
   });
 
+  it("carries the D10 day header with its four judged numbers", () => {
+    const html = render(<ItineraryPage />, "en");
+
+    // Deviation D10: a two-column header, ratio enforced in CSS by the token
+    // gate. The four numbers a day is actually judged on live here; the full
+    // breakdown moves behind a disclosure rather than being dropped.
+    expect(html).toContain("dayhead");
+    expect(html).toContain("dayhead-left");
+    expect(html).toContain("dayhead-right");
+    expect((html.match(/dayhead-stat"/g) ?? []).length).toBe(4);
+    expect(html).toContain("Day 1 of");
+    expect(html).toContain("plan-day-detail");
+    // The old prose summary is gone, not duplicated alongside it.
+    expect(html).not.toContain("plan-day-summary");
+  });
+
   it("renders the operational rows and warnings in Thai", () => {
     const html = render(<ItineraryPage />, "th");
     expect(html).toContain("แผนที่ใช้งาน");
