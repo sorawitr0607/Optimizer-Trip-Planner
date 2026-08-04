@@ -1,14 +1,15 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { RouterProvider } from "react-router";
+import { createBrowserRouter, RouterProvider } from "react-router";
 
 import "../../tokens.css";
 import "./shell.css";
 import type { Language } from "./i18n/copy";
 import { LanguageProvider } from "./i18n/LanguageProvider";
-import { router } from "./routes";
+import { routes } from "./routes";
 
+const router = createBrowserRouter(routes);
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
 });

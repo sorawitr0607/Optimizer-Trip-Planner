@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
-import { createBrowserRouter, Link, Navigate, useNavigate } from "react-router";
+import { Link, Navigate, useNavigate } from "react-router";
 
 import { ApiError, rpc, type Journey, type Trip } from "./api/client";
 import { copy } from "./i18n/copy";
@@ -94,7 +94,12 @@ function TripsPage() {
   );
 }
 
-export const router = createBrowserRouter([
+// The table is data; `main.tsx` builds the router from it. That split is what
+// lets the entry-point smoke test assert the nine routes and five gate keys
+// without a DOM: `createBrowserRouter` reads `window.history` at construction,
+// Vitest runs in the node environment, and adding jsdom to check a nine-row
+// array would be the wrong trade.
+export const routes = [
   { path: "/", element: <Landing /> },
   { path: "/trips", element: <TripsPage /> },
   {
@@ -168,4 +173,4 @@ export const router = createBrowserRouter([
       },
     ],
   },
-]);
+];
