@@ -1400,6 +1400,25 @@ class PlannerActions:
             if origin["place_id"] != destination["place_id"]
         ]
         pairs.sort(key=lambda pair: (pair[0]["place_id"], pair[1]["place_id"]))
+        # Already-cached pairs are removed *before* the cap, so `MAX_ROUTE_REQUESTS`
+        # limits what one run fetches rather than what a trip can ever know. It
+        # read as a total ceiling because the cache check lived inside the loop:
+        # the slice always took the same first 60 pairs of a fixed sort, so the
+        # 61st pair was unreachable however many times this ran. Measured on the
+        # real Taipei trip at 41 selected places -- 1640 pairs needed, 60 fetched,
+        # and re-running changed nothing, which left every variant `unavailable`
+        # for want of route evidence. The names `request_cap` and
+        # `skipped_over_cap` in the reply already described a per-run cap.
+        if not force:
+            fresh_now = now.isoformat()
+            pairs = [
+                pair
+                for pair in pairs
+                if not (
+                    (key := (pair[0]["place_id"], pair[1]["place_id"], provider.mode)) in existing
+                    and existing[key]["expires_at"] > fresh_now
+                )
+            ]
         attempted, skipped = pairs[:MAX_ROUTE_REQUESTS], pairs[MAX_ROUTE_REQUESTS:]
 
         fetched = cached = failed = 0

@@ -215,6 +215,34 @@ class RouteRefreshTest(unittest.TestCase):
         self.assertEqual(report["pairs_needed"] - 2, report["skipped_over_cap"])
         self.assertEqual(2, report["request_cap"])
 
+    def test_the_cap_limits_one_run_and_not_what_a_trip_can_ever_know(self) -> None:
+        """Repeated runs must reach pairs beyond the cap.
+
+        The cache check used to sit inside the fetch loop while the cap sliced a
+        fixed sort of *all* pairs, so every run attempted the same first N and the
+        N+1th pair was unreachable however many times this ran. On the real Taipei
+        trip that pinned route coverage at 60 of 1640 pairs and left every plan
+        variant `unavailable` for want of evidence.
+        """
+
+        with patch("travel_planner.actions.MAX_ROUTE_REQUESTS", 2):
+            first = self.actions.refresh_routes(self.trip.trip_id)
+            second = self.actions.refresh_routes(self.trip.trip_id)
+            third = self.actions.refresh_routes(self.trip.trip_id)
+
+        self.assertEqual(2, first["fetched"])
+        # The point: the later runs fetch *new* pairs rather than re-reporting the
+        # first two as cached.
+        self.assertEqual(2, second["fetched"])
+        self.assertEqual(0, second["from_cache"])
+        self.assertEqual(first["pairs_needed"] - 2, second["pairs_needed"])
+        stored = {
+            (route["origin_id"], route["destination_id"])
+            for route in self.actions.list_routes(self.trip.trip_id)
+        }
+        self.assertEqual(6, len(stored))
+        self.assertEqual(third["pairs_needed"] - 2, third["skipped_over_cap"])
+
     def test_routing_needs_two_located_places(self) -> None:
         empty = PlannerActions(
             Path(self.directory.name) / "empty.sqlite3", route_provider=self.provider
