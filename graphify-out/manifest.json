@@ -20,7 +20,7 @@
     "semantic_hash": "d94c93d37914dcdf9fd8fbf61d37750e"
   },
   "scripts/build_project_graph.py": {
-    "mtime": 1785834332.6678548,
+    "mtime": 1785834484.51961,
     "ast_hash": "7559657a86d08fc778d1768a52572a15",
     "semantic_hash": "7559657a86d08fc778d1768a52572a15"
   },
@@ -75,7 +75,7 @@
     "semantic_hash": "0f0b97bc1702fe704a6233c14f3c26b1"
   },
   "tests/test_api.py": {
-    "mtime": 1785834408.0608785,
+    "mtime": 1785834484.5200498,
     "ast_hash": "1f0c3dfac1b514ee08b67e4ceb21c3c6",
     "semantic_hash": "1f0c3dfac1b514ee08b67e4ceb21c3c6"
   },
@@ -135,9 +135,9 @@
     "semantic_hash": "74ea0535d1b1e1c1d56615e11dcbfc4d"
   },
   "tests/test_routes.py": {
-    "mtime": 1785832402.4821794,
-    "ast_hash": "317cfd0ec3774ad5503abb435a87f204",
-    "semantic_hash": "317cfd0ec3774ad5503abb435a87f204"
+    "mtime": 1785843374.0331087,
+    "ast_hash": "ac15685b005616fd56e3a424d644d643",
+    "semantic_hash": "ac15685b005616fd56e3a424d644d643"
   },
   "tests/test_setup_discovery.py": {
     "mtime": 1785832402.482533,
@@ -165,9 +165,9 @@
     "semantic_hash": "ef0aefdeae9a5f201e587415c32b8a5b"
   },
   "travel_planner/actions.py": {
-    "mtime": 1785815158.5039685,
-    "ast_hash": "2b6c4202ec14ae870ecc00ebe4764b59",
-    "semantic_hash": "2b6c4202ec14ae870ecc00ebe4764b59"
+    "mtime": 1785843374.0334706,
+    "ast_hash": "497077d02bd04387df829979f85705f8",
+    "semantic_hash": "497077d02bd04387df829979f85705f8"
   },
   "travel_planner/checklist.py": {
     "mtime": 1785316030.1684666,
@@ -230,7 +230,7 @@
     "semantic_hash": "a469529cb241479fe75c0c23932a1e2c"
   },
   "travel_planner/ranking.py": {
-    "mtime": 1785386609.8081107,
+    "mtime": 1785840738.5558307,
     "ast_hash": "9b07e2a114e076bdc2f9534b493e990b",
     "semantic_hash": "9b07e2a114e076bdc2f9534b493e990b"
   },
@@ -504,11 +504,6 @@
     "ast_hash": "420e1f2e633c10d6ebabeb1d067f63a8",
     "semantic_hash": "420e1f2e633c10d6ebabeb1d067f63a8"
   },
-  ".wayfinder/map-002-splitter-merge-and-webapp.md": {
-    "mtime": 1785778462.8465285,
-    "ast_hash": "fed2c9da0016bb5b2217dbb98e04c082",
-    "semantic_hash": "fed2c9da0016bb5b2217dbb98e04c082"
-  },
   ".wayfinder/map.md": {
     "mtime": 1785272453.0,
     "ast_hash": "f2ea224e665fdb844438af7de7eba063",
@@ -698,16 +693,6 @@
     "mtime": 1785766520.9028397,
     "ast_hash": "1eadb8bff2a10ce33d7930a6411d1154",
     "semantic_hash": "1eadb8bff2a10ce33d7930a6411d1154"
-  },
-  "CLAUDE.md": {
-    "mtime": 1785834132.5296957,
-    "ast_hash": "e58e452663618aeddb2044a95f4c6830",
-    "semantic_hash": "e58e452663618aeddb2044a95f4c6830"
-  },
-  "README.md": {
-    "mtime": 1785832402.4769094,
-    "ast_hash": "e51b2abbfbcd0586e2c3c8157aa1f58c",
-    "semantic_hash": "e51b2abbfbcd0586e2c3c8157aa1f58c"
   },
   "i18n/notes.md": {
     "mtime": 1785767189.5124507,
