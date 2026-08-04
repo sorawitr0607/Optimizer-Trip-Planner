@@ -424,6 +424,60 @@ class ArtifactTest(unittest.TestCase):
         self.assertIsNotNone(hotel["accommodation"]["anchor"])
 
 
+    def test_costs_sheet_carries_the_per_person_figure_the_references_all_have(
+        self,
+    ) -> None:
+        """All four reference workbooks put ค่าใช้จ่ายต่อคน beside the total.
+
+        `scripts/check_reference_coverage.py` asserts the *label* is present.
+        This asserts the *value*, which that gate cannot see: a wrong figure
+        under a right heading would pass it.
+        """
+
+        export = build_export_snapshot(
+            trip={"trip_id": "t1", "name": "Tokyo day", "destination": "Tokyo"},
+            plan=plan_payload(planner_input()),
+            version_id="plan_abcdef123456",
+            active_version_id="plan_abcdef123456",
+            language="en",
+            exported_at="2030-01-01T00:00:00+00:00",
+            cost_items=[
+                {
+                    "cost_id": "c1",
+                    "label": "Hotel",
+                    "category": "accommodation",
+                    "original_amount": 9000,
+                    "original_currency": "THB",
+                    "payment_state": "estimate",
+                    "converted_thb": 9000,
+                }
+            ],
+            cost_totals={
+                "estimated_thb": 9000,
+                "paid_thb": 0,
+                "total_thb": 9000,
+                "planned_thb": 9000,
+                # Three travellers, so per person is a third — not a half, which
+                # is what `group_preference_weights` would have produced.
+                "planned_per_person_thb": 3000,
+                "unconvertible_rows": 0,
+            },
+        )
+        strings = (
+            zipfile.ZipFile(BytesIO(plan_workbook_xlsx(export)))
+            .read("xl/sharedStrings.xml")
+            .decode("utf-8")
+        )
+        self.assertIn("Per person THB", strings)
+        costs = (
+            zipfile.ZipFile(BytesIO(plan_workbook_xlsx(export)))
+            .read("xl/worksheets/sheet5.xml")
+            .decode("utf-8")
+        )
+        # The figure itself, written as a number rather than a shared string.
+        self.assertIn("<v>3000</v>", costs)
+        self.assertIn("<v>9000</v>", costs)
+
     def test_documents_localize_optimizer_codes_like_the_app(self) -> None:
         export = export_for("ix-dali-hotel-whole-trip", language="th")
         reasons = {item["reason"] for item in export["unscheduled"]}

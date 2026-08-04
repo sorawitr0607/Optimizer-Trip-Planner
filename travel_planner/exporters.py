@@ -583,6 +583,12 @@ def _write_costs(
             ("Estimated THB", totals.get("estimated_thb")),
             ("Paid THB", totals.get("paid_thb")),
             ("Total THB", totals.get("total_thb")),
+            # All four reference workbooks carry ค่าใช้จ่ายต่อคน beside the total,
+            # and the value was already in the snapshot -- only the sheet was
+            # missing it. Per artifact 023 this is planned_thb / headcount, never
+            # `group_preference_weights`, which expresses taste and would charge
+            # the owner half the trip.
+            ("Per person THB", totals.get("planned_per_person_thb")),
             ("Rows without a rate", totals.get("unconvertible_rows")),
         )
     ):

@@ -26,6 +26,10 @@ def main() -> int:
         # so it is not a gate step; this stage skips cleanly when there is
         # nothing captured, and fails when a capture drifted.
         ("Screen baselines", [python, "scripts/check_screen_baselines.py"]),
+        # Reads the four hand-made reference workbooks: free, offline, and the
+        # only gate that validates the merge against real trips rather than
+        # against fixtures.
+        ("Reference workbook coverage", [python, "scripts/check_reference_coverage.py"]),
     ]
     if (ROOT / "web" / "package.json").is_file():
         stages.extend(

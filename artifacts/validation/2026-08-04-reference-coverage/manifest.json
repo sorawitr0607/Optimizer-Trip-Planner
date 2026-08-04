@@ -1,0 +1,80 @@
+{
+  "gate": "Reference workbook coverage",
+  "date": "2026-08-04",
+  "why": "WF-022 hard gate; WF-033 pilot-ready gate 2. The last unbuilt gate in the scorecard.",
+  "script": "scripts/check_reference_coverage.py",
+  "check_py_stage": 9,
+  "check_py_stages_total": 12,
+  "dev_dependency_added": "openpyxl>=3.1",
+  "runtime_dependencies_after": 1,
+  "reference_workbooks": 4,
+  "sheet_inventory": {
+    "ตารางเวลา": {
+      "present_in": 4,
+      "of": 4
+    },
+    "ค่าใช้จ่าย": {
+      "present_in": 4,
+      "of": 4
+    },
+    "☺ Things to Bring": {
+      "present_in": 4,
+      "of": 4
+    },
+    "♢ To-Do List": {
+      "present_in": 3,
+      "of": 4,
+      "absent_from": [
+        "kunming"
+      ]
+    }
+  },
+  "one_off_sheets_out_of_scope": {
+    "Transport": "japan",
+    "Disney": "shanghai"
+  },
+  "recurring_elements": {
+    "total": 10,
+    "covered": 10
+  },
+  "element_to_app_mapping": {
+    "ตารางเวลา": "Timeline (Date, Order, Start, End, Name, Type)",
+    "ค่าใช้จ่าย": "Costs (Cost, Category, Original amount/currency, Payment state, Total THB, Per person THB, Paid THB)",
+    "♢ To-Do List": "Checklist (Title, Progress, Due date / milestone) + checklist_ics VEVENT",
+    "☺ Things to Bring": "Checklist, packing category"
+  },
+  "findings": [
+    {
+      "finding": "the Costs sheet had no per-person figure",
+      "real": true,
+      "evidence": "all four reference workbooks carry ค่าใช้จ่ายต่อคน beside the total",
+      "cause": "costs.totals() already returned planned_per_person_thb and build_export_snapshot already carried it; only the writer omitted the row",
+      "fix": "one row in exporters._write_costs, labelled 'Per person THB'",
+      "basis": "artifact 023 — planned_thb / headcount, never group_preference_weights"
+    },
+    {
+      "finding": "checklist_ics emitted no VEVENT",
+      "real": false,
+      "cause": "the gate's own probe saved a setup with no trip dates, so no readiness item had a due_date and the calendar was legitimately empty",
+      "fix": "the probe now passes the fixture's local_dates; the app was never wrong"
+    }
+  ],
+  "negative_tests": [
+    {
+      "injected": "a plausible but absent Thai label (ค่าใช้จ่ายทั้งหมด for the total)",
+      "result": "FAILED on the reference side, naming the marker: 'fix the gate, not the app'"
+    },
+    {
+      "injected": "removed the Per person THB row from the exporter",
+      "result": "FAILED on the coverage side, naming the missing counterpart"
+    },
+    {
+      "injected": "right label, wrong figure (total_thb under 'Per person THB')",
+      "result": "coverage gate PASSED; the unit test caught it — which is why both exist"
+    }
+  ],
+  "tests": {
+    "python_before": 311,
+    "python_after": 312
+  }
+}

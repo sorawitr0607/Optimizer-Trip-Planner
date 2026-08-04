@@ -16,6 +16,7 @@ uv run --locked python -m compileall -q api travel_planner scripts tests
 python3 scripts/build_project_graph.py --check                       # graph integrity (free)
 python3 scripts/check_provider_access.py --self-test                 # redaction check, no network
 uv run --locked python scripts/check_design_tokens.py                 # token gate: 13 accent triples, no literals, ancestors, 3:1 contrast
+uv run --locked python scripts/check_reference_coverage.py             # structural coverage of the four reference workbooks
 ```
 
 All commands run from the repo root: `tests/` imports both `travel_planner` and `scripts` as top-level

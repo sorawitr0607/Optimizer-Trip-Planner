@@ -15,6 +15,7 @@ dependencies = [
 # what kept the baseline gate working when the POC went.
 [dependency-groups]
 dev = [
+    "openpyxl>=3.1",
     "pillow>=11",
 ]
 
