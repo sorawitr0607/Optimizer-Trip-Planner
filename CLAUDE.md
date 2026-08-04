@@ -286,6 +286,18 @@ ticket, `Prototype the ranked candidate card grid`, is **deferred past the pilot
 outstanding. `Lock the Phase 2 slice plan and validation scorecard` is the destination artifact — read it
 first: `.wayfinder/artifacts/033-phase-2-slice-plan-and-scorecard.md`.
 
+**Three S6 decisions the owner settled on 2026-08-04, so nothing is waiting on them:**
+
+- **Baseline tolerance is a small allowance, not zero** — the screen gate fails above **0.1% of pixels
+  differing** *and* **>8/255 on a channel**, both conditions. Recorded in artifact 025. The element gate
+  compares computed-style values and needs no tolerance.
+- **The fonts are bundled.** Two variable `woff2` files in `web/public/fonts` (67 KB total, SIL OFL 1.1,
+  licence beside them) cover 100-900 for both families, so **no weight can be synthesised**. That closed D8,
+  and **the deviation register is now complete: zero outstanding.** Thai has no subset in either family and
+  falls through per glyph to a system font, exactly as before.
+- **Auto-Bill was never used with real expenses**, so `WF-030`'s pre-archive backup is **discharged**, not
+  skipped. S6 may archive the donor whenever it is ready.
+
 **The Phase 2 code freeze has lifted.** S0 through S5 are complete; **S6 is the next and last slice** —
 the parity gate and the deletion of `views/`, `app.py` and `ui/`. **Its deletion checklist is already
 empty**: all 14 portable behaviours are asserted below Streamlit in `tests/test_ported_behaviours.py`, so

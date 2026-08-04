@@ -94,6 +94,8 @@ produce a false failure. Baselines are captured on one fixed machine, since cros
 is what makes these gates flaky, and a flaky gate gets switched off. **A pixel tolerance must be agreed
 when the harness is built** — zero tolerance will be flaky regardless.
 
+> **Agreed 2026-08-04 by the owner: a small allowance rather than zero.** The screen gate fails when **more than 0.1% of pixels** differ **and** a differing pixel is off by more than **8/255 on any channel** — both conditions, so a handful of antialiasing pixels never fails a build while a real layout shift always does. A starting point to tighten once it has proved stable, not a permanent figure. The **element** gate is separate and needs no tolerance: it compares captured computed-style values, which are exact.
+
 ## 3. Elements with no Auto-Bill counterpart
 
 Token-only conformance, plus a declared ancestor:

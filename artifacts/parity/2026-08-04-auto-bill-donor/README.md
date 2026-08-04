@@ -67,7 +67,13 @@ JSON exists anywhere on disk"*; this adds that no trip data exists in this brows
 itself** to reach the dashboard, modal and expense states. They are a **schema record — not the owner's
 archive.** Do not treat them as migration input; there is no importer by decision anyway.
 
-> **This needs an owner answer before S6 archives the donor.** If Auto-Bill was ever used with real
+> **Answered by the owner on 2026-08-04: Auto-Bill was never used with real trip
+> expenses.** So there is nothing to archive and `WF-030`'s pre-archive backup
+> action is **discharged**, not skipped. S6 may archive the donor whenever it is
+> ready. The original wording is kept below because the reasoning still applies if
+> that answer ever turns out to be wrong.
+>
+> **This needed an owner answer before S6 archives the donor.** If Auto-Bill was ever used with real
 > expenses, that data lives in some other browser profile or origin and is still exportable from the
 > *Backups → Export Trip JSON Backup* control visible in `captures/backups-import-export-light.jpg`. If it
 > was never used with real data, the obligation is discharged by this note and `WF-030`'s pre-archive action

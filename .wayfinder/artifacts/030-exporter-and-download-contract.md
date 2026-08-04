@@ -106,9 +106,9 @@ Both of these need `Auto-Bill-Splitter` runnable and both are lost once it is ar
 > `artifacts/parity/2026-08-04-auto-bill-donor/`. The donor was run and captured: 431 style records across
 > both themes, 97 inline-style sites, resolved tokens per theme, and **35 of the 41 elements fully covered**
 > with the six gaps named. **But the donor held no trip data** — `alipay_splitter_settings` was absent and
-> `alipay_splitter_transactions` was `[]` — so there was no backup JSON to export. If Auto-Bill was ever
-> used with real expenses, that data is in another browser profile and is still exportable until S6
-> archives the donor. If it never was, this obligation is discharged as "nothing to archive".
+> `alipay_splitter_transactions` was `[]` — so there was no backup JSON to export. **The owner confirmed on 2026-08-04 that Auto-Bill was
+> never used with real trip expenses**, so this obligation is **discharged as "nothing to archive"** and no
+> longer gates S6's archive step.
 
 (An earlier version of this pattern in `WF-022` — capturing Streamlit reference exports — was voided when
 Streamlit stopped being a pilot vehicle. These two stand.)

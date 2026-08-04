@@ -1,5 +1,29 @@
 @import "tailwindcss";
 
+/* Deviation D8: both families are self-hosted so bold weights are real rather
+   than browser-synthesised. Faux bold smears digit shapes at exactly the size
+   where a 3 and an 8 must stay distinguishable, and this app is mostly money
+   and times. One variable file per family covers 100-900, so no weight can be
+   missing. Absolute URLs, because this file sits outside web/ and Vite serves
+   web/public from the root. SIL OFL 1.1 — see web/public/fonts/OFL.txt.
+   Thai has no subset in either family and falls through per glyph to the system
+   font, exactly as it did before these were bundled. */
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/plus-jakarta-sans-latin-wght-normal.woff2") format("woff2-variations");
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/jetbrains-mono-latin-wght-normal.woff2") format("woff2-variations");
+}
+
 /* Single colour and motion source for the webapp and Python workbook. */
 :root {
   --bg-primary: #fcfbf9;
