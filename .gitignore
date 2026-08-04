@@ -22,3 +22,8 @@ web/dist/
 # Screen captures awaiting comparison. Only the approved baseline set is
 # committed; the comparison set is regenerated on every capture run.
 artifacts/parity/screen-current/
+
+# Diagnostic copies build_project_graph.py keeps when validation fails. Scratch
+# for the next run to read, never canonical -- graph.json is.
+graphify-out/failed-raw.json
+graphify-out/failed-clustered.json
