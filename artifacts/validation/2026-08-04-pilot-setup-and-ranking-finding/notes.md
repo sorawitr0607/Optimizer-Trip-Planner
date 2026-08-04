@@ -131,3 +131,66 @@ now a decision for the owner — either pick places directly, or settle the
 scoring question first. `OPENING_EVIDENCE_MISSING` is deliberately still open:
 clearing it costs US$0.017 per selected place, and paying for evidence on four
 peaks that are likely to be replaced would be wasted.
+
+---
+
+# Addendum, same day: the owner picked, and it confirmed the finding
+
+The owner worked the `/places` screen and recorded **96 decisions** — 14 `must_do`,
+2 `interested`, 9 `maybe`, 71 `not_for_trip`. Sixty of those rejections were
+peaks. Real work, done properly.
+
+The `must_do` set that came out of it: Dailaokengshan (a peak), True Love Warf,
+New Taipei City Hall Observation Floor, Cross-Dike Platform, an eagle observation
+point, a Feitsui Reservoir viewpoint, a Crocodile Island viewpoint, National
+Taiwan University Archives, TAIPOWER D/S ONE, and four neighbourhood parks —
+員山公園, 四維公園, 江翠礫間水岸公園, 芭樂樹公園.
+
+**Not one Taipei landmark.** The owner rejected 71 hills and then took whatever the
+list offered next, which was minor viewpoints and local parks. The ranking never
+surfaced the alternatives.
+
+Meanwhile, of 18 named Taipei sights a visitor would recognise, **15 are in the
+catalogue** — Taipei 101, Chiang Kai-shek Memorial Hall, National Palace Museum,
+Lungshan Temple, Red House, Beitou Hot Spring Museum, Elephant Mountain, Shilin
+Cixian Temple, Dalongdong Baoan Temple, Taipei Confucius Temple, Sun Yat-sen
+Memorial Hall, Huashan 1914 Creative Park, Taipei Zoo, Taipei Fine Arts Museum,
+and the Botanical Garden herbarium. **None was selected.** Three were genuinely
+absent: Songshan Cultural Park, the Maokong gondola, and Dadaocheng/Dihua Street.
+The shortlist with place ids is in `landmark-shortlist.json`.
+
+## The learner both helps and hurts
+
+After those 96 choices, the top-50 peak count fell from 49 to **29** with no code
+change — `learned_category_bonus` read the 71 rejections and damped the category.
+That mechanism works.
+
+But it then promoted the viewpoint and park categories the owner had picked *from
+the already-skewed list*, and Taipei 101 fell from rank 363 to **398**. The
+learner faithfully amplifies whatever the ranking offered first, which makes it a
+feedback loop around the original bias rather than an escape from it.
+
+## A fix was attempted, measured, and reverted
+
+A per-category crowding deduction — rank within category, spare the best three,
+deduct on a log curve — improved apparent diversity from 49 peaks in the top 50
+to 12, and **moved four of the six target landmarks further down**: Taipei 101 363
+→ 458, National Palace Museum 269 → 308, Beitou 265 → 304, Elephant Mountain 22 →
+98. Only CKS Memorial (181 → 43) and Red House (561 → 199) improved.
+
+The reason is structural: it ranks within a category **using the same score that is
+already tag-biased**. Taipei 101 scores 12.8/30 on preference fit, so it sits low
+among 43 `attraction`s and then takes a further 15-point crowding deduction on
+top. Any fix that sorts by the broken score amplifies the break exactly where it
+hurts most.
+
+Reverted, not committed. The decision now lives in `WF-037`, with three candidate
+mechanisms and the cost of each.
+
+## Also written this round
+
+Nationality is now `Thai` for all three travellers, which took the readiness
+proposal from 13 additions to **26** — three passports generate per-person entry
+requirement items. Arrival 12:00 and departure 20:00 were **assumed** at the
+owner's instruction as the common BKK–TPE shape; they are one field each to
+change. All 96 choices survived the setup rewrite.

@@ -1,0 +1,92 @@
+[
+  {
+    "place_id": "place_877db85a80f6d3d9bb41",
+    "name": "Taipei 101",
+    "category": "attraction",
+    "current_choice": null
+  },
+  {
+    "place_id": "place_a258e239c5f560719e52",
+    "name": "Chiang Kai-shek Memorial Hall",
+    "category": "museum",
+    "current_choice": null
+  },
+  {
+    "place_id": "place_9cf654f7cb6dc8ab9886",
+    "name": "National Palace Museum",
+    "category": "museum",
+    "current_choice": null
+  },
+  {
+    "place_id": "place_afd623bf390a77079a05",
+    "name": "Lungshan Temple",
+    "category": "place_of_worship",
+    "current_choice": null
+  },
+  {
+    "place_id": "place_41a672a96e9cb797240d",
+    "name": "Red House",
+    "category": "theatre",
+    "current_choice": null
+  },
+  {
+    "place_id": "place_b4fa16328261766d40fc",
+    "name": "Beitou Hot Spring Museum",
+    "category": "museum",
+    "current_choice": null
+  },
+  {
+    "place_id": "place_5e709a47a2a633f786e4",
+    "name": "Elephant Mountain",
+    "category": "peak",
+    "current_choice": null
+  },
+  {
+    "place_id": "place_228625f2dae4bca76389",
+    "name": "Shilin Cixian Temple",
+    "category": "place_of_worship",
+    "current_choice": null
+  },
+  {
+    "place_id": "place_e6c812eacbb11e808f6c",
+    "name": "Herbarium of Taipei Botanical Garden",
+    "category": "museum",
+    "current_choice": null
+  },
+  {
+    "place_id": "place_63b7dbd4947708e3b86a",
+    "name": "Dalongdong Baoan Temple",
+    "category": "place_of_worship",
+    "current_choice": null
+  },
+  {
+    "place_id": "place_beccfb8a03ae3dc6903a",
+    "name": "Taipei Confucius Temple",
+    "category": "place_of_worship",
+    "current_choice": null
+  },
+  {
+    "place_id": "place_b8222645f557d74f60fb",
+    "name": "Sun Yat-sen Memorial Hall",
+    "category": "museum",
+    "current_choice": null
+  },
+  {
+    "place_id": "place_e9ea48d08d80f53b2f24",
+    "name": "Huashan 1914 Creative Park",
+    "category": "attraction",
+    "current_choice": null
+  },
+  {
+    "place_id": "place_f0ff8ac167086a45d12b",
+    "name": "Taipei Zoo",
+    "category": "zoo",
+    "current_choice": null
+  },
+  {
+    "place_id": "place_e98c4a0affb9e14c071e",
+    "name": "Taipei Fine Arts Museum",
+    "category": "museum",
+    "current_choice": null
+  }
+]
