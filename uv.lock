@@ -832,11 +832,19 @@ dependencies = [
     { name = "xlsxwriter" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "pillow" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "streamlit", specifier = ">=1.54,<2" },
     { name = "xlsxwriter", specifier = ">=3.2.9" },
 ]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pillow", specifier = ">=11" }]
 
 [[package]]
 name = "typing-extensions"

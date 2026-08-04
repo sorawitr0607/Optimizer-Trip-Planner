@@ -1,0 +1,29 @@
+{
+  "viewport": [
+    1440,
+    900
+  ],
+  "routes": [
+    "setup",
+    "places",
+    "evidence",
+    "optimize",
+    "itinerary",
+    "readiness",
+    "costs",
+    "split",
+    "revise"
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "languages": [
+    "en",
+    "th"
+  ],
+  "expected": 36,
+  "written": 36,
+  "failed": [],
+  "note": "Captured on one fixed machine at a fixed viewport. Cross-platform font rendering is what makes these gates flaky, so a capture from another machine is not comparable."
+}

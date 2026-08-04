@@ -8,5 +8,14 @@ dependencies = [
     "xlsxwriter>=3.2.9",
 ]
 
+# Development only. Runtime dependencies stay at two by decision; these are for
+# gates, never for the app. `pillow` reads the screen baselines: it is installed
+# transitively today via streamlit, and S6 deletes streamlit, so declaring it
+# here is what stops the baseline gate breaking the moment the POC goes.
+[dependency-groups]
+dev = [
+    "pillow>=11",
+]
+
 [tool.uv]
 package = false

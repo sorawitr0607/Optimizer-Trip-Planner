@@ -18,3 +18,7 @@ node_modules/
 web/dist/
 *.sqlite3
 *.sqlite3-*
+
+# Screen captures awaiting comparison. Only the approved baseline set is
+# committed; the comparison set is regenerated on every capture run.
+artifacts/parity/screen-current/

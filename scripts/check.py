@@ -22,6 +22,10 @@ def main() -> int:
         ("Provider redaction self-test", [python, "scripts/check_provider_access.py", "--self-test"]),
         ("Design token gate", [python, "scripts/check_design_tokens.py"]),
         ("Element parity", [python, "scripts/check_element_parity.py"]),
+        # Comparison only. Capturing needs a running server and headless Chrome,
+        # so it is not a gate step; this stage skips cleanly when there is
+        # nothing captured, and fails when a capture drifted.
+        ("Screen baselines", [python, "scripts/check_screen_baselines.py"]),
     ]
     if (ROOT / "web" / "package.json").is_file():
         stages.extend(
