@@ -105,6 +105,27 @@
 :root[data-country="switzerland"] { --color-accent: #be185d; --color-accent-hover: #9d174d; --color-accent-light: rgb(190 24 93 / 12%); }
 :root[data-country="australia"] { --color-accent: #16a34a; --color-accent-hover: #15803d; --color-accent-light: rgb(22 163 74 / 12%); }
 
+/* Two of the 13 destination accents were chosen on a light background and fail
+   contrast on #121212: united-states #1e3a8a at 1.81:1 and united-kingdom
+   #475569 at 2.47:1, both used for buttons and links. These keep the hue and
+   clear 3:1 in dark. Higher specificity than the plain country rule, so the
+   order in this file does not matter. `scripts/check_design_tokens.py` enforces
+   the floor, so a new accent cannot reintroduce the problem.
+   This is D1 in practice: the dark theme's accent has to actually apply. */
+:root.dark[data-country="united-states"],
+:root[data-theme="dark"][data-country="united-states"] {
+  --color-accent: #3b82f6;
+  --color-accent-hover: #60a5fa;
+  --color-accent-light: rgb(59 130 246 / 16%);
+}
+
+:root.dark[data-country="united-kingdom"],
+:root[data-theme="dark"][data-country="united-kingdom"] {
+  --color-accent: #7d8ea3;
+  --color-accent-hover: #94a3b8;
+  --color-accent-light: rgb(125 142 163 / 16%);
+}
+
 @theme {
   --color-page: var(--bg-primary);
   --color-recessed: var(--bg-secondary);

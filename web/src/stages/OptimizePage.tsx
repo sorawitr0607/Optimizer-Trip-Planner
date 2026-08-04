@@ -195,6 +195,8 @@ export function OptimizePage() {
             </div>
           ) : null}
 
+          {/* derives-from: element 12 .stat-card / .stat-cards-grid, three per
+              row rather than five. */}
           <div className="optimize-metrics">
             {METRICS.map((metric) => (
               <div className="money-tile" key={metric}>

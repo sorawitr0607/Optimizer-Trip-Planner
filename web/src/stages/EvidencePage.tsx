@@ -221,7 +221,8 @@ export function EvidencePage() {
         </p>
       ) : null}
 
-      {/* Card 1 — accommodation base. Free: it geocodes through OpenStreetMap. */}
+      {/* Card 1 — accommodation base. Free: it geocodes through OpenStreetMap.
+          derives-from: element 16 .currency-info-box, one card per action. */}
       <div className="evidence-card">
         <strong>{copy("accommodation_base_title", language)}</strong>
         <span className="setup-hint">{copy("accommodation_base_help", language)}</span>
