@@ -25,9 +25,9 @@ ranking, evidence, activation, readiness, costs, split and workbook/calendar exp
 The app uses `data/tourist.sqlite3` by default. Copy `secrets.example.json` to
 `secrets.local.json` for optional provider configuration; never commit local secrets.
 
-> **The database is at schema 12 and the current code is 13.** The first real open bumps it, copying
-> the file to `data/tourist-pre-v13-<date>.sqlite3` first and refusing to migrate if that copy fails.
-> There is no downgrade path by decision, so the copy is the only way back.
+> **The database is at schema 13**, bumped on 2026-08-04. `data/tourist-pre-v13-2026-08-04.sqlite3`
+> holds the pre-bump file at version 12 and is the only way back — there is no downgrade path by decision.
+> Any future bump copies the file first and refuses to migrate if that copy fails.
 
 ## Repository map
 

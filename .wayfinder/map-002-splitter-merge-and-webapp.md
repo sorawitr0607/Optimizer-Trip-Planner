@@ -22,10 +22,16 @@ resolving tickets are throwaway artifacts, not the build.
 > is the handoff artifact — read it first. **It stays `status: open` deliberately**, by owner decision, because
 > [Prototype the ranked candidate card grid](tickets/036-prototype-the-ranked-candidate-card-grid.md) is
 > **deferred past the pilot** and will be built later. An open map here means outstanding *prototype* work, not
-> outstanding decisions: 18 of 19 tickets are closed and nothing on the frontier is a decision. **S0
-> through S4 are complete; S5 is next** — non-AI quick actions plus `revise` and `readiness`. S4 made
-> the saved real Taipei journey assessable through activation and export. Closed-slice evidence is in
-> `artifacts/validation/<date>-slice-<n>/`.
+> outstanding decisions: 18 of 19 tickets are closed and nothing on the frontier is a decision.
+> **All seven slices are complete as of 2026-08-04.** S6 landed the two-level visual parity gate and
+> deleted `views/`, `app.py` and `ui/`; the reference-workbook coverage gate followed, which was the last
+> unbuilt gate in the scorecard. `scripts/check.py` is 12 stages. Closed-slice evidence is in
+> `artifacts/validation/<date>-slice-<n>/` and `artifacts/validation/2026-08-04-reference-coverage/`.
+>
+> **What remains is not construction, it is the pilot.** `WF-022`'s gate 1 — the real Taipei trip planned
+> end to end in the webapp, not a fixture — is the open item, judged 1 November 2026. `data/tourist.sqlite3`
+> was bumped 12 → 13 on 2026-08-04 with `data/tourist-pre-v13-2026-08-04.sqlite3` kept as the only way
+> back, deliberately **before** the 29 December – 4 January freeze, which is the trip's own dates.
 
 ## Notes
 

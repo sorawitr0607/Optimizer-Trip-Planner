@@ -1,0 +1,63 @@
+{
+  "action": "schema bump 12 → 13 on the only real trip",
+  "date": "2026-08-04",
+  "authorised_by": "owner, this session",
+  "why_now_and_not_later": "WF-024 forbids any schema change between 29 December 2026 and 4 January 2027, and those are the trip's own dates (2026-12-29 → 2027-01-04). The bump had to land before the window or wait until after the trip.",
+  "backup": {
+    "path": "data/tourist-pre-v13-2026-08-04.sqlite3",
+    "user_version": 12,
+    "sha256": "faab16d01d708758a75826f71c8bcbddec458084bdbe21975c068dc998e2031e",
+    "is_byte_identical_to_pre_bump_file": true,
+    "note": "WF-022 removed the downgrade path, so this copy is the only way back."
+  },
+  "live": {
+    "path": "data/tourist.sqlite3",
+    "user_version": 13
+  },
+  "dry_run": {
+    "ran_on": "a byte-identical copy in the session scratchpad",
+    "tables_before": 19,
+    "tables_after": 21,
+    "tables_added": [
+      "split_rows",
+      "split_settled_markers"
+    ],
+    "tables_removed": [],
+    "rows_moved_in_any_pre_existing_table": 0,
+    "snapshot_reads_verified": [
+      "setup",
+      "plan versions",
+      "active plan",
+      "preview",
+      "discovery runs",
+      "export snapshot",
+      "split rows",
+      "split summary",
+      "cost totals"
+    ]
+  },
+  "post_bump_state": {
+    "candidates": 832,
+    "discovery_runs": 4,
+    "candidate_choices": 5,
+    "plan_versions": 3,
+    "active_plan": true,
+    "journey_next": "itinerary",
+    "split_rows": 0
+  },
+  "pilot_gaps_remaining": {
+    "setup_incomplete": "planning_mode and confirmed are both None, and 0 travellers are recorded; headcount drives every per-person figure",
+    "capability_gaps": [
+      "ACCOMMODATION_BASE_UNCONFIRMED",
+      "OPENING_EVIDENCE_MISSING"
+    ],
+    "empty_tables": [
+      "checklist_items",
+      "cost_items",
+      "rate_snapshots",
+      "split_rows"
+    ],
+    "paid_spend_to_date_usd": 0.769,
+    "paid_cap_usd": 10
+  }
+}

@@ -390,8 +390,12 @@ Four things from it bind later work:
   bump and raises rather than migrating if the copy fails. It is gated on
   `0 < on_disk_version < SCHEMA_VERSION`: version 0 is a database being created and an equal version
   is not a bump, and without that gate every temp database in the suite would leave a junk copy.
-  **`data/tourist.sqlite3` is still at 12 and was deliberately not bumped** — that is a one-way change
-  to the only real trip in the file and needs to be the owner's deliberate act.
+  **`data/tourist.sqlite3` was bumped 12 → 13 on 2026-08-04** by owner decision, rehearsed on a
+  byte-identical copy first and leaving `data/tourist-pre-v13-2026-08-04.sqlite3` — verified byte-identical
+  to the pre-bump file — as the only way back. It happened then rather than nearer the trip because
+  `WF-024`'s no-schema-change window, 29 December 2026 to 4 January 2027, **is the trip's own dates**:
+  the bump had to precede the window or wait until the trip was over. Evidence in
+  `artifacts/validation/2026-08-04-schema-13-bump/`.
 - **Claimed-ness is derived in exactly one place: `costs.totals()`**, which returns `claimed_cost_ids`
   for the screen to read. Do not add a second derivation — `split.py` had one and it was deleted for
   the vocabulary-drift reason `WF-018` names. Dependency direction is `split.py → costs.py`; the
