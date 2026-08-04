@@ -1,0 +1,154 @@
+{
+  "date": "2026-08-04",
+  "what": "Completed the real trip's setup, refreshed its route evidence, and found why the accommodation recommendation cannot be useful yet",
+  "authorised_by": "owner: 'Me (26) Sister (19) Mom (51), not booked please recommend, explore first'",
+  "corrections_to_earlier_reporting": [
+    "planning_mode was ALREADY explore_first; my earlier probe read it from trip_basics when it sits at the snapshot's top level, and wrongly reported None",
+    "accommodation_status was ALREADY not_booked, same probe error",
+    "confirmed is a SetupDraft field, not a snapshot key; reading setup['confirmed'] returned None because the key never existed"
+  ],
+  "setup_written": {
+    "owner_age": 26,
+    "travellers": [
+      {
+        "label": "Sister",
+        "age": 19,
+        "id": "member_1"
+      },
+      {
+        "label": "Mom",
+        "age": 51,
+        "id": "member_2"
+      }
+    ],
+    "confirmed": true,
+    "headcount": 3,
+    "group_preference_weights": {
+      "owner": 0.5,
+      "member_1": 0.25,
+      "member_2": 0.25
+    },
+    "preserved_verbatim": {
+      "main_style": [
+        "sightseeing",
+        "nature",
+        "chill"
+      ],
+      "also_enjoy": [
+        "local_street_food",
+        "architecture",
+        "neighborhoods"
+      ],
+      "avoid": [
+        "tourist_traps",
+        "plain_long_walks"
+      ],
+      "comfort": [
+        "rewarding_walks"
+      ],
+      "description": "Landmarks",
+      "dates": "2026-12-29 → 2027-01-04"
+    },
+    "left_null_deliberately": {
+      "owner_nationality and member nationality": "drives entry-requirement generation for three real people; not guessed",
+      "arrival_time / departure_time": "flight facts, not inferable",
+      "member tags": "would be inventing two real people's tastes"
+    }
+  },
+  "hash_gate_fired_as_designed": {
+    "setup_sha256": "d70f21bb4826… → 00fcfd3c59dc…",
+    "consequence": "rank_candidates refused with discovery_stale",
+    "recovery": "discover_places re-run, free (openstreetmap:discover US$0.00), served from provider cache in 0.4s, status verified, 832 candidates",
+    "rehearsed_on_a_copy_first": true
+  },
+  "routes_refreshed": {
+    "provider": "OpenRouteServiceProvider",
+    "unit_cost_usd": 0.0,
+    "places": 5,
+    "pairs_needed": 20,
+    "fetched": 8,
+    "from_cache": 12,
+    "failed": 0,
+    "snapshots": "12 → 20",
+    "lifetime_paid_spend_unchanged_usd": 0.769
+  },
+  "preview_regenerated": {
+    "mode": "dated_plan",
+    "optimizer_version": "whole-trip-v2",
+    "variants": [
+      "best_balance",
+      "relaxed",
+      "more_highlights"
+    ],
+    "each": {
+      "status": "provisional",
+      "valid": true,
+      "days": 8,
+      "scheduled_visits": 4
+    }
+  },
+  "accommodation_recommendation": {
+    "answerable": false,
+    "what_it_returns": {
+      "basis": "selected_place_centroid",
+      "default_area_id": "provisional_accommodation_base",
+      "missing_route_count": "4 → 0 after the refresh",
+      "total_known_travel_minutes": "0 → 55 after the refresh",
+      "runner_up_area_id": null
+    },
+    "why_no_comparison": "_hotel_recommendation scores candidates whose kind == 'hotel_area'. The catalogue contains exactly one, and it is synthetic — the centroid of whatever is selected. With one candidate there is no runner-up and no delta, so no neighbourhood comparison is possible at all.",
+    "why_the_centroid_is_meaningless_here": "the four selected places are obscure peaks — Dailaokengshan, Yuantanzikengshan, Daxiangshan, Ejiaogeshan — so the recommended base is the middle of four hills"
+  },
+  "ranking_finding": {
+    "summary": "the ranker buries a city's landmarks under near-identical low-information features",
+    "top_50_category_mix": {
+      "peak": 49,
+      "park": 1
+    },
+    "landmark_ranks_of_832": {
+      "Elephant Mountain": {
+        "rank": 22,
+        "score": 70.2,
+        "group_preference_fit": "27.0/30"
+      },
+      "Chiang Kai-shek Memorial Hall": {
+        "rank": 181,
+        "score": 57.3,
+        "group_preference_fit": "15.8/30"
+      },
+      "Beitou Hot Spring Museum": {
+        "rank": 265,
+        "score": 54.3,
+        "group_preference_fit": "15.8/30"
+      },
+      "National Palace Museum": {
+        "rank": 269,
+        "score": 54.3,
+        "group_preference_fit": "15.8/30"
+      },
+      "Taipei 101": {
+        "rank": 363,
+        "score": 51.6,
+        "group_preference_fit": "12.8/30"
+      },
+      "Red House (Ximending)": {
+        "rank": 561,
+        "score": 43.0,
+        "group_preference_fit": "3.0/30"
+      }
+    },
+    "top_ranked_for_comparison": {
+      "Dailaokengshan": {
+        "rank": 1,
+        "score": 75.2,
+        "group_preference_fit": "27.0/30"
+      }
+    },
+    "discovery_is_not_at_fault": "Taipei 101, CKS Memorial Hall, National Palace Museum, Red House, Beitou Hot Spring Museum and Elephant Mountain are all present in the 832-candidate catalogue. Checked because `out center qt` truncation is a known risk.",
+    "root_cause": "group_preference_fit is the largest dimension at 30 of 100 and is driven by tag matching. A peak carries [nature, rewarding_walks, sightseeing] and matches three recorded preferences for 27/30; Taipei 101 carries [sightseeing] alone for 12.8/30. With 85 near-identical peaks in the catalogue they saturate the head of the ranking.",
+    "is_city_icon_carries_no_weight": "302 candidates are flagged is_city_icon, but the flag appears in ranking.py only in lane assignment, `pros` and `why_shown` — never in any score computation. Landmark status contributes 0 points.",
+    "what_if_tested": "adding culture, markets and night_view to the profile moved the top 50 from 49 peaks to 44 peaks + 4 museums + 1 historic; the top 6 did not change. So this is not a missing-tag problem.",
+    "not_fixed_deliberately": "FORMULA_WEIGHTS is locked at 30/20/20/10/15/5 by decision, and 'a port that alters ranking is a regression'. This needs a decision ticket, not a unilateral edit."
+  },
+  "gate_1_status": "still open. Setup is now complete and evidence-backed, but the trip's place selection is four obscure peaks, so neither the itinerary nor the accommodation recommendation is a real Taipei trip yet."
+}
