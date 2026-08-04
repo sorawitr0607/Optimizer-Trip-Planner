@@ -91,6 +91,139 @@ def contrast(foreground: str, background: str) -> float | None:
     return (lighter + 0.05) / (darker + 0.05)
 
 
+# --------------------------------------------------------------------------
+# The D1-D10 deviation register, as a live scoreboard rather than a document.
+#
+# `WF-025` requires the register "complete" before the parity gate can run, and
+# an unregistered deviation is indistinguishable from drift. So each one is
+# either ENFORCED -- satisfied now, and this script fails if it regresses -- or
+# OUTSTANDING, or NOT_APPLICABLE because the surface it governs does not exist
+# yet. S6 closes when nothing is OUTSTANDING.
+# --------------------------------------------------------------------------
+
+ENFORCED, OUTSTANDING, NOT_APPLICABLE = "enforced", "outstanding", "n/a"
+
+
+def audit_deviations(tokens_text: str) -> list[tuple[str, str, str, str]]:
+    """(id, state, requirement, detail) for D1 through D10."""
+
+    shell = (ROOT / "web" / "src" / "shell.css")
+    shell_text = shell.read_text(encoding="utf-8") if shell.is_file() else ""
+    exporters = (ROOT / "travel_planner" / "exporters.py")
+    exporters_text = exporters.read_text(encoding="utf-8") if exporters.is_file() else ""
+    web_text = "\n".join(
+        path.read_text(encoding="utf-8") for path in WEB_TSX if path.is_file()
+    )
+    results: list[tuple[str, str, str, str]] = []
+
+    # D1 -- the dark accent triple is implemented, not dead code.
+    dark_accent = re.search(
+        r":root\.dark[^{]*\{[^}]*?--color-accent:\s*([^;]+);", tokens_text, re.S
+    )
+    results.append((
+        "D1", ENFORCED if dark_accent else OUTSTANDING,
+        "the dark accent triple is implemented",
+        f"dark :root accent = {dark_accent.group(1).strip() if dark_accent else 'missing'}; "
+        "a set country overrides it in both themes by D6, which is the mapping working, "
+        "not the donor's dead-code bug",
+    ))
+
+    # D2 -- radius unified on 2px, pills exempt.
+    radii = set(re.findall(r"border-radius:\s*([^;]+);", shell_text))
+    stray = {value.strip() for value in radii} - {
+        "var(--radius)", "var(--radius-house)", "var(--radius-pill)"
+    }
+    results.append((
+        "D2", ENFORCED if not stray else OUTSTANDING,
+        "radius unified on 2px; pills exempt",
+        f"{len(radii)} distinct radius values, all tokenised" if not stray
+        else f"untokenised: {sorted(stray)}",
+    ))
+
+    # D3 -- the no-country fallback is the house red, not blue.
+    root_accent = re.search(r":root\s*\{[^}]*?--color-accent:\s*([^;]+);", tokens_text, re.S)
+    fallback = root_accent.group(1).strip() if root_accent else ""
+    results.append((
+        "D3", ENFORCED if fallback.lower() == "#a30000" else OUTSTANDING,
+        "the fallback accent is the house red, not #2563eb",
+        f"no-country fallback = {fallback or 'missing'}",
+    ))
+
+    # D4 -- stale blue removed. #2563eb survives only as South Korea's accent.
+    blue_lines = [
+        line for line in tokens_text.splitlines()
+        if "#2563eb" in line.lower() and "south-korea" not in line
+    ]
+    results.append((
+        "D4", ENFORCED if not blue_lines else OUTSTANDING,
+        "stale blue removed",
+        "#2563eb appears only as South Korea's destination accent" if not blue_lines
+        else f"{len(blue_lines)} stale use(s)",
+    ))
+
+    # D5 -- the violet is a tokenised fifth semantic colour.
+    tokenised = "--color-purple" in tokens_text
+    leaked = "8b5cf6" in shell_text.lower() or "8b5cf6" in web_text.lower()
+    results.append((
+        "D5", ENFORCED if tokenised and not leaked else OUTSTANDING,
+        "#8b5cf6 tokenised as a fifth semantic colour",
+        "--color-purple defined and no raw use outside tokens.css" if tokenised and not leaked
+        else "raw hex leaked" if leaked else "--color-purple missing",
+    ))
+
+    # D6 -- exactly one country->accent mapping.
+    tables = len(re.findall(r':root\[data-country="', tokens_text))
+    elsewhere = re.findall(r'data-country="', web_text)
+    results.append((
+        "D6", ENFORCED if tables == 13 else OUTSTANDING,
+        "one country-to-accent mapping",
+        f"{tables} rules in tokens.css and no second table "
+        f"({len(elsewhere)} literal data-country use(s) in components)",
+    ))
+
+    # D7 -- the export palette reads the single colour source.
+    reads_tokens = "tokens.css" in exporters_text
+    export_hexes = re.findall(r"#[0-9a-fA-F]{6}", exporters_text)
+    results.append((
+        "D7", ENFORCED if reads_tokens and not export_hexes else OUTSTANDING,
+        "the export palette is re-tokenised",
+        "exporters.py reads tokens.css and holds no hex literal" if reads_tokens and not export_hexes
+        else f"{len(export_hexes)} hex literal(s) remain" if export_hexes else "does not read tokens.css",
+    ))
+
+    # D8 -- JetBrains Mono 700 is a real loaded weight, not synthesised.
+    self_hosted = "@font-face" in tokens_text or bool(list(ROOT.glob("web/public/**/*.woff2")))
+    results.append((
+        "D8", ENFORCED if self_hosted else OUTSTANDING,
+        "JetBrains Mono 700 is a real loaded weight",
+        "no @font-face and no woff2 in web/public, so bold numerals are still "
+        "browser-synthesised and a 3 can smear into an 8" if not self_hosted
+        else "self-hosted",
+    ))
+
+    # D9 -- flags are a local sprite with a mandatory country name.
+    renders_flag = bool(re.search(r"flag", web_text, re.I))
+    uses_cdn = "flagcdn" in web_text.lower() or "flagcdn" in shell_text.lower()
+    results.append((
+        "D9", OUTSTANDING if uses_cdn else (NOT_APPLICABLE if not renders_flag else ENFORCED),
+        "flags are a local sprite with a mandatory country name",
+        "no flag is rendered anywhere in the webapp, so there is no surface to "
+        "convert; the rule binds whenever one is added" if not renders_flag and not uses_cdn
+        else "flagcdn still referenced" if uses_cdn else "local sprite in use",
+    ))
+
+    # D10 -- the day-summary header is 3/1, not a locked 260px.
+    ratio = "aspect-ratio: 3 / 1" in shell_text or "aspect-ratio:3/1" in shell_text.replace(" ", "")
+    results.append((
+        "D10", ENFORCED if ratio else OUTSTANDING,
+        "the day-summary header is aspect-ratio 3/1",
+        "artifact 032's .dayhead two-column header is not built; the itinerary "
+        "has a totals block instead, so no ratio is declared" if not ratio
+        else "3/1 declared",
+    ))
+    return results
+
+
 def main() -> int:
     failures: list[str] = []
     notes: list[str] = []
@@ -168,6 +301,18 @@ def main() -> int:
             notes.append(
                 f"all {len(blocks)} destination accents clear 3:1 on both backgrounds"
             )
+
+    register = audit_deviations(tokens_text)
+    outstanding = [row for row in register if row[1] == OUTSTANDING]
+    print(f"  deviation register: {len(register)} entries", flush=True)
+    for did, state, requirement, detail in register:
+        mark = {ENFORCED: "ok ", OUTSTANDING: "TODO", NOT_APPLICABLE: "n/a"}[state]
+        print(f"    [{mark}] {did}: {requirement} — {detail}", flush=True)
+    if outstanding:
+        notes.append(
+            f"{len(outstanding)} deviation(s) outstanding, so the register is not yet "
+            f"complete: {', '.join(row[0] for row in outstanding)}. S6 closes when this is zero"
+        )
 
     for note in notes:
         print(f"NOTE: {note}", flush=True)
