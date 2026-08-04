@@ -313,7 +313,7 @@ class SocketGuardTest(unittest.TestCase):
         self.actions.place_provider = FakePlaceProvider()
         self.actions.route_provider = FakeRouteProvider()
 
-        def rpc(method: str, payload: dict) -> object:
+        def post_api(method: str, payload: dict) -> object:
             status, _, body = self.request(
                 "POST",
                 f"/api/{method}",
@@ -323,7 +323,7 @@ class SocketGuardTest(unittest.TestCase):
             self.assertEqual(200, status, (method, body.decode()))
             return json.loads(body)
 
-        trip = rpc(
+        trip = post_api(
             "create_trip",
             {
                 "name": "Taipei New Year",
@@ -332,7 +332,7 @@ class SocketGuardTest(unittest.TestCase):
             },
         )
         trip_id = trip["trip_id"]
-        rpc(
+        post_api(
             "save_setup",
             {
                 "trip_id": trip_id,
@@ -348,28 +348,28 @@ class SocketGuardTest(unittest.TestCase):
                 "confirmed": True,
             },
         )
-        discovery = rpc("discover_places", {"trip_id": trip_id})
-        ranking = rpc("rank_candidates", {"trip_id": trip_id})
+        discovery = post_api("discover_places", {"trip_id": trip_id})
+        ranking = post_api("rank_candidates", {"trip_id": trip_id})
         self.assertEqual(
             len(discovery["candidates"]["data"]["candidates"]),
             len(ranking["lanes"]["browse_all"]),
         )
         for place_id in ranking["lanes"]["browse_all"]:
-            rpc(
+            post_api(
                 "save_candidate_choice",
                 {"trip_id": trip_id, "place_id": place_id, "action": "must_do"},
             )
-        rpc("refresh_routes", {"trip_id": trip_id})
-        preview = rpc("generate_plan_preview", {"trip_id": trip_id})
+        post_api("refresh_routes", {"trip_id": trip_id})
+        preview = post_api("generate_plan_preview", {"trip_id": trip_id})
         variant = preview["proposal"]["data"]["variants"][0]
         self.assertEqual("provisional", variant["status"])
         self.assertTrue(variant["validation"]["valid"])
-        rpc(
+        post_api(
             "activate_plan_preview",
             {"trip_id": trip_id, "variant_id": variant["variant_id"]},
         )
-        rpc("apply_checklist_proposal", {"trip_id": trip_id})
-        snapshot = rpc("build_export_snapshot", {"trip_id": trip_id, "language": "th"})
+        post_api("apply_checklist_proposal", {"trip_id": trip_id})
+        snapshot = post_api("build_export_snapshot", {"trip_id": trip_id, "language": "th"})
         self.assertEqual(
             {"buffer", "logistics", "meal", "preparation", "travel", "visit"},
             {item["type"] for day in snapshot["data"]["days"] for item in day["items"]},

@@ -413,6 +413,17 @@ def build() -> tuple[int, int]:
             run(graphify, "export", "html")
             result = validate(expected)
         except Exception:
+            # Keep the raw extraction and the clustered graph that failed, under
+            # names `GENERATED` does not cover, so the next run can diagnose
+            # instead of re-paying. Without this the two files that explain a
+            # validation failure are exactly the two the cleanup deletes.
+            for name, keep in (
+                (".graphify_raw.json", "failed-raw.json"),
+                ("graph.json", "failed-clustered.json"),
+            ):
+                source = OUT / name
+                if source.is_file():
+                    shutil.copy(source, OUT / keep)
             for name in GENERATED:
                 (OUT / name).unlink(missing_ok=True)
             for name in saved:

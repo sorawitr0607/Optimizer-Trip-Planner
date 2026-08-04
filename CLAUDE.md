@@ -187,9 +187,20 @@ must stay directed. Rebuild only through `python3 scripts/build_project_graph.py
 failure), and only when explicitly asked or after a topology-changing milestone. After any graph
 change, `--check` must pass before committing. See `AGENTS.md`.
 
-**Rebuilt for S1 on 2026-08-03 and `--check` passes**: 1358 nodes, 3185 directed edges. The guarded S1
-run cost US$0.067015 across two restored clustering failures and one successful cached run; recorded
-cumulative cost is US$0.228995. The script reads `OPENAI_API_KEY` from `secrets.local.json` itself.
+**Rebuilt after S6 on 2026-08-04 and `--check` passes**: 1599 nodes, 3185 → 3851 directed edges, 149
+communities, and **zero nodes sourced from the deleted POC** (there were 82). That run cost US$0.028350
+for one extraction, reused from cache across three clustering failures; recorded cumulative cost is
+US$0.257345.
+
+One of those failures was not flaky and is worth knowing: validation refused three times over the same
+lost pair, `test_s4_taipei_journey_reaches_activation_and_both_downloads → web/src/api/client.rpc`. The
+cause was a **name collision** — that test defined a local `def rpc(...)` helper and `client.ts` exports
+`rpc`, so extraction invented an edge claiming a Python test calls a TypeScript function. Clustering was
+right to drop it and the guard was demanding a false edge survive. Fixed at the source by renaming the
+test-local helper to `post_api`; there is now no `def rpc` in any Python file. **Do not weaken the
+endpoint-pair guard to get past a failure like this** — find the collision. `build()` now preserves
+`failed-raw.json` and `failed-clustered.json` on failure, because the two files that explain a validation
+failure were exactly the two its cleanup deleted. The script reads `OPENAI_API_KEY` from `secrets.local.json` itself.
 Three things to know: **ticket nodes are keyed by title, not by ID**, so `WF-0nn` never appears in a node
 name; **`--exclude` patterns are gitignore lines**, so anchor them (`/artifacts`, not `artifacts`) or they
 match at every depth; and **never run `graphify extract` by hand** — it is incremental against an existing
