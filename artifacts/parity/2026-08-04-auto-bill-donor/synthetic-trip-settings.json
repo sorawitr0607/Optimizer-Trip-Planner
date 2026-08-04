@@ -1,0 +1,24 @@
+{
+  "tripName": "My Summer Vacation",
+  "startDate": "2026-08-04",
+  "durationDays": 5,
+  "country": "China",
+  "currencyCode": "CNY",
+  "currencySymbol": "¥",
+  "fxRate": 4.9,
+  "people": [
+    "Sorawit",
+    "Ploy",
+    "Ake"
+  ],
+  "categories": [
+    "transport",
+    "food & dining",
+    "accommodation",
+    "shopping",
+    "activities",
+    "others"
+  ],
+  "mainPayer": "Sorawit",
+  "bannerImage": null
+}

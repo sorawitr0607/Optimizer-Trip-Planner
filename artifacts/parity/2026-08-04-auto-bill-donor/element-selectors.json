@@ -1,0 +1,418 @@
+{
+  "1": {
+    "name": "App shell / theme container",
+    "selectors": [
+      ".app-container"
+    ]
+  },
+  "2": {
+    "name": "Theme toggle",
+    "selectors": [
+      ".theme-toggle-btn",
+      ".theme-toggle-btn.float"
+    ]
+  },
+  "3": {
+    "name": "Setup header / brand bar",
+    "selectors": [
+      ".setup-header"
+    ]
+  },
+  "4": {
+    "name": "Split landing grid",
+    "selectors": [
+      ".onboarding-landing-grid"
+    ]
+  },
+  "5": {
+    "name": "Dark hero panel",
+    "selectors": [
+      ".app-logo-badge",
+      ".feature-bullet-item",
+      ".feature-bullets-list",
+      ".feature-details",
+      ".feature-icon",
+      ".hero-content",
+      ".hero-headline",
+      ".hero-subtext",
+      ".landing-footer-credits",
+      ".landing-hero-side"
+    ]
+  },
+  "6": {
+    "name": "Wizard shell",
+    "selectors": [
+      ".landing-wizard-side",
+      ".setup-card",
+      ".setup-card.glassmorphic-card"
+    ]
+  },
+  "7": {
+    "name": "Step indicator",
+    "selectors": [
+      ".progress-line-4",
+      ".progress-step-4",
+      ".step-label-4",
+      ".step-num-4",
+      ".wizard-progress-4"
+    ]
+  },
+  "8": {
+    "name": "Step header",
+    "selectors": [
+      ".wizard-step-header"
+    ]
+  },
+  "9": {
+    "name": "Wizard action row",
+    "selectors": [
+      ".wizard-actions"
+    ]
+  },
+  "10": {
+    "name": "Button family",
+    "selectors": [
+      ".btn",
+      ".btn-outline",
+      ".btn-primary",
+      ".btn-secondary",
+      ".btn-sm",
+      ".btn-success",
+      ".btn-text",
+      ".w-full"
+    ]
+  },
+  "11": {
+    "name": "Icon action button",
+    "selectors": [
+      ".action-btn",
+      ".btn-remove-icon"
+    ]
+  },
+  "12": {
+    "name": "Hero CTA banner",
+    "selectors": [
+      ".btn-hero-cta",
+      ".hero-banner-badge",
+      ".hero-banner-card",
+      ".hero-banner-card.card",
+      ".hero-banner-content",
+      ".hero-banner-image-overlay",
+      ".hero-banner-image-wrapper",
+      ".hero-description",
+      ".hero-title",
+      ".hero-trip-img"
+    ]
+  },
+  "13": {
+    "name": "Generic card",
+    "selectors": [
+      ".card",
+      ".card-header-row",
+      ".card-title"
+    ]
+  },
+  "14": {
+    "name": "Stat card",
+    "selectors": [
+      ".stat-card",
+      ".stat-cards-grid",
+      ".stat-icon-wrapper",
+      ".stat-label",
+      ".stat-subvalue",
+      ".stat-value"
+    ]
+  },
+  "15": {
+    "name": "Insight card",
+    "selectors": [
+      ".card-header-icon",
+      ".icon",
+      ".insights-card",
+      ".insights-panel-cards",
+      ".insights-prices"
+    ]
+  },
+  "16": {
+    "name": "Filter bar",
+    "selectors": [
+      ".filter-group",
+      ".filter-icon",
+      ".filtering-card",
+      ".filters-grid",
+      ".search-box",
+      ".search-icon",
+      ".search-input"
+    ]
+  },
+  "17": {
+    "name": "Sidebar shell",
+    "selectors": [
+      ".brand-badge",
+      ".brand-logo",
+      ".sidebar",
+      ".sidebar-brand",
+      ".sidebar-title"
+    ]
+  },
+  "18": {
+    "name": "Metadata summary box",
+    "selectors": [
+      ".label",
+      ".summary-row-stat",
+      ".text-truncate",
+      ".trip-summary-box",
+      ".value"
+    ]
+  },
+  "19": {
+    "name": "Person meter row",
+    "selectors": [
+      ".meter-bar-container",
+      ".meter-bar-fill",
+      ".meter-info",
+      ".meter-thb",
+      ".person-cost",
+      ".person-meter-item",
+      ".person-meters-list",
+      ".person-name"
+    ]
+  },
+  "20": {
+    "name": "Grand total panel",
+    "selectors": [
+      ".main-price",
+      ".sidebar-grand-total",
+      ".thb-price"
+    ]
+  },
+  "21": {
+    "name": "Sidebar quick actions",
+    "selectors": [
+      ".sidebar-quick-actions"
+    ]
+  },
+  "22": {
+    "name": "Workspace tabs",
+    "selectors": [
+      ".tab-link",
+      ".tab-link.active",
+      ".tab-viewport",
+      ".top-navbar",
+      ".workspace-tabs"
+    ]
+  },
+  "23": {
+    "name": "Danger action",
+    "selectors": [
+      ".btn-reset-trip"
+    ]
+  },
+  "24": {
+    "name": "Donut chart",
+    "selectors": [
+      ".chart-flex-layout",
+      ".chart-legend",
+      ".donut-center-content",
+      ".donut-chart",
+      ".donut-chart-container",
+      ".donut-hole",
+      ".donut-label",
+      ".donut-value",
+      ".legend-dot",
+      ".legend-item",
+      ".legend-label",
+      ".legend-value",
+      ".no-data-chart"
+    ]
+  },
+  "25": {
+    "name": "Vertical bar chart",
+    "selectors": [
+      ".bar-chart-container",
+      ".bar-interactive-pillar",
+      ".bar-item-label",
+      ".bar-pillar-fill",
+      ".bar-tooltip-popup",
+      ".bar-wrapper-item",
+      ".vertical-chart-view"
+    ]
+  },
+  "26": {
+    "name": "Transaction list row",
+    "selectors": [
+      ".action-btns",
+      ".category-badge",
+      ".recent-cost-actions",
+      ".recent-day",
+      ".recent-details",
+      ".recent-list",
+      ".recent-meta",
+      ".recent-row-item",
+      ".txn-amount",
+      ".txn-name",
+      ".txn-splits-people"
+    ]
+  },
+  "27": {
+    "name": "Transaction table",
+    "selectors": [
+      ".badge-day",
+      ".category-badge",
+      ".cell-notes",
+      ".max-width-splits",
+      ".no-items-td",
+      ".overflow-x",
+      ".table-card",
+      ".transactions-table",
+      ".txn-desc-cell",
+      ".width-row"
+    ]
+  },
+  "28": {
+    "name": "Split-mode badge",
+    "selectors": [
+      ".m-all",
+      ".m-man",
+      ".m-sel",
+      ".m-sgl",
+      ".mode-badge"
+    ]
+  },
+  "29": {
+    "name": "Settlement grid + settlement item",
+    "selectors": [
+      ".avatar-circle-sm",
+      ".settlement-card",
+      ".settlement-grid",
+      ".settlement-item"
+    ]
+  },
+  "30": {
+    "name": "Main-cardholder selector",
+    "selectors": []
+  },
+  "31": {
+    "name": "Copy-memo action",
+    "selectors": []
+  },
+  "32": {
+    "name": "Settings form / people manager",
+    "selectors": [
+      ".btn-remove-icon",
+      ".categories-settings-container",
+      ".form-help-text",
+      ".inline-add-form",
+      ".person-info",
+      ".settings-cards-grid",
+      ".settings-divider",
+      ".settings-form",
+      ".settings-people-list",
+      ".settings-people-row"
+    ]
+  },
+  "33": {
+    "name": "Form field family",
+    "selectors": [
+      ".form-group",
+      ".form-row-three",
+      ".form-row-two",
+      ".highlight-amount-focus",
+      ".highlight-focus",
+      ".input-action-row"
+    ]
+  },
+  "34": {
+    "name": "Amount + currency field",
+    "selectors": [
+      ".field-suffix",
+      ".input-field.highlight-amount-focus",
+      ".input-prefix",
+      ".input-with-label",
+      ".manual-input",
+      ".manual-input-box"
+    ]
+  },
+  "35": {
+    "name": "Tag chips",
+    "selectors": [
+      ".no-items-text",
+      ".no-padding",
+      ".tag-item",
+      ".tag-item.category-tag",
+      ".tag-remove",
+      ".tags-container"
+    ]
+  },
+  "36": {
+    "name": "Info callout",
+    "selectors": [
+      ".currency-info-box"
+    ]
+  },
+  "37": {
+    "name": "Import / export cards",
+    "selectors": [
+      ".backup-card-header",
+      ".backup-grid",
+      ".backup-icon",
+      ".import-action-zone",
+      ".text-blue",
+      ".text-green"
+    ]
+  },
+  "38": {
+    "name": "Modal shell",
+    "selectors": [
+      ".modal-backdrop",
+      ".modal-body",
+      ".modal-card",
+      ".modal-close-btn",
+      ".modal-footer",
+      ".modal-form-grid",
+      ".modal-header",
+      ".span-full"
+    ]
+  },
+  "39": {
+    "name": "Allocation-mode picker",
+    "selectors": [
+      ".active",
+      ".modal-split-section",
+      ".section-title",
+      ".split-descriptor",
+      ".split-modes-tabs"
+    ]
+  },
+  "40": {
+    "name": "Participant chooser (avatar card grid)",
+    "selectors": [
+      ".avatar-circle",
+      ".avatar-cost",
+      ".avatar-name",
+      ".avatar-preview-card",
+      ".avatar-preview-grid",
+      ".clickable",
+      ".inactive"
+    ]
+  },
+  "41": {
+    "name": "Manual allocation rows + validation panel",
+    "selectors": [
+      ".btn-adjust",
+      ".input-prefix",
+      ".invalid",
+      ".manual-input",
+      ".manual-input-box",
+      ".manual-inputs-list",
+      ".manual-person-info",
+      ".manual-person-name",
+      ".manual-row-item",
+      ".manual-validation-panel",
+      ".valid",
+      ".validation-divider",
+      ".validation-row",
+      ".validation-row.status-line"
+    ]
+  }
+}

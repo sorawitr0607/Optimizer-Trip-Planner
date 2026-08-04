@@ -1,0 +1,30 @@
+[
+  {
+    "id": 1,
+    "day": "Day 1",
+    "category": "transport",
+    "name": "Selected mode bill",
+    "amount": 300,
+    "splitMode": "equal selected",
+    "splits": {
+      "Sorawit": 300,
+      "Ploy": 0,
+      "Ake": 0
+    },
+    "notes": "note for the table cell"
+  },
+  {
+    "id": 2,
+    "day": "Day 1",
+    "category": "transport",
+    "name": "Single payer bill",
+    "amount": 300,
+    "splitMode": "single",
+    "splits": {
+      "Sorawit": 300,
+      "Ploy": 0,
+      "Ake": 0
+    },
+    "notes": "note for the table cell"
+  }
+]

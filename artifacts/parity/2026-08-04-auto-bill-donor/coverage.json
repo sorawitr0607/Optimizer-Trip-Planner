@@ -1,0 +1,85 @@
+{
+  "captured_at": "2026-08-04",
+  "donor_commit_state": "working tree at capture time",
+  "style_records": 431,
+  "distinct_class_tokens": 265,
+  "tokens_captured_in_both_themes": 171,
+  "elements_total": 41,
+  "elements_fully_covered": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    29,
+    32,
+    33,
+    34,
+    35,
+    36,
+    38,
+    39,
+    40,
+    41
+  ],
+  "elements_partial": {
+    "16": {
+      "name": "Filter bar",
+      "missing": [
+        "filter-icon",
+        "search-icon"
+      ]
+    },
+    "27": {
+      "name": "Transaction table",
+      "missing": [
+        "cell-notes"
+      ]
+    },
+    "28": {
+      "name": "Split-mode badge",
+      "missing": [
+        "m-man",
+        "m-sel",
+        "m-sgl"
+      ]
+    },
+    "37": {
+      "name": "Import / export cards",
+      "missing": [
+        "backup-icon",
+        "text-blue"
+      ]
+    }
+  },
+  "elements_not_covered": {
+    "30": {
+      "name": "Main-cardholder selector",
+      "selectors": []
+    },
+    "31": {
+      "name": "Copy-memo action",
+      "selectors": []
+    }
+  }
+}

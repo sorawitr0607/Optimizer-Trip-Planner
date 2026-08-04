@@ -524,6 +524,15 @@ Already decided, and binding on any future implementation:
   missing flag shows the country name alone. **Everything local works offline** — the optimizer and
   `revision.py` are pure — **and network-requiring actions say so before being pressed.** The colour source is
   **`tokens.css`, in CSS not JSON**. See `.wayfinder/artifacts/034-offline-asset-policy.md`.
+- **The donor capture happened on 2026-08-04** — `artifacts/parity/2026-08-04-auto-bill-donor/` holds 431
+  style records across both themes, 97 inline-style sites, resolved tokens per theme and **35 of the 41
+  elements fully covered**, with the six gaps named. Diff S6's rebuild against `computed-styles.json` rather
+  than trying to recreate the donor. **The backup JSON could not be taken: the donor held no trip data** —
+  `alipay_splitter_settings` absent, `alipay_splitter_transactions` empty. If Auto-Bill was ever used for
+  real, that data is in another browser profile and is exportable until S6 archives the donor; the files in
+  that bundle named `synthetic-*` are a schema record from a trip the capture created, **not** the owner's
+  archive. One measured finding binds S6: **the donor's accent is `#dc2626` in both themes**, which is the
+  evidence for deviation D1.
 - **Two things must be taken from `Auto-Bill-Splitter` before it is archived**: a backup JSON per trip (kept as
   an archive record — a file survives archiving, `localStorage` does not) and the 41 lifted element captures
   for the parity gate. Both need the donor runnable. The token extraction is **done**, so it no longer does.

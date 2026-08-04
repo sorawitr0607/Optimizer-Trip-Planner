@@ -102,6 +102,14 @@ Both of these need `Auto-Bill-Splitter` runnable and both are lost once it is ar
 1. **Export a backup JSON per trip** — this ticket.
 2. **Capture the 41 lifted elements in isolation** — `WF-025`'s element-level parity baseline.
 
+> **Acted on 2026-08-04, and one half is blocked on the owner.** See
+> `artifacts/parity/2026-08-04-auto-bill-donor/`. The donor was run and captured: 431 style records across
+> both themes, 97 inline-style sites, resolved tokens per theme, and **35 of the 41 elements fully covered**
+> with the six gaps named. **But the donor held no trip data** — `alipay_splitter_settings` was absent and
+> `alipay_splitter_transactions` was `[]` — so there was no backup JSON to export. If Auto-Bill was ever
+> used with real expenses, that data is in another browser profile and is still exportable until S6
+> archives the donor. If it never was, this obligation is discharged as "nothing to archive".
+
 (An earlier version of this pattern in `WF-022` — capturing Streamlit reference exports — was voided when
 Streamlit stopped being a pilot vehicle. These two stand.)
 
