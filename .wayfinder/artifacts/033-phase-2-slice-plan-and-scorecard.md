@@ -72,6 +72,15 @@ cheap-before-expensive *within* the journey while proving the merge early.
 | **S5** | **Slice 6 and the rest.** Non-AI quick actions · `revise` · `readiness` | **Done 2026-08-04.** [Evidence](../../artifacts/validation/2026-08-04-slice-5/notes.md): 328 Python + 38 web tests and all 8 check stages green; *reduce walking* rebuilt a variant showing changed days, a seven-dimension before/after table and moved, removed and displaced stops all **named**; a revision applies and restores on a verified-hours fixture, while the browser witnessed the blocked path because every variant on the real trip is provisional; the board generated 13 items and applies only after previewing. **The S6 deletion checklist is now empty** — all 14 portable behaviours are asserted below Streamlit. Free-text GenAI stays deferred and the screen never calls `interpret_revision`. |
 | **S6** | **Parity and deletion.** The parity harness green · the remaining ported behaviours · delete `views/`, `app.py`, `ui/` | Element diffs within tolerance for all 41 lifted elements; 36 screen baselines approved; token allowlist clean; deviation register D1–D10 complete; `check.py` green with `AppTest` gone |
 
+> **A gap none of these rows owned, closed 2026-08-04.** Checking every row above: **no slice owns the
+> `/evidence` screen.** It was the last stub, and it was why a *newly created* trip could not be planned in
+> the webapp at all — route and opening evidence are hard optimizer constraints, so only the Streamlit POC
+> could satisfy them, which is why S4's gate had to use the saved Taipei trip. It was built between S5 and
+> S6 because **S6 deletes the POC**: shipping S6 with this stub would have left no way to plan a new trip
+> anywhere and would have baked a stub into the 36 approved baselines. Evidence:
+> [`2026-08-04-evidence-screen/notes.md`](../../artifacts/validation/2026-08-04-evidence-screen/notes.md).
+> **All nine routes are now real screens**, so `gated()`, `StagePage` and the `stage_stub` copy key are gone.
+
 **S4 is the slice that first makes the webapp usable end to end**, and it is the slice the 1 November
 checkpoint actually measures.
 

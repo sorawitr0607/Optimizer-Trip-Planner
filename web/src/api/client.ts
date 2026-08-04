@@ -542,6 +542,55 @@ export interface PlanVersionRecord {
   created_at: string;
 }
 
+export interface AccommodationBase {
+  name: string;
+  address?: string | null;
+  latitude: number;
+  longitude: number;
+}
+
+export interface TimezoneEvidence {
+  status: string;
+  timezone: string;
+  timezone_name?: string;
+  retrieved_at?: string;
+  expires_at?: string;
+}
+
+export interface PaidUsageStatus {
+  month: string;
+  estimated_usd: number;
+  spent_usd: number;
+  cap_usd: number;
+  warn_at_usd: number;
+  remaining_usd: number;
+  requests: number;
+  state: string;
+  cap_is_owner_raised: boolean;
+  by_operation: Record<string, unknown>;
+  entries: unknown[];
+}
+
+/** place_id -> the usable window, or the stable reason there is none. */
+export type OpeningIntervals = Record<
+  string,
+  { interval: { start: string; end: string } | null; reason: string; retrieved_at?: string | null }
+>;
+
+export interface RouteRecord {
+  origin_id: string;
+  destination_id: string;
+  mode: string;
+  status: string;
+  duration_minutes?: number;
+  walking_minutes?: number;
+  distance_m?: number;
+  transfers?: number;
+  provider?: string;
+  retrieved_at?: string;
+  expires_at?: string;
+}
+
 export class ApiError extends Error {
   constructor(
     public readonly code: string,

@@ -252,10 +252,12 @@ THB so a later rate cannot rewrite it, and a missing rate stays a visible gap ra
 **Phase 2 S5 is complete:** `api/` owns the localhost boundary and downloads, `web/` owns the nine
 routes and in-place `StageGate`, and `scripts/check.py` is the one free green command. The allowlist is
 **60 methods**: 51 at S1, five split-ledger ones at S2, `setup_vocabulary` at S3, the paid-call preflight
-and export-snapshot reads at S4, then `checklist_vocabulary` at S5; 28 refusal codes. **Eight of the nine
-routes are real** — `/setup`, `/places`, `/optimize`, `/itinerary`, `/readiness`, `/costs`, `/split` and
-`/revise`. **Only `/evidence` is still a stub**, which is why a newly created trip cannot yet acquire route
-evidence through the webapp; the S4 gate deliberately uses the saved real Taipei trip, which already has it.
+and export-snapshot reads at S4, then `checklist_vocabulary` at S5; 28 refusal codes. **All nine routes are
+real screens** as of 2026-08-04 — `/setup`, `/places`, `/evidence`, `/optimize`, `/itinerary`, `/readiness`,
+`/costs`, `/split` and `/revise`. There is no `StagePage`, no `gated()` wrapper and no `stage_stub` copy key;
+they went with the last stub. `/evidence` was built between S5 and S6 because **no slice row owned it** and
+S6 deletes the POC — see `artifacts/validation/2026-08-04-evidence-screen/notes.md`. It is the screen a
+*newly created* trip needs, since route and opening evidence are hard optimizer constraints.
 **Slice 6's non-AI half now has its React surface** (S5); its GenAI half stays deferred past the pilot. The
 core landed long before either: `revision.py`'s non-AI quick actions (`a7ad537`) and
 `interpret.py`'s constrained GenAI revision (`a2d59f6`) landed 2026-07-29 with tests, wired into

@@ -3,12 +3,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
 import { createBrowserRouter, Link, Navigate, useNavigate } from "react-router";
 
-import { ApiError, rpc, type Journey, type StageKey, type Trip } from "./api/client";
+import { ApiError, rpc, type Journey, type Trip } from "./api/client";
 import { copy } from "./i18n/copy";
 import { useLanguage } from "./i18n/LanguageProvider";
 import { AppShell } from "./shared/AppShell";
 import { StageGate } from "./shared/StageGate";
 import { CostsPage } from "./stages/CostsPage";
+import { EvidencePage } from "./stages/EvidencePage";
 import { ItineraryPage } from "./stages/ItineraryPage";
 import { OptimizePage } from "./stages/OptimizePage";
 import { ReadinessPage } from "./stages/ReadinessPage";
@@ -16,7 +17,6 @@ import { RevisePage } from "./stages/RevisePage";
 import { PlacesPage } from "./stages/PlacesPage";
 import { SetupPage } from "./stages/SetupPage";
 import { SplitPage } from "./stages/SplitPage";
-import { StagePage } from "./stages/StagePage";
 
 function Landing() {
   const { language } = useLanguage();
@@ -94,14 +94,6 @@ function TripsPage() {
   );
 }
 
-function gated(stage: string, gate: StageKey) {
-  return (
-    <StageGate stage={gate}>
-      <StagePage stage={stage} />
-    </StageGate>
-  );
-}
-
 export const router = createBrowserRouter([
   { path: "/", element: <Landing /> },
   { path: "/trips", element: <TripsPage /> },
@@ -118,7 +110,14 @@ export const router = createBrowserRouter([
           </StageGate>
         ),
       },
-      { path: "evidence", element: gated("evidence", "evidence") },
+      {
+        path: "evidence",
+        element: (
+          <StageGate stage="evidence">
+            <EvidencePage />
+          </StageGate>
+        ),
+      },
       {
         path: "optimize",
         element: (
