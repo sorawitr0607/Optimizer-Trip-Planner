@@ -11,6 +11,8 @@ import { StageGate } from "./shared/StageGate";
 import { CostsPage } from "./stages/CostsPage";
 import { ItineraryPage } from "./stages/ItineraryPage";
 import { OptimizePage } from "./stages/OptimizePage";
+import { ReadinessPage } from "./stages/ReadinessPage";
+import { RevisePage } from "./stages/RevisePage";
 import { PlacesPage } from "./stages/PlacesPage";
 import { SetupPage } from "./stages/SetupPage";
 import { SplitPage } from "./stages/SplitPage";
@@ -133,7 +135,14 @@ export const router = createBrowserRouter([
           </StageGate>
         ),
       },
-      { path: "readiness", element: gated("readiness", "setup") },
+      {
+        path: "readiness",
+        element: (
+          <StageGate stage="setup">
+            <ReadinessPage />
+          </StageGate>
+        ),
+      },
       {
         path: "costs",
         element: (
@@ -150,7 +159,14 @@ export const router = createBrowserRouter([
           </StageGate>
         ),
       },
-      { path: "revise", element: gated("revise", "itinerary") },
+      {
+        path: "revise",
+        element: (
+          <StageGate stage="itinerary">
+            <RevisePage />
+          </StageGate>
+        ),
+      },
     ],
   },
 ]);

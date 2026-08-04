@@ -1366,3 +1366,183 @@
     grid-column: 3;
   }
 }
+
+/* Readiness board and revise screen. Tokens only. */
+.readiness-screen,
+.revise-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.readiness-preview,
+.readiness-dismissed,
+.revise-history,
+.revise-versions {
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius-house);
+  padding: 9px 11px;
+}
+
+.readiness-preview {
+  background: var(--color-accent-light);
+  border-color: var(--color-accent);
+}
+
+.readiness-preview summary,
+.readiness-dismissed summary,
+.revise-history summary,
+.revise-versions summary {
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-selected);
+}
+
+.readiness-preview ul,
+.readiness-dismissed ul,
+.revise-history ul,
+.revise-versions ul,
+.revise-list {
+  font-size: var(--text-sm);
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.readiness-preview button {
+  background: var(--color-accent);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius-house);
+  color: var(--color-on-accent);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-secondary);
+  margin-top: 8px;
+  padding: 6px 12px;
+}
+
+.readiness-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.readiness-item {
+  border-top: 1px dashed var(--bg-card-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 9px 0;
+}
+
+.readiness-item:first-child {
+  border-top: 0;
+}
+
+.readiness-item-head {
+  display: flex;
+  flex: 1 1 320px;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.readiness-item-head a {
+  color: var(--color-accent);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-secondary);
+  text-decoration: none;
+}
+
+.readiness-item-controls {
+  align-items: flex-end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.readiness-item-controls label {
+  display: flex;
+  flex-direction: column;
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-secondary);
+  gap: 3px;
+}
+
+.readiness-item-controls select,
+.readiness-item-controls input {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius-house);
+  color: var(--text-primary);
+  font-size: var(--text-xs);
+  padding: 4px 6px;
+}
+
+.readiness-item-controls button,
+.readiness-dismissed button,
+.revise-versions button {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius-house);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-secondary);
+  padding: 4px 8px;
+}
+
+.revise-pick {
+  align-items: flex-end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.revise-pick label {
+  display: flex;
+  flex: 1 1 260px;
+  flex-direction: column;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-secondary);
+  gap: 4px;
+}
+
+.revise-pick select {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius-house);
+  color: var(--text-primary);
+  padding: 6px 8px;
+}
+
+.revise-pick button {
+  background: var(--color-accent);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius-house);
+  color: var(--color-on-accent);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-secondary);
+  padding: 6px 14px;
+}
+
+.revise-draft {
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius-house);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 11px 13px;
+}
+
+.revise-group {
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+.revise-history code,
+.revise-versions code {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}

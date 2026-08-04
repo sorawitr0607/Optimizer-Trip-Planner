@@ -1,0 +1,112 @@
+{
+  "slice": 5,
+  "title": "Slice 6 and the rest: non-AI quick actions, revise, readiness",
+  "date": "2026-08-04",
+  "closes": ".wayfinder/artifacts/033-phase-2-slice-plan-and-scorecard.md S5 row",
+  "paid_calls": 0,
+  "paid_spend_usd": 0.0,
+  "check_script": {
+    "command": "uv run --locked python scripts/check.py",
+    "stages_passed": 8
+  },
+  "tests": {
+    "python_total": 328,
+    "python_total_at_slice_4": 312,
+    "python_added": 16,
+    "web_total": 38,
+    "web_total_at_slice_4": 26,
+    "web_added": 12,
+    "ported_behaviours_suite": 40
+  },
+  "closing_checks": {
+    "quick_actions_produce_a_rebuilt_variant_with_consequences_shown": "pass",
+    "a_revision_applies_and_restores": "pass at actions level on a verified-hours fixture; the browser witnessed the blocked path because every variant on the real trip is provisional",
+    "the_readiness_board_generates_and_applies": "pass"
+  },
+  "ported_behaviours": {
+    "ported_here": [
+      "trip_without_setup_explains_the_board_is_unavailable",
+      "board_renders_previews_and_applies_in_both_languages",
+      "the_section_previews_and_applies_in_both_languages",
+      "costs_section_renders_and_saves"
+    ],
+    "still_owed_after_s5": 0,
+    "checklist_status": "empty; all 14 portable behaviours are asserted below Streamlit",
+    "apptest_originals_deleted": 0,
+    "note": "S6 can delete views/, app.py and ui/ without coverage dipping. What remains is the parity gate itself and artifact 029's three genuinely-UI tests."
+  },
+  "api": {
+    "allowlisted_actions_before": 59,
+    "allowlisted_actions_after": 60,
+    "actions_added": ["checklist_vocabulary"],
+    "refusal_codes": 28,
+    "new_runtime_dependencies": 0,
+    "interpret_revision_exposed_but_unreferenced": true,
+    "interpret_revision_note": "Constrained GenAI revision is deferred past the pilot, so the React surface never calls it even though the transport allows it."
+  },
+  "copy": {
+    "text_keys_before": 593,
+    "text_keys_after": 596,
+    "keys_added": 3,
+    "keys_added_list": ["open", "required_open", "unverified_required"],
+    "note": "Only the readiness summary counts needed new labels. Every other string both screens use already existed."
+  },
+  "code": {
+    "web/src/stages/ReadinessPage.tsx": 379,
+    "web/src/stages/RevisePage.tsx": 357,
+    "web/src/stages/s5.test.tsx": 295,
+    "web/src/shared/names.ts": 37,
+    "poc_readiness_view_lines_replaced": 144,
+    "poc_revise_view_lines_replaced": 220
+  },
+  "consolidation": {
+    "what": "placeName / placeNameFrom in web/src/shared/names.ts",
+    "why": "three screens had begun to diverge: places, optimize and revise each carried their own localName with a different signature",
+    "removed_duplicates": 2,
+    "rule": "a consequence or plan row must name a place, never a truncated place_id"
+  },
+  "live_walkthrough": {
+    "database": "copy of data/tourist.sqlite3, never the original",
+    "original_user_version": 12,
+    "server": "uv run --locked python -m api --port 8801",
+    "readiness_items": 13,
+    "readiness_state": "verification_needed",
+    "readiness_counts_shown": ["open", "required_open", "unverified_required", "overdue", "due_soon"],
+    "quick_actions_offered": 9,
+    "quick_action_run": "reduce_walking",
+    "consequences_observed": {
+      "changed_days": ["2027-01-03", "2027-01-04"],
+      "metric_dimensions": 7,
+      "moved": 2,
+      "removed": 2,
+      "displaced": 2,
+      "places_named_not_ids": true
+    },
+    "apply_blocked_with_a_visible_reason": true,
+    "apply_blocked_because": "every variant on the real trip is provisional (opening evidence missing) and apply_revision requires ready and valid",
+    "both_languages": true
+  },
+  "defects_found_and_fixed": [
+    "expected_authority holds a stable code and was rendered raw, so the board read 'Confirm with: attraction_operator'; it now resolves through the catalogue with a literal fallback for owner-entered text"
+  ],
+  "pre_existing_gap_recorded_not_fixed": {
+    "what": "revision.py builds assumption codes with the value interpolated, e.g. WALKING_MINUTES_PER_LEG_SET_TO_14",
+    "consequence": "no static catalogue entry can exist, so the assumptions line renders as the documented visible-machine-output fallback",
+    "same_in_the_poc": true,
+    "why_not_fixed": "changing how a locked domain module names assumptions is outside S5 and needs its own decision"
+  },
+  "graph": {
+    "check_command": "python3 scripts/build_project_graph.py --check",
+    "result": "pass",
+    "nodes": 1358,
+    "directed_edges": 3185,
+    "rebuilt": false
+  },
+  "captures": [
+    "captures/readiness-board-en-light.jpg",
+    "captures/readiness-board-th-light.jpg",
+    "captures/revise-consequences-en-light.jpg",
+    "captures/revise-consequences-th-light.jpg",
+    "captures/readiness-before-authority-fix-en-light.jpg"
+  ]
+}

@@ -6,7 +6,6 @@ import {
   ApiError,
   rpc,
   type CandidateChoice,
-  type DiscoveryCandidate,
   type DiscoveryRun,
   type PaidCallCheck,
   type PlaceInsight,
@@ -16,6 +15,7 @@ import {
 } from "../api/client";
 import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
+import { placeName } from "../shared/names";
 
 const LANES = ["main_queue", "city_icons", "worth_it_if", "local_alternatives", "browse_all"] as const;
 const CHOICES = ["must_do", "interested", "maybe"] as const;
@@ -32,10 +32,6 @@ const CONSIDERED = new Set<string>(CHOICES);
 const PHOTO_LIMIT = 5;
 
 type Lane = (typeof LANES)[number];
-
-function localName(candidate: DiscoveryCandidate, language: Language): string {
-  return candidate.names?.[language] ?? candidate.names?.en ?? candidate.names?.local ?? candidate.name;
-}
 
 function categoryName(category: string, language: Language): string {
   const translated = copyFrom("CATEGORY_TEXT", category, language);
@@ -238,7 +234,7 @@ export function PlacesPage() {
                       const source = item.provider_aliases[0]?.source_url;
                       return (
                         <tr key={item.place_id}>
-                          <td>{localName(item, language)}</td>
+                          <td>{placeName(item, language, item.name)}</td>
                           <td>{item.names?.local ?? item.name}</td>
                           <td>{categoryName(item.category, language)}</td>
                           <td>{item.operational_evidence.opening_hours.state === "official_confirmed" ? copy("evidence_verified", language) : copy("opening_unverified", language)}</td>
@@ -279,7 +275,7 @@ export function PlacesPage() {
                 <select value={selectedId} onChange={(event) => setCardId(event.target.value)}>
                   {entries.map((entry) => {
                     const item = catalog.find((value) => value.place_id === entry.place_id);
-                    return <option key={entry.place_id} value={entry.place_id}>{item ? localName(item, language) : entry.place_id} · {ranking.data.cards[entry.place_id]?.total_score.toFixed(1)}/100</option>;
+                    return <option key={entry.place_id} value={entry.place_id}>{item ? placeName(item, language, item.name) : entry.place_id} · {ranking.data.cards[entry.place_id]?.total_score.toFixed(1)}/100</option>;
                   })}
                 </select>
               </label>
@@ -291,11 +287,11 @@ export function PlacesPage() {
             // derives-from: A4 ranked candidate card, reduced to one functional list card for S4.
             <article className="place-card">
               <header className="place-card-head">
-                <div><h3>{localName(candidate, language)}</h3>{candidate.names?.local && candidate.names.local !== localName(candidate, language) ? <p>{candidate.names.local}</p> : null}<span className="money-tag">{categoryName(candidate.category, language)}</span></div>
+                <div><h3>{placeName(candidate, language, candidate.name)}</h3>{candidate.names?.local && candidate.names.local !== placeName(candidate, language, candidate.name) ? <p>{candidate.names.local}</p> : null}<span className="money-tag">{categoryName(candidate.category, language)}</span></div>
                 <strong className="place-score">{card.total_score.toFixed(1)}<small>/100</small></strong>
               </header>
               <p>{copyFormat("place_summary_template", language, {
-                name: localName(candidate, language),
+                name: placeName(candidate, language, candidate.name),
                 category: categoryName(candidate.category, language),
                 best_for: (card.matched_tags.length ? card.matched_tags : card.candidate_tags).slice(0, 4).map((tag) => copyFrom("TAG_TEXT", tag, language)).join(" · "),
                 reason: copyFrom("EXPLANATION_TEXT", card.why_shown[0], language),
@@ -311,7 +307,7 @@ export function PlacesPage() {
                   {insight.photo_gallery?.length ? (() => {
                     const index = (photoIndexes[selectedId] ?? 0) % insight.photo_gallery.length;
                     const photo = insight.photo_gallery[index];
-                    return <><img alt={localName(candidate, language)} src={photo.uri} /><div className="setup-actions"><button onClick={() => setPhotoIndexes((current) => ({ ...current, [selectedId]: (index - 1 + insight.photo_gallery!.length) % insight.photo_gallery!.length }))} type="button">← {copy("previous_photo", language)}</button><span>{copy("photo_count", language).replace("{current}", String(index + 1)).replace("{total}", String(insight.photo_gallery.length))}</span><button onClick={() => setPhotoIndexes((current) => ({ ...current, [selectedId]: (index + 1) % insight.photo_gallery!.length }))} type="button">{copy("next_photo", language)} →</button></div></>;
+                    return <><img alt={placeName(candidate, language, candidate.name)} src={photo.uri} /><div className="setup-actions"><button onClick={() => setPhotoIndexes((current) => ({ ...current, [selectedId]: (index - 1 + insight.photo_gallery!.length) % insight.photo_gallery!.length }))} type="button">← {copy("previous_photo", language)}</button><span>{copy("photo_count", language).replace("{current}", String(index + 1)).replace("{total}", String(insight.photo_gallery.length))}</span><button onClick={() => setPhotoIndexes((current) => ({ ...current, [selectedId]: (index + 1) % insight.photo_gallery!.length }))} type="button">{copy("next_photo", language)} →</button></div></>;
                   })() : null}
                   {insight.rating != null ? <p><b>{copy("source_rating", language)}:</b> {insight.rating.toFixed(1)}/5 · {(insight.user_rating_count ?? 0).toLocaleString()} {copy("ratings", language)}</p> : null}
                   {insight.review_summary?.text ? <><h4>{copy("review_summary", language)}</h4><p>{insight.review_summary.text}</p>{insight.review_summary.disclosure ? <p className="setup-hint">{insight.review_summary.disclosure}</p> : null}</> : null}

@@ -53,6 +53,7 @@ ACTIONS = (
     "restore_plan_version",
     "get_active_plan",
     "build_export_snapshot",
+    "checklist_vocabulary",
     "propose_checklist",
     "apply_checklist_proposal",
     "list_checklist_items",

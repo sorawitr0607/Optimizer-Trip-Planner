@@ -851,6 +851,46 @@ class PlannerActions:
     def get_active_plan(self, trip_id: str) -> PlanVersion | None:
         return self.store.get_active_plan(trip_id)
 
+    def checklist_vocabulary(self) -> dict[str, Any]:
+        """Every list the readiness board offers, as stable codes.
+
+        Display text comes from the copy catalogue -- these are codes, not copy.
+        The orders are explicit rather than derived: `TIMING_BUCKETS` carries
+        meaning in its order (soonest first) and the rest need a stable one for
+        a picker. Each is asserted against the core tuple so a new member cannot
+        be added in `checklist.py` and silently miss the board.
+        """
+
+        categories = (
+            "entry_requirements",
+            "immigration_customs",
+            "money",
+            "connectivity",
+            "insurance_health",
+            "transport_setup",
+            "reservations",
+            "registrations",
+            "packing",
+            "local_rules",
+            "emergency",
+            "accommodation",
+        )
+        assert set(categories) == set(checklist.CATEGORIES)
+        assert categories == checklist.CATEGORIES, "category order drifted from the core"
+        return {
+            "categories": list(categories),
+            # Ordered by how binding each level is, not alphabetically.
+            "requirement_levels": list(checklist.REQUIREMENT_LEVELS),
+            # Soonest first; the board groups by this.
+            "timing_buckets": list(checklist.TIMING_BUCKETS),
+            "progress_states": list(checklist.PROGRESS_STATES),
+            "evidence_states": list(checklist.EVIDENCE_STATES),
+            "authority_types": list(checklist.AUTHORITY_TYPES),
+            # Requirement level and evidence state move independently, and a
+            # verified `required` item with no responsible authority is refused.
+            "closed_states": sorted(checklist.CLOSED_STATES),
+        }
+
     def propose_checklist(self, trip_id: str) -> dict[str, Any]:
         """Preview the generated board against what is already saved."""
 

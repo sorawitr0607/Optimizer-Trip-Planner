@@ -434,6 +434,114 @@ export interface ExportSnapshot {
   };
 }
 
+export interface ChecklistVocabulary {
+  categories: string[];
+  requirement_levels: string[];
+  timing_buckets: string[];
+  progress_states: string[];
+  evidence_states: string[];
+  authority_types: string[];
+  closed_states: string[];
+}
+
+/** A board item. `title`/`consequence` are stored literals; the codes localize them. */
+export interface ChecklistItem {
+  item_id: string;
+  title: string;
+  title_args?: Record<string, string | number> | null;
+  template_id?: string | null;
+  consequence?: string | null;
+  consequence_code?: string | null;
+  category: string;
+  timing: string;
+  requirement_level: string;
+  progress: string;
+  evidence_state: string;
+  due_date?: string | null;
+  note?: string | null;
+  source_url?: string | null;
+  expected_authority?: string | null;
+  authority_type?: string | null;
+  last_checked_at?: string | null;
+  origin?: string | null;
+  generated_key?: string | null;
+  dismissed: boolean;
+  updated_at?: string;
+}
+
+export interface ChecklistProposal {
+  proposed: ChecklistItem[];
+  additions: ChecklistItem[];
+  removals: ChecklistItem[];
+  deadline_changes: {
+    title: string;
+    from: { due_date?: string | null };
+    to: { due_date?: string | null };
+  }[];
+  unchanged: number;
+}
+
+export interface ChecklistReadiness {
+  state: string;
+  /** Always false by decision: readiness warnings never gate the itinerary. */
+  blocks_itinerary: boolean;
+  counts: Record<string, number>;
+  due_soon: unknown[];
+  overdue: unknown[];
+}
+
+export interface QuickAction {
+  operation: string;
+  arguments: Record<string, string | number>;
+}
+
+export interface MetricDelta {
+  before: number;
+  after: number;
+  delta: number;
+}
+
+export interface RevisionConsequences {
+  changed_dates: string[];
+  metrics: Record<string, MetricDelta>;
+  moved: { place_id: string; from: { date: string; start: string }; to: { date: string; start: string } }[];
+  added: string[];
+  removed: string[];
+  shortened: { place_id: string; from_minutes: number; to_minutes: number }[];
+  lengthened: { place_id: string; from_minutes: number; to_minutes: number }[];
+  displaced: { place_id: string; reason: string }[];
+  warnings: { new: string[]; cleared: string[] };
+  can_apply: boolean;
+}
+
+export interface RevisionDraft {
+  operation: string;
+  arguments?: Record<string, string | number>;
+  assumptions?: string[];
+  explanation?: {
+    variant_id: string;
+    status: string;
+    metrics: Record<string, number>;
+    unscheduled: { place_id: string; reason: string }[];
+  } | null;
+  consequences?: RevisionConsequences | null;
+  can_apply?: boolean;
+}
+
+export interface RevisionRecord {
+  created_at: string;
+  operation: string;
+  from_version_id: string;
+  to_version_id: string;
+}
+
+export interface PlanVersionRecord {
+  version_id: string;
+  trip_id: string;
+  cause: string;
+  created_at: string;
+}
+
 export class ApiError extends Error {
   constructor(
     public readonly code: string,

@@ -923,7 +923,10 @@
       "split_claim_none": "Nothing",
       "split_save": "Save",
       "split_no_members": "Only you are recorded on this trip, so a bill has nobody to share with yet. Add travellers in setup.",
-      "shopping": "Shopping"
+      "shopping": "Shopping",
+      "open": "Open",
+      "required_open": "Required open",
+      "unverified_required": "Required, unverified"
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -1518,7 +1521,10 @@
       "split_claim_none": "ไม่ผูก",
       "split_save": "บันทึก",
       "split_no_members": "ทริปนี้บันทึกไว้แค่คุณคนเดียว จึงยังไม่มีใครหารบิลด้วย เพิ่มผู้ร่วมทางในหน้าตั้งค่า",
-      "shopping": "ช้อปปิ้ง"
+      "shopping": "ช้อปปิ้ง",
+      "open": "ยังไม่เสร็จ",
+      "required_open": "จำเป็นและยังไม่เสร็จ",
+      "unverified_required": "จำเป็นแต่ยังไม่ยืนยัน"
     }
   }
 }

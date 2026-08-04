@@ -249,12 +249,15 @@ readiness ICS — both snapshot-in, bytes-out. **The 9:16 poster and the trip PD
 (2026-08-03), and with them the whole export-font apparatus. `checklist.py` generates the readiness board and `costs.py` converts owner-recorded
 expenses into THB against an owner-editable, timestamped rate snapshot; a paid charge locks its actual
 THB so a later rate cannot rewrite it, and a missing rate stays a visible gap rather than a guess.
-**Phase 2 S4 is complete:** `api/` owns the localhost boundary and downloads, `web/` owns the nine
+**Phase 2 S5 is complete:** `api/` owns the localhost boundary and downloads, `web/` owns the nine
 routes and in-place `StageGate`, and `scripts/check.py` is the one free green command. The allowlist is
-**59 methods**: 51 at S1, five split-ledger ones at S2, `setup_vocabulary` at S3, then the paid-call
-preflight and export-snapshot reads at S4; 28 refusal codes. `/costs`, `/split`, `/setup`, `/places`,
-`/optimize` and `/itinerary` are real; `evidence`, `readiness` and `revise` remain stubs. **Slice 6's
-core exists but only behind the POC UI:** `revision.py`'s non-AI quick actions (`a7ad537`) and
+**60 methods**: 51 at S1, five split-ledger ones at S2, `setup_vocabulary` at S3, the paid-call preflight
+and export-snapshot reads at S4, then `checklist_vocabulary` at S5; 28 refusal codes. **Eight of the nine
+routes are real** — `/setup`, `/places`, `/optimize`, `/itinerary`, `/readiness`, `/costs`, `/split` and
+`/revise`. **Only `/evidence` is still a stub**, which is why a newly created trip cannot yet acquire route
+evidence through the webapp; the S4 gate deliberately uses the saved real Taipei trip, which already has it.
+**Slice 6's non-AI half now has its React surface** (S5); its GenAI half stays deferred past the pilot. The
+core landed long before either: `revision.py`'s non-AI quick actions (`a7ad537`) and
 `interpret.py`'s constrained GenAI revision (`a2d59f6`) landed 2026-07-29 with tests, wired into
 `views/revise.py`. The pure modules survive the redesign; their Streamlit surfaces are POC code awaiting
 deletion, so **slice 6 still has to be built in the webapp** and the live pilot remains unbuilt. Every new
@@ -280,10 +283,28 @@ ticket, `Prototype the ranked candidate card grid`, is **deferred past the pilot
 outstanding. `Lock the Phase 2 slice plan and validation scorecard` is the destination artifact — read it
 first: `.wayfinder/artifacts/033-phase-2-slice-plan-and-scorecard.md`.
 
-**The Phase 2 code freeze has lifted.** S0 through S4 are complete; **S5 is the next allowed slice** —
-the non-AI quick actions plus `revise` and `readiness`. S4 made the saved real Taipei trip assessable
-through discovery, ranking, optimization, activation and export; fresh trips still wait on the
-route-evidence surface assigned to parity work.
+**The Phase 2 code freeze has lifted.** S0 through S5 are complete; **S6 is the next and last slice** —
+the parity gate and the deletion of `views/`, `app.py` and `ui/`. **Its deletion checklist is already
+empty**: all 14 portable behaviours are asserted below Streamlit in `tests/test_ported_behaviours.py`, so
+what remains is the parity gate itself plus artifact 029's three genuinely-UI tests — the paid-card
+placement rule, the entry-point smoke test that changes subject to React, and the full journey walk.
+
+**S5 landed the last journey screens on 2026-08-04**
+(evidence: `artifacts/validation/2026-08-04-slice-5/notes.md`). Four things from it bind S6:
+
+- **The GenAI surface is absent on purpose.** `interpret_revision` is allowlisted and the transport would
+  carry it, but `RevisePage` never calls it, because artifact 033 defers constrained GenAI revision past the
+  pilot. A test asserts the screen renders no textarea and no interpret control, so the deferral cannot be
+  undone by accident.
+- **`placeName` / `placeNameFrom` in `web/src/shared/names.ts` is the one place naming happens.** `places`,
+  `optimize` and `revise` each had their own copy with a different signature; they are consolidated. A
+  consequence or plan row must name a place, never a truncated `place_id`, and divergence here is invisible
+  until a screen shows an id.
+- **`checklist_vocabulary` is the 60th allowlisted read**, with its orders asserted against the core tuples
+  like `setup_vocabulary`. Do not hardcode a board vocabulary in TypeScript.
+- **`revision.py` interpolates values into its assumption codes** (`WALKING_MINUTES_PER_LEG_SET_TO_14`), so
+  no catalogue entry can exist and that line is permanently the visible-machine-output fallback. The POC
+  does the same. Recorded as a pre-existing gap, not a port defect; changing it needs its own decision.
 
 **S4 landed the expensive journey screens on 2026-08-04**
 (evidence: `artifacts/validation/2026-08-04-slice-4/notes.md`). Its constraints are:

@@ -10,8 +10,9 @@ import {
   type PlanVariant,
   type Trip,
 } from "../api/client";
-import { copy, copyFrom, type Language } from "../i18n/copy";
+import { copy, copyFrom } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
+import { placeName } from "../shared/names";
 
 // Three per row, not five: at a fifth of a centred page these labels clipped.
 const METRICS = [
@@ -26,14 +27,6 @@ const METRICS = [
 ] as const;
 
 const CONSIDERED = new Set(["must_do", "interested", "maybe"]);
-
-function localName(
-  names: Record<string, string | undefined> | undefined,
-  fallback: string,
-  language: Language,
-): string {
-  return names?.[language] ?? names?.en ?? names?.local ?? fallback;
-}
 
 export function OptimizePage() {
   const { tripId = "" } = useParams();
@@ -187,7 +180,7 @@ export function OptimizePage() {
                   language,
                 )}
               </strong>
-              <span>{localName(area?.names, area?.name ?? "—", language)}</span>
+              <span>{placeName(area, language, "—")}</span>
               <span className="setup-hint">
                 {copy(
                   variant.hotel_recommendation.basis === "booked_accommodation"
@@ -247,7 +240,7 @@ export function OptimizePage() {
               <tbody>
                 {variant.reconciliation.map((item, index) => (
                   <tr key={`${item.name}-${index}`}>
-                    <td>{localName(item.names, item.name, language)}</td>
+                    <td>{placeName(item, language, item.name)}</td>
                     <td>{copy(item.priority, language)}</td>
                     <td>{copy(item.status, language)}</td>
                     <td>{copyFrom("OPTIMIZER_CODE_TEXT", item.reason, language)}</td>
@@ -281,7 +274,7 @@ export function OptimizePage() {
                           <td className="money-num">{item.start}</td>
                           <td className="money-num">{item.end}</td>
                           <td>{item.type}</td>
-                          <td>{localName(item.names, item.name ?? item.type, language)}</td>
+                          <td>{placeName(item, language, item.name ?? item.type)}</td>
                           <td className="money-num">
                             {item.duration_minutes} {copy("minutes", language)}
                           </td>
