@@ -252,7 +252,7 @@ export function ReadinessPage() {
                   draft.progress !== item.progress || draft.note !== (item.note ?? "");
                 const why = consequence(item, language);
                 return (
-                  // derives-from: element 26 .recent-row-item
+                  // derives-from: element 26 .recent-row-item as .readiness-item
                   <li className="readiness-item" key={item.item_id}>
                     <div className="readiness-item-head">
                       <strong>{title(item, language)}</strong>

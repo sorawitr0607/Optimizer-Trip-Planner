@@ -47,7 +47,7 @@ export function CostsPage() {
 
       <h2 className="money-eyebrow">{copy("costs_by_category", language)}</h2>
       <div className="money-table-scroll">
-        {/* derives-from: element 27 .transactions-table */}
+        {/* derives-from: element 27 .transactions-table as .money-table */}
         <table className="money-table">
           <thead>
             <tr>
@@ -148,7 +148,7 @@ export function CostsPage() {
           const isClaimed = claimed.has(item.cost_id);
           const paid = item.payment_state === "paid";
           return (
-            // derives-from: element 26 .recent-row-item
+            // derives-from: element 26 .recent-row-item as .money-row
             <li className="money-row" key={item.cost_id}>
               <span className="money-row-main">
                 <strong>{item.label}</strong>

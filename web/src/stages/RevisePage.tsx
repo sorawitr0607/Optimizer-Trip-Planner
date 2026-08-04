@@ -250,7 +250,7 @@ export function RevisePage() {
                   : copy("no_changes", language)}
               </p>
               <div className="money-table-scroll">
-                {/* derives-from: element 27 .transactions-table */}
+                {/* derives-from: element 27 .transactions-table as .money-table */}
                 <table className="money-table">
                   <thead>
                     <tr>

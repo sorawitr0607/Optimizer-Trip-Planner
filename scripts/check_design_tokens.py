@@ -94,7 +94,9 @@ def contrast(foreground: str, background: str) -> float | None:
 
 DONOR = ROOT / "artifacts" / "parity" / "2026-08-04-auto-bill-donor"
 DERIVES = re.compile(
-    r"derives-from:\s*(?:element\s+(\d+)|inline|(A\d+))\s+([.\w-]+)", re.I
+    r"derives-from:\s*(?:element\s+(\d+)|inline|(A\d+))\s+([.\w-]+)"
+    r"(?:\s+as\s+\.([\w-]+))?",
+    re.I,
 )
 
 
@@ -131,10 +133,18 @@ def validate_ancestors() -> list[str]:
         if path.name.endswith(".test.tsx"):
             continue
         for match in DERIVES.finditer(path.read_text(encoding="utf-8")):
-            number, absent, selector = match.group(1), match.group(2), match.group(3).rstrip(",.")
+            number, absent, selector, planner = (
+                match.group(1), match.group(2), match.group(3).rstrip(",."), match.group(4)
+            )
             where = path.relative_to(ROOT)
             if absent:
                 continue  # An absent element has no donor counterpart to diff.
+            if not planner:
+                problems.append(
+                    f"{where} declares {selector} without naming the planner class it pairs "
+                    "with; write `as .planner-class` so the parity diff cannot guess wrong"
+                )
+                continue
             if number is None:
                 # `inline` — the class is inline-styled in the donor, so it has
                 # no CSS rule and therefore no catalogue entry.

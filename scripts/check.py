@@ -21,6 +21,7 @@ def main() -> int:
         ("Project graph integrity", [python, "scripts/build_project_graph.py", "--check"]),
         ("Provider redaction self-test", [python, "scripts/check_provider_access.py", "--self-test"]),
         ("Design token gate", [python, "scripts/check_design_tokens.py"]),
+        ("Element parity", [python, "scripts/check_element_parity.py"]),
     ]
     if (ROOT / "web" / "package.json").is_file():
         stages.extend(

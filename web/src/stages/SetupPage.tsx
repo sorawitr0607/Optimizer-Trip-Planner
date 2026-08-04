@@ -214,7 +214,7 @@ export function SetupPage() {
         <p>{copy("setup_help", language)}</p>
       </header>
 
-      {/* derives-from: element 7 .wizard-progress-4, generalised to five steps
+      {/* derives-from: element 7 .wizard-progress-4 as .wizard-steps, generalised to five steps
           because the donor's class family hardcodes four. */}
       <ol className="wizard-steps">
         {STEP_TITLES.map((title, index) => {

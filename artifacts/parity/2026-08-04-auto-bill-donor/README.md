@@ -95,6 +95,30 @@ archive.** Do not treat them as migration input; there is no importer by decisio
 ancestor rather than as diffable lifts. The other four are reachable states that this pass did not stage;
 they are named here precisely so S6 can decide to stage them or accept them.
 
+## The rebuild side, captured 2026-08-04
+
+`rebuild-computed-styles.json` is the same capture taken against the planner: all
+nine routes in both themes, **206 records**. `scripts/check_element_parity.py`
+diffs the two by declared ancestor and runs as a `check.py` stage, so the
+comparison survives the donor being archived — which an image diff would not.
+
+Two things about how it compares, both learned by getting them wrong first:
+
+- **The pairing is declared, not inferred.** Each `derives-from:` now reads
+  `element 14 .stat-card as .money-tile`. Guessing the planner class from the
+  nearest `className` picked the filter *container* instead of the chip.
+- **Border width and style are not compared.** On a list row they are positional:
+  a dashed separator with `:first-child { border-top: 0 }` captures as `0px` for
+  whichever row is recorded first. Comparing them measured where an element sat
+  in the DOM, not whether it matched the donor, and produced fifteen findings
+  that were all artifacts of that.
+
+A deviation licenses a difference only when the rebuild's value is what the
+deviation actually mandates: D2 permits `2px` and pills, not any radius; D8
+permits a token weight; and a shadow must still have **zero blur**, because
+"same zero-blur hard offset shadows" is a locked requirement rather than taste.
+Negative-tested by injecting a `14px` radius and a `9px` blur, both of which fail.
+
 ## Reproducing
 
 ```bash

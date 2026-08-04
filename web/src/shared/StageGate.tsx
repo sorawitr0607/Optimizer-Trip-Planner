@@ -10,7 +10,7 @@ interface StageGateProps extends PropsWithChildren {
   stage: StageKey;
 }
 
-// derives-from: element 26 .recent-row-item
+// derives-from: element 26 .recent-row-item as .stage-blocked
 export function StageGate({ stage, children }: StageGateProps) {
   const { tripId = "" } = useParams();
   const { language } = useLanguage();

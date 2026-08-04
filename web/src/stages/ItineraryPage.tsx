@@ -257,7 +257,7 @@ export function ItineraryPage() {
         {copy("days", language)}
         <select value={day.date} onChange={(event) => setChosenDate(event.target.value)}>{plan.days.map((item) => <option key={item.date} value={item.date}>{item.date}</option>)}</select>
       </label>
-      {/* derives-from: element 12 .hero-banner-image-wrapper, at aspect-ratio
+      {/* derives-from: element 12 .hero-banner-image-wrapper as .dayhead, at aspect-ratio
           3/1 rather than the donor's locked 260px. That is deviation D10: it
           follows the donor's README over the donor's CSS, at the owner's
           request, and keeps the column rule unchanged. The ratio is dropped

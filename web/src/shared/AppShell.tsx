@@ -59,7 +59,7 @@ export function AppShell() {
 
   return (
     <div className="app-shell">
-      {/* derives-from: element 17 .sidebar. Auto-Bill has no phone precedent
+      {/* derives-from: element 17 .sidebar as .sidebar. Auto-Bill has no phone precedent
           because its sidebar was informational; a nine-item nav list sitting
           above the content on every phone screen is why this collapse exists. */}
       <button
