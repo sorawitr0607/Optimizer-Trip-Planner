@@ -175,7 +175,7 @@ export function SplitPage() {
           {summary.data.settlement.map((entry) => {
             const owedToTraveller = entry.direction === "cardholder_pays_traveller";
             return (
-              // derives-from: element 24 .person-meter-item
+              // derives-from: element 19 .person-meter-item
               <li className="money-row" key={entry.traveller_id}>
                 <span className="money-row-main">
                   <strong className={owedToTraveller ? "money-reversed" : undefined}>
@@ -214,7 +214,7 @@ export function SplitPage() {
       )}
 
       <h2 className="money-eyebrow">{copy("split_transactions", language)}</h2>
-      {/* derives-from: element 6 .clickable-filter-item, recovered from inline
+      {/* derives-from: inline .clickable-filter-item, recovered from inline
           styles. Filtering dims rather than hides, so a total that moved can
           still be explained. */}
       <div className={`money-filters${filtering ? " filtering" : ""}`}>

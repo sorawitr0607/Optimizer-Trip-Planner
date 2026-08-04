@@ -28,7 +28,7 @@ export function travellerNames(
   return names;
 }
 
-// derives-from: element 12 .stat-card / .stat-cards-grid
+// derives-from: element 14 .stat-card / .stat-cards-grid
 export function Tile({
   label,
   value,
@@ -54,7 +54,7 @@ export function Tile({
   );
 }
 
-// derives-from: element 31 .currency-info-box
+// derives-from: element 36 .currency-info-box
 export function Note({
   tone,
   mark,
@@ -68,7 +68,7 @@ export function Note({
   );
 }
 
-// derives-from: element 19 .category-badge
+// derives-from: element 26 .category-badge
 export function Tag({ children }: PropsWithChildren) {
   return <span className="money-tag">{children}</span>;
 }

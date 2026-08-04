@@ -20,6 +20,7 @@ because an accent chosen on a light background is not automatically legible on
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import re
 import sys
@@ -89,6 +90,73 @@ def contrast(foreground: str, background: str) -> float | None:
     a, b = relative_luminance(left), relative_luminance(right)
     lighter, darker = max(a, b), min(a, b)
     return (lighter + 0.05) / (darker + 0.05)
+
+
+DONOR = ROOT / "artifacts" / "parity" / "2026-08-04-auto-bill-donor"
+DERIVES = re.compile(
+    r"derives-from:\s*(?:element\s+(\d+)|inline|(A\d+))\s+([.\w-]+)", re.I
+)
+
+
+def validate_ancestors() -> list[str]:
+    """A declared ancestor has to be the *right* one.
+
+    Requiring the note without checking it let eight wrong element numbers
+    accumulate across S2-S6: the class names were real Auto-Bill classes but
+    belonged to other catalogue entries, and one came from misreading "6 of the
+    23 classes with no CSS rule" as "element 6". A parity harness keyed on those
+    numbers would have diffed against the wrong donor element and called the
+    result parity.
+    """
+
+    selectors = DONOR / "element-selectors.json"
+    inline = DONOR / "inline-styles.json"
+    if not selectors.is_file():
+        return []  # No donor capture in this checkout; nothing to validate against.
+
+    catalogue = json.loads(selectors.read_text(encoding="utf-8"))
+    owner: dict[str, set[int]] = {}
+    for number, entry in catalogue.items():
+        for selector in entry["selectors"]:
+            owner.setdefault(selector, set()).add(int(number))
+    inline_classes: set[str] = set()
+    if inline.is_file():
+        for key in json.loads(inline.read_text(encoding="utf-8")):
+            for token in key.split("|", 1)[-1].split("."):
+                if token:
+                    inline_classes.add("." + token)
+
+    problems: list[str] = []
+    for path in WEB_TSX:
+        if path.name.endswith(".test.tsx"):
+            continue
+        for match in DERIVES.finditer(path.read_text(encoding="utf-8")):
+            number, absent, selector = match.group(1), match.group(2), match.group(3).rstrip(",.")
+            where = path.relative_to(ROOT)
+            if absent:
+                continue  # An absent element has no donor counterpart to diff.
+            if number is None:
+                # `inline` — the class is inline-styled in the donor, so it has
+                # no CSS rule and therefore no catalogue entry.
+                if selector not in inline_classes:
+                    problems.append(
+                        f"{where} declares `inline {selector}` but that class is not in the "
+                        "donor's inline capture"
+                    )
+                continue
+            owners = owner.get(selector)
+            if owners is None:
+                problems.append(
+                    f"{where} cites element {number} for {selector}, which is not in the donor "
+                    "catalogue at all — use `inline <class>` if it carries no CSS rule"
+                )
+            elif int(number) not in owners:
+                problems.append(
+                    f"{where} cites element {number} for {selector}, but that class belongs to "
+                    f"element {'/'.join(str(n) for n in sorted(owners))} "
+                    f"({catalogue[str(sorted(owners)[0])]['name']})"
+                )
+    return problems
 
 
 # --------------------------------------------------------------------------
@@ -258,6 +326,9 @@ def main() -> int:
                     f"{path.relative_to(ROOT)}:{number} holds a colour literal; "
                     f"use a token from tokens.css: {line.strip()[:70]}"
                 )
+
+    # 3a. Every declared ancestor is the right one.
+    failures.extend(validate_ancestors())
 
     # 3. Every stage/shared component declares an ancestor.
     for path in WEB_TSX:

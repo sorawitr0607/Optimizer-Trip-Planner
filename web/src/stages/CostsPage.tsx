@@ -47,7 +47,7 @@ export function CostsPage() {
 
       <h2 className="money-eyebrow">{copy("costs_by_category", language)}</h2>
       <div className="money-table-scroll">
-        {/* derives-from: element 8 .transactions-table */}
+        {/* derives-from: element 27 .transactions-table */}
         <table className="money-table">
           <thead>
             <tr>
