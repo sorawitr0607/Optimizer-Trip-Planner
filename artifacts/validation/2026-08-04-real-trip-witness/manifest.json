@@ -1,0 +1,106 @@
+{
+  "witness": "the real Taipei trip through all nine webapp routes, at schema 13",
+  "date": "2026-08-04",
+  "trip": {
+    "name": "Taipei, Taiwan",
+    "dates": "2026-12-29 → 2027-01-04",
+    "days": 7
+  },
+  "database": {
+    "path": "data/tourist.sqlite3",
+    "schema": 13,
+    "opened_read_only_by_this_witness": true
+  },
+  "reads_exercised": {
+    "total": 26,
+    "returned_200": 26,
+    "source": "extracted from web/src/**/*.tsx rather than guessed — the first attempt invented five method names and passed trip_id to two global vocabularies",
+    "by_route": {
+      "shell": [
+        "list_trips",
+        "journey"
+      ],
+      "setup": [
+        "get_setup",
+        "setup_vocabulary"
+      ],
+      "places": [
+        "rank_candidates",
+        "list_candidate_choices",
+        "get_latest_discovery",
+        "check_paid_call"
+      ],
+      "evidence": [
+        "get_accommodation_base",
+        "get_timezone_evidence",
+        "list_routes",
+        "opening_intervals",
+        "paid_usage_status"
+      ],
+      "optimize": [
+        "get_plan_preview"
+      ],
+      "itinerary": [
+        "build_export_snapshot"
+      ],
+      "readiness": [
+        "list_checklist_items",
+        "propose_checklist",
+        "checklist_readiness",
+        "checklist_vocabulary"
+      ],
+      "costs": [
+        "list_cost_items",
+        "cost_totals"
+      ],
+      "split": [
+        "list_split_rows",
+        "split_summary"
+      ],
+      "revise": [
+        "list_plan_versions",
+        "list_revisions",
+        "get_revision_draft",
+        "quick_actions"
+      ]
+    },
+    "mutations_and_paid_calls_deliberately_excluded": [
+      "refresh_opening_hours",
+      "refresh_routes",
+      "refresh_timezone",
+      "discover_places",
+      "enrich_place_card",
+      "save_setup",
+      "save_candidate_choice",
+      "generate_plan_preview",
+      "activate_plan_preview",
+      "apply_checklist_proposal",
+      "save_split_row",
+      "apply_revision"
+    ]
+  },
+  "captures": {
+    "count": 9,
+    "variant": "light/en only",
+    "viewport": [
+      1440,
+      900
+    ],
+    "all_distinct": true,
+    "written_outside_screen_current": "deliberately — the 36-image gate compares a different trip, and writing these into screen-current would diff two unrelated trips"
+  },
+  "paid_cap": {
+    "calls_ever": 50,
+    "spend_ever_usd": 0.769,
+    "all_in_month": "2026-07",
+    "month_to_date_usd": 0.0,
+    "cap_usd": 10.0,
+    "note": "the cap is monthly, so a US$0.00 month-to-date beside a US$0.769 lifetime total is correct, not a broken ledger read"
+  },
+  "what_the_screens_show": {
+    "itinerary": "real dates and plan version bcdd81353160, 'Provisional / needs acceptance', 'Evidence still missing', and 0 visits on day 1 — the stored plan is genuinely sparse and the screen says so rather than inventing content",
+    "split": "'Only you are recorded on this trip, so a bill has nobody to share with yet. Add travellers in setup.' The app diagnoses the setup gap by itself",
+    "accent": "teal, not the house red — data-country resolves Taiwan through D6"
+  },
+  "gate_1_status": "not passed. The webapp handles the real trip without error, but the trip's own data is incomplete: planning_mode and confirmed are None, 0 travellers, 2 capability gaps, and readiness/costs/rates/split are empty."
+}
