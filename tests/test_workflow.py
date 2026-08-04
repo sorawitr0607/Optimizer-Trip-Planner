@@ -1,14 +1,10 @@
 from __future__ import annotations
 
 from io import BytesIO
-import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
-from unittest.mock import patch
 import zipfile
-
-from streamlit.testing.v1 import AppTest
 
 from tests.test_opening import FakeHoursProvider, TRIP_DATES
 from tests.test_routes import FakePlaceProvider, FakeRouteProvider, FakeTimeZoneProvider
@@ -17,9 +13,6 @@ from travel_planner.exporters import (
     checklist_ics,
     plan_workbook_xlsx,
 )
-
-
-ROOT = Path(__file__).resolve().parents[1]
 
 
 class FullWorkflowTest(unittest.TestCase):
@@ -71,26 +64,13 @@ class FullWorkflowTest(unittest.TestCase):
             actions.refresh_timezone(trip.trip_id)
             self.assertEqual([], actions._optimizer_input(trip.trip_id)["trip"]["capability_gaps"])
 
-            with patch.dict(os.environ, {"TOURIST_DB_PATH": str(path)}):
-                app = AppTest.from_file(ROOT / "app.py", default_timeout=20)
-                app.switch_page("views/evidence.py")
-                app.run()
-                app.button(key=f"continue_optimize_{trip.trip_id}").click().run()
-                self.assertFalse(app.exception)
-                self.assertIn("Whole-trip optimizer", [item.value for item in app.subheader])
-
-                # AppTest retains widgets from the page that called switch_page;
-                # a fresh harness mirrors the clean browser-page run.
-                app = AppTest.from_file(ROOT / "app.py", default_timeout=20)
-                app.switch_page("views/optimize.py")
-                app.run()
-                app.button(key=f"generate_plan_{trip.trip_id}").click().run()
-                self.assertFalse(app.exception)
-                app.button(
-                    key=f"activate_plan_{trip.trip_id}_best_balance"
-                ).click().run()
-                self.assertFalse(app.exception)
-                self.assertIn("Active plan", [item.value for item in app.subheader])
+            # The POC drove these two steps by clicking generate and then
+            # activate. Those buttons only ever called these two methods, and
+            # this is the real path rather than a fixture: the preview is built
+            # from the trip's own setup, discovery, choices and evidence above.
+            preview = actions.generate_plan_preview(trip.trip_id)
+            self.assertEqual(trip.trip_id, preview.trip_id)
+            actions.activate_plan_preview(trip_id=trip.trip_id, variant_id="best_balance")
 
             version = actions.get_active_plan(trip.trip_id)
             self.assertIsNotNone(version)
@@ -145,21 +125,11 @@ class FullWorkflowTest(unittest.TestCase):
             self.assertEqual(version.version_id, snapshot["stamp"]["plan_version_id"])
             self.assertEqual("ready", snapshot["readiness"]["state"])
 
-            with patch.dict(os.environ, {"TOURIST_DB_PATH": str(path)}):
-                app = AppTest.from_file(ROOT / "app.py", default_timeout=20)
-                for page in (
-                    "views/setup.py",
-                    "views/places.py",
-                    "views/evidence.py",
-                    "views/optimize.py",
-                    "views/itinerary.py",
-                    "views/readiness.py",
-                    "views/costs.py",
-                    "views/revise.py",
-                ):
-                    app.switch_page(page)
-                    app.run()
-                    self.assertFalse(app.exception, page)
+            # This test used to end by walking all eight POC pages and asserting
+            # no exception. Its React replacement is not a unittest: the 36
+            # screen baselines drive a real trip through all nine routes over
+            # the real socket, and `web/src/routes.test.tsx` asserts the table
+            # those routes come from. Both run inside `scripts/check.py`.
 
 
 if __name__ == "__main__":

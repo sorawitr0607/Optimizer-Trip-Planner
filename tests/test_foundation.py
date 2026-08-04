@@ -8,13 +8,9 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from streamlit.testing.v1 import AppTest
 
-from travel_planner.actions import PlannerActions, PlannerRefusal
+from travel_planner.actions import PlannerActions
 from travel_planner.core import freeze_snapshot
-
-
-ROOT = Path(__file__).resolve().parents[1]
 
 
 class FoundationTest(unittest.TestCase):
@@ -197,152 +193,12 @@ class FoundationTest(unittest.TestCase):
         )
         self.assertEqual(1, len(self.actions.list_plan_versions(trip.trip_id)))
 
-    def test_streamlit_entry_point_renders(self) -> None:
-        with patch.dict(os.environ, {"TOURIST_DB_PATH": str(self.database_path)}):
-            app = AppTest.from_file(ROOT / "app.py", default_timeout=10).run()
-            self.assertFalse(app.exception)
-            self.assertEqual("Personal Travel Planner", app.title[0].value)
-
-            # Nothing is pre-selected, so an untouched form is the empty
-            # destination the error exists for.
-            app.button(key="create_trip").click().run()
-            self.assertEqual("Destination is required.", app.error[0].value)
-
-            app.text_input(key="trip_name").input("Taipei New Year")
-            # Widget keys carry the language so a switch cannot leave a stale
-            # label behind; see `shared.translated_selectbox`.
-            app.selectbox(key="country__en").select("Taiwan")
-            # The city list is built from the chosen country, so it needs the rerun.
-            app.run()
-            app.selectbox(key="city__en").select("Taipei")
-            app.selectbox(key="planning_mode__en").select("ready_to_schedule")
-            app.button(key="create_trip").click().run()
-            self.assertFalse(app.exception)
-            self.assertEqual("Trip saved.", app.success[0].value)
-            selected_id = app.sidebar.selectbox(key="selected_trip_id").value
-            self.assertEqual(
-                "Taipei, Taiwan", self.actions.get_trip(selected_id).destination
-            )
-
-            app.radio[0].set_value("th").run()
-            self.assertFalse(app.exception)
-            self.assertEqual("ตัวช่วยวางแผนท่องเที่ยวส่วนตัว", app.title[0].value)
-            # The Thai widget carries over the country chosen in English, so a
-            # language switch changes the wording and nothing else.
-            self.assertEqual("Taiwan", app.selectbox(key="country__th").value)
-            self.assertEqual("Taipei", app.selectbox(key="city__th").value)
-
-        saved = self.actions.list_trips()
-        self.assertEqual(1, len(saved))
-        self.assertEqual("Taipei, Taiwan", saved[0].destination)
-
-    def test_trip_slots_create_switch_and_keep_drafts_independent(self) -> None:
-        taiwan = self.actions.create_trip(
-            name="Taiwan draft", destination="Taipei, Taiwan"
-        )
-        self.actions.save_setup(
-            trip_id=taiwan.trip_id,
-            main_style=["culture"],
-            owner_description="Taiwan night markets",
-            confirmed=True,
-        )
-
-        with patch.dict(os.environ, {"TOURIST_DB_PATH": str(self.database_path)}):
-            app = AppTest.from_file(ROOT / "app.py", default_timeout=10)
-            app.switch_page("views/setup.py")
-            app.run()
-            self.assertEqual(
-                "Active trip slot",
-                app.sidebar.selectbox(key="selected_trip_id").label,
-            )
-
-            app.sidebar.button(key="new_trip_slot").click().run()
-            self.assertFalse(app.exception)
-            app.text_input(key="trip_name").input("Kyoto ideas")
-            app.selectbox(key="country__en").select("Japan")
-            app.run()
-            app.selectbox(key="city__en").select("Kyoto")
-            app.button(key="create_trip").click().run()
-
-            kyoto_id = app.sidebar.selectbox(key="selected_trip_id").value
-            self.assertNotEqual(taiwan.trip_id, kyoto_id)
-            self.assertEqual("Kyoto, Japan", self.actions.get_trip(kyoto_id).destination)
-            self.actions.save_setup(
-                trip_id=kyoto_id,
-                main_style=["nature"],
-                owner_description="Kyoto gardens",
-            )
-
-            # A confirmed Taiwan draft resumes at Places; the newer unfinished
-            # Kyoto draft resumes at Setup. Neither switch needs a nav click.
-            app.sidebar.selectbox(key="selected_trip_id").select(taiwan.trip_id).run()
-            self.assertFalse(app.exception)
-            self.assertIn(
-                "Broad attraction discovery", [item.value for item in app.subheader]
-            )
-            app.sidebar.selectbox(key="selected_trip_id").select(kyoto_id).run()
-            self.assertFalse(app.exception)
-            self.assertIn(
-                "Destination: Kyoto, Japan", [item.value for item in app.caption]
-            )
-
-            self.assertEqual(
-                "Taiwan night markets",
-                self.actions.get_setup(taiwan.trip_id).snapshot.as_dict()["owner"][
-                    "description"
-                ],
-            )
-            self.assertEqual(
-                "Kyoto gardens",
-                self.actions.get_setup(kyoto_id).snapshot.as_dict()["owner"][
-                    "description"
-                ],
-            )
-
-            delete_key = f"delete_trip_{kyoto_id}"
-            self.assertTrue(app.button(key=delete_key).disabled)
-            app.text_input(key=f"delete_trip_confirm_{kyoto_id}").input(
-                "Kyoto ideas"
-            ).run()
-            self.assertFalse(app.button(key=delete_key).disabled)
-            app.button(key=delete_key).click().run()
-            self.assertFalse(app.exception)
-            self.assertEqual(
-                taiwan.trip_id,
-                app.sidebar.selectbox(key="selected_trip_id").value,
-            )
-            self.assertIn(
-                "Broad attraction discovery", [item.value for item in app.subheader]
-            )
-
-        self.assertEqual(
-            "Taiwan night markets",
-            self.actions.get_setup(taiwan.trip_id).snapshot.as_dict()["owner"][
-                "description"
-            ],
-        )
-        self.assertIsNone(self.actions.get_trip(kyoto_id))
-        self.assertIsNone(self.actions.get_setup(kyoto_id))
-
-    def test_deleting_the_last_trip_returns_to_first_trip_setup(self) -> None:
-        trip = self.actions.create_trip(name="Only trip", destination="Taipei")
-        with patch.dict(os.environ, {"TOURIST_DB_PATH": str(self.database_path)}):
-            app = AppTest.from_file(ROOT / "app.py", default_timeout=10).run()
-            app.text_input(key=f"delete_trip_confirm_{trip.trip_id}").input(
-                trip.name
-            ).run()
-            app.button(key=f"delete_trip_{trip.trip_id}").click().run()
-
-            self.assertFalse(app.exception)
-            self.assertEqual([], list(app.sidebar.selectbox))
-            self.assertEqual("Personal Travel Planner", app.title[0].value)
-            self.assertIsNotNone(app.button(key="create_trip"))
-        self.assertEqual([], self.actions.list_trips())
-
     def test_every_interface_string_exists_in_both_languages(self) -> None:
         """Every bilingual table is key-for-key; categories are derived in English."""
 
-        from ui.text import (
+        # Was `ui.text`, a re-export shim that died with the POC. This is the
+        # catalogue both renderers actually read.
+        from travel_planner.copy import (
             ACCOMMODATION_TEXT,
             CATEGORY_TEXT,
             DIMENSION_TEXT,
@@ -369,13 +225,16 @@ class FoundationTest(unittest.TestCase):
             )
             self.assertNotIn(" Of ", rendered)
 
-        from ui import shared
-
-        with patch.object(shared, "language", return_value="th"):
-            self.assertEqual(
-                OPTIMIZER_CODE_TEXT["th"]["setup_not_confirmed"],
-                shared.plain(PlannerRefusal("setup_not_confirmed")),
-            )
+        # A refusal code must have Thai prose to render, which is the half of
+        # `ui.shared.plain` worth keeping. Rendering it is no longer this test's
+        # business: below Streamlit that is `exporters._code`, asserted with its
+        # `⚠` fallback in `test_exports.py`, and on screen it is `copyFrom`.
+        # The other half — escaping `$` so Streamlit's markdown stopped reading
+        # money as LaTeX — has nothing left to protect against.
+        self.assertTrue(OPTIMIZER_CODE_TEXT["th"]["setup_not_confirmed"])
+        self.assertEqual(
+            set(OPTIMIZER_CODE_TEXT["en"]), set(OPTIMIZER_CODE_TEXT["th"])
+        )
 
     def test_copy_never_uses_a_pictograph_as_the_only_meaning(self) -> None:
         from travel_planner.copy import TABLE_NAMES, _CATALOGUE

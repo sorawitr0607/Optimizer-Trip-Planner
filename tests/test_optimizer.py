@@ -7,7 +7,6 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from streamlit.testing.v1 import AppTest
 
 from scripts.run_optimizer_regressions import run_catalog
 from travel_planner.actions import PlannerActions
@@ -149,74 +148,6 @@ class OptimizerActionsTest(unittest.TestCase):
             self.assertEqual(snapshot, version.snapshot.as_dict()["optimizer_input"])
             self.assertEqual("ready", version.snapshot.as_dict()["variant"]["status"])
             self.assertIsNone(actions.get_plan_preview(trip.trip_id))
-
-    def test_preview_is_persisted_but_unverified_inputs_cannot_activate(self) -> None:
-        from tests.test_ranking import RankingActionsTest
-
-        with TemporaryDirectory() as directory:
-            path = Path(directory) / "optimizer.sqlite3"
-            actions = PlannerActions(path, place_provider=RankingActionsTest.Provider())
-            trip = actions.create_trip(
-                name="Taipei", destination="Taipei", planning_mode="ready_to_schedule"
-            )
-            actions.save_setup(
-                trip_id=trip.trip_id,
-                main_style=["sightseeing", "culture"],
-                start_date="2030-01-01",
-                end_date="2030-01-03",
-                accommodation_status="not_booked",
-                confirmed=True,
-            )
-            actions.discover_places(trip_id=trip.trip_id)
-            ranking = actions.rank_candidates(trip.trip_id)
-            place_id = ranking["lanes"]["main_queue"][0]["place_id"]
-            actions.save_candidate_choice(
-                trip_id=trip.trip_id, place_id=place_id, action="must_do"
-            )
-
-            preview = actions.generate_plan_preview(trip.trip_id)
-            resumed = PlannerActions(path)
-
-            self.assertEqual(preview, resumed.get_plan_preview(trip.trip_id))
-            self.assertEqual(
-                {"unavailable"},
-                {item["status"] for item in preview.proposal.as_dict()["variants"]},
-            )
-            self.assertIn(
-                "OPENING_UNVERIFIED",
-                {
-                    item["reason"]
-                    for variant in preview.proposal.as_dict()["variants"]
-                    for item in variant["reconciliation"]
-                },
-            )
-            with self.assertRaises(ValueError) as raised:
-                resumed.activate_plan_preview(
-                    trip_id=trip.trip_id, variant_id="best_balance"
-                )
-            self.assertEqual("variant_not_ready", str(raised.exception))
-            self.assertIsNone(resumed.get_active_plan(trip.trip_id))
-
-            with patch.dict(os.environ, {"TOURIST_DB_PATH": str(path)}):
-                app = AppTest.from_file(ROOT / "app.py", default_timeout=10)
-                app.switch_page("views/optimize.py")
-                app.run()
-                self.assertFalse(app.exception)
-                self.assertIn(
-                    "Whole-trip optimizer", [item.value for item in app.subheader]
-                )
-                self.assertEqual(
-                    "best_balance",
-                    app.selectbox(key=f"plan_variant_{trip.trip_id}__en").value,
-                )
-                self.assertTrue(
-                    app.button(key=f"activate_plan_{trip.trip_id}_best_balance").disabled
-                )
-                app.radio[0].set_value("th").run()
-                self.assertFalse(app.exception)
-                self.assertIn(
-                    "ระบบจัดแผนทั้งทริป", [item.value for item in app.subheader]
-                )
 
     def test_missing_dates_returns_stay_length_choices(self) -> None:
         snapshot = fixture("jp-shibuya-sky-morning-view")["planner_input"]

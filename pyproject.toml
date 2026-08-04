@@ -3,15 +3,16 @@ name = "tourist-planner"
 version = "0.1.0"
 description = "Local, evidence-aware personal travel planner"
 requires-python = ">=3.12"
+# One. `xlsxwriter` exists only because slice 5 renders a workbook. Streamlit
+# went with the POC at S6; the local API is a stdlib ThreadingHTTPServer and the
+# browser dependencies live in web/package.json.
 dependencies = [
-    "streamlit>=1.54,<2",
     "xlsxwriter>=3.2.9",
 ]
 
-# Development only. Runtime dependencies stay at two by decision; these are for
-# gates, never for the app. `pillow` reads the screen baselines: it is installed
-# transitively today via streamlit, and S6 deletes streamlit, so declaring it
-# here is what stops the baseline gate breaking the moment the POC goes.
+# Development only, for gates, never for the app. `pillow` reads the screen
+# baselines. It used to arrive transitively via streamlit, so declaring it is
+# what kept the baseline gate working when the POC went.
 [dependency-groups]
 dev = [
     "pillow>=11",

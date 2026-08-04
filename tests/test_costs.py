@@ -6,10 +6,8 @@ import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
-from unittest.mock import patch
 import zipfile
 
-from streamlit.testing.v1 import AppTest
 
 from travel_planner import costs, split
 from travel_planner.actions import PlannerActions
@@ -338,49 +336,6 @@ class CostPersistenceTest(unittest.TestCase):
         totals = snapshot["costs"]["totals"]
         self.assertEqual(600.0, totals["estimated_thb"])
         self.assertEqual(2900.0, totals["paid_thb"])
-
-
-class CostViewTest(unittest.TestCase):
-    def test_costs_section_renders_and_saves(self) -> None:
-        with TemporaryDirectory() as directory:
-            path = Path(directory) / "view.sqlite3"
-            actions = PlannerActions(path)
-            trip = actions.create_trip(name="Dali", destination="Dali")
-            actions.save_rate_snapshot(
-                trip_id=trip.trip_id,
-                rates={"CNY": 5.0},
-                as_of="2026-12-01",
-                source="Bank of Thailand",
-            )
-            actions.save_cost_item(
-                trip_id=trip.trip_id,
-                item={
-                    "label": "Cable car",
-                    "category": "activity",
-                    "original_amount": 120,
-                    "original_currency": "CNY",
-                    "payment_state": "estimate",
-                },
-            )
-
-            with patch.dict(os.environ, {"TOURIST_DB_PATH": str(path)}):
-                app = AppTest.from_file(ROOT / "app.py", default_timeout=30)
-                app.switch_page("views/costs.py")
-                app.run()
-                self.assertFalse(app.exception)
-                self.assertIn("Costs", [item.value for item in app.subheader])
-                text = "\n".join(
-                    str(item.value)
-                    for group in (app.markdown, app.caption, app.info, app.warning)
-                    for item in group
-                )
-                self.assertIn("Cable car", text)
-                self.assertIn("600.00 THB", text)
-                self.assertIn("Total THB 600.00", text)
-
-                app.radio[0].set_value("th").run()
-                self.assertFalse(app.exception)
-                self.assertIn("ค่าใช้จ่าย", [item.value for item in app.subheader])
 
 
 class ReconciliationTest(unittest.TestCase):

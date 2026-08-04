@@ -7,15 +7,11 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from streamlit.testing.v1 import AppTest
 
 from travel_planner import destinations
 from travel_planner.actions import PlannerActions
 from travel_planner.providers import OpenStreetMapProvider, ProviderUnavailable
 from travel_planner.store import SCHEMA_VERSION, SQLiteStore
-
-
-ROOT = Path(__file__).resolve().parents[1]
 
 
 class FakePlaceProvider:
@@ -448,85 +444,6 @@ class ConcreteProviderTest(unittest.TestCase):
 
         self.assertEqual(1, len(requests))
         self.assertEqual("Taipei, Taiwan", result["coverage"]["geocoded_name"])
-
-
-class SetupUiTest(unittest.TestCase):
-    def test_owner_and_two_members_confirm_and_survive_thai_switch(self) -> None:
-        with TemporaryDirectory() as directory:
-            database_path = Path(directory) / "ui.sqlite3"
-            with patch.dict(os.environ, {"TOURIST_DB_PATH": str(database_path)}):
-                app = AppTest.from_file(ROOT / "app.py", default_timeout=10)
-                app.switch_page("views/setup.py")
-                app.run()
-                app.text_input(key="trip_name").input("Taipei New Year")
-                app.selectbox(key="country__en").select("Taiwan")
-                app.run()
-                app.selectbox(key="city__en").select("Taipei")
-                app.selectbox(key="planning_mode__en").select("ready_to_schedule")
-                app.button(key="create_trip").click().run()
-                trip_id = app.sidebar.selectbox(key="selected_trip_id").value
-
-                # Step 1 of 5: basics are all optional here, so continue straight on.
-                app.button(key=f"continue_{trip_id}").click().run()
-
-                # Step 2 of 5: owner style.
-                app.multiselect(key=f"main_style_{trip_id}__en").set_value(
-                    ["sightseeing", "culture"]
-                )
-                app.number_input(key=f"owner_age_{trip_id}").set_value(26)
-                app.button(key=f"continue_{trip_id}").click().run()
-
-                # Step 3 of 5: the member cards appear only after the count is set.
-                app.number_input(key=f"member_count_{trip_id}").set_value(2).run()
-                app.number_input(key=f"member_age_{trip_id}_0").set_value(19)
-                app.number_input(key=f"member_age_{trip_id}_1").set_value(50)
-                app.button(key=f"continue_{trip_id}").click().run()
-
-                # Step 4 of 5: no non-negotiables to add.
-                app.button(key=f"continue_{trip_id}").click().run()
-
-                # Step 5 of 5: review, then confirm.
-                app.button(key=f"confirm_{trip_id}").click().run()
-
-                self.assertFalse(app.exception)
-                self.assertIn(
-                    "Broad attraction discovery",
-                    [item.value for item in app.subheader],
-                )
-                setup = PlannerActions(database_path).get_setup(trip_id)
-                self.assertTrue(setup.confirmed)
-                self.assertEqual(
-                    [19, 50],
-                    [item["age"] for item in setup.snapshot.as_dict()["travellers"]],
-                )
-                # Values entered on earlier steps survived the later ones.
-                saved_owner = setup.snapshot.as_dict()["owner"]
-                self.assertEqual(26, saved_owner["age"])
-                self.assertEqual(["sightseeing", "culture"], saved_owner["main_style"])
-
-                app.switch_page("views/setup.py")
-                app.run()
-                app.radio[0].set_value("th").run()
-                self.assertFalse(app.exception)
-                self.assertEqual("ตัวช่วยวางแผนท่องเที่ยวส่วนตัว", app.title[0].value)
-                self.assertIn("ตั้งค่าทริป", [item.value for item in app.subheader])
-
-    def test_a_destination_outside_the_picker_still_creates_a_trip(self) -> None:
-        """The picker is a convenience; a city it does not list must still work.
-
-        `AppTest` cannot type a new option into a selectbox — `set_value` refuses
-        anything outside `options` — so the worldwide acceptance check runs
-        through the same two calls the view makes with a typed value.
-        """
-
-        with TemporaryDirectory() as directory:
-            actions = PlannerActions(Path(directory) / "typed.sqlite3")
-            self.assertEqual((), destinations.city_options("Georgia"))
-            trip = actions.create_trip(
-                name="", destination=destinations.destination_text("Georgia", "Tbilisi")
-            )
-            self.assertEqual("Tbilisi, Georgia", trip.destination)
-            self.assertEqual("Tbilisi, Georgia", trip.name)
 
 
 class DestinationPickerTest(unittest.TestCase):

@@ -11,7 +11,6 @@ import unittest
 from unittest.mock import patch
 import zipfile
 
-from streamlit.testing.v1 import AppTest
 
 from travel_planner import checklist
 from travel_planner.actions import PlannerActions
@@ -586,7 +585,9 @@ class ChecklistLocalizationTest(unittest.TestCase):
 
 
 def _app_text() -> dict:
-    from ui.text import TEXT
+    # Was `ui.text`, a re-export shim that died with the POC at S6. This is the
+    # catalogue both renderers actually read.
+    from travel_planner.copy import TEXT
 
     return TEXT
 
@@ -723,73 +724,6 @@ class ChecklistExportTest(unittest.TestCase):
             self.export, {"requirement_level": "ระดับความจำเป็น", "required": "จำเป็น"}
         ).decode("utf-8")
         self.assertIn("ระดับความจำเป็น", data.replace("\r\n ", ""))
-
-
-class ChecklistViewTest(unittest.TestCase):
-    def test_board_renders_previews_and_applies_in_both_languages(self) -> None:
-        with TemporaryDirectory() as directory:
-            path = Path(directory) / "board.sqlite3"
-            actions = PlannerActions(path)
-            trip = actions.create_trip(
-                name="Taipei", destination="Taipei", planning_mode="ready_to_schedule"
-            )
-            actions.save_setup(
-                trip_id=trip.trip_id,
-                main_style=["sightseeing"],
-                owner_nationality="Thailand",
-                start_date="2026-12-29",
-                end_date="2027-01-04",
-                accommodation_status="not_booked",
-                confirmed=True,
-            )
-
-            with patch.dict(os.environ, {"TOURIST_DB_PATH": str(path)}):
-                app = AppTest.from_file(ROOT / "app.py", default_timeout=30)
-                app.switch_page("views/readiness.py")
-                app.run()
-                self.assertFalse(app.exception)
-                self.assertIn("Trip readiness checklist", [i.value for i in app.subheader])
-                text = _text(app)
-                # Additions are previewed, not applied silently.
-                self.assertIn("➕ Verify entry requirements for Taipei", text)
-                self.assertIn("➕ Confirm accommodation and record its address", text)
-                self.assertEqual([], actions.list_checklist_items(trip.trip_id))
-
-                app.button(key=f"apply_checklist_{trip.trip_id}").click().run()
-                self.assertFalse(app.exception)
-                applied = _text(app)
-                self.assertIn("Do now / before booking", applied)
-                self.assertIn("Verification needed", applied)
-                self.assertIn("The board matches the current trip.", applied)
-
-                app.radio[0].set_value("th").run()
-                self.assertFalse(app.exception)
-                self.assertIn("รายการเตรียมตัวก่อนเดินทาง", [i.value for i in app.subheader])
-                self.assertIn("ทำทันที / ก่อนจอง", _text(app))
-
-            saved = actions.list_checklist_items(trip.trip_id)
-            self.assertTrue(saved)
-            self.assertEqual(
-                {"verification_needed"}, {item["evidence_state"] for item in saved}
-            )
-
-    def test_trip_without_setup_explains_the_board_is_unavailable(self) -> None:
-        with TemporaryDirectory() as directory:
-            path = Path(directory) / "nosetup.sqlite3"
-            PlannerActions(path).create_trip(name="Blank", destination="Osaka")
-
-            with patch.dict(os.environ, {"TOURIST_DB_PATH": str(path)}):
-                app = AppTest.from_file(ROOT / "app.py", default_timeout=30)
-                app.switch_page("views/readiness.py")
-                app.run()
-
-            self.assertFalse(app.exception)
-            self.assertIn("Save the trip setup first", _text(app))
-
-
-def _text(app: AppTest) -> str:
-    groups = (app.markdown, app.caption, app.info, app.warning, app.success)
-    return "\n".join(str(item.value) for group in groups for item in group)
 
 
 if __name__ == "__main__":

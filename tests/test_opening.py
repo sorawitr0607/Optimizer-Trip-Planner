@@ -8,7 +8,6 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from streamlit.testing.v1 import AppTest
 
 from travel_planner import opening
 from travel_planner.actions import PlannerActions
@@ -19,7 +18,6 @@ from travel_planner.providers import (
 )
 from tests.test_routes import FakePlaceProvider, FakeRouteProvider
 
-ROOT = Path(__file__).resolve().parents[1]
 
 # 2030-01-01 is a Tuesday, so Google days 2, 3, 4 are Tue, Wed, Thu.
 TRIP_DATES = ["2030-01-01", "2030-01-02", "2030-01-03"]
@@ -466,68 +464,6 @@ class ExploreFirstEvidenceTest(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.directory.cleanup()
-
-    def test_missing_hours_and_hotel_create_a_visible_provisional_plan(self) -> None:
-        snapshot = self.actions._optimizer_input(self.trip.trip_id)
-        opening_facts = [
-            fact for fact in snapshot["facts"] if fact["fact_type"] == "opening_interval"
-        ]
-        selected = [
-            item for item in snapshot["candidates"] if item["kind"] != "hotel_area"
-        ]
-
-        self.assertEqual(len(selected), len(opening_facts))
-        self.assertEqual({"assumed"}, {fact["status"] for fact in opening_facts})
-        self.assertTrue(
-            all(
-                fact["value"] == {"start": "09:00", "end": "21:00"}
-                for fact in opening_facts
-            )
-        )
-        self.assertIn("OPENING_EVIDENCE_MISSING", snapshot["trip"]["capability_gaps"])
-        journey = self.actions.journey(self.trip.trip_id)
-        self.assertIn("OPENING_EVIDENCE_MISSING", journey["capability_gaps"])
-        self.assertIn(
-            "provisional_accommodation_base",
-            {item["id"] for item in snapshot["candidates"]},
-        )
-
-        proposal = self.actions.generate_plan_preview(self.trip.trip_id).proposal.as_dict()
-        for variant in proposal["variants"]:
-            self.assertEqual("provisional", variant["status"])
-            self.assertTrue(variant["validation"]["valid"])
-            self.assertEqual(len(selected), variant["metrics"]["scheduled_visits"])
-            self.assertEqual(
-                "selected_place_centroid", variant["hotel_recommendation"]["basis"]
-            )
-
-        with patch.dict(os.environ, {"TOURIST_DB_PATH": str(self.path)}):
-            app = AppTest.from_file(ROOT / "app.py", default_timeout=10)
-            app.switch_page("views/evidence.py")
-            app.run()
-            self.assertFalse(app.exception)
-            button = app.button(key=f"continue_optimize_{self.trip.trip_id}")
-            self.assertEqual("Continue with provisional assumptions", button.label)
-            button.click().run()
-            self.assertIn("Whole-trip optimizer", [item.value for item in app.subheader])
-            activate = app.button(
-                key=f"activate_plan_{self.trip.trip_id}_best_balance"
-            )
-            self.assertFalse(activate.disabled)
-            self.assertEqual(
-                "Use and export this provisional itinerary", activate.label
-            )
-
-        self.actions.activate_plan_preview(
-            trip_id=self.trip.trip_id, variant_id="best_balance"
-        )
-        exported = self.actions.build_export_snapshot(self.trip.trip_id).as_dict()
-        self.assertEqual("action_needed", exported["readiness"]["state"])
-        self.assertEqual("provisional", exported["readiness"]["variant_status"])
-        self.assertEqual(
-            "provisional_accommodation_base",
-            exported["accommodation"]["anchor"]["subject_id"],
-        )
 
     def test_a_booked_base_replaces_the_hypothesis_and_routes_from_it(self) -> None:
         saved = self.actions.confirm_accommodation_base(

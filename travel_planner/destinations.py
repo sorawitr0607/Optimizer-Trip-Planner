@@ -15,7 +15,7 @@ Two deliberate choices:
 - The table is ordered by region rather than alphabetically, so the dropdown a
   Thai owner opens shows nearby destinations before distant ones.
 
-No live geocoding autocomplete: the OpenStreetMap notice in `ui.text` commits
+No live geocoding autocomplete: the OpenStreetMap notice in `i18n/copy.json` commits
 this app to identified, cached, user-triggered requests only.
 """
 

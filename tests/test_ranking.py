@@ -8,15 +8,11 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from streamlit.testing.v1 import AppTest
 
 from travel_planner.actions import PlannerActions
 from travel_planner.providers import GooglePlacesCardProvider, ProviderUnavailable
 from travel_planner.ranking import FORMULA_WEIGHTS, build_ranking
 from travel_planner.setup import build_setup_payload
-
-
-ROOT = Path(__file__).resolve().parents[1]
 
 
 def candidate(
@@ -452,81 +448,6 @@ class CardEnrichmentTest(unittest.TestCase):
             self.assertEqual(1, usage["google_places:card_details"]["requests"])
             self.assertEqual(5, usage["google_places:photo"]["requests"])
             self.assertEqual([], actions.store.list_place_evidence(trip.trip_id, "card_details"))
-
-
-class RankingUiTest(unittest.TestCase):
-    def test_interested_choice_persists_and_ranking_renders_in_thai(self) -> None:
-        with TemporaryDirectory() as directory:
-            path = Path(directory) / "ranking-ui.sqlite3"
-            actions = PlannerActions(path, place_provider=RankingActionsTest.Provider())
-            trip = actions.create_trip(name="Taipei", destination="Taipei")
-            actions.save_setup(
-                trip_id=trip.trip_id,
-                main_style=["sightseeing", "culture"],
-                travellers=[{"label": "Member", "age": 19, "tags": ["nature"]}],
-                confirmed=True,
-            )
-            actions.discover_places(trip_id=trip.trip_id)
-
-            with patch.dict(os.environ, {"TOURIST_DB_PATH": str(path)}), patch(
-                "travel_planner.actions.GooglePlacesCardProvider",
-                return_value=FakeCardProvider(),
-            ):
-                app = AppTest.from_file(ROOT / "app.py", default_timeout=10)
-                app.switch_page("views/places.py")
-                app.run()
-                self.assertFalse(app.exception)
-                self.assertIn("Personalized place cards", [item.value for item in app.subheader])
-                card_widget = app.selectbox(
-                    key=f"ranking_card_{trip.trip_id}_main_queue__en"
-                )
-                card_id = card_widget.value
-                self.assertTrue(
-                    any("Tourist take" in item.value for item in app.markdown)
-                )
-                rendered_before_enrichment = "\n".join(
-                    item.value for group in (app.markdown, app.caption) for item in group
-                )
-                self.assertIn("Why consider this place", rendered_before_enrichment)
-                self.assertIn("worth considering for", rendered_before_enrichment)
-                self.assertIn("Search this place on TripAdvisor", rendered_before_enrichment)
-
-                app.button(key=f"enrich_card_{trip.trip_id}_{card_id}").click().run()
-                rendered = "\n".join(
-                    item.value for group in (app.markdown, app.caption) for item in group
-                )
-                self.assertIn("Visitors praise the skyline view", rendered)
-                self.assertIn("The sunset view was the highlight", rendered)
-                self.assertIn("4.7/5", rendered)
-                self.assertIn("Report this review summary", rendered)
-                app.button(key=f"next_photo_{trip.trip_id}_{card_id}").click().run()
-                self.assertEqual(
-                    1, app.session_state[f"photo_index_{trip.trip_id}_{card_id}"]
-                )
-
-                app.button(key=f"choice_interested_{trip.trip_id}_{card_id}").click().run()
-
-                self.assertFalse(app.exception)
-                self.assertEqual(
-                    "interested", PlannerActions(path).list_candidate_choices(trip.trip_id)[0].action
-                )
-                self.assertIn(
-                    "Choice saved. Unseen cards were reordered; Browse All still retains everything.",
-                    [item.value for item in app.success],
-                )
-
-                app.radio[0].set_value("th").run()
-                self.assertFalse(app.exception)
-                self.assertIn(
-                    "การ์ดสถานที่ที่เหมาะกับทริป", [item.value for item in app.subheader]
-                )
-                thai_rendered = "\n".join(item.value for item in app.markdown)
-                self.assertIn("เหตุผลที่ควรพิจารณาสถานที่นี้", thai_rendered)
-                self.assertIn("น่าพิจารณาสำหรับ", thai_rendered)
-
-                app.button(key=f"continue_evidence_{trip.trip_id}").click().run()
-                self.assertFalse(app.exception)
-                self.assertIn("Evidence", [item.value for item in app.subheader])
 
 
 if __name__ == "__main__":

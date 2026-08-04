@@ -1,0 +1,126 @@
+{
+  "slice": "S6",
+  "date": "2026-08-04",
+  "what": "Visual parity gate at two levels, then deletion of the Streamlit POC",
+  "check_py": {
+    "stages": 11,
+    "seconds": 16.2,
+    "added_this_slice": [
+      "Design token gate",
+      "Element parity",
+      "Screen baselines"
+    ]
+  },
+  "deleted": {
+    "lines": 2951,
+    "files": 13,
+    "paths": [
+      "app.py",
+      "views/ (9 files)",
+      "ui/ (3 files)"
+    ],
+    "runtime_dependencies": {
+      "before": 2,
+      "after": 1,
+      "removed": "streamlit"
+    },
+    "packages_dropped_from_lock": 30
+  },
+  "tests": {
+    "python_before": 329,
+    "python_after": 311,
+    "apptest_tests_removed": 18,
+    "ui_classes_removed": 7,
+    "web_before": 47,
+    "web_after": 50
+  },
+  "parity_gates": {
+    "element_level": {
+      "script": "scripts/check_element_parity.py",
+      "pairs_declared": 11,
+      "properties_compared": [
+        "borderRadius",
+        "boxShadow",
+        "fontWeight",
+        "textTransform",
+        "letterSpacing"
+      ],
+      "tolerance": "none — computed style values are exact",
+      "positional_properties_excluded": [
+        "borderWidth",
+        "borderStyle"
+      ]
+    },
+    "screen_level": {
+      "script": "scripts/check_screen_baselines.py",
+      "baselines": 36,
+      "routes": 9,
+      "variants": "light/dark x en/th",
+      "viewport": [
+        1440,
+        900
+      ],
+      "max_differing_fraction": 0.001,
+      "min_channel_delta": 8,
+      "both_conditions_required": true,
+      "size_kb": 3148
+    }
+  },
+  "capture_races_fixed": [
+    {
+      "screens": "setup-dark-en, setup-dark-th",
+      "symptom_percent": 48.96,
+      "peak_channel_delta": 25,
+      "cause": "screenshot landed part-way through body's 300ms theme fade",
+      "evidence": "same pixel read (79,78,78) then (64,64,64)",
+      "fix": "capture mode injects a stylesheet disabling all transitions and animations"
+    },
+    {
+      "screens": "readiness-dark-th, readiness-light-th",
+      "symptom_percent": 0.154,
+      "peak_channel_delta": 229,
+      "cause": "board still loading; diff confined to bbox (325,114)-(1280,501)",
+      "fix": "stable_capture() requires two consecutive byte-identical shots"
+    }
+  ],
+  "negative_tests": [
+    {
+      "gate": "screen baselines",
+      "injected": "padding: 9px 0 9px 14px on .money-row",
+      "failed_screens": 8,
+      "expected_screens": 8,
+      "fraction_range_percent": [
+        0.265,
+        0.332
+      ],
+      "note": "exactly the costs and split routes x 4 variants; nothing else"
+    },
+    {
+      "gate": "entry point",
+      "injected": "removed the /split route",
+      "result": "order assertion failed"
+    },
+    {
+      "gate": "entry point",
+      "injected": "pointed /split at a sixth gate key",
+      "result": "failed with 'split gates on unknown stage costs'"
+    }
+  ],
+  "genuinely_ui_tests_resolved": {
+    "each_paid_enrichment_offers_its_own_card": "web/src/stages/s4.test.tsx — placement rule",
+    "streamlit_entry_point_renders": "web/src/routes.test.tsx — nine routes, five gate keys",
+    "owner_can_go_from_new_trip_to_every_export": "kept in tests/test_workflow.py at actions level; its eight-page render loop is the 36-screen capture",
+    "money_on_screen_is_not_read_as_maths": "died — Streamlit's $-as-LaTeX bug went with Streamlit"
+  },
+  "tests_repointed_not_deleted": {
+    "test_every_interface_string_exists_in_both_languages": "ui.text -> travel_planner.copy; the shared.plain half is redundant with exporters._code",
+    "_app_text in test_checklist.py": "ui.text -> travel_planner.copy"
+  },
+  "known_gaps": [
+    "graphify-out/ still describes app.py, views/ and ui/. --check passes; a rebuild is paid (~US$0.07) and was not run.",
+    "data/tourist.sqlite3 is still at schema 12 and bumps on first real open.",
+    "No Thai subset in either bundled font; Thai falls through per glyph to a system font.",
+    "Baselines are valid only on the machine that captured them, by decision.",
+    "pre-existing dead code left alone: unicodedata in test_exports.py, ROOT in test_interpret.py, ROOT/patch in test_usage.py"
+  ]
+}

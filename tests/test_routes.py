@@ -6,7 +6,6 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from streamlit.testing.v1 import AppTest
 
 from travel_planner.actions import MAX_ROUTE_REQUESTS, PlannerActions
 from travel_planner.providers import (
@@ -15,8 +14,6 @@ from travel_planner.providers import (
     ProviderBudgetExceeded,
     ProviderUnavailable,
 )
-
-ROOT = Path(__file__).resolve().parents[1]
 
 
 class FakeRouteProvider:
@@ -406,53 +403,3 @@ class TimeZoneTest(unittest.TestCase):
         self.assertEqual([], self.provider.calls)
 
 
-class EvidenceUiTest(unittest.TestCase):
-    """The evidence view had no render test, so its layout was unverified."""
-
-    def test_each_paid_enrichment_offers_its_own_card(self) -> None:
-        with TemporaryDirectory() as directory:
-            path = Path(directory) / "evidence-ui.sqlite3"
-            actions = PlannerActions(path, place_provider=FakePlaceProvider())
-            trip = actions.create_trip(name="Taipei", destination="Taipei")
-            actions.save_setup(
-                trip_id=trip.trip_id,
-                main_style=["sightseeing"],
-                start_date="2030-01-01",
-                end_date="2030-01-01",
-                confirmed=True,
-            )
-            actions.discover_places(trip_id=trip.trip_id)
-            # The stage is only reachable once a place has been chosen.
-            catalog = actions.get_latest_discovery(trip.trip_id).candidates.as_dict()
-            actions.save_candidate_choice(
-                trip_id=trip.trip_id,
-                place_id=catalog["candidates"][0]["place_id"],
-                action="must_do",
-            )
-            place_id = catalog["candidates"][0]["place_id"]
-
-            with patch.dict(os.environ, {"TOURIST_DB_PATH": str(path)}):
-                app = AppTest.from_file(ROOT / "app.py", default_timeout=10)
-                app.switch_page("views/evidence.py")
-                app.run()
-
-                self.assertFalse(app.exception)
-                # One button per enrichment, each inside its own card.
-                for key in (
-                    f"fetch_tz_{trip.trip_id}",
-                    f"fetch_hours_{trip.trip_id}",
-                    f"fetch_routes_{trip.trip_id}",
-                ):
-                    self.assertIsNotNone(app.button(key=key))
-                app.button(key=f"confirm_hours_{trip.trip_id}_{place_id}").click().run()
-                self.assertEqual(
-                    {"start": "08:00", "end": "18:00"},
-                    PlannerActions(path).opening_intervals(trip.trip_id)[place_id][
-                        "interval"
-                    ],
-                )
-                # The cap control no longer reuses the expander's own label.
-                self.assertEqual(
-                    "New monthly cap (US$)",
-                    app.number_input(key=f"cap_{trip.trip_id}").label,
-                )

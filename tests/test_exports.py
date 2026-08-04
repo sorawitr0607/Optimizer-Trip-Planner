@@ -11,7 +11,6 @@ from unittest.mock import patch
 import unicodedata
 import zipfile
 
-from streamlit.testing.v1 import AppTest
 
 from travel_planner import exporters
 from travel_planner.actions import PlannerActions
@@ -332,7 +331,6 @@ class ArtifactTest(unittest.TestCase):
         )
 
 
-
     def test_workbook_has_the_six_agreed_sheets_and_working_formulas(self) -> None:
         xlsx = plan_workbook_xlsx(self.export)
         archive = zipfile.ZipFile(BytesIO(xlsx))
@@ -473,115 +471,6 @@ class ArtifactTest(unittest.TestCase):
         indexed = set(re.findall(r"""words\[['\"]([a-z_0-9]+)['\"]\]""", source))
         self.assertTrue(indexed)
         self.assertEqual(set(), indexed - set(exporters.DEFAULT_LABELS))
-
-
-class ActivePlanViewTest(unittest.TestCase):
-    def test_active_plan_renders_timeline_and_map_in_both_languages(self) -> None:
-        plan = plan_payload(planner_input(with_names=True, with_coordinates=True))
-        with TemporaryDirectory() as directory:
-            path = Path(directory) / "view.sqlite3"
-            actions = PlannerActions(path)
-            trip = actions.create_trip(name="Tokyo day", destination="Tokyo")
-            actions.save_plan_version(
-                trip_id=trip.trip_id, snapshot=plan, cause="optimizer:best_balance"
-            )
-
-            with patch.dict(os.environ, {"TOURIST_DB_PATH": str(path)}):
-                app = AppTest.from_file(ROOT / "app.py", default_timeout=20)
-                app.switch_page("views/itinerary.py")
-                app.run()
-                self.assertFalse(app.exception)
-                self.assertIn("Active plan", [item.value for item in app.subheader])
-                english = _text(app)
-                self.assertIn("Shibuya Sky", english)
-                self.assertIn("Stop 1", english)
-                self.assertIn("✅ Confirmed", english)
-                self.assertNotIn("No plan is active yet", english)
-
-                app.radio[0].set_value("th").run()
-                self.assertFalse(app.exception)
-                self.assertIn("แผนที่ใช้งาน", [item.value for item in app.subheader])
-                thai = _text(app)
-                self.assertIn("ชิบูยะสกาย", thai)
-                self.assertIn("จุดที่ 1", thai)
-
-    def test_fallback_block_renders_beneath_its_half_day(self) -> None:
-        source = next(
-            item
-            for item in CATALOG["fixtures"]
-            if item["metadata"]["id"] == "ix-jp-rain-fallback-reoptimization"
-        )
-        plan = plan_payload(json.loads(json.dumps(source["planner_input"])))
-        with TemporaryDirectory() as directory:
-            path = Path(directory) / "fallback.sqlite3"
-            actions = PlannerActions(path)
-            trip = actions.create_trip(name="Rain day", destination="Tokyo")
-            actions.save_plan_version(
-                trip_id=trip.trip_id, snapshot=plan, cause="optimizer:best_balance"
-            )
-
-            with patch.dict(os.environ, {"TOURIST_DB_PATH": str(path)}):
-                app = AppTest.from_file(ROOT / "app.py", default_timeout=20)
-                app.switch_page("views/itinerary.py")
-                app.run()
-                self.assertFalse(app.exception)
-                english = _text(app)
-                self.assertIn("Fallback for this half-day", english)
-                self.assertIn("nearby_museum", english)
-
-                app.radio[0].set_value("th").run()
-                self.assertFalse(app.exception)
-                self.assertIn("แผนสำรองของช่วงนี้", _text(app))
-
-    def test_a_trip_without_a_plan_is_told_which_stage_to_finish(self) -> None:
-        with TemporaryDirectory() as directory:
-            path = Path(directory) / "empty.sqlite3"
-            actions = PlannerActions(path)
-            actions.create_trip(name="No plan", destination="Osaka")
-
-            with patch.dict(os.environ, {"TOURIST_DB_PATH": str(path)}):
-                app = AppTest.from_file(ROOT / "app.py", default_timeout=20)
-                app.switch_page("views/itinerary.py")
-                app.run()
-
-            self.assertFalse(app.exception)
-            # The itinerary names the blocking stage rather than dead-ending.
-            text = _text(app)
-            self.assertIn("Finish this first", text)
-            self.assertIn("Build the plan", text)
-            self.assertIn("Trip progress", text)
-
-
-    def test_money_on_screen_is_not_read_as_maths(self) -> None:
-        # Two bare dollars in one block are inline LaTeX to Streamlit, which
-        # swallowed the amounts in "US$0.1300 / US$10.00" entirely.
-        plan = plan_payload(planner_input(with_names=True, with_coordinates=True))
-        with TemporaryDirectory() as directory:
-            path = Path(directory) / "money.sqlite3"
-            actions = PlannerActions(path)
-            trip = actions.create_trip(name="Tokyo day", destination="Tokyo")
-            actions.save_plan_version(
-                trip_id=trip.trip_id, snapshot=plan, cause="optimizer:best_balance"
-            )
-
-            with patch.dict(os.environ, {"TOURIST_DB_PATH": str(path)}):
-                app = AppTest.from_file(ROOT / "app.py", default_timeout=20)
-                app.switch_page("views/itinerary.py")
-                app.run()
-
-        self.assertFalse(app.exception)
-        rendered = _text(app)
-        self.assertIn(r"US\$", rendered)  # the spend caption is on screen at all
-        unescaped = re.search(r"(?<!\\)\$", rendered)
-        self.assertIsNone(unescaped, f"unescaped dollar in: {rendered!r}")
-
-
-def _text(app: AppTest) -> str:
-    return "\n".join(
-        str(item.value)
-        for group in (app.markdown, app.caption, app.info, app.warning)
-        for item in group
-    )
 
 
 if __name__ == "__main__":

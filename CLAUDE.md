@@ -7,13 +7,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 npm --prefix web install                                             # first web run only
 uv run --locked python -m api                                        # production shell on 127.0.0.1:8765
-uv run streamlit run app.py                                          # temporary Phase 1 POC
 uv run --locked python scripts/check.py                              # every free Python + web gate
 uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 312 tests, ~11s
 uv run --locked python -m unittest tests.test_optimizer.OptimizerCoreTest.test_safe_route_and_weather_fallback_are_selected  # one test
 python3 scripts/validate_regression_fixtures.py                      # fixture catalog structure
 uv run --locked python scripts/run_optimizer_regressions.py          # 27 historic cases through the real optimizer
-uv run --locked python -m compileall -q app.py travel_planner scripts tests
+uv run --locked python -m compileall -q api travel_planner scripts tests
 python3 scripts/build_project_graph.py --check                       # graph integrity (free)
 python3 scripts/check_provider_access.py --self-test                 # redaction check, no network
 uv run --locked python scripts/check_design_tokens.py                 # token gate: 13 accent triples, no literals, ancestors, 3:1 contrast
@@ -27,56 +26,28 @@ no formatter.
 
 ## Architecture
 
-Phase 1 is the temporary local Streamlit POC. Phase 2 S1 adds the local React shell without deleting it.
-The design decisions are already locked in `.wayfinder/tickets/` (see below) — the constraints in this
-section are decisions, not incidental structure.
+There is one interface: the local React webapp behind `api/`. The Streamlit POC that proved the core
+works was deleted at slice S6 on 2026-08-04. The design decisions are locked in `.wayfinder/tickets/`
+(see below) — the constraints in this section are decisions, not incidental structure.
 
 ### Dependency direction is one-way and enforced by review, not by tooling
 
 ```
 web/ (React)  →  api/ (stdlib localhost HTTP)  →  travel_planner/actions.py
-app.py (Streamlit POC) ────────────────────────→             │
+                                                             │
                                                              ├─ core / optimizer / ranking / setup / discovery
                                                              └─ store.py (SQLite) · providers.py (HTTP)
 ```
 
 - `core.py`, `optimizer.py`, `ranking.py`, `setup.py`, `discovery.py` are the planning core: pure,
-  language-neutral, no Streamlit / SQLite / HTTP / LLM imports. Check the module docstrings — they
-  each state this. Adding such an import is the single easiest way to break the design.
+  language-neutral, no UI / SQLite / HTTP / LLM imports. Check the module docstrings — they each state
+  this. Adding such an import is the single easiest way to break the design, and honouring it is why
+  replacing the whole interface at S6 cost the core nothing.
 - `PlannerActions` (`actions.py`) is the only coordinator: it assembles snapshots, calls the core,
-  and persists results. It holds no Streamlit session state and no presentation formatting.
-- The POC UI is split by journey stage. `app.py` owns only what every stage shares: the language, selected
-  trip, journey state, and `st.navigation`. Each stage is under `views/`; `ui/text.py` re-exports the shared
-  JSON catalogue and `ui/shared.py` holds POC state plus row renderers.
-  A view never recomputes context: it calls `shared.actions()`, `shared.words()`, `shared.trip()`.
-- `PlannerActions.journey()` decides which stages are done and which is next; `shared.journey()` is only a
-  POC compatibility shim. `shared.require(stage, trip)`
-  renders one clear next step and returns False when a stage is not reachable, so a view explains
-  itself instead of erroring. The landing page is the stage that needs attention, so a returning owner
-  sees the itinerary rather than the setup form.
-- `st.navigation` always renders at the top of the sidebar, so `app.py` cannot put anything above it;
-  the trip context sits directly under the stages and the language control at the foot. The language is
-  read with `shared.language()` before its widget is created, which is what lets that widget render last.
-- Any string built from numbers or exception text goes through `shared.plain()`. Streamlit markdown reads
-  a pair of `$` as inline LaTeX, which silently swallowed the amounts in `US$0.1300 / US$10.00`.
-- A UI test must select its stage: `at = AppTest.from_file(ROOT / "app.py", ...)`, then
-  `at.switch_page("views/<stage>.py")`, then `at.run()`. Without the switch, the default landing stage
-  renders and assertions about another stage will fail. The trip selector is a sidebar widget keyed
-  `selected_trip_id`.
-- Setup is the five editable steps of `Prototype the owner-led setup and confirmation flow`, not one
-  form. `views/setup.py` holds no `st.form`: the city list depends on the chosen country, and a form
-  defers every value until submit. Each step seeds its widgets from the saved draft rather than from
-  session state, because Streamlit drops widget state once a widget stops rendering, and each
-  `Save & continue` autosaves through an `on_click` callback. A callback runs after the values are
-  committed but before the rerun, so it saves what the owner can see; a closure captured at render time
-  would miss an edit made just before the click, and `st.rerun()` mid-script leaves two steps in one run.
-- A selectbox or multiselect whose `format_func` depends on the language must go through
-  `shared.translated_selectbox` / `shared.translated_multiselect`. Streamlit caches the selected
-  option's rendered text in the browser, so the plain widget keeps the previous language's wording
-  after a switch — the dropdown list updates, the closed control does not. The helpers key the widget
-  per language and carry the choice in a language-free key. Consequences: widget keys end in
-  `__<language>`, so a UI test looks up `key="country__en"`; and a value is read back with
-  `shared.chosen("<base key>")`, never straight from session state.
+  and persists results. It holds no session state and no presentation formatting.
+- `PlannerActions.journey()` decides which stages are done and which is next. The webapp renders the
+  blocked explanation **in place** through `<StageGate>` rather than redirecting; only `/` redirects, to
+  `journey["next"]`, so a returning owner lands on the stage needing attention.
 - `travel_planner/destinations.py` (country/city) and `costs.COMMON_CURRENCIES` are picker
   convenience only. Both dropdowns take a typed value, so a destination or currency absent from the
   table stays reachable — the worldwide acceptance check requires it. A city name is the geocoder
@@ -164,8 +135,8 @@ preview. `SCHEMA_VERSION` (`store.py`) is stamped into `PRAGMA user_version`; a 
 
 ### Bilingual by data, not by branching
 
-All user-facing strings live in the eight `en`/`th` tables in `i18n/copy.json`; `ui/text.py` is a thin POC
-compatibility shim and React imports the same catalogue. The core emits stable codes; the views map code →
+All user-facing strings live in the eight `en`/`th` tables in `i18n/copy.json`; `travel_planner/copy.py`
+reads it for the exports and React imports the same catalogue. The core emits stable codes; the views map code →
 language → text. Switching language must never change ranking, scheduling, or the active plan — so
 never put display text in the core or a language check in a scoring path. New user-visible string ⇒ add both
 `en` and `th`. Tests enforce key parity across all tables except `CATEGORY_TEXT`'s documented derived-English
@@ -173,9 +144,9 @@ rule. Unknown stable codes render visibly as `⚠ CODE`; never prettify them int
 
 ### Tests
 
-Python uses `unittest`, plus `streamlit.testing.v1.AppTest` for the temporary POC paths
-(`AppTest.from_file(ROOT / "app.py")` with `TOURIST_DB_PATH` patched to a temp dir). The webapp uses Vitest
-for focused UI behavior. No network, no paid API, no Python fixtures framework.
+Python uses `unittest`; the webapp uses Vitest. No network, no paid API, no Python fixtures framework.
+**`AppTest` is gone** — S6 removed the 18 tests that used it, having first moved the 14 portable
+behaviours down to actions/core/exports. The suite is **311**.
 `tests/fixtures/historic_regressions.json` encodes 20 atomic + 7 interaction failures from four real
 past trips; `scripts/run_optimizer_regressions.py` replays all of them through the real optimizer.
 Behavior changes to the optimizer should be expressed there.
@@ -184,14 +155,14 @@ Behavior changes to the optimizer should be expressed there.
 
 `TOURIST_DB_PATH` (default `data/tourist.sqlite3`), `TOURIST_NOMINATIM_URL`, `TOURIST_OVERPASS_URL`,
 `TOURIST_USER_AGENT`. Providers still read keys from `os.environ` and nowhere else — that is what keeps
-a key out of every snapshot, export and log. `credentials.load_local_credentials()` (called once at the
-top of `app.py`) copies a flat `secrets.local.json` into the environment first, so the owner need not
+a key out of every snapshot, export and log. `credentials.load_local_credentials()` (called once from `api.main()`)
+copies a flat `secrets.local.json` into the environment first, so the owner need not
 export four variables per shell; an already-set variable always wins, and the module never logs or
 returns a value. `.env` / `secrets.local.json` are gitignored, `.env.example` / `secrets.example.json`
 hold names and placeholders. `scripts/check_provider_access.py` reads the same file directly.
-`tests/__init__.py` sets `TOURIST_LOCAL_SECRETS=off` because `AppTest` imports `app.py`: without it the
-suite would run holding real keys, and a test reaching a real provider would bill rather than fail with
-"not configured". Do not remove that line. Paid usage is capped
+`tests/__init__.py` sets `TOURIST_LOCAL_SECRETS=off`. The original reason — `AppTest` importing `app.py`,
+which loaded secrets at module scope — died with the POC, and `api` now loads them only in `main()`. **Do
+not remove that line anyway**: it costs nothing and the failure it prevents is a bill. Paid usage is capped
 at US$10/month by decision (warn at $8). `usage.py` is that ledger: `PRICES_USD` holds the estimated
 unit price per `provider:operation`, `actions._spend()` refuses a call that would cross the cap and
 records what it cost, and free-tier operations are recorded at zero so call counts stay reconcilable.
@@ -244,8 +215,7 @@ Before changing scoring weights, optimizer rules, schema, or provider policy, re
 the "why" is there, not in the code. Reference tickets by linked title, never bare ID.
 
 Slices 1–4 are built and evidenced (foundation, setup+discovery, ranking, optimization). Slice 5 is
-**complete**, including the readiness checklist and owner-recorded costs: `exports.py` builds the one shared export snapshot; `app.py` renders the active-plan
-day summary, timeline, and numbered map; `exporters.py` writes the six-sheet Excel workbook and the
+**complete**, including the readiness checklist and owner-recorded costs: `exports.py` builds the one shared export snapshot; `exporters.py` writes the six-sheet Excel workbook and the
 readiness ICS — both snapshot-in, bytes-out. **The 9:16 poster and the trip PDF were dropped in slice S0**
 (2026-08-03), and with them the whole export-font apparatus. `checklist.py` generates the readiness board and `costs.py` converts owner-recorded
 expenses into THB against an owner-editable, timestamped rate snapshot; a paid charge locks its actual
@@ -257,14 +227,13 @@ and export-snapshot reads at S4, then `checklist_vocabulary` at S5; 28 refusal c
 real screens** as of 2026-08-04 — `/setup`, `/places`, `/evidence`, `/optimize`, `/itinerary`, `/readiness`,
 `/costs`, `/split` and `/revise`. There is no `StagePage`, no `gated()` wrapper and no `stage_stub` copy key;
 they went with the last stub. `/evidence` was built between S5 and S6 because **no slice row owned it** and
-S6 deletes the POC — see `artifacts/validation/2026-08-04-evidence-screen/notes.md`. It is the screen a
+S6 has since deleted the POC — see `artifacts/validation/2026-08-04-evidence-screen/notes.md`. It is the screen a
 *newly created* trip needs, since route and opening evidence are hard optimizer constraints.
 **Slice 6's non-AI half now has its React surface** (S5); its GenAI half stays deferred past the pilot. The
 core landed long before either: `revision.py`'s non-AI quick actions (`a7ad537`) and
-`interpret.py`'s constrained GenAI revision (`a2d59f6`) landed 2026-07-29 with tests, wired into
-`views/revise.py`. The pure modules survive the redesign; their Streamlit surfaces are POC code awaiting
-deletion, so **slice 6 still has to be built in the webapp** and the live pilot remains unbuilt. Every new
-output must read
+`interpret.py`'s constrained GenAI revision (`a2d59f6`) landed 2026-07-29 with tests. The pure modules
+survived the redesign exactly as intended; their Streamlit surfaces went at S6. The live pilot remains
+unbuilt. Every new output must read
 `build_export_snapshot()` rather than the raw variant — that is what keeps their times, totals, and
 statuses from diverging. Complete a slice vertically with its own runnable check before starting the next.
 
@@ -274,10 +243,10 @@ is an accessibility rule and not only an export one.
 
 Explicitly out of scope for the Python core: FastAPI, Docker, Redis, background workers, remote
 collaboration, hosted notifications. `pyproject.toml` lists exactly two runtime dependencies:
-`xlsxwriter` exists only because slice 5 renders a workbook, and `streamlit` is the only one for the
-*interface*. Keep it that way. **After S0 there are two**: `fpdf2` and `pillow` were dropped with the PDF and
-poster — though `pillow` stays *installed* because `streamlit` depends on it, so it only leaves the
-environment when Streamlit is deleted at S6.
+`xlsxwriter` exists only because slice 5 renders a workbook. **After S6 there is exactly one**: `fpdf2` went
+with the PDF and poster at S0, and `streamlit` went with the POC. `pillow` used to arrive transitively via
+streamlit and is now declared in `[dependency-groups] dev` — the screen-baseline gate reads PNGs with it, so
+that declaration is what kept the gate working when the POC went.
 
 ## Phase 2 implementation follows the locked slice order
 
@@ -298,11 +267,32 @@ first: `.wayfinder/artifacts/033-phase-2-slice-plan-and-scorecard.md`.
 - **Auto-Bill was never used with real expenses**, so `WF-030`'s pre-archive backup is **discharged**, not
   skipped. S6 may archive the donor whenever it is ready.
 
-**The Phase 2 code freeze has lifted.** S0 through S5 are complete; **S6 is the next and last slice** —
-the parity gate and the deletion of `views/`, `app.py` and `ui/`. **Its deletion checklist is already
-empty**: all 14 portable behaviours are asserted below Streamlit in `tests/test_ported_behaviours.py`, so
-what remains is the parity gate itself plus artifact 029's three genuinely-UI tests — the paid-card
-placement rule, the entry-point smoke test that changes subject to React, and the full journey walk.
+**Phase 2 is complete: S0 through S6 are all done as of 2026-08-04.** S6 landed the two-level visual parity
+gate and deleted the POC. `scripts/check.py` is **11 stages**, green in ~24s.
+
+The parity gate is two levels, and neither is a whole-screen comparison against the donor — Auto-Bill has
+two screens and the planner has nine, so that comparison is meaningless:
+
+- **`check_element_parity.py`** diffs the rebuild's *computed style values* against the donor capture by
+  declared `derives-from:` ancestor. Exact, no tolerance, and it still works after the donor is archived. A
+  difference fails only when unexplained — a registered deviation must actually license the rebuilt value,
+  so D2 permits only `{2px, 9999px, 0px}`, D8 only a real token weight, and any shadow blur other than 0 is
+  drift whatever the register says.
+- **`check_screen_baselines.py`** compares 36 approved images (9 routes x light/dark x en/th) against a
+  fresh capture. It catches **drift over time only**. Tolerance is the owner's pair: fail above 0.1% of
+  pixels differing *and* more than 8/255 on a channel. See `artifacts/parity/screen-baselines/README.md`
+  for the two capture races that had to be fixed to make it deterministic, and for the negative test.
+
+Capturing needs a running server and headless Chrome, so only the *comparison* is a `check.py` stage; it
+skips cleanly where nothing has been captured. Baselines are machine-specific by decision — re-approve when
+the machine changes rather than widening the tolerance.
+
+**All three of artifact 029's genuinely-UI tests were resolved before the deletion**, not dropped: the
+paid-card placement rule is `web/src/stages/s4.test.tsx`, the entry-point smoke test became
+`web/src/routes.test.tsx` (nine routes, five gate keys), and the journey walk kept its actions-level body in
+`tests/test_workflow.py` while its eight-page render loop became the 36-screen capture. Only
+`money_on_screen_is_not_read_as_maths` died, and only because Streamlit's `$`-as-LaTeX bug went with
+Streamlit.
 
 **S5 landed the last journey screens on 2026-08-04**
 (evidence: `artifacts/validation/2026-08-04-slice-5/notes.md`). Four things from it bind S6:
@@ -332,8 +322,8 @@ placement rule, the entry-point smoke test that changes subject to React, and th
   one set of times and statuses.
 - **`check_paid_call` and `build_export_snapshot` are allowlisted reads 58 and 59.** No internal writer
   was exposed and no runtime dependency was added.
-- **Five more portable behaviours now live below Streamlit; four remain.** No `AppTest` original is
-  deleted before S6.
+- **Five more portable behaviours moved below Streamlit here; the last four followed at S5.** The
+  `AppTest` originals were deleted at S6, once all 14 had homes.
 - **The visual witness was obtained 2026-08-04 and Gate 1 is now assessable.** Six captures across
   `places` and `itinerary` in both languages, the tile-free numbered map with its duplicated stop list,
   and both `GET` downloads verified over the socket with a bare `GET` to a mutation still refused.
@@ -351,7 +341,8 @@ placement rule, the entry-point smoke test that changes subject to React, and th
 - **The setup draft is one object, always sent whole.** `save_setup` defaults every field to empty, so
   a partial payload **erases what it omits**. Five steps are five views over one piece of state, never
   five requests. The draft also carries `owner_nationality` and each member's `nationality`, which
-  `views/setup.py` drops on save — readiness reads them, so losing them is not round-tripping whole.
+  the POC's setup view dropped on save — readiness reads them, so losing them is not round-tripping whole.
+  `SetupPage` sends them; keep it that way.
 - **`setup_vocabulary` is the 57th allowlisted method**, a read returning planning modes, accommodation
   statuses, the four tag groups as codes, and countries with **both** language labels plus their cities.
   Both languages in one payload so a language switch never refetches. Its picker orders are explicit
@@ -369,10 +360,10 @@ placement rule, the entry-point smoke test that changes subject to React, and th
   so it declares element 17 `.sidebar` as its ancestor and still needs a real-phone capture before the
   parity gate runs.
 
-**`tests/test_ported_behaviours.py` is the S6 deletion checklist.** It holds the actions-level homes for
-behaviours still asserted through `AppTest`, organised by provenance on purpose. Two of artifact 029's
-"14 portable" were already at actions level, so **12 were outstanding and 4 remain after S4**; its module
-docstring lists what is owed. No `AppTest` original is deleted until `views/` goes at S6.
+**`tests/test_ported_behaviours.py` was the S6 deletion checklist, and it is discharged.** It holds the
+actions-level homes for the 14 behaviours that used to be asserted through `AppTest`, organised by
+provenance on purpose. Nothing is owed; the file stays because the behaviours are real, and its provenance
+grouping is the record of where each one came from.
 
 **S2 landed the merge on 2026-08-03** (evidence: `artifacts/validation/2026-08-03-slice-2/notes.md`).
 Four things from it bind later work:
@@ -432,9 +423,9 @@ Locked by the destination interview, so not open for re-litigation inside a tick
   than an aspiration — same palette, same zero-blur hard offset shadows, same fonts, same elements.
 - Bilingual `en`/`th` stays mandatory, and the key-parity test keeps running.
 - Local-only and owner-led: `localhost`, SQLite on disk, no accounts, no auth.
-- **Streamlit is the POC that proved the core works — not a product, not a pilot fallback.** It stays in
-  the tree unmaintained (`views/` need not stay green) and `views/`, `app.py` and `ui/` are deleted once
-  the webapp reaches parity across all 8 stages. Slice 6 is built as part of the webapp. Schema is fully
+- **Streamlit was the POC that proved the core works — not a product, not a pilot fallback.** `views/`,
+  `app.py` and `ui/` were **deleted at S6 on 2026-08-04** (2,951 lines) once the webapp reached parity
+  across all nine routes. There is no fallback and that is deliberate. Schema is fully
   unconstrained — there is no tag, no downgrade path, no restorable old checkout. The webapp is the
   **committed** vehicle for the pilot with a **1 November 2026** checkpoint; not on track means Taipei is
   planned by hand in Excel, as the four reference trips were.
@@ -481,8 +472,8 @@ Already decided, and binding on any future implementation:
   one route with five steps in state. **Costs and split are two cross-linked screens**: costs holds estimates
   for the drafted plan, split holds actual bills split per person. Navigation adapts Auto-Bill's existing
   sidebar shell. See `.wayfinder/artifacts/028-webapp-information-architecture.md`.
-- `shared.journey()` (`ui/shared.py:160`) is 74 lines of business logic in the UI layer, and it moves into
-  `PlannerActions.journey()` as the 51st allowlisted method. It currently reaches into the private
+- `shared.journey()` was 74 lines of business logic in the POC's UI layer; it moved into
+  `PlannerActions.journey()` as the 51st allowlisted method, which is why deleting `ui/` cost nothing. It currently reaches into the private
   `_optimizer_input`, invents the gap code `OPENING_EVIDENCE_MISSING` that the core never emits, and
   duplicates the rated-place filter `rank_candidates` enforces. React cannot recompute it — that would
   require exposing `_optimizer_input`.
