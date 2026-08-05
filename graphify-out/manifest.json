@@ -135,9 +135,9 @@
     "semantic_hash": "74ea0535d1b1e1c1d56615e11dcbfc4d"
   },
   "tests/test_routes.py": {
-    "mtime": 1785921729.7673373,
-    "ast_hash": "44eb9e77c53465ddc0980aa2e5e01947",
-    "semantic_hash": "44eb9e77c53465ddc0980aa2e5e01947"
+    "mtime": 1785924829.099779,
+    "ast_hash": "787270c5044433feb6b751fef6c28d5a",
+    "semantic_hash": "787270c5044433feb6b751fef6c28d5a"
   },
   "tests/test_setup_discovery.py": {
     "mtime": 1785832402.482533,
@@ -165,9 +165,9 @@
     "semantic_hash": "ef0aefdeae9a5f201e587415c32b8a5b"
   },
   "travel_planner/actions.py": {
-    "mtime": 1785921729.767701,
-    "ast_hash": "0f9d9a9d59ca0a437f82f524ba5c2968",
-    "semantic_hash": "0f9d9a9d59ca0a437f82f524ba5c2968"
+    "mtime": 1785925401.0014274,
+    "ast_hash": "54c440022aebaacf6e893c0055440e5f",
+    "semantic_hash": "54c440022aebaacf6e893c0055440e5f"
   },
   "travel_planner/checklist.py": {
     "mtime": 1785316030.1684666,
@@ -210,9 +210,9 @@
     "semantic_hash": "e1fbb6b9be169864c0f1a3a0cb5a5e89"
   },
   "travel_planner/gtfs.py": {
-    "mtime": 1785921729.7679315,
-    "ast_hash": "860644b8d152fdbd0788cd56e837d2e6",
-    "semantic_hash": "860644b8d152fdbd0788cd56e837d2e6"
+    "mtime": 1785924556.78718,
+    "ast_hash": "d08f1fc665f1ca783b7c2a3fb0d1da1b",
+    "semantic_hash": "d08f1fc665f1ca783b7c2a3fb0d1da1b"
   },
   "travel_planner/interpret.py": {
     "mtime": 1785320568.189277,
@@ -225,14 +225,14 @@
     "semantic_hash": "9ee894f176866da44ca41771e596053b"
   },
   "travel_planner/optimizer.py": {
-    "mtime": 1785917078.7697182,
-    "ast_hash": "0cdc72927ae02580a2b44e8fac9eed90",
-    "semantic_hash": "0cdc72927ae02580a2b44e8fac9eed90"
+    "mtime": 1785925401.001893,
+    "ast_hash": "8889e5ff17f32866985d481df19c00e9",
+    "semantic_hash": "8889e5ff17f32866985d481df19c00e9"
   },
   "travel_planner/providers.py": {
-    "mtime": 1785921729.7682235,
-    "ast_hash": "4790420b0f6ebe27b0c3bf814e48d0b4",
-    "semantic_hash": "4790420b0f6ebe27b0c3bf814e48d0b4"
+    "mtime": 1785924601.6636856,
+    "ast_hash": "26c72077c6bb36f80e0fa444b3eea3ce",
+    "semantic_hash": "26c72077c6bb36f80e0fa444b3eea3ce"
   },
   "travel_planner/ranking.py": {
     "mtime": 1785840738.5558307,
@@ -259,10 +259,15 @@
     "ast_hash": "514eade9822bcbe0511b085f732da9f6",
     "semantic_hash": "514eade9822bcbe0511b085f732da9f6"
   },
+  "travel_planner/transit.py": {
+    "mtime": 1785924815.213886,
+    "ast_hash": "1ef554d9b380bdedc9c8236ab34ba5a1",
+    "semantic_hash": "1ef554d9b380bdedc9c8236ab34ba5a1"
+  },
   "travel_planner/usage.py": {
-    "mtime": 1785921729.768504,
-    "ast_hash": "c4dd8cf966340040fe28df55007ff8b6",
-    "semantic_hash": "c4dd8cf966340040fe28df55007ff8b6"
+    "mtime": 1785924601.7125978,
+    "ast_hash": "597dac1484a739d4b6e0aeee77bd3892",
+    "semantic_hash": "597dac1484a739d4b6e0aeee77bd3892"
   },
   "web/eslint.config.js": {
     "mtime": 1785764956.464039,
@@ -704,10 +709,20 @@
     "ast_hash": "e5e709485ed12348878571ff45097ba5",
     "semantic_hash": "e5e709485ed12348878571ff45097ba5"
   },
+  ".wayfinder/tickets/038-decide-how-the-planner-gets-transit-routing.md": {
+    "mtime": 1785923243.4256158,
+    "ast_hash": "d72f42e9e0be67742b1f5a46f2f3aa4e",
+    "semantic_hash": "d72f42e9e0be67742b1f5a46f2f3aa4e"
+  },
   ".wayfinder/tickets/039-decide-how-an-owner-accepts-a-comfort-tradeoff.md": {
     "mtime": 1785917078.7450142,
     "ast_hash": "78b3ea3119d95e32262fb4a2c99893ad",
     "semantic_hash": "78b3ea3119d95e32262fb4a2c99893ad"
+  },
+  ".wayfinder/tickets/040-decide-whether-the-planner-recommends-where-to-stay.md": {
+    "mtime": 1785923416.7348952,
+    "ast_hash": "e46cd0d92f6050699f2d6e9338b72b77",
+    "semantic_hash": "e46cd0d92f6050699f2d6e9338b72b77"
   },
   "AGENTS.md": {
     "mtime": 1785766520.9028397,

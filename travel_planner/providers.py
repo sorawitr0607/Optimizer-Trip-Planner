@@ -405,6 +405,125 @@ class OpenRouteServiceProvider:
         }
 
 
+class OsmMetroProvider:
+    """Transit legs from OpenStreetMap metro topology, when no timetable exists.
+
+    `WF-038` chose GTFS, and Taipei's feed turned out to need a Taiwan mobile number
+    or a manual identity review to obtain. This is the way in that needs no account
+    at all: the app already queries Overpass for free, and OSM carries `route=subway`
+    relations listing each line's stations in order.
+
+    **It is weaker than GTFS and says so.** OSM publishes topology, not timetables,
+    so the ride time comes from distance at an assumed metro speed and the wait from
+    an assumed headway — both named constants in `transit.py`. Every route is
+    `status: "estimated"` and carries `basis: "nominal"`, where a GTFS route carries
+    `basis: "timetable"`. Prefer a feed when one exists; `PlannerActions` does.
+
+    Priced at zero like `openstreetmap:discover`, and priced rather than omitted,
+    because an unpriced operation raises and call counts must stay reconcilable.
+    """
+
+    name = "osm_metro"
+    operation = "openstreetmap:metro"
+    cache_version = "osm-metro-v1"
+    # A metro network changes on the timescale of construction projects.
+    cache_ttl_days = 30
+    mode = "transit"
+
+    def __init__(self, destination: str = "", graph: Any | None = None) -> None:
+        self.destination = destination
+        self._graph = graph
+        self._osm = OpenStreetMapProvider()
+
+    def metro_query(self, bbox: list[float]) -> str:
+        """Stations and the relations that order them.
+
+        `>;` after the relations pulls in their member nodes, which is what makes the
+        ordered member list resolvable — without it the relations arrive with
+        references to nodes that were never returned and every line yields no edges.
+        """
+
+        bounds = ",".join(map(str, bbox))
+        return f"""[out:json][timeout:90];
+(
+  node["railway"="station"]["station"="subway"]({bounds});
+  node["railway"="station"]["subway"="yes"]({bounds});
+  relation["route"="subway"]({bounds});
+);
+(._;>;);
+out body qt;
+"""
+
+    def build_graph(self) -> Any:
+        from .transit import graph_from_osm
+
+        if self._graph is None:
+            if not self.destination:
+                raise ProviderUnavailable("no destination to look up a metro network for")
+            location = self._osm._find_destination(self.destination)
+            bbox = self._osm._bounded_bbox(location)
+            payload = self._osm._request_json(
+                Request(
+                    self._osm.overpass_url,
+                    data=urlencode({"data": self.metro_query(bbox)}).encode("utf-8"),
+                    headers={
+                        "Accept": "application/json",
+                        "Content-Type": "application/x-www-form-urlencoded",
+                        "User-Agent": self._osm.user_agent,
+                    },
+                    method="POST",
+                )
+            )
+            graph = graph_from_osm(payload.get("elements") or [])
+            if not graph.edges:
+                raise ProviderUnavailable(
+                    "OpenStreetMap has no usable subway topology for this destination"
+                )
+            self._graph = graph
+        return self._graph
+
+    def cache_descriptor(
+        self, origin: dict[str, Any], destination: dict[str, Any]
+    ) -> dict[str, Any]:
+        return {
+            "operation": "metro_route",
+            "provider": self.name,
+            "version": self.cache_version,
+            "mode": self.mode,
+            "destination": self.destination,
+            "origin": _point_key(origin),
+            "destination_point": _point_key(destination),
+        }
+
+    def route(
+        self, origin: dict[str, Any], destination: dict[str, Any]
+    ) -> dict[str, Any]:
+        journey = self.build_graph().journey(
+            origin=(float(origin["latitude"]), float(origin["longitude"])),
+            destination=(float(destination["latitude"]), float(destination["longitude"])),
+        )
+        if journey is None:
+            raise ProviderUnavailable(
+                "no metro connection within walking reach of both places"
+            )
+        return {
+            "origin_id": str(origin["place_id"]),
+            "destination_id": str(destination["place_id"]),
+            "mode": self.mode,
+            "duration_minutes": journey.total_minutes,
+            # Access and egress only; the ride is not walking. This is what lets a
+            # cross-city leg pass a walking cap at all.
+            "walking_minutes": journey.walking_minutes,
+            "distance_m": None,
+            "transfers": journey.transfers,
+            "boarding_buffer_minutes": journey.waiting_minutes,
+            "experience_evidence": [],
+            # Topology plus assumed speed and headway. Never "verified".
+            "status": "estimated",
+            "provider": self.name,
+        }
+
+
 class GtfsTransitProvider:
     """Transit legs from a local GTFS feed, normalized like any other route.
 

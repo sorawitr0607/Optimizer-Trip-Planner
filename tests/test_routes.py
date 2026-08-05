@@ -445,6 +445,121 @@ class TransitRouteTest(unittest.TestCase):
         self.assertIn("GTFS feed unusable", report["provider_errors"][0])
 
 
+class OsmMetroTransitTest(unittest.TestCase):
+    """`WF-038` fallback: metro topology from OpenStreetMap when no feed exists."""
+
+    # Three stations on one line plus a crossing line, in the same place as the fake
+    # discovery provider's Tower / Temple / Market.
+    ELEMENTS = [
+        # Tagged as real stations would be: the graph rejects untagged nodes, because
+        # the Overpass recursion drags in every node of every track way.
+        {"type": "node", "id": 1, "lat": 25.0405, "lon": 121.5705,
+         "tags": {"name": "Tower", "railway": "station", "station": "subway"}},
+        {"type": "node", "id": 2, "lat": 25.0498, "lon": 121.5798,
+         "tags": {"name": "Temple", "railway": "station", "station": "subway"}},
+        {"type": "node", "id": 3, "lat": 25.0603, "lon": 121.5903,
+         "tags": {"name": "Market", "railway": "station", "station": "subway"}},
+        # Track geometry that must never become a boarding point.
+        {"type": "node", "id": 4, "lat": 25.0450, "lon": 121.5750},
+        {
+            "type": "relation", "id": 90,
+            "tags": {"route": "subway", "ref": "BR"},
+            "members": [
+                {"type": "node", "ref": 1}, {"type": "node", "ref": 2},
+                {"type": "node", "ref": 3},
+            ],
+        },
+    ]
+
+    def graph(self):
+        from travel_planner.transit import graph_from_osm
+
+        return graph_from_osm(self.ELEMENTS)
+
+    def test_a_relation_yields_both_directions(self) -> None:
+        """A relation lists one direction; a metro runs both.
+
+        Recording only the stated direction produced a graph where half the network
+        was one-way, and journeys back towards the centre simply did not exist.
+        """
+
+        graph = self.graph()
+        self.assertEqual(3, len(graph.stops))
+        self.assertEqual(4, len(graph.edges))
+        there = graph.journey(origin=(25.0405, 121.5705), destination=(25.0603, 121.5903))
+        back = graph.journey(origin=(25.0603, 121.5903), destination=(25.0405, 121.5705))
+        self.assertIsNotNone(there)
+        self.assertIsNotNone(back)
+        self.assertEqual(there.total_minutes, back.total_minutes)
+
+    def test_it_reports_nominal_basis_where_gtfs_reports_timetable(self) -> None:
+        """The whole point of carrying a basis: this data is weaker and says so."""
+
+        from travel_planner.gtfs import TransitFeed
+
+        osm = self.graph().journey(
+            origin=(25.0405, 121.5705), destination=(25.0603, 121.5903)
+        )
+        self.assertEqual("nominal", osm.basis)
+        feed = TransitFeed(
+            Path(__file__).resolve().parent / "fixtures" / "synthetic_transit_gtfs.zip"
+        )
+        timetabled = feed.journey(
+            origin=(25.040, 121.570), destination=(25.060, 121.590)
+        )
+        self.assertEqual("timetable", timetabled.basis)
+
+    def test_a_metro_leg_walks_only_to_the_station(self) -> None:
+        journey = self.graph().journey(
+            origin=(25.0405, 121.5705), destination=(25.0603, 121.5903)
+        )
+        self.assertGreater(journey.total_minutes, journey.walking_minutes)
+        self.assertLess(journey.walking_minutes, 5)
+
+    def test_topology_without_a_usable_relation_refuses(self) -> None:
+        """Stations alone are not a network, and inventing edges would be worse."""
+
+        from travel_planner.providers import OsmMetroProvider, ProviderUnavailable
+        from travel_planner.transit import graph_from_osm
+
+        stations_only = graph_from_osm([e for e in self.ELEMENTS if e["type"] == "node"])
+        self.assertEqual(3, len(stations_only.stops), "untagged track node must be dropped")
+        self.assertEqual({}, stations_only.edges)
+        provider = OsmMetroProvider(destination="Nowhere", graph=stations_only)
+        with self.assertRaises(ProviderUnavailable):
+            provider.route(
+                {"place_id": "a", "latitude": 25.0405, "longitude": 121.5705},
+                {"place_id": "b", "latitude": 25.0603, "longitude": 121.5903},
+            )
+
+    def test_the_provider_normalizes_like_any_other_route(self) -> None:
+        from travel_planner.providers import OsmMetroProvider
+
+        provider = OsmMetroProvider(destination="Taipei", graph=self.graph())
+        route = provider.route(
+            {"place_id": "tower", "latitude": 25.0405, "longitude": 121.5705},
+            {"place_id": "market", "latitude": 25.0603, "longitude": 121.5903},
+        )
+        self.assertEqual("transit", route["mode"])
+        self.assertEqual("estimated", route["status"])
+        self.assertEqual("osm_metro", route["provider"])
+        self.assertLess(route["walking_minutes"], route["duration_minutes"])
+        self.assertGreaterEqual(route["boarding_buffer_minutes"], 1)
+
+    def test_the_metro_query_pulls_relation_members(self) -> None:
+        """`>;` is what makes the ordered member list resolvable.
+
+        Without it the relations arrive referring to nodes that were never returned,
+        and every line yields no edges at all.
+        """
+
+        from travel_planner.providers import OsmMetroProvider
+
+        query = OsmMetroProvider(destination="Taipei").metro_query([25.0, 121.5, 25.1, 121.6])
+        self.assertIn('relation["route"="subway"]', query)
+        self.assertIn("(._;>;);", query)
+
+
 class TimeZoneTest(unittest.TestCase):
     def setUp(self) -> None:
         self.directory = TemporaryDirectory()

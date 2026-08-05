@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime, timedelta, timezone
+import os
 from pathlib import Path
 import re
 from typing import Any
@@ -40,6 +41,7 @@ from .providers import (
     GoogleTimeZoneProvider,
     GtfsTransitProvider,
     OpenRouteServiceProvider,
+    OsmMetroProvider,
     OpenStreetMapProvider,
     ProviderBudgetExceeded,
     ProviderUnavailable,
@@ -751,10 +753,20 @@ class PlannerActions:
             "booked_accommodation_base",
             "provisional_accommodation_base",
         }
+        # `verified` always; `estimated` only for an Explore preview, which is the
+        # same rule `optimizer._planning_fact` already applies to opening hours --
+        # "a visible assumption allowed only for an Explore preview". A transit leg
+        # is `estimated` by construction, derived from a timetable or from topology
+        # rather than looked up, so without this the 162 metro routes `WF-038`
+        # fetches never reach the optimizer and the whole ticket buys nothing.
+        # A `ready_to_schedule` trip is unaffected and still demands verification.
+        usable_route_statuses = (
+            {"verified", "estimated"} if allow_provisional_assumptions else {"verified"}
+        )
         routes = [
             route
             for route in self.list_routes(trip_id)
-            if route.get("status") == "verified"
+            if route.get("status") in usable_route_statuses
             and all(
                 endpoint not in accommodation_ids or endpoint == active_base_id
                 for endpoint in (route.get("origin_id"), route.get("destination_id"))
@@ -1402,8 +1414,28 @@ class PlannerActions:
         """
 
         return self._refresh_routes_with(
-            self.transit_provider or GtfsTransitProvider(), trip_id, force=force
+            self.transit_provider or self._default_transit_provider(trip_id),
+            trip_id,
+            force=force,
         )
+
+    def _default_transit_provider(self, trip_id: str) -> Any:
+        """A real timetable when one is on disk, otherwise OSM metro topology.
+
+        Preference, not equivalence. GTFS states ride times and lets headway be
+        measured; OSM states only which stations a line joins, so its times come
+        from an assumed speed and headway and its routes carry `basis: "nominal"`.
+        Falling back is better than refusing — a nominal metro time is far closer to
+        the truth than the walking route it replaces, which is what
+        `artifacts/validation/2026-08-05-gate-1/` measured as a 45-minute walk
+        between districts.
+        """
+
+        feed = Path(os.environ.get("TOURIST_GTFS_PATH", "data/gtfs/transit.zip"))
+        if feed.is_file():
+            return GtfsTransitProvider()
+        trip = self.store.get_trip(trip_id)
+        return OsmMetroProvider(destination=str(trip.destination) if trip else "")
 
     def _refresh_routes_with(
         self, provider: Any, trip_id: str, *, force: bool = False

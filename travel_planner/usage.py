@@ -30,6 +30,9 @@ PRICES_USD = {
     # rather than omitted, since an unpriced operation raises and every provider
     # call has to stay reconcilable by count even when it costs nothing.
     "gtfs:transit": 0.0,
+    # Overpass metro topology. Free like openstreetmap:discover, and priced for the
+    # same reason: an unpriced operation raises.
+    "openstreetmap:metro": 0.0,
     "google_places:details": 0.017,
     # Current Text Search Enterprise + Atmosphere and Place Photo list prices,
     # conservatively tracked even when the account is still inside its free cap.

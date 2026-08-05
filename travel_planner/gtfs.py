@@ -33,27 +33,13 @@ They are for deciding whether two places belong in the same day.
 from __future__ import annotations
 
 import csv
-from dataclasses import dataclass
-from heapq import heappop, heappush
 from io import TextIOWrapper
-from math import asin, cos, radians, sin, sqrt
 from pathlib import Path
 from typing import Any, Iterator
 import zipfile
 
+from .transit import Edge, Journey, Stop, TransitGraph, metres
 
-# Walking speed for access and egress, metres per minute. 80 m/min is 4.8 km/h,
-# the same order the reference workbooks' own walking legs imply and slower than
-# the 5 km/h a fit adult manages, because this trip has a 51-year-old on it.
-WALK_METRES_PER_MINUTE = 80.0
-
-# How far someone will walk to reach transit at either end. Beyond this, transit
-# stops being the sensible answer and the walk itself is the journey.
-MAX_ACCESS_METRES = 900.0
-
-# Changing route costs more than the arithmetic: finding the platform, reading the
-# sign, the chance of missing one. Charged per change, on top of headway waiting.
-TRANSFER_PENALTY_MINUTES = 4.0
 
 # Headway is trips-per-edge over the span the feed actually covers, and the span is
 # measured rather than assumed. Assuming an 18-hour service day inferred a 90-minute
@@ -67,35 +53,8 @@ MIN_HEADWAY_WAIT_MINUTES = 1.0
 MAX_HEADWAY_WAIT_MINUTES = 30.0
 
 
-@dataclass(frozen=True)
-class Stop:
-    stop_id: str
-    name: str
-    latitude: float
-    longitude: float
-
-
-@dataclass(frozen=True)
-class Journey:
-    """One transit answer. Minutes are whole; walking excludes riding and waiting."""
-
-    total_minutes: int
-    walking_minutes: int
-    waiting_minutes: int
-    transfers: int
-    boarded_routes: tuple[str, ...]
-    origin_stop: str
-    destination_stop: str
-
-
 class GtfsUnavailable(RuntimeError):
     """The feed is absent, unreadable, or missing a file this needs."""
-
-
-def _metres(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    a1, o1, a2, o2 = radians(lat1), radians(lon1), radians(lat2), radians(lon2)
-    value = sin((a2 - a1) / 2) ** 2 + cos(a1) * cos(a2) * sin((o2 - o1) / 2) ** 2
-    return 12_742_000 * asin(sqrt(value))
 
 
 def _seconds(value: str) -> int | None:
@@ -133,6 +92,7 @@ class TransitFeed:
         self._edges: dict[tuple[str, str], list[Any]] = {}
         self._earliest: int | None = None
         self._latest: int | None = None
+        self._graph: TransitGraph | None = None
         self._load()
 
     @property
@@ -214,19 +174,37 @@ class TransitFeed:
             leaves_at = _seconds(row.get("departure_time") or "") or moment
             previous = (stop_id, leaves_at)
 
-    # -- queries ---------------------------------------------------------
+    # -- the graph -------------------------------------------------------
+
+    @property
+    def graph(self) -> TransitGraph:
+        """Built once from the parsed edges; the routing itself lives in transit.py.
+
+        Headway becomes a per-edge wait here, because only GTFS can measure it:
+        trips serving the edge over the span the feed actually covers.
+        """
+
+        if self._graph is None:
+            edges = {
+                key: Edge(
+                    ride_minutes=float(ride),
+                    wait_minutes=min(
+                        MAX_HEADWAY_WAIT_MINUTES,
+                        max(
+                            MIN_HEADWAY_WAIT_MINUTES,
+                            self.service_minutes / (2.0 * max(1, trips)),
+                        ),
+                    ),
+                    route_id=route_id,
+                    basis="timetable",
+                )
+                for key, (ride, trips, route_id) in self._edges.items()
+            }
+            self._graph = TransitGraph(self.stops, edges)
+        return self._graph
 
     def near(self, latitude: float, longitude: float) -> list[tuple[Stop, float]]:
-        """Stops within walking reach, nearest first, with their distance."""
-
-        found = [
-            (stop, distance)
-            for stop in self.stops.values()
-            if (distance := _metres(latitude, longitude, stop.latitude, stop.longitude))
-            <= MAX_ACCESS_METRES
-        ]
-        found.sort(key=lambda pair: (pair[1], pair[0].stop_id))
-        return found
+        return self.graph.near(latitude, longitude)
 
     def journey(
         self,
@@ -234,84 +212,4 @@ class TransitFeed:
         origin: tuple[float, float],
         destination: tuple[float, float],
     ) -> Journey | None:
-        """Fastest transit answer, or None when transit does not help.
-
-        Dijkstra over stop edges. State carries the route last boarded so a change
-        can be charged; waiting is charged on every boarding, including the first,
-        because the first vehicle has to arrive too.
-        """
-
-        access = self.near(*origin)
-        egress = {stop.stop_id: distance for stop, distance in self.near(*destination)}
-        if not access or not egress:
-            return None
-
-        def walk_minutes(metres: float) -> float:
-            return metres / WALK_METRES_PER_MINUTE
-
-        # (cost, stop_id, route_last_boarded, walking, waiting, transfers,
-        #  routes, first_stop_boarded_from)
-        queue: list[
-            tuple[float, str, str, float, float, int, tuple[str, ...], str]
-        ] = []
-        for stop, distance in access:
-            walking = walk_minutes(distance)
-            heappush(queue, (walking, stop.stop_id, "", walking, 0.0, 0, (), stop.stop_id))
-        best: dict[tuple[str, str], float] = {}
-        outgoing: dict[str, list[tuple[str, list[Any]]]] = {}
-        for (from_stop, to_stop), edge in self._edges.items():
-            outgoing.setdefault(from_stop, []).append((to_stop, edge))
-
-        answer: Journey | None = None
-        while queue:
-            (
-                cost, stop_id, boarded, walking, waiting, transfers, routes, from_first
-            ) = heappop(queue)
-            if answer is not None and cost >= answer.total_minutes:
-                break
-            if stop_id in egress and boarded:
-                # Only an answer once something has actually been ridden; otherwise
-                # this is a walk dressed as a journey.
-                final_walk = walking + walk_minutes(egress[stop_id])
-                total = cost + walk_minutes(egress[stop_id])
-                candidate = Journey(
-                    total_minutes=max(1, round(total)),
-                    walking_minutes=max(0, round(final_walk)),
-                    waiting_minutes=max(0, round(waiting)),
-                    transfers=transfers,
-                    boarded_routes=routes,
-                    origin_stop=from_first,
-                    destination_stop=stop_id,
-                )
-                if answer is None or candidate.total_minutes < answer.total_minutes:
-                    answer = candidate
-                continue
-            key = (stop_id, boarded)
-            if key in best and best[key] <= cost:
-                continue
-            best[key] = cost
-            for to_stop, (ride, trips, route_id) in outgoing.get(stop_id, ()):
-                headway_wait = min(
-                    MAX_HEADWAY_WAIT_MINUTES,
-                    max(
-                        MIN_HEADWAY_WAIT_MINUTES,
-                        self.service_minutes / (2.0 * max(1, trips)),
-                    ),
-                )
-                change = route_id != boarded
-                penalty = (TRANSFER_PENALTY_MINUTES if boarded else 0.0) if change else 0.0
-                wait = headway_wait if change else 0.0
-                heappush(
-                    queue,
-                    (
-                        cost + ride + wait + penalty,
-                        to_stop,
-                        route_id,
-                        walking,
-                        waiting + wait,
-                        transfers + (1 if change and boarded else 0),
-                        routes + (route_id,) if change else routes,
-                        from_first,
-                    ),
-                )
-        return answer
+        return self.graph.journey(origin=origin, destination=destination)

@@ -1,0 +1,103 @@
+{
+  "what": "WF-038 completed with OpenStreetMap metro topology, no account and no cost",
+  "date": "2026-08-05",
+  "why_not_gtfs": "Taipei's feed needs a Taiwan mobile number or a manual identity review at TDX; parked by the owner. OSM needs no account and Overpass was already wired and free.",
+  "shared_routing": "travel_planner/transit.py holds TransitGraph, the walking constants and one Dijkstra. gtfs.TransitFeed and graph_from_osm both build one, so there is a single routing implementation to be wrong.",
+  "taipei_network_measured": {
+    "overpass_nodes_returned": 6751,
+    "stops_after_filtering": 437,
+    "edges": 432,
+    "lines": [
+      "R",
+      "BL",
+      "BR",
+      "G",
+      "O",
+      "Y",
+      "A",
+      "捷運紅線 (新北投支線)"
+    ],
+    "station_filter": "the `>;` recursion needed to resolve ordered relation members also drags in every track node; without STOP_TAGS a place beside a tunnel would be handed a walk to 'a station'"
+  },
+  "metro_versus_walking_minutes": {
+    "Lungshan Temple → Taipei 101": {
+      "walk": 89,
+      "metro": 32,
+      "metro_walking_part": 13
+    },
+    "Red House → Taipei Fine Arts Museum": {
+      "walk": 55,
+      "metro": 28,
+      "metro_walking_part": 8
+    },
+    "Lungshan Temple → Chiang Kai-shek Memorial Hall": {
+      "walk": 32,
+      "metro": 25,
+      "metro_walking_part": 8
+    },
+    "Taipei 101 → Taipei Zoo": {
+      "walk": null,
+      "metro": 43,
+      "metro_walking_part": 12
+    },
+    "Lungshan Temple → Beitou Hot Spring Museum": {
+      "walk": null,
+      "metro": 56,
+      "metro_walking_part": 8,
+      "transfers": 2
+    }
+  },
+  "the_three_verification_gates": {
+    "finding": "transit routes are status 'estimated' by construction, and three separate sites admitted only 'verified' — actions._optimizer_input, optimizer._routes_between and optimizer._best_inbound_route. All 162 fetched metro routes were silently discarded before the optimizer saw them.",
+    "precedent_relied_on": "optimizer._planning_fact: 'Verified fact, or a visible assumption allowed only for an Explore preview.' The app already plans against provisional opening hours in explore_first mode; routes are the same category.",
+    "change": "all three now admit 'estimated' when allow_provisional_assumptions is set, which only explore_first sets. ready_to_schedule is unaffected and still demands verification.",
+    "regressions": "27 of 27 pass unchanged, 325 tests green"
+  },
+  "plan_before_and_after": {
+    "before": {
+      "visits": 3,
+      "days_used": 2,
+      "worst_day_walking_min": 35,
+      "longest_leg_min": 14,
+      "landmarks": 5,
+      "modes": [
+        "walk"
+      ]
+    },
+    "after": {
+      "visits": 11,
+      "days_used": 7,
+      "worst_day_walking_min": 35,
+      "longest_leg_min": 22,
+      "landmarks": 13,
+      "modes": [
+        "transit",
+        "walk"
+      ]
+    },
+    "activated": "plan_1d875c0e7a0143db93401"
+  },
+  "two_landmarks_dropped": {
+    "National Palace Museum": "metro-connected to 0 of 14 — bus-served from Shilin, and the app has no bus routing",
+    "Elephant Mountain": "metro-connected to 0 of 14 — OSM places the peak beyond the 900 m access radius",
+    "consequence": "dropping them removed the last violation, a single 43-minute walk from Shilin Cixian Temple to the Palace Museum"
+  },
+  "honesty": {
+    "basis": "nominal, not timetable — ride time from distance at 33 km/h and wait from an assumed 6-minute headway",
+    "status": "every metro route is 'estimated'; the plan stays provisional",
+    "do_not": "use these times to catch a flight"
+  },
+  "exports": {
+    "days": 8,
+    "rows": 90,
+    "checklist_items": 25,
+    "workbook_kb": 26,
+    "calendar_kb": 10,
+    "calendar_events": 22
+  },
+  "cost": {
+    "metro_topology_usd": 0.0,
+    "lifetime_usd": 2.484,
+    "cap_usd": 10.0
+  }
+}

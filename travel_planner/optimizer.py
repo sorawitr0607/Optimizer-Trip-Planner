@@ -187,6 +187,7 @@ def optimize_trip(
 
 def validate_variant(snapshot: dict[str, Any], variant: dict[str, Any]) -> dict[str, Any]:
     """Recheck a proposal independently; never trust solver construction alone."""
+    usable_statuses = _usable_route_statuses(snapshot)
 
     errors: list[dict[str, Any]] = []
     visits: dict[str, dict[str, Any]] = {}
@@ -219,7 +220,7 @@ def validate_variant(snapshot: dict[str, Any], variant: dict[str, Any]) -> dict[
                 show = _verified_fact(snapshot, subject, "show_intervals")
                 if show and not any(_inside(item, interval) for interval in show["value"]):
                     errors.append({"code": "SHOW_INTERVAL_MISSED", "subject_id": subject})
-            if item["type"] == "travel" and item.get("status") != "verified":
+            if item["type"] == "travel" and item.get("status") not in usable_statuses:
                 errors.append(
                     {"code": "ROUTE_UNVERIFIED", "subject_id": item.get("subject_id")}
                 )
@@ -1692,23 +1693,39 @@ def _best_route(snapshot: dict[str, Any], origin: str, destination: str) -> dict
 def _best_inbound_route(
     snapshot: dict[str, Any], destination: str, candidate_ids: set[str]
 ) -> dict[str, Any] | None:
+    usable = _usable_route_statuses(snapshot)
     routes = [
         route
         for route in snapshot.get("routes", [])
-        if route.get("status") == "verified"
+        if route.get("status") in usable
         and route.get("destination_id") == destination
         and route.get("origin_id") not in candidate_ids
     ]
     return deepcopy(min(routes, key=lambda item: int(item.get("duration_minutes", 0)))) if routes else None
 
 
+def _usable_route_statuses(snapshot: dict[str, Any]) -> set[str]:
+    """`verified` always; `estimated` only for an Explore preview.
+
+    The same rule `_planning_fact` applies to opening hours. A transit leg derived
+    from topology or a timetable is `estimated` by construction -- it is honest, not
+    looked up -- so without this the optimizer discards every transit route it is
+    given and `WF-038` buys nothing.
+    """
+
+    if snapshot.get("trip", {}).get("allow_provisional_assumptions"):
+        return {"verified", "estimated"}
+    return {"verified"}
+
+
 def _routes_between(
     snapshot: dict[str, Any], origin: str, destination: str, *, symmetric: bool = False
 ) -> list[dict[str, Any]]:
+    usable = _usable_route_statuses(snapshot)
     return [
         route
         for route in snapshot.get("routes", [])
-        if route.get("status") == "verified"
+        if route.get("status") in usable
         and (
             (route.get("origin_id") == origin and route.get("destination_id") == destination)
             or (
