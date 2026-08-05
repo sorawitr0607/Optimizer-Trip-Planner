@@ -243,6 +243,39 @@ class RouteRefreshTest(unittest.TestCase):
         self.assertEqual(6, len(stored))
         self.assertEqual(third["pairs_needed"] - 2, third["skipped_over_cap"])
 
+    def test_the_cap_spends_itself_on_the_nearest_pairs_first(self) -> None:
+        """Under the cap, the pairs most likely to be walked must win.
+
+        Ordering by `place_id` spent 340 free calls on arbitrary pairs of the real
+        Taipei trip while every pair the plan actually used stayed unmeasured. A
+        missing route falls back to a pessimistic estimate, so the plan showed
+        68-minute walks between places a kilometre apart and failed validation on
+        them; fetching the same pairs by proximity turned those legs into 14, 10
+        and 9 minutes.
+        """
+
+        from travel_planner.ranking import _distance_metres
+
+        located = self.actions._route_points(self.trip.trip_id)
+        with patch("travel_planner.actions.MAX_ROUTE_REQUESTS", 2):
+            self.actions.refresh_routes(self.trip.trip_id)
+
+        by_id = {point["place_id"]: point for point in located}
+        fetched = [
+            _distance_metres(by_id[route["origin_id"]], by_id[route["destination_id"]])
+            for route in self.actions.list_routes(self.trip.trip_id)
+        ]
+        every_pair = [
+            _distance_metres(left, right)
+            for left in located
+            for right in located
+            if left["place_id"] != right["place_id"]
+        ]
+        # Both fetched legs are among the closest pairs available, not simply the
+        # first two by identifier.
+        self.assertEqual(2, len(fetched))
+        self.assertLessEqual(max(fetched), sorted(every_pair)[1])
+
     def test_routing_needs_two_located_places(self) -> None:
         empty = PlannerActions(
             Path(self.directory.name) / "empty.sqlite3", route_provider=self.provider

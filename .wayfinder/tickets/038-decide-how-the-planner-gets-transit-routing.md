@@ -27,17 +27,40 @@ one is `status: unavailable`, `valid: false`:
 
 | Variant | Plain walking / day | Limit | Longest single leg | Limit | Visits |
 |---|---|---|---|---|---|
-| `best_balance` | **1289 min** | 45 | **205 min** | 20 | 16 |
+| `best_balance` | 874 min | 45 | 205 min | 20 | 20 |
 | `relaxed` | 0 | 45 | 0 | 20 | **0** |
 | `more_highlights` | 0 | 45 | 0 | 20 | **0** |
 
 Hard violations: `UNAPPROVED_PLAIN_WALK_THRESHOLD`,
-`UNAPPROVED_WALKING_LEG_THRESHOLD`. The longest stored walking route on the trip
-is **379 minutes** — a 6.3-hour walk offered as a connection between two stops.
+`UNAPPROVED_WALKING_LEG_THRESHOLD`.
 
-The optimizer is behaving correctly. It refuses to assert a schedule that
-violates the owner's stated limits, and it will not fabricate a connection it has
-no evidence for. The gap is in what evidence it can be given.
+> **Correction, same day.** This ticket first recorded 1289 min and a 205-min leg
+> and attributed all of it to the missing transit mode. **A large part was missing
+> route data, not distance.** A pair with no measured route falls back to a
+> pessimistic estimate, so the plan showed phantom 68-minute walks between places
+> a kilometre apart. Fetching those nine specific pairs turned the legs into 14,
+> 10 and 9 minutes and a three-stop Wanhua cluster went **valid** with the owner's
+> 20-min and 45-min limits fully intact. The figures above are after 500 measured
+> routes and still fall, so treat any single reading as an upper bound until the
+> pairs the plan uses are measured.
+>
+> That misattribution had a cause worth keeping: `refresh_routes` ordered pairs by
+> `place_id`, so 340 free calls went on arbitrary pairs while every pair the plan
+> used stayed unmeasured. **Now fixed** — nearest pairs first, since the cap bites
+> long before 1640 pairs and a 17 km pair will never be walked. Fixed with a test.
+
+**The transit gap is real, and measured cleanly.** With all 110 pairs fetched for a
+complete ten-landmark, four-district set — no missing data at all — the plan still
+needs **206 min/day of plain walking and a 45-minute longest leg**. The
+inter-district hops are genuinely 45-minute walks. So:
+
+- **one walkable district validates today** — verified: 3 stops, 33 min/day
+  walking, 14-min longest leg, `valid`, `provisional`
+- **four districts does not**, and no amount of route data changes that
+
+The optimizer is behaving correctly throughout. It refuses to assert a schedule
+that violates the owner's stated limits, and it will not fabricate a connection it
+has no evidence for. The gap is in what evidence it can be given.
 
 ## Why every earlier plan looked fine
 
@@ -107,7 +130,8 @@ provider needs a sparse-pair strategy rather than a full matrix.
   the cache check sat inside the loop while the cap sliced a fixed sort of all
   pairs. Route coverage on the real trip was pinned at 60 of 1640 and re-running
   changed nothing. That is a straightforward defect against the stated intent, not
-  a decision, so it was fixed with a test rather than deferred here.
+  a decision, so it was fixed with a test rather than deferred here. The pair
+  *ordering* defect above is fixed the same way and for the same reason.
 
 ## Interim position
 

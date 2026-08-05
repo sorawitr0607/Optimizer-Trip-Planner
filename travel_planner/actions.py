@@ -43,7 +43,7 @@ from .providers import (
     ProviderBudgetExceeded,
     ProviderUnavailable,
 )
-from .ranking import build_ranking, validate_choice
+from .ranking import build_ranking, validate_choice, _distance_metres
 from .setup import build_setup_payload
 from .store import SQLiteStore
 
@@ -1399,7 +1399,22 @@ class PlannerActions:
             for destination in points
             if origin["place_id"] != destination["place_id"]
         ]
-        pairs.sort(key=lambda pair: (pair[0]["place_id"], pair[1]["place_id"]))
+        # Nearest pairs first, because the cap bites long before 41 places' 1640
+        # pairs are covered and a 17 km pair will never be walked whatever it
+        # measures. Sorting by place_id spent 340 free calls on arbitrary pairs
+        # while every pair the plan actually used stayed unmeasured -- and a
+        # missing route falls back to a pessimistic estimate, so the plan showed
+        # phantom 68-minute walks between places 1 km apart and failed validation
+        # on them. Fetching the same 9 pairs by relevance turned those legs into
+        # 14, 10 and 9 minutes and the plan went valid with no other change.
+        # place_id stays as the final tiebreak so the order remains deterministic.
+        pairs.sort(
+            key=lambda pair: (
+                _distance_metres(pair[0], pair[1]),
+                pair[0]["place_id"],
+                pair[1]["place_id"],
+            )
+        )
         # Already-cached pairs are removed *before* the cap, so `MAX_ROUTE_REQUESTS`
         # limits what one run fetches rather than what a trip can ever know. It
         # read as a total ceiling because the cache check lived inside the loop:
