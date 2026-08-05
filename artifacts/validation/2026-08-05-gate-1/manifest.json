@@ -1,0 +1,86 @@
+{
+  "gate": "WF-022 pilot-ready gate 1 — the real Taipei trip planned end to end in the webapp",
+  "date": "2026-08-05",
+  "verdict": "met in substance, thin in content",
+  "trip": {
+    "name": "Taipei, Taiwan",
+    "dates": "2026-12-29 → 2027-01-04",
+    "travellers": [
+      "owner 26",
+      "Sister 19",
+      "Mom 51"
+    ],
+    "headcount": 3,
+    "nationality": "Thai (all three)",
+    "planning_mode": "explore_first"
+  },
+  "walking_cap": {
+    "requested": "lower the strength of plain_long_walks",
+    "applied": "balanced_pace",
+    "per_leg_min": 25,
+    "plain_per_day_min": 60,
+    "note": "a genuine cap, one rung looser than the 20/45 it replaced"
+  },
+  "selection": {
+    "scheduled": [
+      "Taipei 101",
+      "Sun Yat-sen Memorial Hall",
+      "Lungshan Temple"
+    ],
+    "dropped_as_closed": [
+      "Red House (closed 2027-01-04)",
+      "Herbarium of Taipei Botanical Garden (closed 2026-12-29 and 2027-01-04)"
+    ],
+    "excluded_pending_transit": [
+      "Dalongdong Baoan Temple",
+      "Taipei Confucius Temple",
+      "Taipei Fine Arts Museum",
+      "Chiang Kai-shek Memorial Hall",
+      "Huashan 1914 Creative Park",
+      "Beitou Hot Spring Museum",
+      "National Palace Museum",
+      "Elephant Mountain",
+      "Shilin Cixian Temple",
+      "Taipei Zoo"
+    ]
+  },
+  "activated_plan": {
+    "version_id": "plan_803580bfb8d54468bac549913aac0ac2",
+    "variant": "best_balance",
+    "status": "provisional",
+    "valid": true,
+    "days": 8,
+    "rows": 65,
+    "worst_day_plain_walking_min": 35,
+    "longest_leg_min": 22
+  },
+  "readiness": {
+    "items": 17,
+    "plan_readiness_state": "action_needed"
+  },
+  "exports": {
+    "workbook_kb": 23,
+    "calendar_kb": 6,
+    "calendar_events": 14,
+    "gate_2_reference_coverage": "10 of 10 recurring elements — passes"
+  },
+  "paid": {
+    "today_usd": 0.125,
+    "today_calls": "5 google_places:search_text",
+    "lifetime_usd": 2.484,
+    "cap_usd": 10.0,
+    "estimate_error": "preflighted google_places:details at US$0.017; refresh_opening_hours actually bills google_places:search_text at US$0.025, so US$0.085 estimated against US$0.125 spent"
+  },
+  "what_the_paid_call_bought": "the activated plan had scheduled Red House and the Herbarium on 2027-01-04, the one day both are closed. Real opening hours moved or dropped them.",
+  "why_only_three_visits": "5 candidate places cannot fill 7 days. With 41 places the optimizer spread 20 visits across 8 days, so this is not a packing defect — it is the downstream effect of WF-038: no transit means the walking cap admits only two adjacent districts, which admits only five landmarks.",
+  "open_tickets_this_produced": [
+    "WF-037 ranking buries landmarks",
+    "WF-038 no transit routing",
+    "WF-039 comfort-tradeoff acceptance is unreachable"
+  ],
+  "defects_fixed_along_the_way": [
+    "MAX_ROUTE_REQUESTS capped total coverage rather than per-run",
+    "route pairs were fetched in place_id order rather than nearest-first",
+    "a whole-trip walking total was compared against a per-day budget"
+  ]
+}
