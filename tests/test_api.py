@@ -100,7 +100,12 @@ class JsonableContractTest(unittest.TestCase):
 class DispatchContractTest(unittest.TestCase):
     def test_allowlist_is_literal_and_excludes_internal_writes(self) -> None:
         self.assertIsInstance(ACTIONS, tuple)
-        self.assertEqual(60, len(ACTIONS))
+        # 61 since WF-038 added refresh_transit_routes. The count is asserted so a
+        # method cannot join the allowlist unnoticed -- save_plan_version writes an
+        # activated version with no optimizer validation and record_paid_call forges
+        # ledger rows, so what is reachable over the socket has to be deliberate.
+        self.assertEqual(61, len(ACTIONS))
+        self.assertIn("refresh_transit_routes", ACTIONS)
         self.assertEqual(len(ACTIONS), len(set(ACTIONS)))
         self.assertNotIn("save_plan_version", ACTIONS)
         self.assertNotIn("record_paid_call", ACTIONS)

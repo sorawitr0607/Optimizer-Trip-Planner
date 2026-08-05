@@ -1,8 +1,8 @@
 {
   "api/__init__.py": {
-    "mtime": 1785815158.494452,
-    "ast_hash": "7cbcceb0a5792fa0d69c696f4ab514f1",
-    "semantic_hash": "7cbcceb0a5792fa0d69c696f4ab514f1"
+    "mtime": 1785920806.7946594,
+    "ast_hash": "eb191cfc1008290a4e31c7517724aa56",
+    "semantic_hash": "eb191cfc1008290a4e31c7517724aa56"
   },
   "api/__main__.py": {
     "mtime": 1785767189.3726726,
@@ -75,9 +75,9 @@
     "semantic_hash": "0f0b97bc1702fe704a6233c14f3c26b1"
   },
   "tests/test_api.py": {
-    "mtime": 1785834484.5200498,
-    "ast_hash": "1f0c3dfac1b514ee08b67e4ceb21c3c6",
-    "semantic_hash": "1f0c3dfac1b514ee08b67e4ceb21c3c6"
+    "mtime": 1785920841.0033782,
+    "ast_hash": "48a3c6b3ebbad0bfae968b6c581d0fb1",
+    "semantic_hash": "48a3c6b3ebbad0bfae968b6c581d0fb1"
   },
   "tests/test_checklist.py": {
     "mtime": 1785832402.4787455,
@@ -115,7 +115,7 @@
     "semantic_hash": "a7f46e76083a3393931040c722ce3866"
   },
   "tests/test_optimizer.py": {
-    "mtime": 1785915707.3667588,
+    "mtime": 1785917078.7690575,
     "ast_hash": "bbb4f335d784d3e7bc844d45ec2a856c",
     "semantic_hash": "bbb4f335d784d3e7bc844d45ec2a856c"
   },
@@ -135,9 +135,9 @@
     "semantic_hash": "74ea0535d1b1e1c1d56615e11dcbfc4d"
   },
   "tests/test_routes.py": {
-    "mtime": 1785914305.9172518,
-    "ast_hash": "60ec5d722a82c6c89e0a359390e1296f",
-    "semantic_hash": "60ec5d722a82c6c89e0a359390e1296f"
+    "mtime": 1785920790.3754313,
+    "ast_hash": "44eb9e77c53465ddc0980aa2e5e01947",
+    "semantic_hash": "44eb9e77c53465ddc0980aa2e5e01947"
   },
   "tests/test_setup_discovery.py": {
     "mtime": 1785832402.482533,
@@ -165,9 +165,9 @@
     "semantic_hash": "ef0aefdeae9a5f201e587415c32b8a5b"
   },
   "travel_planner/actions.py": {
-    "mtime": 1785914305.9176588,
-    "ast_hash": "aacdb6d3a52c550e3ca364a0da02e98a",
-    "semantic_hash": "aacdb6d3a52c550e3ca364a0da02e98a"
+    "mtime": 1785920672.2890766,
+    "ast_hash": "0f9d9a9d59ca0a437f82f524ba5c2968",
+    "semantic_hash": "0f9d9a9d59ca0a437f82f524ba5c2968"
   },
   "travel_planner/checklist.py": {
     "mtime": 1785316030.1684666,
@@ -209,6 +209,11 @@
     "ast_hash": "e1fbb6b9be169864c0f1a3a0cb5a5e89",
     "semantic_hash": "e1fbb6b9be169864c0f1a3a0cb5a5e89"
   },
+  "travel_planner/gtfs.py": {
+    "mtime": 1785920544.5854595,
+    "ast_hash": "860644b8d152fdbd0788cd56e837d2e6",
+    "semantic_hash": "860644b8d152fdbd0788cd56e837d2e6"
+  },
   "travel_planner/interpret.py": {
     "mtime": 1785320568.189277,
     "ast_hash": "4a3506e0951d0398c7a56287366e1eed",
@@ -220,14 +225,14 @@
     "semantic_hash": "9ee894f176866da44ca41771e596053b"
   },
   "travel_planner/optimizer.py": {
-    "mtime": 1785916970.9926615,
+    "mtime": 1785917078.7697182,
     "ast_hash": "0cdc72927ae02580a2b44e8fac9eed90",
     "semantic_hash": "0cdc72927ae02580a2b44e8fac9eed90"
   },
   "travel_planner/providers.py": {
-    "mtime": 1785397212.768139,
-    "ast_hash": "a469529cb241479fe75c0c23932a1e2c",
-    "semantic_hash": "a469529cb241479fe75c0c23932a1e2c"
+    "mtime": 1785920608.994861,
+    "ast_hash": "4790420b0f6ebe27b0c3bf814e48d0b4",
+    "semantic_hash": "4790420b0f6ebe27b0c3bf814e48d0b4"
   },
   "travel_planner/ranking.py": {
     "mtime": 1785840738.5558307,
@@ -255,9 +260,9 @@
     "semantic_hash": "514eade9822bcbe0511b085f732da9f6"
   },
   "travel_planner/usage.py": {
-    "mtime": 1785385897.4960427,
-    "ast_hash": "c1113a47d693dc40b5aef47e17bd0af7",
-    "semantic_hash": "c1113a47d693dc40b5aef47e17bd0af7"
+    "mtime": 1785920628.7252152,
+    "ast_hash": "c4dd8cf966340040fe28df55007ff8b6",
+    "semantic_hash": "c4dd8cf966340040fe28df55007ff8b6"
   },
   "web/eslint.config.js": {
     "mtime": 1785764956.464039,
@@ -699,15 +704,25 @@
     "ast_hash": "e5e709485ed12348878571ff45097ba5",
     "semantic_hash": "e5e709485ed12348878571ff45097ba5"
   },
+  ".wayfinder/tickets/038-decide-how-the-planner-gets-transit-routing.md": {
+    "mtime": 1785920954.6028094,
+    "ast_hash": "c36f6ff8359d0e5dac6076ae574b772e",
+    "semantic_hash": "c36f6ff8359d0e5dac6076ae574b772e"
+  },
+  ".wayfinder/tickets/039-decide-how-an-owner-accepts-a-comfort-tradeoff.md": {
+    "mtime": 1785917078.7450142,
+    "ast_hash": "78b3ea3119d95e32262fb4a2c99893ad",
+    "semantic_hash": "78b3ea3119d95e32262fb4a2c99893ad"
+  },
   "AGENTS.md": {
     "mtime": 1785766520.9028397,
     "ast_hash": "1eadb8bff2a10ce33d7930a6411d1154",
     "semantic_hash": "1eadb8bff2a10ce33d7930a6411d1154"
   },
   "CLAUDE.md": {
-    "mtime": 1785835418.4716196,
-    "ast_hash": "e29f739707708861bebc859d0cc6e977",
-    "semantic_hash": "e29f739707708861bebc859d0cc6e977"
+    "mtime": 1785920954.603618,
+    "ast_hash": "6e398c17963a1691ec92cd6778727f18",
+    "semantic_hash": "6e398c17963a1691ec92cd6778727f18"
   },
   "README.md": {
     "mtime": 1785835418.4719262,

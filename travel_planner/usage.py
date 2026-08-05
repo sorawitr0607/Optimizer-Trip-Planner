@@ -26,6 +26,10 @@ PRICES_USD = {
     "openstreetmap:discover": 0.0,
     "openrouteservice:directions": 0.0,
     "openrouteservice:matrix": 0.0,
+    # A local GTFS feed. Zero because it is a file read, not a request — but priced
+    # rather than omitted, since an unpriced operation raises and every provider
+    # call has to stay reconcilable by count even when it costs nothing.
+    "gtfs:transit": 0.0,
     "google_places:details": 0.017,
     # Current Text Search Enterprise + Atmosphere and Place Photo list prices,
     # conservatively tracked even when the account is still inside its free cap.

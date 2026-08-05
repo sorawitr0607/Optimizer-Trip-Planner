@@ -70,6 +70,10 @@ ACTIONS = (
     "refresh_timezone",
     "get_timezone_evidence",
     "refresh_routes",
+    # WF-038. A local file read, so it is free and works offline, but it is a
+    # mutation like any other refresh and belongs on the allowlist explicitly
+    # rather than arriving through introspection.
+    "refresh_transit_routes",
     "list_routes",
     "paid_usage_status",
     "set_paid_cap",

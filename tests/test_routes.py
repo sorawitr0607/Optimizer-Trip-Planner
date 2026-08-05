@@ -349,6 +349,102 @@ class FakeTimeZoneProvider:
         )
 
 
+class TransitRouteTest(unittest.TestCase):
+    """`WF-038`: transit legs from a local GTFS feed, no network and no cost."""
+
+    FEED = Path(__file__).resolve().parent / "fixtures" / "synthetic_transit_gtfs.zip"
+
+    def setUp(self) -> None:
+        from travel_planner.providers import GtfsTransitProvider
+
+        self.directory = TemporaryDirectory()
+        self.actions = PlannerActions(
+            Path(self.directory.name) / "transit.sqlite3",
+            place_provider=FakePlaceProvider(),
+            route_provider=FakeRouteProvider(),
+            transit_provider=GtfsTransitProvider(),
+        )
+        # The provider reads its path at construction, so point it at the fixture.
+        self.actions.transit_provider._path = str(self.FEED)
+        self.trip = self.actions.create_trip(
+            name="Taipei", destination="Taipei", planning_mode="ready_to_schedule"
+        )
+        self.actions.save_setup(
+            trip_id=self.trip.trip_id, main_style=["sightseeing"],
+            start_date="2030-01-01", end_date="2030-01-03",
+            accommodation_status="booked", confirmed=True,
+        )
+        self.actions.discover_places(trip_id=self.trip.trip_id)
+        # `_route_points` reads *selected* places, so a route pair only exists once
+        # a choice does.
+        for candidate in self.actions.get_latest_discovery(
+            self.trip.trip_id
+        ).candidates.as_dict()["candidates"]:
+            self.actions.save_candidate_choice(
+                trip_id=self.trip.trip_id,
+                place_id=candidate["place_id"],
+                action="must_do",
+            )
+
+    def tearDown(self) -> None:
+        self.directory.cleanup()
+
+    def test_a_transit_leg_reports_only_access_walking(self) -> None:
+        """The reason this ticket exists: a long ride with a short walk.
+
+        `maximum_walking_minutes_per_leg` measures `walking_minutes`, so a 40-minute
+        ride reached by a 2-minute walk passes a 25-minute walking cap that a
+        40-minute walk never could. Without it a city trip cannot validate at all.
+        """
+
+        report = self.actions.refresh_transit_routes(self.trip.trip_id)
+        self.assertEqual(0, report["failed"], report.get("provider_errors"))
+        self.assertGreater(report["fetched"], 0)
+
+        transit = [
+            route
+            for route in self.actions.list_routes(self.trip.trip_id)
+            if route["mode"] == "transit"
+        ]
+        self.assertTrue(transit)
+        longest = max(transit, key=lambda route: route["duration_minutes"])
+        self.assertGreater(longest["duration_minutes"], 20)
+        self.assertLess(longest["walking_minutes"], 10)
+        # Derived from a timetable, not looked up in one.
+        self.assertEqual("estimated", longest["status"])
+        self.assertEqual("gtfs", longest["provider"])
+
+    def test_transit_is_stored_beside_walking_rather_than_replacing_it(self) -> None:
+        """The store keys by (origin, destination, mode), so both survive."""
+
+        self.actions.refresh_routes(self.trip.trip_id)
+        self.actions.refresh_transit_routes(self.trip.trip_id)
+        modes = {route["mode"] for route in self.actions.list_routes(self.trip.trip_id)}
+        self.assertEqual({"walk", "transit"}, modes)
+
+    def test_a_transit_call_is_recorded_at_zero_rather_than_left_unpriced(self) -> None:
+        self.actions.refresh_transit_routes(self.trip.trip_id)
+        rows = [
+            row
+            for row in self.actions.store.list_paid_usage()
+            if row["operation"] == "gtfs:transit"
+        ]
+        self.assertTrue(rows)
+        self.assertEqual(0.0, sum(float(row["estimated_usd"]) for row in rows))
+
+    def test_an_absent_feed_refuses_and_never_invents_a_journey(self) -> None:
+        from travel_planner.providers import GtfsTransitProvider
+
+        self.actions.transit_provider = GtfsTransitProvider()
+        self.actions.transit_provider._path = str(
+            Path(self.directory.name) / "not-a-feed.zip"
+        )
+        report = self.actions.refresh_transit_routes(self.trip.trip_id)
+        self.assertEqual(0, report["fetched"])
+        self.assertTrue(report["provider_errors"])
+        self.assertIn("GTFS feed unusable", report["provider_errors"][0])
+
+
 class TimeZoneTest(unittest.TestCase):
     def setUp(self) -> None:
         self.directory = TemporaryDirectory()

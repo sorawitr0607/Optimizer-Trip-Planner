@@ -6,6 +6,7 @@ from difflib import SequenceMatcher
 import json
 from math import asin, ceil, cos, radians, sin, sqrt
 import os
+from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
@@ -400,6 +401,96 @@ class OpenRouteServiceProvider:
             # Plain transfer: no evidence that the walk is worth doing for itself.
             "experience_evidence": [],
             "status": "verified",
+            "provider": self.name,
+        }
+
+
+class GtfsTransitProvider:
+    """Transit legs from a local GTFS feed, normalized like any other route.
+
+    `WF-038`. The feed is a file on disk, so this makes no request, costs nothing,
+    and works offline — which is why it is priced at zero rather than left
+    unpriced. `usage.PRICES_USD` still carries an entry, because an unpriced
+    operation raises rather than being assumed free.
+
+    Two properties matter to the planner. The mode is `transit`, which the
+    optimizer already tolerates: it special-cases only `walk` and `bike`, for heat
+    and cycling limits. And `walking_minutes` counts **access and egress only**,
+    never the ride — which is the whole point, because
+    `maximum_walking_minutes_per_leg` measures `walking_minutes`, so a 40-minute
+    ride with a 5-minute walk to the station passes a 25-minute walking cap that a
+    40-minute walk could never pass.
+
+    Routes are `status: "estimated"`, never `"verified"`: the journey is derived
+    from the timetable rather than looked up in it, so it does not know that the
+    last train has gone. `travel_planner/gtfs.py` states the model's limits.
+    """
+
+    name = "gtfs"
+    operation = "gtfs:transit"
+    cache_version = "gtfs-transit-v1"
+    # Long, because the feed itself is the thing that goes stale, and replacing the
+    # file is the deliberate act that should invalidate these.
+    cache_ttl_days = 30
+    mode = "transit"
+
+    def __init__(self, feed: Any | None = None) -> None:
+        self._feed = feed
+        self._path = os.environ.get("TOURIST_GTFS_PATH", "data/gtfs/transit.zip")
+
+    @property
+    def feed(self) -> Any:
+        """Loaded once and reused; parsing a city feed is not free in time."""
+
+        if self._feed is None:
+            from .gtfs import GtfsUnavailable, TransitFeed
+
+            try:
+                self._feed = TransitFeed(self._path)
+            except GtfsUnavailable as error:
+                raise ProviderUnavailable(f"GTFS feed unusable: {error}") from error
+        return self._feed
+
+    def cache_descriptor(
+        self, origin: dict[str, Any], destination: dict[str, Any]
+    ) -> dict[str, Any]:
+        return {
+            "operation": "transit_route",
+            "provider": self.name,
+            "version": self.cache_version,
+            "mode": self.mode,
+            "feed": Path(self._path).name,
+            "origin": _point_key(origin),
+            "destination": _point_key(destination),
+        }
+
+    def route(
+        self, origin: dict[str, Any], destination: dict[str, Any]
+    ) -> dict[str, Any]:
+        journey = self.feed.journey(
+            origin=(float(origin["latitude"]), float(origin["longitude"])),
+            destination=(float(destination["latitude"]), float(destination["longitude"])),
+        )
+        if journey is None:
+            raise ProviderUnavailable(
+                "no transit connection within walking reach of both places"
+            )
+        return {
+            "origin_id": str(origin["place_id"]),
+            "destination_id": str(destination["place_id"]),
+            "mode": self.mode,
+            "duration_minutes": journey.total_minutes,
+            # Access and egress only. The ride is not walking.
+            "walking_minutes": journey.walking_minutes,
+            # Straight-line: a transit journey's shape is the network's, not a
+            # distance this provider can honestly report.
+            "distance_m": None,
+            "transfers": journey.transfers,
+            "boarding_buffer_minutes": journey.waiting_minutes,
+            # A ride between two stops is a transfer, not an experience.
+            "experience_evidence": [],
+            # Derived from the timetable, not looked up in it.
+            "status": "estimated",
             "provider": self.name,
         }
 

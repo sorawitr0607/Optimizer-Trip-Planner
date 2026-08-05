@@ -1,7 +1,7 @@
 ---
 id: WF-038
 title: Decide how the planner gets transit routing
-status: open
+status: closed
 labels:
   - "wayfinder:decision"
 parent: WF-MAP-002
@@ -132,6 +132,53 @@ provider needs a sparse-pair strategy rather than a full matrix.
   changed nothing. That is a straightforward defect against the stated intent, not
   a decision, so it was fixed with a test rather than deferred here. The pair
   *ordering* defect above is fixed the same way and for the same reason.
+
+## Decided 2026-08-05: a local GTFS feed, read with the standard library
+
+The owner chose GTFS. Built and green:
+
+- **`travel_planner/gtfs.py`** — pure, no HTTP and no SQLite, like the rest of the
+  core. It reads a GTFS zip with `zipfile` and `csv`, indexes stops, derives edges
+  from consecutive `stop_times` within each trip keeping the fastest, and answers
+  origin/destination with Dijkstra. **No runtime dependency was added**, which is
+  what ruled OpenTripPlanner out as much as the operational weight did.
+- **`providers.GtfsTransitProvider`** — `mode: "transit"`, priced at US$0.00 in
+  `PRICES_USD` because it is a file read, but priced rather than omitted since an
+  unpriced operation raises.
+- **`actions.refresh_transit_routes`** — allowlisted as the 61st method. Transit
+  legs are stored *beside* walking ones, because the store keys a snapshot by
+  (origin, destination, **mode**) and the optimizer takes the shortest it holds for
+  a pair. Short hops keep their walk; long ones gain a ride.
+
+**Why this unblocks the gate.** `maximum_walking_minutes_per_leg` measures
+`walking_minutes`, and a transit leg reports **access and egress only**. Measured on
+the test feed: a 43-minute journey reports **2 minutes of walking**. A 43-minute
+walk can never pass a 25-minute cap; a 43-minute ride to a 2-minute walk passes it
+easily.
+
+**What it does not do.** The journey is schedule-*derived*, not schedule-bound: it
+takes the fastest observed ride per edge, adds half the measured mean headway per
+boarding and a 4-minute transfer penalty, and never consults the clock. So it does
+not know the last train has gone. Every route it produces is `status: "estimated"`,
+never `"verified"`. Do not use these times to catch a flight.
+
+The headway is measured from the feed's own service span rather than an assumed
+18-hour day — assuming the day inferred a 90-minute wait from six trips that ran
+15 minutes apart.
+
+### The Taipei feed itself is outstanding
+
+The code is done and tested; the **data is not sourced**. Checked on 2026-08-05:
+
+- Taiwan's official TDX platform answers **HTTP 401** — it needs a free account.
+- The MobilityData open catalogue holds **9 Taiwan feeds and none for Taipei**
+  (Changhua, Miaoli, Nantou, Taichung, Yunlin). All 2,146 catalogue objects were
+  scanned; the apparent `taipei` matches are `tper`, an Italian operator.
+
+So the remaining step is owner-side: register at TDX, download the Taipei feed, and
+put it at `data/gtfs/transit.zip` or point `TOURIST_GTFS_PATH` at it. Until then
+`refresh_transit_routes` refuses cleanly with "GTFS feed unusable" and changes
+nothing, which is asserted by a test.
 
 ## Interim position
 

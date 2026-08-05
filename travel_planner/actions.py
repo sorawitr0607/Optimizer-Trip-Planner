@@ -38,6 +38,7 @@ from .providers import (
     OpenAIRevisionInterpreter,
     RevisionInterpretationUnavailable,
     GoogleTimeZoneProvider,
+    GtfsTransitProvider,
     OpenRouteServiceProvider,
     OpenStreetMapProvider,
     ProviderBudgetExceeded,
@@ -91,6 +92,7 @@ class PlannerActions:
         *,
         place_provider: Any = None,
         route_provider: Any = None,
+        transit_provider: Any = None,
         timezone_provider: Any = None,
         hours_provider: Any = None,
         card_provider: Any = None,
@@ -99,6 +101,9 @@ class PlannerActions:
         self.store = SQLiteStore(database_path)
         self.place_provider = place_provider
         self.route_provider = route_provider
+        # Injected the same way every other provider is, so a test can hand over a
+        # small feed instead of reaching for a city-sized one.
+        self.transit_provider = transit_provider
         self.timezone_provider = timezone_provider
         self.hours_provider = hours_provider
         self.card_provider = card_provider
@@ -1380,6 +1385,29 @@ class PlannerActions:
     def refresh_routes(self, trip_id: str, *, force: bool = False) -> dict[str, Any]:
         """Fetch walking routes between the selected places, sparsely and capped."""
 
+        return self._refresh_routes_with(
+            self.route_provider or OpenRouteServiceProvider(), trip_id, force=force
+        )
+
+    def refresh_transit_routes(
+        self, trip_id: str, *, force: bool = False
+    ) -> dict[str, Any]:
+        """Fetch transit legs from the local GTFS feed. `WF-038`.
+
+        Stored *alongside* the walking routes rather than replacing them, because
+        the store keys a snapshot by (origin, destination, **mode**) and the
+        optimizer takes the shortest route it holds for a pair. So a short hop keeps
+        its walk and a cross-city hop gains a ride, and neither decision is made
+        here.
+        """
+
+        return self._refresh_routes_with(
+            self.transit_provider or GtfsTransitProvider(), trip_id, force=force
+        )
+
+    def _refresh_routes_with(
+        self, provider: Any, trip_id: str, *, force: bool = False
+    ) -> dict[str, Any]:
         trip = self.store.get_trip(trip_id)
         if trip is None:
             raise PlannerRefusal("unknown_trip", trip_id=trip_id)
@@ -1387,7 +1415,6 @@ class PlannerActions:
         if len(points) < 2:
             raise PlannerRefusal("insufficient_geocoded_places", minimum=2)
 
-        provider = self.route_provider or OpenRouteServiceProvider()
         now = datetime.now(timezone.utc)
         existing = {
             (route["origin_id"], route["destination_id"], route["mode"]): route

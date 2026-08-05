@@ -155,7 +155,8 @@ Behavior changes to the optimizer should be expressed there.
 ## Configuration
 
 `TOURIST_DB_PATH` (default `data/tourist.sqlite3`), `TOURIST_NOMINATIM_URL`, `TOURIST_OVERPASS_URL`,
-`TOURIST_USER_AGENT`. Providers still read keys from `os.environ` and nowhere else — that is what keeps
+`TOURIST_USER_AGENT`, `TOURIST_GTFS_PATH` (default
+`data/gtfs/transit.zip`; a GTFS zip read locally for transit legs — see `WF-038`). Providers still read keys from `os.environ` and nowhere else — that is what keeps
 a key out of every snapshot, export and log. `credentials.load_local_credentials()` (called once from `api.main()`)
 copies a flat `secrets.local.json` into the environment first, so the owner need not
 export four variables per shell; an already-set variable always wins, and the module never logs or
