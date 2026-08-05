@@ -107,6 +107,48 @@ class OptimizerCoreTest(unittest.TestCase):
             self.assertTrue(item["validation"]["valid"] or item["status"] == "unavailable")
             self.assertFalse(item["status"] == "ready" and not item["validation"]["valid"])
 
+    def test_a_daily_walking_budget_is_measured_per_day_not_per_trip(self) -> None:
+        """`plain_walking_minutes_per_day` is a daily budget, so judge a day.
+
+        `_schedule_metrics` sums across every day, and that whole-trip total used
+        to be compared against the per-day budget, making an n-day trip n times too
+        strict. It was invisible here because 25 of the 27 historic fixtures are
+        single-day and 2 are two-day. Measured on the real 8-day Taipei trip: 147
+        minutes of plain walking across the trip, about 18 a day, failed a 60-a-day
+        budget.
+        """
+
+        from travel_planner.optimizer import (
+            _comfort_violation_count,
+            _schedule_metrics,
+        )
+
+        def leg(minutes: int) -> dict:
+            return {
+                "type": "travel", "duration_minutes": minutes,
+                "walking_minutes": minutes, "mode": "walk",
+                "origin_id": "a", "destination_id": "b",
+            }
+
+        # Four days, 30 minutes of plain walking each: 120 across the trip, which
+        # is over a 45-a-day budget only if the trip total is mistaken for a day.
+        days = [{"date": f"2030-01-0{n}", "items": [leg(30)]} for n in range(1, 5)]
+        snapshot = {"thresholds": {"plain_walking_minutes_per_day": 45}, "travellers": []}
+        metrics = _schedule_metrics(snapshot, days)
+
+        self.assertEqual(120, metrics["plain_walking_minutes"])
+        self.assertEqual(30, metrics["maximum_plain_walking_minutes_per_day"])
+
+        metrics["maximum_walking_minutes_per_leg"] = 30
+        self.assertEqual(0, _comfort_violation_count(snapshot, metrics))
+
+        # A single day that genuinely exceeds the budget must still be caught.
+        days[2]["items"].append(leg(40))
+        heavy = _schedule_metrics(snapshot, days)
+        heavy["maximum_walking_minutes_per_leg"] = 30
+        self.assertEqual(70, heavy["maximum_plain_walking_minutes_per_day"])
+        self.assertEqual(1, _comfort_violation_count(snapshot, heavy))
+
     def test_independent_validator_rejects_a_corrupted_timeline(self) -> None:
         snapshot = fixture("ix-jp-shibuya-hours-view-walk")["planner_input"]
         variant = optimize_trip(snapshot)["variants"][0]

@@ -115,9 +115,9 @@
     "semantic_hash": "a7f46e76083a3393931040c722ce3866"
   },
   "tests/test_optimizer.py": {
-    "mtime": 1785832402.4805465,
-    "ast_hash": "0285fec540e8ea6cb65af309ef9f1118",
-    "semantic_hash": "0285fec540e8ea6cb65af309ef9f1118"
+    "mtime": 1785915707.3667588,
+    "ast_hash": "bbb4f335d784d3e7bc844d45ec2a856c",
+    "semantic_hash": "bbb4f335d784d3e7bc844d45ec2a856c"
   },
   "tests/test_ported_behaviours.py": {
     "mtime": 1785815158.503317,
@@ -135,9 +135,9 @@
     "semantic_hash": "74ea0535d1b1e1c1d56615e11dcbfc4d"
   },
   "tests/test_routes.py": {
-    "mtime": 1785843374.0331087,
-    "ast_hash": "ac15685b005616fd56e3a424d644d643",
-    "semantic_hash": "ac15685b005616fd56e3a424d644d643"
+    "mtime": 1785914305.9172518,
+    "ast_hash": "60ec5d722a82c6c89e0a359390e1296f",
+    "semantic_hash": "60ec5d722a82c6c89e0a359390e1296f"
   },
   "tests/test_setup_discovery.py": {
     "mtime": 1785832402.482533,
@@ -165,9 +165,9 @@
     "semantic_hash": "ef0aefdeae9a5f201e587415c32b8a5b"
   },
   "travel_planner/actions.py": {
-    "mtime": 1785843374.0334706,
-    "ast_hash": "497077d02bd04387df829979f85705f8",
-    "semantic_hash": "497077d02bd04387df829979f85705f8"
+    "mtime": 1785914305.9176588,
+    "ast_hash": "aacdb6d3a52c550e3ca364a0da02e98a",
+    "semantic_hash": "aacdb6d3a52c550e3ca364a0da02e98a"
   },
   "travel_planner/checklist.py": {
     "mtime": 1785316030.1684666,
@@ -220,9 +220,9 @@
     "semantic_hash": "9ee894f176866da44ca41771e596053b"
   },
   "travel_planner/optimizer.py": {
-    "mtime": 1785468194.0061438,
-    "ast_hash": "bc0a651bd7637fd7c8c0b617bda50090",
-    "semantic_hash": "bc0a651bd7637fd7c8c0b617bda50090"
+    "mtime": 1785916970.9926615,
+    "ast_hash": "0cdc72927ae02580a2b44e8fac9eed90",
+    "semantic_hash": "0cdc72927ae02580a2b44e8fac9eed90"
   },
   "travel_planner/providers.py": {
     "mtime": 1785397212.768139,
@@ -504,6 +504,11 @@
     "ast_hash": "420e1f2e633c10d6ebabeb1d067f63a8",
     "semantic_hash": "420e1f2e633c10d6ebabeb1d067f63a8"
   },
+  ".wayfinder/map-002-splitter-merge-and-webapp.md": {
+    "mtime": 1785835418.4709735,
+    "ast_hash": "a5f5895818ee54c5e161d86f3604126d",
+    "semantic_hash": "a5f5895818ee54c5e161d86f3604126d"
+  },
   ".wayfinder/map.md": {
     "mtime": 1785272453.0,
     "ast_hash": "f2ea224e665fdb844438af7de7eba063",
@@ -689,10 +694,25 @@
     "ast_hash": "f1b02223bdffe51e72c8ccf3c3dc935d",
     "semantic_hash": "f1b02223bdffe51e72c8ccf3c3dc935d"
   },
+  ".wayfinder/tickets/037-decide-how-ranking-handles-crowded-categories-and-landmark-signal.md": {
+    "mtime": 1785841827.1655192,
+    "ast_hash": "e5e709485ed12348878571ff45097ba5",
+    "semantic_hash": "e5e709485ed12348878571ff45097ba5"
+  },
   "AGENTS.md": {
     "mtime": 1785766520.9028397,
     "ast_hash": "1eadb8bff2a10ce33d7930a6411d1154",
     "semantic_hash": "1eadb8bff2a10ce33d7930a6411d1154"
+  },
+  "CLAUDE.md": {
+    "mtime": 1785835418.4716196,
+    "ast_hash": "e29f739707708861bebc859d0cc6e977",
+    "semantic_hash": "e29f739707708861bebc859d0cc6e977"
+  },
+  "README.md": {
+    "mtime": 1785835418.4719262,
+    "ast_hash": "a853272b8d46eb421c7192100fdae12c",
+    "semantic_hash": "a853272b8d46eb421c7192100fdae12c"
   },
   "i18n/notes.md": {
     "mtime": 1785767189.5124507,

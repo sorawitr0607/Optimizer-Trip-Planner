@@ -1,15 +1,15 @@
-# Graph Report - /Users/t1ct1ch20375754/Documents/Thaksin/ML/Personal_Project/Tourist/Optimizer-Trip-Planner  (2026-08-04)
+# Graph Report - /Users/t1ct1ch20375754/Documents/Thaksin/ML/Personal_Project/Tourist/Optimizer-Trip-Planner  (2026-08-05)
 
 ## Corpus Check
 - cluster-only mode — file stats not available
 
 ## Summary
-- 1581 nodes · 3838 edges · 146 communities (75 shown, 71 thin omitted)
-- Extraction: 91% EXTRACTED · 9% INFERRED · 0% AMBIGUOUS · INFERRED: 327 edges (avg confidence: 0.51)
-- Token cost: 452,815 input · 55,257 output · about US$0.2695 (cumulative)
+- 1588 nodes · 3850 edges · 152 communities (75 shown, 77 thin omitted)
+- Extraction: 92% EXTRACTED · 8% INFERRED · 0% AMBIGUOUS · INFERRED: 327 edges (avg confidence: 0.51)
+- Token cost: 456,365 input · 55,866 output · about US$0.2719 (cumulative)
 
 ## Graph Freshness
-- Built from commit: `17442138`
+- Built from commit: `910b86de`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -98,14 +98,14 @@
 - [[_COMMUNITY_Community 81|Community 81]]
 - [[_COMMUNITY_Community 82|Community 82]]
 - [[_COMMUNITY_Community 83|Community 83]]
+- [[_COMMUNITY_Community 84|Community 84]]
+- [[_COMMUNITY_Community 85|Community 85]]
 - [[_COMMUNITY_Community 86|Community 86]]
 - [[_COMMUNITY_Community 87|Community 87]]
-- [[_COMMUNITY_Community 89|Community 89]]
-- [[_COMMUNITY_Community 90|Community 90]]
+- [[_COMMUNITY_Community 88|Community 88]]
 - [[_COMMUNITY_Community 91|Community 91]]
 - [[_COMMUNITY_Community 92|Community 92]]
 - [[_COMMUNITY_Community 93|Community 93]]
-- [[_COMMUNITY_Community 94|Community 94]]
 - [[_COMMUNITY_Community 95|Community 95]]
 - [[_COMMUNITY_Community 96|Community 96]]
 - [[_COMMUNITY_Community 97|Community 97]]
@@ -125,20 +125,20 @@
 - [[_COMMUNITY_Community 111|Community 111]]
 - [[_COMMUNITY_Community 112|Community 112]]
 - [[_COMMUNITY_Community 113|Community 113]]
+- [[_COMMUNITY_Community 114|Community 114]]
 - [[_COMMUNITY_Community 115|Community 115]]
 - [[_COMMUNITY_Community 116|Community 116]]
 - [[_COMMUNITY_Community 117|Community 117]]
 - [[_COMMUNITY_Community 118|Community 118]]
 - [[_COMMUNITY_Community 119|Community 119]]
-- [[_COMMUNITY_Community 120|Community 120]]
 - [[_COMMUNITY_Community 121|Community 121]]
 - [[_COMMUNITY_Community 122|Community 122]]
+- [[_COMMUNITY_Community 123|Community 123]]
 - [[_COMMUNITY_Community 124|Community 124]]
 - [[_COMMUNITY_Community 125|Community 125]]
 - [[_COMMUNITY_Community 126|Community 126]]
 - [[_COMMUNITY_Community 127|Community 127]]
 - [[_COMMUNITY_Community 128|Community 128]]
-- [[_COMMUNITY_Community 129|Community 129]]
 - [[_COMMUNITY_Community 130|Community 130]]
 - [[_COMMUNITY_Community 131|Community 131]]
 - [[_COMMUNITY_Community 132|Community 132]]
@@ -150,8 +150,14 @@
 - [[_COMMUNITY_Community 138|Community 138]]
 - [[_COMMUNITY_Community 139|Community 139]]
 - [[_COMMUNITY_Community 140|Community 140]]
+- [[_COMMUNITY_Community 141|Community 141]]
 - [[_COMMUNITY_Community 142|Community 142]]
 - [[_COMMUNITY_Community 143|Community 143]]
+- [[_COMMUNITY_Community 144|Community 144]]
+- [[_COMMUNITY_Community 145|Community 145]]
+- [[_COMMUNITY_Community 146|Community 146]]
+- [[_COMMUNITY_Community 148|Community 148]]
+- [[_COMMUNITY_Community 149|Community 149]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `PlannerActions` - 232 edges
@@ -197,132 +203,133 @@
 - **Phase 2 slice plan validation gates** — wayfinder_artifacts_033phase2sliceplanandscorecard [EXTRACTED 1.00]
 - **Phase 2 slice plan and validation scorecard dependencies** — wayfinder_tickets_030_decide_which_exporter_survives_python_or_javascript, wayfinder_tickets_031_prototype_the_merged_cost_and_split_screen, wayfinder_tickets_032_prototype_the_itinerary_day_screen_in_the_new_design, wayfinder_tickets_033_lock_the_phase_2_slice_plan_and_validation_scorecard [EXTRACTED 1.00]
 - **Phase 2 Implementation Slices** — claudemd, wayfinder_map_002_splitter_merge_and_webappmd, readmemd [EXTRACTED 1.00]
+- **Transit routing and comfort tradeoff decisions in Wayfinder** — wayfinder_tickets_038_decide_how_the_planner_gets_transit_routing, wayfinder_tickets_039_decide_how_an_owner_accepts_a_comfort_tradeoff [INFERRED 0.80]
 
-## Communities (146 total, 71 thin omitted)
+## Communities (152 total, 77 thin omitted)
 
 ### Community 0 - "Community 0"
 Cohesion: 0.08
-Nodes (71): fixture(), OptimizerActionsTest, OptimizerCoreTest, ConsequenceTest, _access_gap(), _activity_route(), _append_operational(), _append_wait() (+63 more)
+Nodes (72): fixture(), OptimizerActionsTest, OptimizerCoreTest, `plain_walking_minutes_per_day` is a daily budget, so judge a day.          `_sc, ConsequenceTest, _access_gap(), _activity_route(), _append_operational() (+64 more)
 
 ### Community 1 - "Community 1"
 Cohesion: 0.06
-Nodes (16): ChecklistItem, Connection, Row, Path, SchemaMigrationTest, FrozenSnapshot, PlanVersion, Any (+8 more)
+Nodes (15): ChecklistItem, Connection, Row, Path, SchemaMigrationTest, PlanVersion, Any, CandidateChoice (+7 more)
 
 ### Community 2 - "Community 2"
 Cohesion: 0.07
-Nodes (33): dispatch(), jsonable(), Convert domain records to their frozen JSON wire shapes., DispatchContractTest, JsonableContractTest, The wire shape is implicit, so these tests are what catch a rename., The S4 transport path, with route evidence prepared deterministically., SocketGuardTest (+25 more)
-
-### Community 3 - "Community 3"
-Cohesion: 0.07
 Nodes (31): ConversionTest, rates(), RateSnapshotTest, Artifact 023: planned versus actual across the two linked ledgers., ReconciliationTest, apply_rates(), _currency(), new_rate_snapshot() (+23 more)
 
+### Community 3 - "Community 3"
+Cohesion: 0.11
+Nodes (34): Counter, candidate(), RankingCoreTest, setup_payload(), Under the cap, the pairs most likely to be walked must win.          Ordering by, build_ranking(), candidates_by_id(), _city_icon() (+26 more)
+
 ### Community 4 - "Community 4"
-Cohesion: 0.12
-Nodes (33): Counter, candidate(), RankingCoreTest, setup_payload(), build_ranking(), candidates_by_id(), _city_icon(), _distance_metres() (+25 more)
+Cohesion: 0.09
+Nodes (34): _load(), Any, Load the bilingual catalogue shared by Python exports and the webapp., Reusable core and local application services for the travel planner., allowed_place_ids(), _assert_clean(), build_payload(), interpret_response() (+26 more)
 
 ### Community 5 - "Community 5"
-Cohesion: 0.10
-Nodes (27): RuntimeError, annotate_report_cost(), build(), cluster_raw_graph(), deduplicate_nodes(), extracted_edge_issues(), main(), normalize_raw_graph() (+19 more)
+Cohesion: 0.13
+Nodes (15): FakePlaceProvider, ExploreFirstEvidenceTest, FakeHoursProvider, PlaceProvider, ProvisionalDerivationTest, A plan may only be Ready once the owner has confirmed the basics., FakePlaceProvider, FakeRouteProvider (+7 more)
 
 ### Community 6 - "Community 6"
 Cohesion: 0.07
 Nodes (17): entry(), LedgerPersistenceTest, PricingTest, ThresholdTest, check_allowed(), month_of(), new_entry(), price_for() (+9 more)
 
 ### Community 7 - "Community 7"
-Cohesion: 0.10
-Nodes (31): Reusable core and local application services for the travel planner., allowed_place_ids(), _assert_clean(), build_payload(), interpret_response(), Any, Free text to one typed revision operation.  Pure: no Streamlit, SQLite, provider, The stable IDs the model was shown; it may name no other. (+23 more)
+Cohesion: 0.12
+Nodes (14): jsonable(), PlannerHTTPServer, Convert domain records to their frozen JSON wire shapes., DispatchContractTest, JsonableContractTest, ThreadingHTTPServer, CandidateChoice, ChecklistItem (+6 more)
 
 ### Community 8 - "Community 8"
+Cohesion: 0.12
+Nodes (24): RuntimeError, annotate_report_cost(), build(), cluster_raw_graph(), deduplicate_nodes(), extracted_edge_issues(), main(), normalize_raw_graph() (+16 more)
+
+### Community 9 - "Community 9"
 Cohesion: 0.10
 Nodes (6): _app_text(), ChecklistDiffAndReadinessTest, ChecklistGenerationTest, ChecklistLocalizationTest, ChecklistPersistenceTest, setup_payload()
 
-### Community 9 - "Community 9"
+### Community 10 - "Community 10"
 Cohesion: 0.15
 Nodes (9): LedgerTest, rates(), RateTest, resolved(), RoundingTest, row(), SettlementTest, summary() (+1 more)
 
-### Community 10 - "Community 10"
+### Community 11 - "Community 11"
 Cohesion: 0.06
 Nodes (30): dependencies, lucide-react, react, react-dom, react-router, tailwindcss, @tanstack/react-query, devDependencies (+22 more)
 
-### Community 11 - "Community 11"
-Cohesion: 0.11
-Nodes (23): ChecklistItem, ChecklistProposal, ChecklistReadiness, ChecklistVocabulary, PlanVersionRecord, QuickAction, RevisionDraft, Language (+15 more)
-
 ### Community 12 - "Community 12"
-Cohesion: 0.15
-Nodes (11): ExploreFirstEvidenceTest, PlaceProvider, ProvisionalDerivationTest, A plan may only be Ready once the owner has confirmed the basics., FakePlaceProvider, FakeRouteProvider, FakeTimeZoneProvider, Stands in for OpenRouteService; tests never touch the network. (+3 more)
+Cohesion: 0.09
+Nodes (24): Balance, CategoryComparison, DiscoveryCandidate, DiscoveryReport, DiscoveryRun, ExportSnapshot, Frozen, JourneyStage (+16 more)
 
 ### Community 13 - "Community 13"
-Cohesion: 0.08
-Nodes (25): Balance, CategoryComparison, DiscoveryCandidate, DiscoveryReport, DiscoveryRun, ExportSnapshot, Frozen, JourneyStage (+17 more)
+Cohesion: 0.12
+Nodes (10): CardEnrichmentTest, FakeCardProvider, Provider, GooglePlacesCardProvider, _place_search_name(), ProviderUnavailable, Provider payload to one normalized route record, or a refusal., One owner-triggered live card overlay: photo, rating, and reviews.      The resp (+2 more)
 
 ### Community 14 - "Community 14"
+Cohesion: 0.16
+Nodes (8): Request, ConcreteProviderTest, _address(), _category(), OpenStreetMapProvider, _point_key(), Any, Resolve one owner-entered accommodation name or address.
+
+### Community 15 - "Community 15"
 Cohesion: 0.15
 Nodes (24): _booking_places(), diff_proposal(), due_date_for(), _generated(), _is_due_soon(), _is_overdue(), _nationality(), _nationality_groups() (+16 more)
 
-### Community 15 - "Community 15"
-Cohesion: 0.11
-Nodes (9): _comfort_thresholds(), CandidateChoice, DiscoveryRun, Return the server-owned stage gates and attention stage for one trip., Unexpired zone evidence, or None. An expired zone is not verified., The centre of the discovered coverage box, or a selected place., Unexpired normalized routes; an expired leg is no longer verified., Selected places that carry coordinates, deterministically ordered. (+1 more)
-
 ### Community 16 - "Community 16"
-Cohesion: 0.13
-Nodes (21): ApiError, CandidateChoice, PlaceInsight, PlanVariant, RankingLaneEntry, copyFrom(), placeName(), code() (+13 more)
+Cohesion: 0.12
+Nodes (18): AccommodationBase, OpeningIntervals, PaidUsageStatus, RouteRecord, TimezoneEvidence, Language, LanguageContext, LanguageProvider() (+10 more)
 
 ### Community 17 - "Community 17"
+Cohesion: 0.20
+Nodes (23): _accommodation(), build_export_snapshot(), _day(), _day_totals(), display_name(), _fallbacks(), _highest_risk(), _item() (+15 more)
+
+### Community 18 - "Community 18"
 Cohesion: 0.18
 Nodes (18): CostItem, CostTotals, SetupDraft, SplitRow, SplitSummary, CostsPage(), AMOUNT, money() (+10 more)
 
-### Community 18 - "Community 18"
-Cohesion: 0.14
-Nodes (9): CardEnrichmentTest, FakeCardProvider, GooglePlacesCardProvider, _place_search_name(), ProviderUnavailable, Provider payload to one normalized route record, or a refusal., One owner-triggered live card overlay: photo, rating, and reviews.      The resp, Resolve one photo resource without exposing the server key to the UI. (+1 more)
-
 ### Community 19 - "Community 19"
+Cohesion: 0.13
+Nodes (16): ApiError, ChecklistItem, ChecklistProposal, ChecklistReadiness, ChecklistVocabulary, PlanVersionRecord, QuickAction, RevisionDraft (+8 more)
+
+### Community 20 - "Community 20"
 Cohesion: 0.17
 Nodes (16): Journey, rpc(), StageKey, Trip, useLanguage(), Landing(), routes, GATE_KEYS (+8 more)
 
-### Community 20 - "Community 20"
-Cohesion: 0.19
-Nodes (21): _accommodation(), _day(), _day_totals(), display_name(), _fallbacks(), _highest_risk(), _item(), _leg_name() (+13 more)
-
 ### Community 21 - "Community 21"
-Cohesion: 0.18
-Nodes (21): Define the split ledger model and where its math lives, Lock the local API contract between the webapp and the planning core, Define the split ledger model and where its math lives, Lock the local API contract between the webapp and the planning core, Extract the Auto-Bill design token contract, Inventory the Auto-Bill elements each planner stage needs, Decide the Streamlit freeze and pilot fallback rules, Decide cost-and-split reconciliation rules (+13 more)
+Cohesion: 0.14
+Nodes (20): CandidateChoice, PlaceInsight, PlanVariant, RankingLaneEntry, copyFrom(), placeName(), code(), CONSIDERED (+12 more)
 
 ### Community 22 - "Community 22"
-Cohesion: 0.19
-Nodes (19): A formula with no cached value reads blank until the app recalculates., _code(), _design_token(), _labels(), _light_tokens(), plan_workbook_xlsx(), Any, _rate_summary() (+11 more)
+Cohesion: 0.18
+Nodes (21): Define the split ledger model and where its math lives, Lock the local API contract between the webapp and the planning core, Define the split ledger model and where its math lives, Lock the local API contract between the webapp and the planning core, Extract the Auto-Bill design token contract, Inventory the Auto-Bill elements each planner stage needs, Decide the Streamlit freeze and pilot fallback rules, Decide cost-and-split reconciliation rules (+13 more)
 
 ### Community 23 - "Community 23"
 Cohesion: 0.14
 Nodes (7): ExtractionTest, PayloadTest, OpenAIRevisionInterpreter, Pull the structured object out of a Responses API reply., Free-text interpretation is unavailable, with the reason named.      `cause` is, One structured-output call that chooses a typed revision operation.      The mod, RevisionInterpretationUnavailable
 
 ### Community 24 - "Community 24"
-Cohesion: 0.12
-Nodes (8): ActivationGateTest, LastTripDeletionTest, The new homes for behaviours currently asserted through Streamlit `AppTest`.  Ar, S3's second closing check: a variant activates, and a stale hash refuses.      H, The five AppTest behaviours whose React surfaces land in S4., Replaces `deleting_the_last_trip_returns_to_first_trip_setup`., S4PortedBehaviourTest, RankingActionsTest
-
-### Community 25 - "Community 25"
 Cohesion: 0.21
 Nodes (20): Project agent notes, Set the Phase 1 destination and pilot rules, Verify permitted live travel data and cost limits, Establish Taipei New Year countdown evidence and refresh timing, Choose the Phase 1 source stack and evidence policy, Define trustworthy attraction coverage and card ranking, Define the strong cross-day optimization contract, Prototype the owner-led setup and confirmation flow (+12 more)
 
-### Community 26 - "Community 26"
+### Community 25 - "Community 25"
 Cohesion: 0.17
-Nodes (8): BadRequest, PlannerRefusal, SetupDraft, Geocode one owner-entered booked stay and keep it as the routing base., Fetch walking routes between the selected places, sparsely and capped., Record the sourced, timestamped rates costs convert against., An owner-visible refusal with a stable, translatable code., ValueError
+Nodes (8): BadRequest, PlannerRefusal, SetupDraft, Geocode one owner-entered booked stay and keep it as the routing base., Record the sourced, timestamped rates costs convert against., Fetch a session-only photo/rating/review overlay for one visible card., An owner-visible refusal with a stable, translatable code., ValueError
 
-### Community 27 - "Community 27"
-Cohesion: 0.21
-Nodes (7): Request, _address(), _category(), OpenStreetMapProvider, _point_key(), Any, Resolve one owner-entered accommodation name or address.
-
-### Community 28 - "Community 28"
+### Community 26 - "Community 26"
 Cohesion: 0.14
 Nodes (8): Cost rows with their THB value resolved against the rate snapshot., Planned versus actual, read across both ledgers per artifact 023., Traveller ids a split row may name: the owner plus recorded members., Record or correct one bill that was actually paid., Split rows in THB, resolved without the estimate buffer., Remove a row by voiding it, so a total that moved stays explainable., Actual group spend, per-traveller balances, and the star settlement., Mark a balance settled, or drop the marker.          The marker records the bala
 
-### Community 29 - "Community 29"
+### Community 27 - "Community 27"
+Cohesion: 0.21
+Nodes (19): _code(), _design_token(), _labels(), _light_tokens(), plan_workbook_xlsx(), Any, _rate_summary(), Snapshot-in, bytes-out artifact writers for the active plan.  Outer adapters: th (+11 more)
+
+### Community 28 - "Community 28"
 Cohesion: 0.32
 Nodes (17): _condition_holds(), _has_verified_entrance(), _high_heat(), _hotel_id(), main(), _meal_inside_window(), _minutes(), _outcome_holds() (+9 more)
 
+### Community 29 - "Community 29"
+Cohesion: 0.35
+Nodes (15): Application actions coordinating the domain core and SQLite adapter., freeze_snapshot(), FrozenSnapshot, new_candidate_choice(), new_checklist_item(), new_discovery_run(), new_optimization_preview(), new_plan_version() (+7 more)
+
 ### Community 30 - "Community 30"
-Cohesion: 0.17
-Nodes (7): Any, Path, Move an item to verified by recording its official source., Store a planning window the owner says they independently checked., Every list the setup form offers, as stable codes plus picker data.          Bot, Add or edit one board item, generated or owner-authored., _simple_interval()
+Cohesion: 0.13
+Nodes (8): Look up the destination's IANA zone once, from its discovered centre., The centre of the discovered coverage box, or a selected place., Fetch walking routes between the selected places, sparsely and capped., Selected places that carry coordinates, deterministically ordered., This month's paid spend against the cap, with per-operation counts., Judge a prospective paid call. Callers must honour `allowed`., Refuse a call that would cross the cap, then record what it cost., One model call turns free text into a typed operation, then previews it.
 
 ### Community 31 - "Community 31"
 Cohesion: 0.16
@@ -334,79 +341,75 @@ Nodes (17): compilerOptions, allowJs, allowSyntheticDefaultImports, esModuleInte
 
 ### Community 33 - "Community 33"
 Cohesion: 0.14
-Nodes (6): ArtifactTest, export_for(), FallbackAndAnchorTest, words['x'] with no default raises when a caller passes no labels., half_day(), Morning or afternoon, the grouping fallbacks and day summaries hang off.
+Nodes (5): CostPersistenceTest, PlannerActions, Trip, Only the owner may raise the stop threshold., Every list the readiness board offers, as stable codes.          Display text co
 
 ### Community 34 - "Community 34"
+Cohesion: 0.18
+Nodes (7): Any, Path, Move an item to verified by recording its official source., Store a planning window the owner says they independently checked., Every list the setup form offers, as stable codes plus picker data.          Bot, Add or edit one board item, generated or owner-authored., _simple_interval()
+
+### Community 35 - "Community 35"
 Cohesion: 0.21
 Nodes (15): ExportDay, ExportFallback, ExportPlanItem, ExportStop, copy(), codeText(), CoordinateMap(), CoordinatePoint (+7 more)
 
-### Community 35 - "Community 35"
-Cohesion: 0.16
-Nodes (3): FakePlaceProvider, FakeHoursProvider, OpeningRefreshTest
-
 ### Community 36 - "Community 36"
-Cohesion: 0.15
-Nodes (5): CostPersistenceTest, PlannerActions, Trip, Only the owner may raise the stop threshold., Every list the readiness board offers, as stable codes.          Display text co
+Cohesion: 0.17
+Nodes (6): _comfort_thresholds(), CandidateChoice, DiscoveryRun, Return the server-owned stage gates and attention stage for one trip., Unexpired zone evidence, or None. An expired zone is not verified., Unexpired normalized routes; an expired leg is no longer verified.
 
 ### Community 37 - "Community 37"
 Cohesion: 0.28
 Nodes (14): build_report(), check_google_places(), check_google_routes(), check_open_meteo(), check_openrouteservice(), check_overpass(), configured_status(), load_keys() (+6 more)
 
 ### Community 38 - "Community 38"
-Cohesion: 0.30
-Nodes (6): ExportSnapshotTest, plan_payload(), planner_input(), All four reference workbooks put ค่าใช้จ่ายต่อคน beside the total.          `scr, build_export_snapshot(), Return the display-ready snapshot for one active plan version.
+Cohesion: 0.24
+Nodes (5): google_payload(), NormalizationTest, period(), GooglePlacesOpeningHoursProvider, Opening hours for one place, from a licensed live overlay.      Text search carr
 
 ### Community 39 - "Community 39"
 Cohesion: 0.16
 Nodes (7): ChecklistExportTest, checklist_ics(), _ics_fold(), _ics_text(), Escape per RFC 5545; an unescaped comma silently truncates a field., Fold to 75 octets; a long unfolded line makes some importers reject the file., All-day calendar entries for every dated readiness task.      All-day VEVENTs ra
 
-### Community 41 - "Community 41"
-Cohesion: 0.26
-Nodes (5): google_payload(), NormalizationTest, period(), GooglePlacesOpeningHoursProvider, Opening hours for one place, from a licensed live overlay.      Text search carr
-
-### Community 43 - "Community 43"
+### Community 42 - "Community 42"
 Cohesion: 0.15
 Nodes (3): TimeZoneTest, GoogleTimeZoneProvider, The destination's IANA time zone, from coordinates.      A paid, single-value lo
 
-### Community 44 - "Community 44"
-Cohesion: 0.20
-Nodes (9): AccommodationBase, OpeningIntervals, PaidUsageStatus, RouteRecord, TimezoneEvidence, placeNameFrom(), EvidencePage(), OWNER_FIXABLE (+1 more)
+### Community 43 - "Community 43"
+Cohesion: 0.27
+Nodes (5): PlannerHandler, Any, Exception, Path, SimpleHTTPRequestHandler
 
-### Community 46 - "Community 46"
+### Community 45 - "Community 45"
 Cohesion: 0.23
 Nodes (3): model_reply(), A live model returns factor: null for "cut down the walking"., ResponseValidationTest
+
+### Community 46 - "Community 46"
+Cohesion: 0.15
+Nodes (5): LastTripDeletionTest, The new homes for behaviours currently asserted through Streamlit `AppTest`.  Ar, The five AppTest behaviours whose React surfaces land in S4., Replaces `deleting_the_last_trip_returns_to_first_trip_setup`., S4PortedBehaviourTest
 
 ### Community 47 - "Community 47"
 Cohesion: 0.19
 Nodes (3): S3's closing check: nothing the form holds is lost by saving it.          `save_, Replaces `owner_and_two_members_confirm_and_survive_thai_switch`.      The `AppT, SetupConfirmationTest
 
-### Community 49 - "Community 49"
-Cohesion: 0.23
-Nodes (8): _download(), ensure_web_build(), _labels(), main(), PlannerHTTPServer, Path, Thin localhost HTTP transport for :class:`PlannerActions`., ThreadingHTTPServer
+### Community 50 - "Community 50"
+Cohesion: 0.24
+Nodes (5): export_for(), FallbackAndAnchorTest, RankingActionsTest, half_day(), Morning or afternoon, the grouping fallbacks and day summaries hang off.
 
 ### Community 51 - "Community 51"
-Cohesion: 0.35
-Nodes (4): PlannerHandler, Any, Exception, SimpleHTTPRequestHandler
+Cohesion: 0.32
+Nodes (4): ExportSnapshotTest, plan_payload(), planner_input(), All four reference workbooks put ค่าใช้จ่ายต่อคน beside the total.          `scr
 
 ### Community 53 - "Community 53"
-Cohesion: 0.22
-Nodes (5): Look up the destination's IANA zone once, from its discovered centre., This month's paid spend against the cap, with per-operation counts., Judge a prospective paid call. Callers must honour `allowed`., Refuse a call that would cross the cap, then record what it cost., One model call turns free text into a typed operation, then previews it.
+Cohesion: 0.18
+Nodes (9): city_options(), country_label(), country_options(), destination_text(), Curated country and city picker list for the setup form.  This is a convenience, Countries in region order. The dropdown also accepts a typed name., Cities for one country, empty for a country that was typed in., Display name for one country. Falls back to the value itself when typed. (+1 more)
 
 ### Community 54 - "Community 54"
 Cohesion: 0.25
 Nodes (9): _best_nearby_match(), _category_accepts_primary_type(), _distance_metres(), _name_similarity(), Low-volume worldwide place discovery from OpenStreetMap., Provider payload to weekly opening periods, or a refusal., Select one name-, type-, and coordinate-compatible Google result., Normalize Google periods, whose day 0 is Sunday, into plain records. (+1 more)
 
 ### Community 55 - "Community 55"
-Cohesion: 0.22
-Nodes (3): NormalizationTest, OpenRouteServiceProvider, Foot-walking routes from OpenRouteService, normalized for the planner.      A ro
-
-### Community 56 - "Community 56"
-Cohesion: 0.22
-Nodes (4): Actions offered for the active plan. None of them needs a model., Build the one pending preview. The active plan is never touched here., Apply the pending preview as a new immutable version, with history., Deterministic reasons for the active plan. No model involved.
+Cohesion: 0.38
+Nodes (3): dispatch(), The wire shape is implicit, so these tests are what catch a rename., SplitWireShapeTest
 
 ### Community 57 - "Community 57"
-Cohesion: 0.20
-Nodes (9): city_options(), country_label(), country_options(), destination_text(), Curated country and city picker list for the setup form.  This is a convenience, Countries in region order. The dropdown also accepts a typed name., Cities for one country, empty for a country that was typed in., Display name for one country. Falls back to the value itself when typed. (+1 more)
+Cohesion: 0.22
+Nodes (4): Actions offered for the active plan. None of them needs a model., Build the one pending preview. The active plan is never touched here., Apply the pending preview as a new immutable version, with history., Deterministic reasons for the active plan. No model involved.
 
 ### Community 58 - "Community 58"
 Cohesion: 0.39
@@ -417,71 +420,75 @@ Cohesion: 0.31
 Nodes (8): app_workbook(), Element, main(), Which workbooks hold which sheet, and all text per sheet name., Generate one populated workbook and calendar, and return their text.      Driven, One recurring thing a reference sheet carries, and its app counterpart.      `ma, reference_text(), Result
 
 ### Community 61 - "Community 61"
+Cohesion: 0.22
+Nodes (3): ArtifactTest, A formula with no cached value reads blank until the app recalculates., words['x'] with no default raises when a caller passes no labels.
+
+### Community 64 - "Community 64"
 Cohesion: 0.47
 Nodes (8): build_candidate_catalog(), _candidate(), _distance_metres(), _merge(), _name_key(), _occupied_cells(), Any, Provider-neutral candidate identity, conservative dedupe, and coverage reporting
 
-### Community 62 - "Community 62"
+### Community 65 - "Community 65"
 Cohesion: 0.31
 Nodes (8): common_interval(), google_day(), intervals_by_date(), Any, Weekly opening periods to the per-date interval the optimizer can use.  Pure: no, Google Places numbers days from Sunday; Python's isoweekday from Monday., The open windows on each trip date, empty where the place is closed., Reduce a weekly schedule to one interval valid on every trip date.
 
-### Community 63 - "Community 63"
+### Community 66 - "Community 66"
 Cohesion: 0.36
 Nodes (7): by_class(), explained(), load(), main(), Path, Why this difference is licensed, or None if it is drift., (theme, single class) -> the first record that class appeared in.
 
-### Community 65 - "Community 65"
+### Community 70 - "Community 70"
 Cohesion: 0.32
 Nodes (4): Fetch opening hours for the selected places, one paid call each., The interval valid on every trip date, per place, with its reason., date_range(), Small shared helper for application snapshot assembly.
 
-### Community 66 - "Community 66"
+### Community 71 - "Community 71"
 Cohesion: 0.29
 Nodes (7): Category mapping, Cost per person mechanisms, costs.totals() planned_thb and actual_thb, Rate policy, Per-traveller settled marker, Split row cost_id field, Unreconciled difference warning
 
-### Community 69 - "Community 69"
-Cohesion: 0.38
-Nodes (6): display_consequence(), display_title(), _localized(), Localized task wording, or the stored English literal as a fallback.      Templa, Localized consequence; a template may vary it per generated variant., _write_checklist()
+### Community 72 - "Community 72"
+Cohesion: 0.43
+Nodes (5): _download(), ensure_web_build(), _labels(), main(), Thin localhost HTTP transport for :class:`PlannerActions`.
 
-### Community 73 - "Community 73"
+### Community 77 - "Community 77"
+Cohesion: 0.40
+Nodes (5): display_consequence(), display_title(), _localized(), Localized task wording, or the stored English literal as a fallback.      Templa, Localized consequence; a template may vary it per generated variant.
+
+### Community 78 - "Community 78"
 Cohesion: 0.33
 Nodes (3): Verified operational facts that justify a booking or access task., Preview the generated board against what is already saved., Apply the previewed changes. A removal is dismissed, never deleted.
 
-### Community 74 - "Community 74"
+### Community 79 - "Community 79"
 Cohesion: 0.70
 Nodes (4): find_forbidden_keys(), main(), Any, validate()
 
-### Community 76 - "Community 76"
+### Community 80 - "Community 80"
 Cohesion: 0.50
 Nodes (4): Absent List of Elements, Auto-Bill Element Catalogue, Element Inventory Matrix, Planner Stage Demand
 
-### Community 77 - "Community 77"
+### Community 81 - "Community 81"
 Cohesion: 0.67
 Nodes (3): Copy JSON Catalogue, ui/text.py Bilingual Tables, Test Strategy After Streamlit AppTest
 
-### Community 78 - "Community 78"
+### Community 82 - "Community 82"
 Cohesion: 0.67
 Nodes (3): Cost & Split screens — throwaway prototype (WF-031), Itinerary day screen — throwaway prototype v2 (WF-032), Offline asset policy for the webapp
 
-### Community 80 - "Community 80"
+### Community 84 - "Community 84"
 Cohesion: 1.33
 Nodes (3): Copy catalogue notes, Exporter and download contract, Phase 2 slice plan and validation scorecard
 
-### Community 81 - "Community 81"
-Cohesion: 1.00
-Nodes (3): Map 002 Splitter Merge and Webapp, Decide How Ranking Handles Crowded Categories and Landmark Signal, Decide How the Planner Gets Transit Routing
-
 ## Knowledge Gaps
-- **158 isolated node(s):** `tourist-planner`, `name`, `private`, `version`, `type` (+153 more)
+- **164 isolated node(s):** `tourist-planner`, `name`, `private`, `version`, `type` (+159 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **71 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **77 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `PlannerActions` connect `Community 36` to `Community 65`, `Community 2`, `Community 1`, `Community 73`, `Community 41`, `Community 43`, `Community 12`, `Community 15`, `Community 18`, `Community 53`, `Community 55`, `Community 23`, `Community 56`, `Community 26`, `Community 27`, `Community 28`, `Community 30`?**
-  _High betweenness centrality (0.016) - this node is a cross-community bridge._
-- **Why does `SQLiteStore` connect `Community 1` to `Community 2`?**
+- **Why does `PlannerActions` connect `Community 33` to `Community 1`, `Community 34`, `Community 36`, `Community 5`, `Community 70`, `Community 7`, `Community 38`, `Community 42`, `Community 13`, `Community 78`, `Community 14`, `Community 23`, `Community 25`, `Community 26`, `Community 29`, `Community 30`, `Community 57`?**
+  _High betweenness centrality (0.018) - this node is a cross-community bridge._
+- **Why does `SQLiteStore` connect `Community 1` to `Community 29`, `Community 7`?**
   _High betweenness centrality (0.008) - this node is a cross-community bridge._
-- **Why does `PlannerRefusal` connect `Community 26` to `Community 1`, `Community 2`, `Community 41`, `Community 43`, `Community 12`, `Community 18`, `Community 55`, `Community 23`, `Community 27`, `Community 30`?**
-  _High betweenness centrality (0.005) - this node is a cross-community bridge._
+- **Why does `PlannerRefusal` connect `Community 25` to `Community 1`, `Community 34`, `Community 5`, `Community 38`, `Community 7`, `Community 42`, `Community 13`, `Community 14`, `Community 23`, `Community 29`?**
+  _High betweenness centrality (0.007) - this node is a cross-community bridge._
 - **Are the 18 inferred relationships involving `PlannerActions` (e.g. with `CandidateChoice` and `DiscoveryRun`) actually correct?**
   _`PlannerActions` has 18 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 9 inferred relationships involving `SQLiteStore` (e.g. with `CandidateChoice` and `ChecklistItem`) actually correct?**
@@ -489,4 +496,4 @@ _Questions this graph is uniquely positioned to answer:_
 - **Are the 18 inferred relationships involving `PlannerRefusal` (e.g. with `CandidateChoice` and `DiscoveryRun`) actually correct?**
   _`PlannerRefusal` has 18 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `Thin localhost HTTP transport for :class:`PlannerActions`.`, `Convert domain records to their frozen JSON wire shapes.`, `tourist-planner` to the rest of the system?**
-  _334 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _342 weakly-connected nodes found - possible documentation gaps or missing edges._

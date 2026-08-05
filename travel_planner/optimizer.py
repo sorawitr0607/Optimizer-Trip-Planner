@@ -252,7 +252,9 @@ def validate_variant(snapshot: dict[str, Any], variant: dict[str, Any]) -> dict[
         if item["status"] == "fits_with_tradeoff"
         and not item.get("owner_acceptance_required", True)
     }
-    if metrics.get("plain_walking_minutes", 0) > int(
+    if metrics.get(
+        "maximum_plain_walking_minutes_per_day", metrics.get("plain_walking_minutes", 0)
+    ) > int(
         thresholds.get("plain_walking_minutes_per_day", 10**9)
     ) and "PLAIN_WALK_THRESHOLD" not in accepted_reasons:
         errors.append({"code": "UNAPPROVED_PLAIN_WALK_THRESHOLD", "subject_id": None})
@@ -1066,6 +1068,24 @@ def _schedule_metrics(
         for item in travel
         if item.get("experience_evidence")
     )
+    # The comfort budget `plain_walking_minutes_per_day` is a **daily** figure, so
+    # it needs a daily measurement. `plain_walking_minutes` above is the whole-trip
+    # sum, and comparing that against a per-day budget makes an n-day trip n times
+    # too strict. It went unnoticed because 25 of the 27 historic fixtures are
+    # single-day and 2 are two-day, where the two readings very nearly coincide.
+    # Measured on the real 8-day Taipei trip: 147 minutes of plain walking over the
+    # whole trip -- about 18 a day -- failed a 60-a-day budget.
+    worst_plain_walk = max(
+        (
+            sum(
+                item.get("walking_minutes", 0)
+                for item in day["items"]
+                if item["type"] == "travel" and not item.get("experience_evidence")
+            )
+            for day in days
+        ),
+        default=0,
+    )
     warnings = []
     if meals or preparation or logistics:
         warnings.append("OPERATIONAL_DETAILS_REQUIRE_CONFIRMATION")
@@ -1080,6 +1100,7 @@ def _schedule_metrics(
         "travel_minutes": sum(item["duration_minutes"] for item in travel),
         "walking_minutes": sum(item.get("walking_minutes", 0) for item in travel),
         "plain_walking_minutes": plain_walk,
+        "maximum_plain_walking_minutes_per_day": worst_plain_walk,
         "rewarding_walking_minutes": rewarding_walk,
         "cycling_minutes": sum(
             item["duration_minutes"] for item in travel if item.get("mode") == "bike"
@@ -1231,9 +1252,9 @@ def _search_objective(
 def _comfort_violation_count(snapshot: dict[str, Any], metrics: dict[str, Any]) -> int:
     thresholds = _thresholds(snapshot)
     count = 0
-    if metrics["plain_walking_minutes"] > int(
-        thresholds.get("plain_walking_minutes_per_day", 10**9)
-    ):
+    if metrics.get(
+        "maximum_plain_walking_minutes_per_day", metrics["plain_walking_minutes"]
+    ) > int(thresholds.get("plain_walking_minutes_per_day", 10**9)):
         count += 1
     if metrics["maximum_walking_minutes_per_leg"] > int(
         thresholds.get("walking_minutes_per_leg", 10**9)
