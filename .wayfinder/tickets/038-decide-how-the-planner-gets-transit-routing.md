@@ -175,10 +175,38 @@ The code is done and tested; the **data is not sourced**. Checked on 2026-08-05:
   (Changhua, Miaoli, Nantou, Taichung, Yunlin). All 2,146 catalogue objects were
   scanned; the apparent `taipei` matches are `tper`, an Italian operator.
 
-So the remaining step is owner-side: register at TDX, download the Taipei feed, and
-put it at `data/gtfs/transit.zip` or point `TOURIST_GTFS_PATH` at it. Until then
-`refresh_transit_routes` refuses cleanly with "GTFS feed unusable" and changes
-nothing, which is asserted by a test.
+**TDX registration is parked by owner decision, 2026-08-05.** It is not a
+formality: an account needs a **Taiwan mobile phone number**, and without one the
+route is "Manual Verification" — emailing an identity statement and an application
+introduction to `tdx@motc.gov.tw` and waiting for staff to approve it. That is
+disproportionate for one personal trip, so the feed stays unsourced for now and the
+capability stays built and idle.
+
+Until a feed is present `refresh_transit_routes` refuses cleanly with "GTFS feed
+unusable" and changes nothing, which a test asserts. Nothing else in the app
+notices, and the activated plan is unaffected.
+
+### Ways in that avoid TDX, for whoever picks this up
+
+None is built, and none is free of work:
+
+- **Derive a metro graph from OpenStreetMap.** The app already queries Overpass for
+  free, and Taipei's MRT stations and line relations are in OSM. That gives
+  station-to-station topology with **no timetable**, so headway and dwell would have
+  to be nominal constants rather than measured. Weaker than GTFS and honest about
+  it — and it needs no account anywhere.
+- **A third party's redistribution of the feed.** Cheapest if one exists, but it
+  inherits someone else's staleness and licence, and the open catalogue has none
+  today.
+- **Ask a Taiwan-resident contact to register.** Trivial socially, and it puts the
+  feed's licence terms on someone else's account, which is worth a thought before
+  asking.
+
+The engine is also still **only tested against a synthetic feed**. Validating it
+against any real feed — the open catalogue's Taichung one is 14.3 MB — would exercise
+the quirks a hand-built fixture cannot: interleaved trips, byte-order marks,
+`frequencies.txt`-only services. Worth doing before anyone relies on it, and it does
+not need Taipei.
 
 ## Interim position
 
