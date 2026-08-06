@@ -18,6 +18,8 @@ export interface PlaceSummary {
   qid: string;
   text: Partial<Record<Language, string>>;
   image_url: string | null;
+  /** The curated image first, then article photographs. Free, capped at six. */
+  image_urls?: string[];
   licence: string;
   source_urls: Partial<Record<Language, string>>;
 }

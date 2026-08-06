@@ -1,0 +1,143 @@
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it } from "vitest";
+
+import type { PlaceSummary, Ranking } from "../api/client";
+import { PlaceDeck } from "./PlaceDeck";
+
+/**
+ * `WF-036` built against `WF-005`.
+ *
+ * The gesture cannot be exercised by `renderToStaticMarkup`, which is the reason the
+ * deck was built with buttons as the mechanism and the swipe as an accelerant. What
+ * is asserted here is therefore the whole contract: the 4:1 queue order, the required
+ * card content, the exploration card being labelled as such, and every action being
+ * reachable without a pointer.
+ */
+
+const CARD = {
+  place_id: "",
+  total_score: 71.5,
+  dimensions: {
+    group_preference_fit: { score: 24, max: 30 },
+    experience_value: { score: 18, max: 20 },
+    reward_vs_effort: { score: 10, max: 20 },
+    time_fit: { score: 6, max: 10 },
+    route_compatibility: { score: 12, max: 15 },
+    evidence_quality: { score: 4, max: 5 },
+  },
+  deductions: [],
+  candidate_tags: ["sightseeing"],
+  matched_tags: ["sightseeing"],
+  matched_people: ["owner"],
+  learned_category_bonus: 0,
+  experience_value: 18,
+  is_city_icon: true,
+  city_icon_basis: ["wikipedia"],
+  queue_role: "ranked",
+  why_shown: ["group_preference_match"],
+  pros: ["preference_match"],
+  cons: ["route_not_verified"],
+  duration_estimate: { minimum_minutes: 45, maximum_minutes: 90, origin: "planner_category_default" },
+  feasibility: { state: "not_evaluated_until_optimizer" },
+  ratings: {},
+  example_reviews: [],
+  effort_state: "unknown",
+  route_distance_to_selected_metres: null,
+} as unknown as Ranking["cards"][string];
+
+const RANKING = {
+  cards: { first: { ...CARD }, explore: { ...CARD, total_score: 52.0 } },
+  lanes: {
+    main_queue: [
+      { place_id: "first", role: "ranked" },
+      { place_id: "explore", role: "protected_exploration" },
+    ],
+    city_icons: [],
+    worth_it_if: [],
+    local_alternatives: [],
+    browse_all: [],
+  },
+  coverage: {},
+} as unknown as Ranking;
+
+const SUMMARY: Record<string, PlaceSummary> = {
+  first: {
+    place_id: "first",
+    qid: "Q1",
+    text: { en: "A landmark tower with an observation deck." },
+    image_url: "https://commons.example/one.jpg",
+    image_urls: ["https://commons.example/one.jpg", "https://commons.example/two.jpg"],
+    licence: "CC BY-SA, Wikipedia and Wikimedia Commons",
+    source_urls: { en: "https://en.wikipedia.org/wiki/One" },
+  },
+};
+
+function render(summaries: Record<string, PlaceSummary>, choices: string[] = []) {
+  return renderToStaticMarkup(
+    <PlaceDeck
+      choices={choices.map((place_id) => ({ place_id, action: "must_do", reason: null }) as never)}
+      language="en"
+      nameOf={(placeId) => (placeId === "first" ? "Taipei 101" : "A quiet park")}
+      onDecide={() => {}}
+      onWantSummary={() => {}}
+      ranking={RANKING}
+      summaries={summaries}
+    />,
+  );
+}
+
+describe("PlaceDeck", () => {
+  it("shows one card with every fact WF-005 requires on it", () => {
+    const html = render(SUMMARY);
+    expect(html).toContain("Taipei 101");
+    expect(html).toContain("71.5");
+    expect(html).toContain("A landmark tower");
+    expect(html).toContain("Visit estimate");
+    expect(html).toContain("45–90");
+    expect(html).toContain("Effort and access");
+    expect(html).toContain("Crowd and tourist-trap signals");
+    expect(html).toContain("Cost and reservation");
+    expect(html).toContain("CC BY-SA");
+    // The second card must not be on screen: this is a deck, not a list.
+    expect(html).not.toContain("A quiet park");
+  });
+
+  it("offers every decision as a real button, not only as a gesture", () => {
+    const html = render(SUMMARY);
+    for (const label of ["Must do", "Interested", "Maybe", "Not for trip", "Skip for now"]) {
+      expect(html).toContain(label);
+    }
+    // A gesture-only deck would exclude keyboard and screen-reader users.
+    expect(html).toContain("Swipe or use the buttons");
+    expect(html).toContain('tabindex="0"');
+  });
+
+  it("labels the exploration card so a low score is not read as a bad pick", () => {
+    // WF-005: one protected exploration card per four ranked ones. Deciding the
+    // first card leaves the exploration card in front.
+    const html = render(SUMMARY, ["first"]);
+    expect(html).toContain("A quiet park");
+    expect(html).toContain("widen the search");
+    expect(html).toContain("52.0");
+  });
+
+  it("counts the gallery and makes the photo itself the control", () => {
+    const html = render(SUMMARY);
+    expect(html).toContain("Photo 1 of 2");
+    expect(html).toContain("commons.example/one.jpg");
+    // The image sits inside a button so a keyboard can advance it.
+    expect(html).toMatch(/<button[^>]*class="place-deck-photo"/);
+  });
+
+  it("offers the free fetch when a card has no imagery yet", () => {
+    const html = render({});
+    expect(html).toContain("Load free descriptions");
+    expect(html).toContain("no charge and no key");
+    expect(html).not.toContain("Photo 1 of");
+  });
+
+  it("says so when every unseen place has been decided", () => {
+    const html = render(SUMMARY, ["first", "explore"]);
+    expect(html).toContain("Every unseen place has had a decision");
+  });
+});

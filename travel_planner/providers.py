@@ -436,6 +436,14 @@ class WikidataSummaryProvider:
     # planner schedules against, so this can sit for a long time.
     cache_ttl_days = 60
     languages = ("en", "th")
+    # `WF-005` requires "permitted imagery" on every card and the owner asked for a
+    # tappable gallery. `prop=images` on the article gives one free list -- 27 for
+    # Chiang Kai-shek Memorial Hall -- so a gallery costs one extra request and no
+    # money. Capped because a card is not a photo album.
+    gallery_limit = 6
+    # Rasters only. SVG on a Wikipedia article is almost always an icon, a locator
+    # map or a flag, never a photograph of the place.
+    photo_suffixes = (".jpg", ".jpeg", ".png")
 
     def __init__(self) -> None:
         self.wikidata_url = os.environ.get(
@@ -474,6 +482,38 @@ class WikidataSummaryProvider:
                     raise
         raise last if last else ProviderUnavailable("Wikidata unreachable")
 
+    def _gallery(self, sitelinks: dict[str, Any]) -> list[str]:
+        """Photographs from whichever article exists, cheapest language first."""
+
+        for code in self.languages:
+            link = sitelinks.get(f"{code}wiki")
+            if not link:
+                continue
+            try:
+                listing = self._json(
+                    f"https://{code}.wikipedia.org/w/api.php?action=query&format=json"
+                    "&prop=images&imlimit=40&titles="
+                    + quote(str(link["title"]).replace(" ", "_"))
+                )
+            except ProviderUnavailable:
+                continue
+            pages = list(((listing.get("query") or {}).get("pages") or {}).values())
+            names = [
+                str(item.get("title") or "")
+                for page in pages
+                for item in (page.get("images") or [])
+            ]
+            found = [
+                "https://commons.wikimedia.org/wiki/Special:FilePath/"
+                + quote(name.removeprefix("File:").replace(" ", "_"))
+                + "?width=640"
+                for name in names
+                if name.lower().endswith(self.photo_suffixes)
+            ]
+            if found:
+                return found
+        return []
+
     def summary(self, qid: str) -> dict[str, Any]:
         """Titles, extracts and an image for one Wikidata entity.
 
@@ -505,6 +545,10 @@ class WikidataSummaryProvider:
                 )
                 break
 
+        gallery: list[str] = []
+        if image:
+            gallery.append(image)
+
         text: dict[str, str] = {}
         for code in self.languages:
             link = sitelinks.get(f"{code}wiki")
@@ -522,11 +566,17 @@ class WikidataSummaryProvider:
                 text[code] = extract
             if image is None:
                 image = ((page.get("thumbnail") or {}).get("source")) or None
+                if image:
+                    gallery.append(image)
+
+        gallery.extend(self._gallery(sitelinks))
 
         return {
             "qid": str(qid),
             "text": text,
-            "image_url": image,
+            "image_url": image or (gallery[0] if gallery else None),
+            # First is the curated P18 where there is one, then article photographs.
+            "image_urls": gallery[: self.gallery_limit],
             # Wikipedia and Commons are CC BY-SA. Recorded with the value so the
             # screen can attribute it without guessing.
             "licence": "CC BY-SA, Wikipedia and Wikimedia Commons",

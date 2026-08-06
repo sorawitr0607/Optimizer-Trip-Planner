@@ -1,7 +1,7 @@
 ---
 id: WF-036
 title: Prototype the ranked candidate card grid
-status: open
+status: closed
 labels:
   - "wayfinder:prototype"
 parent: WF-MAP-002
@@ -47,3 +47,45 @@ the thing the port **unlocks** rather than ports.
 
 Produce a throwaway prototype with realistic candidate data and link it from this ticket, including the layouts
 rejected and how the grid degrades on a phone.
+
+
+## Built 2026-08-06 as the swipe deck WF-005 specified
+
+The owner asked for it directly, so the deferral ends here. Built against `WF-005`'s
+2026-07-28 decisions rather than designed afresh.
+
+**Most of it already existed.** `WF-005` asked for "four highest-ranked unseen
+candidates followed by one protected exploration candidate", with rated cards keeping
+their decisions and only unseen cards reordering. The core already builds exactly
+that: verified on the real 832-candidate catalogue as ranked ×4 then
+`protected_exploration`, repeating, with all 111 decided places absent. 86 cards carry
+the exploration role. What was missing was only the interface — `/places` rendered a
+selectbox, which is what the Context section above called the problem.
+
+**Swipe is the accelerant, not the mechanism.** Every action is a real button and the
+arrow keys work, because a gesture-only deck excludes keyboard and screen-reader
+users. That also makes the whole contract testable under `renderToStaticMarkup`: the
+queue order, the required card content, the exploration label, the gallery counter and
+the exhausted state are all asserted, which a gesture-only deck could not be. The
+gesture maps right to `interested` and left to `not_for_trip`, matching the button
+order so the direction is learnable from the layout.
+
+**Imagery, which was the blocker, is now free.** `WF-005` requires "permitted imagery"
+on every card, and until the Wikidata provider landed the same day there was none
+without paying Google US$0.007 a photo. `prop=images` on a Wikipedia article gives a
+free list — 27 for Chiang Kai-shek Memorial Hall — so the gallery costs one extra
+request and nothing else. Capped at six, rasters only, curated `P18` first.
+
+**`WF-005`'s minimum card content** is rendered as one labelled row per topic: visit
+estimate, feasibility, effort and access, crowd and tourist-trap signals, cost and
+reservation, plus the score, the name, the free description with CC BY-SA attribution,
+and an explicit note that an exploration card is shown to widen the search rather than
+because it scored highly.
+
+**The page around it changed too.** The deck first landed 620 px down, behind the
+coverage report — which is how this screen came to be called unfriendly. Coverage is
+how you audit a discovery run, not how you choose a place, so it is collapsed behind a
+one-line summary and the whole deck now fits one screen.
+
+Not deferred any longer, and `WF-021`'s "biggest design gap" is closed. Evidence in
+`artifacts/validation/2026-08-06-swipe-deck/`.

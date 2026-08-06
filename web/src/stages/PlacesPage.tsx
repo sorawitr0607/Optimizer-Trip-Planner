@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+
+import { PlaceDeck } from "./PlaceDeck";
 import { useNavigate, useParams } from "react-router";
 
 import {
@@ -64,6 +66,9 @@ export function PlacesPage() {
   // lane led with an RC model airplane runway; all 20 of City Icons' top 20 have one.
   // The queue is still one select away.
   const [lane, setLane] = useState<Lane>("city_icons");
+  // Deck first, because WF-005 designed this stage as a swipe queue and the list is
+  // the fallback for comparing two places side by side. The list is one button away.
+  const [mode, setMode] = useState<"deck" | "list">("deck");
   // Free descriptions and photos: Wikidata plus Wikipedia, no key and no charge.
   // This is what answers "the summary tells me nothing about the place" -- the
   // templated sentence below is built from the same codes for every card.
@@ -148,10 +153,12 @@ export function PlacesPage() {
     },
   });
   const saveChoice = useMutation({
-    mutationFn: ({ action, reason }: { action: string; reason?: string | null }) =>
+    // `placeId` defaults to the list's selection; the deck passes its own, because
+    // the card in the deck is not the card in the select.
+    mutationFn: ({ action, reason, placeId }: { action: string; reason?: string | null; placeId?: string }) =>
       rpc<CandidateChoice>("save_candidate_choice", {
         trip_id: tripId,
-        place_id: selectedId,
+        place_id: placeId ?? selectedId,
         action,
         reason: reason ?? null,
       }),
@@ -223,7 +230,8 @@ export function PlacesPage() {
           {new Set(["unavailable", "error", "stale"]).has(discovery.data.status) ? (
             <p className="money-note money-note-warn"><b aria-hidden="true">⚠</b>{copy("provider_gap", language)}</p>
           ) : null}
-          <h2 className="money-eyebrow">{copy("coverage", language)}</h2>
+          <details className="places-coverage">
+          <summary><h2 className="money-eyebrow">{copy("coverage", language)}</h2></summary>
           <p className="places-status">
             <strong>{copy("provider_status", language)}:</strong>{" "}
             {copy(`provider_${discovery.data.status}`, language)}
@@ -269,6 +277,7 @@ export function PlacesPage() {
             <a href={report.license_url} rel="noreferrer" target="_blank">{report.attribution} · {report.license}</a>
           ) : null}
           <details><summary>{copy("details", language)}</summary><pre className="places-json">{JSON.stringify(report, null, 2)}</pre></details>
+          </details>
         </>
       ) : null}
 
@@ -280,7 +289,32 @@ export function PlacesPage() {
 
       {ranking.data ? (
         <>
-          <div className="places-pickers">
+          <div className="setup-actions">
+            <button onClick={() => setMode(mode === "deck" ? "list" : "deck")} type="button">
+              {copy(mode === "deck" ? "list_mode" : "deck_mode", language)}
+            </button>
+          </div>
+          {mode === "deck" ? (
+            <>
+              <p className="setup-hint">{copy("deck_help", language)}</p>
+              <PlaceDeck
+                choices={choices.data ?? []}
+                language={language}
+                nameOf={(placeId) => {
+                  // `catalog` is already the normalized candidate list on this page.
+                  const found = catalog.find((item) => item.place_id === placeId);
+                  return found ? placeName(found, language, found.name) : placeId;
+                }}
+                onDecide={(placeId, action, reason) =>
+                  saveChoice.mutate({ action, reason, placeId })
+                }
+                onWantSummary={(placeId) => fetchSummary.mutate(placeId)}
+                ranking={ranking.data}
+                summaries={summaries.data ?? {}}
+              />
+            </>
+          ) : null}
+          <div className="places-pickers" hidden={mode === "deck"}>
             <label className="optimize-variant">
               {copy("lane", language)}
               <select value={lane} onChange={(event) => { setLane(event.target.value as Lane); setCardId(""); }}>

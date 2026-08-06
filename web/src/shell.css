@@ -1053,6 +1053,90 @@
   margin: 0 0 8px;
 }
 
+/* The swipe deck: one card, filling the column, so a decision needs no scrolling on
+   a phone. Tall photo because WF-005 asks for imagery to carry the card. */
+/* Provenance, collapsed. The coverage report is how you audit a discovery run, not
+   how you choose a place, and open by default it pushed the deck off the first
+   screen. The summary keeps it one click away. */
+.places-coverage summary h2 {
+  display: inline;
+}
+
+.place-deck {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius-house);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+}
+
+.place-deck-head {
+  align-items: baseline;
+  display: flex;
+  justify-content: space-between;
+}
+
+.place-deck h3 {
+  margin: 0;
+}
+
+/* A button, not a div: the gallery must be reachable by keyboard. Reset the
+   button chrome so it reads as an image, not a control. */
+.place-deck-photo {
+  background: none;
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius-house);
+  cursor: pointer;
+  display: block;
+  overflow: hidden;
+  padding: 0;
+  text-align: left;
+  width: 100%;
+}
+
+.place-deck-photo img {
+  aspect-ratio: 3 / 2;
+  display: block;
+  object-fit: cover;
+  width: 100%;
+}
+
+.place-deck-photo span {
+  display: block;
+  padding: 4px 8px;
+}
+
+.place-deck-photo-empty {
+  align-items: center;
+  cursor: default;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  justify-content: center;
+  min-height: 120px;
+  padding: 12px;
+}
+
+/* One topic per row: label left, value right, so each of WF-005's required facts
+   is readable on its own instead of run into a sentence. */
+.place-deck-topics {
+  display: grid;
+  gap: 2px 12px;
+  grid-template-columns: auto 1fr;
+  margin: 0;
+}
+
+.place-deck-topics dt {
+  font-weight: 600;
+}
+
+.place-deck-topics dd {
+  margin: 0;
+}
+
 .place-about {
   align-items: flex-start;
   border-top: 1px dashed var(--bg-card-border);

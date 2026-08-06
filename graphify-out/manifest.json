@@ -10,9 +10,9 @@
     "semantic_hash": "d33425215a1a5b514fe4f1a0bbaa33d3"
   },
   "i18n/copy.json": {
-    "mtime": 1786001201.940893,
-    "ast_hash": "4bc3a2eb022d859074f68733ff23e072",
-    "semantic_hash": "4bc3a2eb022d859074f68733ff23e072"
+    "mtime": 1786003289.0431929,
+    "ast_hash": "f3817943709d4d10fd5bbe68d5624941",
+    "semantic_hash": "f3817943709d4d10fd5bbe68d5624941"
   },
   "pyproject.toml": {
     "mtime": 1785834132.5329027,
@@ -165,7 +165,7 @@
     "semantic_hash": "ef0aefdeae9a5f201e587415c32b8a5b"
   },
   "travel_planner/actions.py": {
-    "mtime": 1786001641.8960178,
+    "mtime": 1786002791.3731952,
     "ast_hash": "e311ad5d7fe6aeea4b8da510abdb06a5",
     "semantic_hash": "e311ad5d7fe6aeea4b8da510abdb06a5"
   },
@@ -230,9 +230,9 @@
     "semantic_hash": "6a219a473a7ada13eba32333c7482869"
   },
   "travel_planner/providers.py": {
-    "mtime": 1786001001.2778583,
-    "ast_hash": "9d3970a0242363f12a59e43a756db30c",
-    "semantic_hash": "9d3970a0242363f12a59e43a756db30c"
+    "mtime": 1786003242.760253,
+    "ast_hash": "ed1b339b459ea4402c59eb4afb92adc5",
+    "semantic_hash": "ed1b339b459ea4402c59eb4afb92adc5"
   },
   "travel_planner/ranking.py": {
     "mtime": 1785998402.7722473,
@@ -280,9 +280,9 @@
     "semantic_hash": "39c50ba6ae1dcb8562cfff0bc1bc4135"
   },
   "web/src/api/client.ts": {
-    "mtime": 1786001372.4579184,
-    "ast_hash": "4cd07f8f5653810d46cc223afe09bc71",
-    "semantic_hash": "4cd07f8f5653810d46cc223afe09bc71"
+    "mtime": 1786003289.0920022,
+    "ast_hash": "9cd369564c26cd9c73d3d13ba5379325",
+    "semantic_hash": "9cd369564c26cd9c73d3d13ba5379325"
   },
   "web/src/i18n/LanguageProvider.tsx": {
     "mtime": 1785770892.378143,
@@ -340,7 +340,7 @@
     "semantic_hash": "70a43e308029371dbea4d1663cfdd792"
   },
   "web/src/stages/EvidencePage.tsx": {
-    "mtime": 1786001438.216751,
+    "mtime": 1786002791.3742583,
     "ast_hash": "852e1101ba8fc13cd41f3e7cb506209b",
     "semantic_hash": "852e1101ba8fc13cd41f3e7cb506209b"
   },
@@ -354,10 +354,15 @@
     "ast_hash": "25ce794c0ae31c7a9857eb4bae7048b2",
     "semantic_hash": "25ce794c0ae31c7a9857eb4bae7048b2"
   },
+  "web/src/stages/PlaceDeck.tsx": {
+    "mtime": 1786003352.2430317,
+    "ast_hash": "bab2380a56a507abac8484f0acaf4fab",
+    "semantic_hash": "bab2380a56a507abac8484f0acaf4fab"
+  },
   "web/src/stages/PlacesPage.tsx": {
-    "mtime": 1786001698.0447335,
-    "ast_hash": "e9eeb6b3b1e996a62e1ae8e30c8a7c36",
-    "semantic_hash": "e9eeb6b3b1e996a62e1ae8e30c8a7c36"
+    "mtime": 1786003815.2067366,
+    "ast_hash": "f42cb0d067d570f75c45df4180fdfcff",
+    "semantic_hash": "f42cb0d067d570f75c45df4180fdfcff"
   },
   "web/src/stages/ReadinessPage.tsx": {
     "mtime": 1785821548.1072967,
@@ -378,6 +383,11 @@
     "mtime": 1785821548.1097798,
     "ast_hash": "28fc6d7c08f495cdb83c2d1427c8c06f",
     "semantic_hash": "28fc6d7c08f495cdb83c2d1427c8c06f"
+  },
+  "web/src/stages/deck.test.tsx": {
+    "mtime": 1786003636.996169,
+    "ast_hash": "5b783b76dc0e6fabb08594d3d1d2539f",
+    "semantic_hash": "5b783b76dc0e6fabb08594d3d1d2539f"
   },
   "web/src/stages/evidence.test.tsx": {
     "mtime": 1785818226.495623,
@@ -400,7 +410,7 @@
     "semantic_hash": "ea34a1254b2296e11acd2df2ff6e9ba3"
   },
   "web/src/stages/s4.test.tsx": {
-    "mtime": 1786001730.187901,
+    "mtime": 1786002791.3749352,
     "ast_hash": "0b47487da0521da4d145bc97dd083679",
     "semantic_hash": "0b47487da0521da4d145bc97dd083679"
   },
@@ -698,11 +708,6 @@
     "mtime": 1785759761.9246192,
     "ast_hash": "2f75c7e38e1c83c56c90f97f23d08fc8",
     "semantic_hash": "2f75c7e38e1c83c56c90f97f23d08fc8"
-  },
-  ".wayfinder/tickets/036-prototype-the-ranked-candidate-card-grid.md": {
-    "mtime": 1785468188.293299,
-    "ast_hash": "f1b02223bdffe51e72c8ccf3c3dc935d",
-    "semantic_hash": "f1b02223bdffe51e72c8ccf3c3dc935d"
   },
   ".wayfinder/tickets/037-decide-how-ranking-handles-crowded-categories-and-landmark-signal.md": {
     "mtime": 1785998488.2537198,
