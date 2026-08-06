@@ -346,8 +346,25 @@ resolving tickets are throwaway artifacts, not the build.
 - Whether the donut and vertical bar charts have any planner use at all. The element inventory found no
   distribution the planner charts today; the only candidate is the ranking dimension breakdown, which is
   already a table with an explicit per-dimension maximum.
-- Archival mechanics for the `Auto-Bill-Splitter` repository, and how lifted code is attributed once its
-  origin repo is read-only.
+- ~~Archival mechanics for the `Auto-Bill-Splitter` repository~~ — **settled 2026-08-06 by doing it.**
+  Archive means **closed and read-only, never deleted**: an `ARCHIVED.md` recording what was taken and
+  where it went, a commit marking the state, and the working tree `chmod`-ed unwritable with `.git` left
+  alone so the repository still functions. Nothing was moved and nothing was removed, so the mechanic is
+  reversible with one `chmod -R u+w`.
+
+  Safe because both pre-archive obligations were discharged first and **re-verified on the day**: the 41
+  element captures are in `artifacts/parity/2026-08-04-auto-bill-donor/` (431 computed-style records, 98
+  inline sites, 206 rebuild records), and `check_element_parity.py` and `check_design_tokens.py` both pass
+  with the donor directory renamed away. `WF-030`'s backup JSON is discharged as *nothing to archive* — the
+  app was never used with real expenses.
+
+  Two things left deliberately to the owner, because both are outward-facing: **pushing** the archival
+  commit, and using GitHub's own *Archive repository* setting, which is the canonical mechanic for a repo
+  with a remote and makes it read-only for everyone rather than just on this disk.
+
+  How lifted code is attributed remains open, and is now the only part of this item outstanding. Nothing
+  depends on it: `split.py` was rebuilt rather than copied, and the visual lineage is recorded per element
+  by the `derives-from:` declarations that `check_design_tokens.py` validates.
 
 ## Out of scope
 
