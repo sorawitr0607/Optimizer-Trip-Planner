@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm --prefix web install                                             # first web run only
 uv run --locked python -m api                                        # production shell on 127.0.0.1:8765
 uv run --locked python scripts/check.py                              # every free Python + web gate
-uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 339 tests, ~9s
+uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 351 tests, ~9s
 uv run --locked python -m unittest tests.test_optimizer.OptimizerCoreTest.test_safe_route_and_weather_fallback_are_selected  # one test
 python3 scripts/validate_regression_fixtures.py                      # fixture catalog structure
 uv run --locked python scripts/run_optimizer_regressions.py          # 27 historic cases through the real optimizer
@@ -173,6 +173,27 @@ an expired budget legitimately yields 0 visits where greedy's only schedule carr
 because `comfort_violations` outranks `experience_value` in the objective tuple — that ordering is
 `WF-039`'s question.
 
+**The planner recommends where to stay as of 2026-08-06 (`WF-040`).** `travel_planner/areas.py` is a new
+pure module and `actions.recommend_areas` the coordinator; `recommend_areas` is the **64th** allowlisted
+method. **The unit is a transit station, not a hotel and not a district** — that is how the owner
+searches ("it only near ximenting station"), it is the only unit whose travel time the app can measure
+exactly, and district names do not generalise (Taipei's OSM addresses carry `中正區` on 278 of 832
+candidates, so parsing one would be a Chinese-only regex over a third of the data). Five factors:
+travel time 45, metro access 20, food 15, after-dark 10, lodging choice 10. Free — one Overpass request
+for the whole shortlist via `OsmAreaAmenitiesProvider`, `openstreetmap:areas` priced at 0.0.
+Four things are **never** scored and are returned on every result including an empty one: price, room
+type and family capacity, cleanliness, safety. Do not fold any of them into the score — the owner's own
+constraint was a family room that existed only on Airbnb, which no free source can see.
+
+Three traps, all found by measuring rather than reasoning. **Group graph stops by name**: `STOP_TAGS`
+admits platforms so relations resolve, so 437 Taipei stops are 138 stations (six for 板橋) and without
+grouping the shortlist fills with duplicates. **Score travel time as a ratio against the best, not a
+rank across the observed range**: the shortlisted stations all average 20-22 minutes, and rank-scaling
+turned that into a 45-point gap. **Set count ceilings from data and use a log curve**: a linear scale
+saturating at 30 gave every station a flat 15 of 15 when Taipei really returns 150-586. And
+`TransitGraph.journey` returns `None` when nothing needs riding, so travel time takes the **better of
+riding and walking** — otherwise a station across the road from a place scores as unreachable.
+
 **Ranking divides by category breadth as of 2026-08-06 (`WF-037`).** `group_preference_fit` divided the
 owner's matched styles by how many they *named*, which a category with more tags wins for free: `peak`
 carries four tags and `attraction` two, so a nameless hill scored 27 of 30 against Taipei 101's 12.8 and
@@ -259,9 +280,10 @@ must stay directed. Rebuild only through `python3 scripts/build_project_graph.py
 failure), and only when explicitly asked or after a topology-changing milestone. After any graph
 change, `--check` must pass before committing. See `AGENTS.md`.
 
-**Rebuilt for `WF-042`/`WF-043` on 2026-08-06 and `--check` passes**: 1756 nodes, 4305 directed edges,
-148 communities. Cost **US$0.0125** — the semantic cache hit 66 of 69 documents, so only the two new
-tickets and the edited `CLAUDE.md` were extracted; recorded cumulative cost is US$0.315828 over 30 runs.
+**Rebuilt for `WF-040` on 2026-08-06 and `--check` passes**: 1818 nodes, 4492 directed edges, 153
+communities, after `areas.py`, `StayAreas.tsx` and `test_areas.py` joined. Cost **US$0.0121**; recorded
+cumulative cost is US$0.327973 over 31 runs. The `WF-042`/`WF-043` rebuild earlier the same day gave 1756
+nodes, 4305 edges and 148 communities for US$0.0125.
 Adding a ticket file **breaks stage 4 of `check.py` until this is re-run**, because `--check` demands a
 node per ticket; that is the normal reason to pay for a rebuild.
 
@@ -338,10 +360,16 @@ that declaration is what kept the gate working when the POC went.
 
 ## Phase 2 implementation follows the locked slice order
 
-`WF-MAP-002` is **decision-complete as of 2026-08-03**. Across both maps there are 43 tickets, **41
-closed, 2 open**, and both open ones are open *by decision* rather than outstanding:
-`Decide how an owner accepts a comfort tradeoff` (`WF-039`) and `Decide whether the planner recommends
-where to stay` (`WF-040`). `Lock the Phase 2 slice plan and validation scorecard` is the destination artifact — read it
+`WF-MAP-002` is **decision-complete as of 2026-08-03**. Across both maps there are 43 tickets, **42
+closed, 1 open**. The one open ticket is `Decide how an owner accepts a comfort tradeoff` (`WF-039`),
+and it is worth reading before touching comfort thresholds: the acceptance path is **dead code by
+construction** (`_reconciliation` sets `owner_acceptance_required` to exactly the condition
+`validate_variant` requires to be false), so an owner two minutes over a cap can only abandon the plan
+or drop the cap for the whole trip. It has a second consequence found while fixing `WF-043`:
+`comfort_violations` outranks `experience_value` in the objective tuple, so the optimizer prefers
+**scheduling nothing** to scheduling three places with one comfort overage — measured on
+`jp-shibuya-plain-walk-overload`. The pilot currently sits inside both caps (longest leg 22 of 25,
+worst day 39 of 60), so it does not bite today. `Lock the Phase 2 slice plan and validation scorecard` is the destination artifact — read it
 first: `.wayfinder/artifacts/033-phase-2-slice-plan-and-scorecard.md`.
 
 **Three S6 decisions the owner settled on 2026-08-04, so nothing is waiting on them:**

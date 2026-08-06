@@ -190,7 +190,22 @@
       "unknown_split_row": "That split row no longer exists. It may have been voided.",
       "unknown_traveller": "That traveller is not on this trip. Add them in setup first.",
       "unknown_trip": "Trip not found",
-      "variant_not_ready": "Only a validated ready plan can be activated"
+      "variant_not_ready": "Only a validated ready plan can be activated",
+      "no_transit_graph_for_areas": "No metro network is available for this destination, so areas cannot be ranked by travel time",
+      "no_area_reaches_any_place": "No station is within walking reach of any place you chose",
+      "AREA_DOES_NOT_REACH_EVERY_PLACE": "Does not reach every place you chose",
+      "AREA_NO_FOOD_FOUND_NEARBY": "No places to eat are mapped within walking distance",
+      "AREA_NO_LISTED_LODGING_NEARBY": "No accommodation is listed here on OpenStreetMap — try a booking site",
+      "AREA_PRICE_NOT_EVALUATED": "Price is not evaluated",
+      "AREA_ROOM_TYPE_AND_FAMILY_CAPACITY_NOT_EVALUATED": "Room type and whether a family fits are not evaluated",
+      "AREA_CLEANLINESS_NOT_EVALUATED": "Cleanliness is not evaluated",
+      "AREA_SAFETY_NOT_EVALUATED": "Safety is not evaluated — the after-dark count is activity, not a safety rating",
+      "NO_AREA_REACHES_ANY_SELECTED_PLACE": "No candidate area reaches any place you chose",
+      "travel_time": "Travel time to your places",
+      "metro_access": "Metro access",
+      "food_nearby": "Places to eat nearby",
+      "after_dark": "Open after dark",
+      "lodging_choice": "Choice of places to stay"
     },
     "th": {
       "ACCESS_UNVERIFIED": "ยังไม่ยืนยันทางเข้าและกฎการเข้าถึง",
@@ -262,7 +277,22 @@
       "unknown_split_row": "ไม่พบรายการหารนี้แล้ว อาจถูกยกเลิกไปแล้ว",
       "unknown_traveller": "ไม่มีผู้เดินทางคนนี้ในทริปนี้ เพิ่มในการตั้งค่าก่อน",
       "unknown_trip": "ไม่พบทริปนี้",
-      "variant_not_ready": "เปิดใช้ได้เฉพาะแผนที่พร้อมและผ่านการตรวจสอบแล้ว"
+      "variant_not_ready": "เปิดใช้ได้เฉพาะแผนที่พร้อมและผ่านการตรวจสอบแล้ว",
+      "no_transit_graph_for_areas": "ไม่มีข้อมูลเครือข่ายรถไฟฟ้าสำหรับจุดหมายนี้ จึงจัดอันดับย่านตามเวลาเดินทางไม่ได้",
+      "no_area_reaches_any_place": "ไม่มีสถานีใดอยู่ในระยะเดินถึงสถานที่ที่คุณเลือก",
+      "AREA_DOES_NOT_REACH_EVERY_PLACE": "ไปไม่ถึงทุกสถานที่ที่คุณเลือก",
+      "AREA_NO_FOOD_FOUND_NEARBY": "ไม่พบร้านอาหารที่บันทึกไว้ในระยะเดิน",
+      "AREA_NO_LISTED_LODGING_NEARBY": "ไม่มีที่พักบันทึกไว้ที่นี่บน OpenStreetMap ลองดูในเว็บจองที่พัก",
+      "AREA_PRICE_NOT_EVALUATED": "ยังไม่ได้ประเมินราคา",
+      "AREA_ROOM_TYPE_AND_FAMILY_CAPACITY_NOT_EVALUATED": "ยังไม่ได้ประเมินประเภทห้องและความจุสำหรับครอบครัว",
+      "AREA_CLEANLINESS_NOT_EVALUATED": "ยังไม่ได้ประเมินความสะอาด",
+      "AREA_SAFETY_NOT_EVALUATED": "ยังไม่ได้ประเมินความปลอดภัย จำนวนสถานที่เปิดกลางคืนคือความคึกคัก ไม่ใช่คะแนนความปลอดภัย",
+      "NO_AREA_REACHES_ANY_SELECTED_PLACE": "ไม่มีย่านใดที่ไปถึงสถานที่ที่คุณเลือกได้",
+      "travel_time": "เวลาเดินทางไปสถานที่ของคุณ",
+      "metro_access": "การเข้าถึงรถไฟฟ้า",
+      "food_nearby": "ร้านอาหารใกล้เคียง",
+      "after_dark": "เปิดหลังค่ำ",
+      "lodging_choice": "ตัวเลือกที่พัก"
     }
   },
   "REJECTION_TEXT": {
@@ -963,7 +993,14 @@
       "why_transport_setup": "Queues and higher fares on the first day",
       "wikipedia_credit": "Description and photo from Wikipedia · CC BY-SA",
       "will_be_dismissed": "will move to history",
-      "worth_it_if": "Worth It If…"
+      "worth_it_if": "Worth It If…",
+      "stay_areas": "Where to stay",
+      "stay_areas_hint": "Ranked by how well each station neighbourhood fits the places you chose. Free — no booking data.",
+      "rank_areas": "Rank areas to stay",
+      "areas_not_evaluated": "What this does not know",
+      "area_travel_summary": "{minutes} min average to {reachable} of {total} places",
+      "areas_amenities_unavailable": "Nearby counts are unavailable right now, so only travel time and metro access are scored.",
+      "areas_considered": "Ranked {shortlist} of {considered} stations"
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -1594,7 +1631,14 @@
       "why_transport_setup": "ต้องต่อคิวและจ่ายค่าโดยสารแพงขึ้นในวันแรก",
       "wikipedia_credit": "คำบรรยายและภาพจากวิกิพีเดีย · CC BY-SA",
       "will_be_dismissed": "จะย้ายไปประวัติ",
-      "worth_it_if": "คุ้มถ้า…"
+      "worth_it_if": "คุ้มถ้า…",
+      "stay_areas": "ที่พักย่านไหน",
+      "stay_areas_hint": "จัดอันดับตามความเหมาะสมของย่านสถานีกับสถานที่ที่คุณเลือก ฟรี ไม่มีข้อมูลการจอง",
+      "rank_areas": "จัดอันดับย่านที่พัก",
+      "areas_not_evaluated": "สิ่งที่ยังไม่รู้",
+      "area_travel_summary": "เฉลี่ย {minutes} นาที ถึง {reachable} จาก {total} สถานที่",
+      "areas_amenities_unavailable": "ยังดึงจำนวนสถานที่ใกล้เคียงไม่ได้ จึงให้คะแนนเฉพาะเวลาเดินทางและการเข้าถึงรถไฟฟ้า",
+      "areas_considered": "จัดอันดับ {shortlist} จาก {considered} สถานี"
     }
   }
 }

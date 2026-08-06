@@ -78,6 +78,10 @@ ACTIONS = (
     # is what google_places:card_details used to charge US$0.04 for.
     "refresh_place_summaries",
     "list_place_summaries",
+    # WF-040. Ranks station neighbourhoods as places to stay. Free -- one Overpass
+    # request for the whole shortlist -- but it does spend a (zero-priced) provider
+    # call and writes the provider cache, so it is a mutation, not a read.
+    "recommend_areas",
     "list_routes",
     "paid_usage_status",
     "set_paid_cap",

@@ -312,6 +312,120 @@ def _address(tags: dict[str, Any]) -> str | None:
     return address or None
 
 
+class OsmAreaAmenitiesProvider:
+    """How many places to eat, drink late, and stay, within walking reach of a point.
+
+    `WF-040`'s three inferred factors. Free, no key, and **one HTTP request for every
+    point at once** — Overpass accepts many statements per query and prints an `out
+    count` for each, so 8 areas x 3 categories is 24 statements and one round trip
+    returning a few hundred bytes. That matters because the endpoint grants 2 concurrent
+    slots and answers 504 the moment they are spent; a query per area would read as an
+    outage that is really self-inflicted.
+
+    Counting rather than listing is deliberate. The owner asked for "popular by tourist,
+    so can infer that it has many choice", and a count is exactly that inference and no
+    more. It cannot see price, room type or whether a family of three fits, so
+    `areas.py` reports those as gaps instead of scoring them.
+
+    Priced at zero like `openstreetmap:discover`, and priced rather than omitted,
+    because an unpriced operation raises.
+    """
+
+    name = "osm_area_amenities"
+    operation = "openstreetmap:areas"
+    cache_version = "osm-areas-v1"
+    # Shops and restaurants turn over, but not fast enough to re-query inside a week of
+    # planning. Shorter than the metro's 30 days for exactly that reason.
+    cache_ttl_days = 7
+
+    # Walking reach used for every count. 600 m is about 7-8 minutes at the
+    # `transit.WALK_METRES_PER_MINUTE` this app already assumes for a 51-year-old.
+    RADIUS_METRES = 600
+
+    # `nwr` rather than `node`: a restaurant or hotel is as often mapped as a building
+    # way as a point, and counting only nodes under-reports dense blocks worst.
+    CATEGORIES: tuple[tuple[str, str], ...] = (
+        ("food_count", 'nwr["amenity"~"^(restaurant|cafe|fast_food|food_court)$"]'),
+        ("after_dark_count", 'nwr["amenity"~"^(bar|pub|nightclub|cinema)$"]'),
+        ("lodging_count", 'nwr["tourism"~"^(hotel|hostel|guest_house|apartment|motel)$"]'),
+    )
+
+    def __init__(self) -> None:
+        self._osm = OpenStreetMapProvider()
+
+    def cache_descriptor(self, points: list[dict[str, Any]]) -> dict[str, Any]:
+        return {
+            "operation": "area_amenities",
+            "provider": self.name,
+            "version": self.cache_version,
+            "radius": self.RADIUS_METRES,
+            # Not `_point_key`: these are areas, keyed by `area_id`, and rounding the
+            # coordinates the same way is what makes a re-run hit the cache.
+            "points": [
+                {
+                    "area_id": str(point["area_id"]),
+                    "latitude": round(float(point["latitude"]), 5),
+                    "longitude": round(float(point["longitude"]), 5),
+                }
+                for point in points
+            ],
+        }
+
+    def amenities_query(self, points: list[dict[str, Any]]) -> str:
+        lines = [f"[out:json][timeout:90];"]
+        for point in points:
+            for _, selector in self.CATEGORIES:
+                latitude = float(point["latitude"])
+                longitude = float(point["longitude"])
+                lines.append(
+                    f"{selector}(around:{self.RADIUS_METRES},{latitude},{longitude});"
+                )
+                lines.append("out count;")
+        return "\n".join(lines) + "\n"
+
+    def counts(self, points: list[dict[str, Any]]) -> dict[str, dict[str, int]]:
+        """Per-point counts, keyed by the point's `area_id`.
+
+        Overpass returns one `count` element per `out count`, **in statement order**,
+        which is the only thing tying a number back to the point that asked for it. So
+        the length is checked rather than trusted: a short answer means the mapping has
+        silently shifted, and a wrong count per area is worse than no recommendation.
+        """
+
+        if not points:
+            return {}
+        payload = self._osm._request_json(
+            Request(
+                self._osm.overpass_url,
+                data=urlencode({"data": self.amenities_query(points)}).encode("utf-8"),
+                headers={
+                    "Accept": "application/json",
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "User-Agent": self._osm.user_agent,
+                },
+                method="POST",
+            )
+        )
+        elements = [
+            item for item in (payload.get("elements") or []) if item.get("type") == "count"
+        ]
+        expected = len(points) * len(self.CATEGORIES)
+        if len(elements) != expected:
+            raise ProviderUnavailable(
+                f"Overpass returned {len(elements)} counts for {expected} statements"
+            )
+        found: dict[str, dict[str, int]] = {}
+        cursor = 0
+        for point in points:
+            counts: dict[str, int] = {}
+            for key, _ in self.CATEGORIES:
+                tags = elements[cursor].get("tags") or {}
+                counts[key] = int(tags.get("total") or 0)
+                cursor += 1
+            found[str(point["area_id"])] = counts
+        return found
+
+
 class OpenRouteServiceProvider:
     """Foot-walking routes from OpenRouteService, normalized for the planner.
 

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { PlaceDeck } from "./PlaceDeck";
+import { StayAreas } from "./StayAreas";
 import { useNavigate, useParams } from "react-router";
 
 import {
@@ -312,6 +313,10 @@ export function PlacesPage() {
                 ranking={ranking.data}
                 summaries={summaries.data ?? {}}
               />
+              {/* `WF-040`, placed here by the owner: the ranking depends on the places
+                  chosen above, so it belongs under the deck rather than beside the
+                  timetable on `/optimize`. */}
+              <StayAreas language={language} tripId={tripId} />
             </>
           ) : null}
           <div className="places-pickers" hidden={mode === "deck"}>

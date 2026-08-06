@@ -28,7 +28,7 @@ from .core import (
     new_setup_draft,
     new_trip,
 )
-from . import checklist, costs, destinations, exports, interpret, opening, revision, split, usage
+from . import areas, checklist, costs, destinations, exports, interpret, opening, revision, split, usage
 from . import setup as setup_module
 from .discovery import build_candidate_catalog
 from .optimizer import DEPARTURE_LOGISTICS_MINUTES, date_range, optimize_trip
@@ -41,6 +41,7 @@ from .providers import (
     GoogleTimeZoneProvider,
     GtfsTransitProvider,
     OpenRouteServiceProvider,
+    OsmAreaAmenitiesProvider,
     OsmMetroProvider,
     WikidataSummaryProvider,
     OpenStreetMapProvider,
@@ -50,6 +51,7 @@ from .providers import (
 from .ranking import build_ranking, validate_choice, _distance_metres
 from .setup import build_setup_payload
 from .store import SQLiteStore
+from .transit import MAX_ACCESS_METRES, WALK_METRES_PER_MINUTE, metres as transit_metres
 
 
 def _shift_clock(value: str, minutes: int) -> str:
@@ -104,6 +106,7 @@ class PlannerActions:
         place_provider: Any = None,
         route_provider: Any = None,
         transit_provider: Any = None,
+        area_amenities_provider: Any = None,
         summary_provider: Any = None,
         timezone_provider: Any = None,
         hours_provider: Any = None,
@@ -116,6 +119,7 @@ class PlannerActions:
         # Injected the same way every other provider is, so a test can hand over a
         # small feed instead of reaching for a city-sized one.
         self.transit_provider = transit_provider
+        self.area_amenities_provider = area_amenities_provider
         self.summary_provider = summary_provider
         self.timezone_provider = timezone_provider
         self.hours_provider = hours_provider
@@ -1568,6 +1572,171 @@ class PlannerActions:
             return GtfsTransitProvider()
         trip = self.store.get_trip(trip_id)
         return OsmMetroProvider(destination=str(trip.destination) if trip else "")
+
+    # How many areas survive the free travel-time ranking and go on to be counted. The
+    # Overpass query is one request whatever this is, but 8 keeps the answer readable and
+    # the query well inside the endpoint's patience.
+    AREA_SHORTLIST = 8
+
+    def recommend_areas(self, trip_id: str) -> dict[str, Any]:
+        """Rank transit-station neighbourhoods as places to stay. `WF-040`.
+
+        Three stages, cheapest first, because the expensive one should only ever see a
+        shortlist:
+
+        1. Every station in the transit graph is a candidate, and its travel time to
+           every selected place is computed locally from that graph. Free, no request.
+        2. The best `AREA_SHORTLIST` by time per reachable place go forward.
+        3. **One** Overpass request counts food, after-dark venues and listed lodging
+           around those, and `areas.score_areas` combines the five factors.
+
+        Refuses rather than guesses when there is no metro graph for the destination:
+        an area ranking with no travel times is a list of amenity counts pretending to
+        be advice.
+        """
+
+        trip = self.store.get_trip(trip_id)
+        if trip is None:
+            raise PlannerRefusal("unknown_trip", trip_id=trip_id)
+        places = self._selected_places(trip_id)
+        if not places:
+            raise PlannerRefusal("no_places_chosen", purpose="area_recommendation", minimum=1)
+
+        provider = self.transit_provider or self._default_transit_provider(trip_id)
+        build_graph = getattr(provider, "build_graph", None)
+        if build_graph is None:
+            raise PlannerRefusal("no_transit_graph_for_areas")
+        try:
+            graph = build_graph()
+        except ProviderUnavailable as error:
+            raise PlannerRefusal("no_transit_graph_for_areas", detail=str(error)[:160])
+
+        # One area per **named station**, not per graph stop. `transit.STOP_TAGS`
+        # deliberately admits `stop_position` and `platform` so subway relations stay
+        # resolvable, which means Taipei's 437 stops are really 138 stations -- six
+        # platform nodes for 板橋 alone. Without grouping, the shortlist filled with
+        # near-duplicates of two stations and 373 Dijkstras ran instead of 138.
+        #
+        # A stop with no name is skipped rather than merged: an area the app cannot name
+        # is useless as advice, because the owner cannot search a booking site for it.
+        grouped: dict[str, list[Any]] = {}
+        for stop in graph.stops.values():
+            if stop.name == stop.stop_id:
+                continue
+            grouped.setdefault(stop.name, []).append(stop)
+
+        candidates = []
+        for name, stops in grouped.items():
+            latitude = sum(stop.latitude for stop in stops) / len(stops)
+            longitude = sum(stop.longitude for stop in stops) / len(stops)
+            total = 0.0
+            reachable = 0
+            for place in places:
+                # Best of riding and walking. `TransitGraph.journey` answers only once
+                # something has been ridden -- by design, or a walk would arrive wearing
+                # a journey's clothes -- so a station across the road from a place
+                # returns None, and taking that as "unreachable" would score the *best*
+                # possible area worst. Walking is also genuinely quicker for a short hop.
+                options = []
+                journey = graph.journey(
+                    origin=(latitude, longitude),
+                    destination=(place["latitude"], place["longitude"]),
+                )
+                if journey is not None:
+                    options.append(float(journey.total_minutes))
+                gap = transit_metres(
+                    latitude, longitude, place["latitude"], place["longitude"]
+                )
+                if gap <= MAX_ACCESS_METRES:
+                    options.append(max(1.0, gap / WALK_METRES_PER_MINUTE))
+                if not options:
+                    continue
+                total += min(options)
+                reachable += 1
+            if not reachable:
+                continue
+            ids = {stop.stop_id for stop in stops}
+            candidates.append(
+                {
+                    "area_id": min(ids),
+                    "name": name,
+                    "names": {"en": name, "local": name},
+                    "latitude": latitude,
+                    "longitude": longitude,
+                    "total_travel_minutes": round(total),
+                    "reachable_place_count": reachable,
+                    # The area *is* the station, so access is the walk to its own
+                    # entrance. Zero until a finer stop geometry says otherwise.
+                    "access_walk_minutes": 0.0,
+                    "line_count": len(
+                        {
+                            edge.route_id
+                            for (origin, _), edge in graph.edges.items()
+                            if origin in ids
+                        }
+                    ),
+                }
+            )
+        if not candidates:
+            raise PlannerRefusal("no_area_reaches_any_place")
+
+        candidates.sort(
+            key=lambda item: (
+                item["total_travel_minutes"] / item["reachable_place_count"],
+                -item["reachable_place_count"],
+                item["area_id"],
+            )
+        )
+        shortlist = candidates[: self.AREA_SHORTLIST]
+
+        counts, counted = self._area_amenity_counts(trip_id, shortlist)
+        for area in shortlist:
+            area.update(counts.get(area["area_id"], {}))
+        report = areas.score_areas(shortlist, place_count=len(places))
+        report["amenities_counted"] = counted
+        report["considered_area_count"] = len(candidates)
+        return report
+
+    def _area_amenity_counts(
+        self, trip_id: str, shortlist: list[dict[str, Any]]
+    ) -> tuple[dict[str, dict[str, int]], bool]:
+        """Cached Overpass counts, or zeros and `False` when the endpoint will not say.
+
+        Degrading is right here and refusing is not: travel time and metro access are
+        already measured locally, so a ranking without the three inferred factors is
+        weaker but still true. The caller reports `amenities_counted: false` so the
+        screen can say which half it is looking at.
+        """
+
+        provider = self.area_amenities_provider or OsmAreaAmenitiesProvider()
+        request = provider.cache_descriptor(shortlist)
+        fingerprint = freeze_snapshot(request).sha256
+        cache = self.store.get_provider_cache(str(provider.name), fingerprint)
+        now = datetime.now(timezone.utc)
+        if cache and datetime.fromisoformat(cache.expires_at) > now:
+            return dict(cache.snapshot.as_dict().get("counts") or {}), True
+        try:
+            counts = provider.counts(shortlist)
+        except ProviderUnavailable:
+            return {}, False
+        self._spend(
+            operation=str(provider.operation),
+            count=1,
+            trip_id=trip_id,
+            detail={"areas": len(shortlist)},
+        )
+        self.store.put_provider_cache(
+            ProviderCacheEntry(
+                provider=str(provider.name),
+                request_fingerprint=fingerprint,
+                snapshot=freeze_snapshot({"counts": counts}),
+                retrieved_at=now.isoformat(),
+                expires_at=(
+                    now + timedelta(days=int(provider.cache_ttl_days))
+                ).isoformat(),
+            )
+        )
+        return counts, True
 
     def _refresh_routes_with(
         self, provider: Any, trip_id: str, *, force: bool = False

@@ -1,8 +1,8 @@
 {
   "api/__init__.py": {
-    "mtime": 1786001001.2765458,
-    "ast_hash": "f572232062807bc6365e6c0c2e958ee0",
-    "semantic_hash": "f572232062807bc6365e6c0c2e958ee0"
+    "mtime": 1786012577.8402421,
+    "ast_hash": "39fb0eec27cbb48867269fa5fc050010",
+    "semantic_hash": "39fb0eec27cbb48867269fa5fc050010"
   },
   "api/__main__.py": {
     "mtime": 1785767189.3726726,
@@ -10,9 +10,9 @@
     "semantic_hash": "d33425215a1a5b514fe4f1a0bbaa33d3"
   },
   "i18n/copy.json": {
-    "mtime": 1786006325.0986667,
-    "ast_hash": "c96d54e95117ec34c88aab04d74d4c1f",
-    "semantic_hash": "c96d54e95117ec34c88aab04d74d4c1f"
+    "mtime": 1786012561.8915737,
+    "ast_hash": "c0287bd10541ede25c382addb5f5c191",
+    "semantic_hash": "c0287bd10541ede25c382addb5f5c191"
   },
   "pyproject.toml": {
     "mtime": 1785834132.5329027,
@@ -75,9 +75,14 @@
     "semantic_hash": "0f0b97bc1702fe704a6233c14f3c26b1"
   },
   "tests/test_api.py": {
-    "mtime": 1786001001.2768378,
-    "ast_hash": "ab7d11a4b1b0d94b6c8e23d16f57b0c5",
-    "semantic_hash": "ab7d11a4b1b0d94b6c8e23d16f57b0c5"
+    "mtime": 1786013490.8847556,
+    "ast_hash": "5b3b71c87b51902c644bc13818e95742",
+    "semantic_hash": "5b3b71c87b51902c644bc13818e95742"
+  },
+  "tests/test_areas.py": {
+    "mtime": 1786013866.7997983,
+    "ast_hash": "deeb111aba437af1206bd58d622fed39",
+    "semantic_hash": "deeb111aba437af1206bd58d622fed39"
   },
   "tests/test_checklist.py": {
     "mtime": 1785832402.4787455,
@@ -115,7 +120,7 @@
     "semantic_hash": "42162aeee769e14a6a23ae14e5d374f5"
   },
   "tests/test_optimizer.py": {
-    "mtime": 1786010584.6297185,
+    "mtime": 1786011108.0350053,
     "ast_hash": "5972d21c90750695c5d40d7500087463",
     "semantic_hash": "5972d21c90750695c5d40d7500087463"
   },
@@ -165,9 +170,14 @@
     "semantic_hash": "ef0aefdeae9a5f201e587415c32b8a5b"
   },
   "travel_planner/actions.py": {
-    "mtime": 1786010110.086063,
-    "ast_hash": "8e36759c2b282ad550f4dea8b25bc8e0",
-    "semantic_hash": "8e36759c2b282ad550f4dea8b25bc8e0"
+    "mtime": 1786013842.8262064,
+    "ast_hash": "b6ad60b461c450bf27e2bb36b4210fbd",
+    "semantic_hash": "b6ad60b461c450bf27e2bb36b4210fbd"
+  },
+  "travel_planner/areas.py": {
+    "mtime": 1786013932.8746972,
+    "ast_hash": "3bc2c7f5a33223fcbd633ccd49ca4c32",
+    "semantic_hash": "3bc2c7f5a33223fcbd633ccd49ca4c32"
   },
   "travel_planner/checklist.py": {
     "mtime": 1785316030.1684666,
@@ -225,14 +235,14 @@
     "semantic_hash": "8fc8264f745805b7379f4af56db9a0d5"
   },
   "travel_planner/optimizer.py": {
-    "mtime": 1786010605.4455204,
+    "mtime": 1786011108.0353706,
     "ast_hash": "bfc25db4bb9a401410ff9cea490ec025",
     "semantic_hash": "bfc25db4bb9a401410ff9cea490ec025"
   },
   "travel_planner/providers.py": {
-    "mtime": 1786004736.329057,
-    "ast_hash": "ed1b339b459ea4402c59eb4afb92adc5",
-    "semantic_hash": "ed1b339b459ea4402c59eb4afb92adc5"
+    "mtime": 1786012073.3272789,
+    "ast_hash": "8cb35b217c55680ad606e0afa32dfab8",
+    "semantic_hash": "8cb35b217c55680ad606e0afa32dfab8"
   },
   "travel_planner/ranking.py": {
     "mtime": 1785998402.7722473,
@@ -265,9 +275,9 @@
     "semantic_hash": "1ef554d9b380bdedc9c8236ab34ba5a1"
   },
   "travel_planner/usage.py": {
-    "mtime": 1786001001.2781446,
-    "ast_hash": "2bcda33b5a337b0e53028dfed9e16ce0",
-    "semantic_hash": "2bcda33b5a337b0e53028dfed9e16ce0"
+    "mtime": 1786012079.471285,
+    "ast_hash": "e8c6e08336ffb0f63c4600907ab27d16",
+    "semantic_hash": "e8c6e08336ffb0f63c4600907ab27d16"
   },
   "web/eslint.config.js": {
     "mtime": 1785764956.464039,
@@ -280,9 +290,9 @@
     "semantic_hash": "39c50ba6ae1dcb8562cfff0bc1bc4135"
   },
   "web/src/api/client.ts": {
-    "mtime": 1786004736.3294108,
-    "ast_hash": "9cd369564c26cd9c73d3d13ba5379325",
-    "semantic_hash": "9cd369564c26cd9c73d3d13ba5379325"
+    "mtime": 1786013227.2251651,
+    "ast_hash": "a7473d7a9cb67d71bc2a8e4fa36bfb96",
+    "semantic_hash": "a7473d7a9cb67d71bc2a8e4fa36bfb96"
   },
   "web/src/i18n/LanguageProvider.tsx": {
     "mtime": 1785770892.378143,
@@ -360,9 +370,9 @@
     "semantic_hash": "bab2380a56a507abac8484f0acaf4fab"
   },
   "web/src/stages/PlacesPage.tsx": {
-    "mtime": 1786004736.3302352,
-    "ast_hash": "f42cb0d067d570f75c45df4180fdfcff",
-    "semantic_hash": "f42cb0d067d570f75c45df4180fdfcff"
+    "mtime": 1786013282.206058,
+    "ast_hash": "f7ee99934f3a67ef05a7a639f97d313f",
+    "semantic_hash": "f7ee99934f3a67ef05a7a639f97d313f"
   },
   "web/src/stages/ReadinessPage.tsx": {
     "mtime": 1785821548.1072967,
@@ -383,6 +393,11 @@
     "mtime": 1785821548.1097798,
     "ast_hash": "28fc6d7c08f495cdb83c2d1427c8c06f",
     "semantic_hash": "28fc6d7c08f495cdb83c2d1427c8c06f"
+  },
+  "web/src/stages/StayAreas.tsx": {
+    "mtime": 1786013265.258878,
+    "ast_hash": "f256b1a266e7b171dd763b2306ead122",
+    "semantic_hash": "f256b1a266e7b171dd763b2306ead122"
   },
   "web/src/stages/deck.test.tsx": {
     "mtime": 1786004736.3304949,
@@ -729,15 +744,20 @@
     "ast_hash": "78b3ea3119d95e32262fb4a2c99893ad",
     "semantic_hash": "78b3ea3119d95e32262fb4a2c99893ad"
   },
-  ".wayfinder/tickets/040-decide-whether-the-planner-recommends-where-to-stay.md": {
-    "mtime": 1785923416.7348952,
-    "ast_hash": "e46cd0d92f6050699f2d6e9338b72b77",
-    "semantic_hash": "e46cd0d92f6050699f2d6e9338b72b77"
-  },
   ".wayfinder/tickets/041-decide-how-per-day-opening-hours-reach-the-optimizer.md": {
     "mtime": 1785989228.6373284,
     "ast_hash": "8a91dd86f0d6c4f20666f82da66fcc67",
     "semantic_hash": "8a91dd86f0d6c4f20666f82da66fcc67"
+  },
+  ".wayfinder/tickets/042-decide-how-a-flight-day-that-cannot-hold-its-logistics-behaves.md": {
+    "mtime": 1786010110.0837228,
+    "ast_hash": "cbf66dea56223537bc1d26e8dbb6ea38",
+    "semantic_hash": "cbf66dea56223537bc1d26e8dbb6ea38"
+  },
+  ".wayfinder/tickets/043-decide-what-a-variant-returns-when-it-runs-out-of-time.md": {
+    "mtime": 1786011108.027682,
+    "ast_hash": "c5115d12c7730cb5efa13b31fba37e53",
+    "semantic_hash": "c5115d12c7730cb5efa13b31fba37e53"
   },
   "AGENTS.md": {
     "mtime": 1785766520.9028397,

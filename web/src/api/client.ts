@@ -269,6 +269,36 @@ export interface Ranking {
   coverage: Record<string, number>;
 }
 
+/** One candidate place to stay. `WF-040`. The unit is a transit station, because that
+ *  is how accommodation is searched in a metro city and the only unit the app can
+ *  measure travel time for exactly. */
+export interface StayArea {
+  area_id: string;
+  name: string;
+  names: Record<string, string>;
+  latitude: number | null;
+  longitude: number | null;
+  total_score: number;
+  factors: Record<string, { score: number; max: number }>;
+  median_travel_minutes: number;
+  total_travel_minutes: number;
+  reachable_place_count: number;
+  counts: { food_count: number; after_dark_count: number; lodging_count: number };
+  notes: string[];
+}
+
+export interface StayAreaReport {
+  areas: StayArea[];
+  /** Price, room type, cleanliness and safety. Always present, never scored. */
+  not_evaluated: string[];
+  reason: string | null;
+  place_count: number;
+  /** False when Overpass would not answer, so only the two locally-measured factors
+   *  contributed. The screen says which half it is showing. */
+  amenities_counted: boolean;
+  considered_area_count: number;
+}
+
 export interface PaidCallCheck {
   allowed: boolean;
   estimate_usd: number;
