@@ -1,0 +1,56 @@
+{
+  "ticket": "WF-041, intersection option",
+  "date": "2026-08-06",
+  "problem": "a venue closed on one trip day was unschedulable on every day",
+  "mechanism_already_existed": "applies_to_dates was written on the opening_interval fact and consumed by nothing; the per-date windows were in opening_intervals()['by_date'] and never reached the optimizer",
+  "changes": {
+    "opening.common_interval": "overlap across open days instead of refusing; returns open_dates; interval and CLOSED_ON_A_TRIP_DATE reason now coexist",
+    "actions._optimizer_input": "applies_to_dates = the open dates, not every trip date",
+    "optimizer._open_on": "consulted by _earliest_visit_start (returns None for a shut day) and validate_variant (CLOSED_DURING_VISIT)",
+    "no_new_fact_type": true,
+    "fixtures_unaffected": "a fact without applies_to_dates applies everywhere"
+  },
+  "result": {
+    "opening_facts_reaching_optimizer": {
+      "before": 8,
+      "after": 13,
+      "of": 13
+    },
+    "visits": {
+      "before": 8,
+      "after": 13
+    },
+    "landmarks_recovered": [
+      "Red House",
+      "Taipei Fine Arts Museum",
+      "Taipei Confucius Temple",
+      "Beitou Hot Spring Museum",
+      "Botanical Garden herbarium"
+    ],
+    "closed_door_visits": 0,
+    "worst_day_walking_min": 27,
+    "longest_leg_min": 14,
+    "activated": "plan_3638d4445a7c4a7bba9d8b875334247b",
+    "monday_2027_01_04": [
+      "Sun Yat-sen Memorial Hall",
+      "Taipei 101"
+    ]
+  },
+  "tests": {
+    "total": 327,
+    "regressions": "27 of 27 unchanged",
+    "rewritten": [
+      "test_a_place_closed_on_a_trip_date_produces_no_fact — asserted the defect",
+      "test_closed_on_any_trip_date_yields_no_interval"
+    ],
+    "added": [
+      "test_closed_on_every_trip_date_yields_no_interval",
+      "test_a_closed_day_moves_a_visit_rather_than_dropping_it"
+    ],
+    "honesty": "the end-to-end walk does not discriminate — the fixture's only open day is the one the optimizer picks anyway, so _earliest_visit_start is asserted directly and that assertion does fail when the guard is removed"
+  },
+  "cost": {
+    "usd": 0.0,
+    "note": "no provider call; the data was already bought on 2026-08-06 for US$0.225"
+  }
+}

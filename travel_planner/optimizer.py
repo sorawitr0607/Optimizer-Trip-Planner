@@ -215,7 +215,10 @@ def validate_variant(snapshot: dict[str, Any], variant: dict[str, Any]) -> dict[
                     errors.append({"code": "DUPLICATE_VISIT", "subject_id": subject})
                 visits[subject] = item
                 opening = _planning_fact(snapshot, subject, "opening_interval")
-                if opening and not _inside(item, opening["value"]):
+                if opening and (
+                    not _inside(item, opening["value"])
+                    or not _open_on(opening, day["date"])
+                ):
                     errors.append({"code": "CLOSED_DURING_VISIT", "subject_id": subject})
                 show = _verified_fact(snapshot, subject, "show_intervals")
                 if show and not any(_inside(item, interval) for interval in show["value"]):
@@ -1460,6 +1463,8 @@ def _earliest_visit_start(
     latest = _minutes(window["end"])
     start = current
     opening = _planning_fact(snapshot, place_id, "opening_interval")
+    if not _open_on(opening, day):
+        return None
     if opening:
         start = max(start, _minutes(opening["value"]["start"]))
         latest = min(latest, _minutes(opening["value"]["end"]))
@@ -1510,6 +1515,24 @@ def _verified_fact(
         ),
         None,
     )
+
+
+def _open_on(fact: dict[str, Any] | None, day: str) -> bool:
+    """Whether an opening fact applies on this date. `WF-041`.
+
+    `applies_to_dates` lists the dates the window is good for, which excludes any the
+    place is shut. A fact without the field applies everywhere, which keeps every
+    frozen fixture valid -- they predate it.
+
+    Before this the field was written and read by nothing, and a place shut on one
+    trip day got no fact at all and so could not be scheduled on any day. Red House
+    is open six of the pilot trip's seven days and was scheduled on none.
+    """
+
+    if not fact:
+        return True
+    dates = fact.get("applies_to_dates")
+    return day in dates if dates else True
 
 
 def _planning_fact(

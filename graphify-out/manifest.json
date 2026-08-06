@@ -110,9 +110,9 @@
     "semantic_hash": "286bdf6707e108984145a34b014672f0"
   },
   "tests/test_opening.py": {
-    "mtime": 1785832402.4801683,
-    "ast_hash": "a7f46e76083a3393931040c722ce3866",
-    "semantic_hash": "a7f46e76083a3393931040c722ce3866"
+    "mtime": 1785989087.4639978,
+    "ast_hash": "42162aeee769e14a6a23ae14e5d374f5",
+    "semantic_hash": "42162aeee769e14a6a23ae14e5d374f5"
   },
   "tests/test_optimizer.py": {
     "mtime": 1785917078.7690575,
@@ -165,9 +165,9 @@
     "semantic_hash": "ef0aefdeae9a5f201e587415c32b8a5b"
   },
   "travel_planner/actions.py": {
-    "mtime": 1785925806.2592049,
-    "ast_hash": "54c440022aebaacf6e893c0055440e5f",
-    "semantic_hash": "54c440022aebaacf6e893c0055440e5f"
+    "mtime": 1785988764.2889643,
+    "ast_hash": "c4a0881adbabf20f5ba2ab07644aa58a",
+    "semantic_hash": "c4a0881adbabf20f5ba2ab07644aa58a"
   },
   "travel_planner/checklist.py": {
     "mtime": 1785316030.1684666,
@@ -220,14 +220,14 @@
     "semantic_hash": "4a3506e0951d0398c7a56287366e1eed"
   },
   "travel_planner/opening.py": {
-    "mtime": 1785319068.221441,
-    "ast_hash": "9ee894f176866da44ca41771e596053b",
-    "semantic_hash": "9ee894f176866da44ca41771e596053b"
+    "mtime": 1785988752.9795039,
+    "ast_hash": "8fc8264f745805b7379f4af56db9a0d5",
+    "semantic_hash": "8fc8264f745805b7379f4af56db9a0d5"
   },
   "travel_planner/optimizer.py": {
-    "mtime": 1785925806.2598789,
-    "ast_hash": "8889e5ff17f32866985d481df19c00e9",
-    "semantic_hash": "8889e5ff17f32866985d481df19c00e9"
+    "mtime": 1785989087.9481645,
+    "ast_hash": "6a219a473a7ada13eba32333c7482869",
+    "semantic_hash": "6a219a473a7ada13eba32333c7482869"
   },
   "travel_planner/providers.py": {
     "mtime": 1785925806.2602105,

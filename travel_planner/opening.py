@@ -55,32 +55,46 @@ def common_interval(
             "reason": "NO_TRIP_DATES",
             "by_date": {},
             "closed_dates": [],
+            "open_dates": [],
         }
     by_date = intervals_by_date(weekly_periods, local_dates)
     closed = sorted(local_date for local_date, windows in by_date.items() if not windows)
-    if closed:
+    open_dates = sorted(local_date for local_date, windows in by_date.items() if windows)
+    if not open_dates:
         return {
             "interval": None,
-            "reason": "CLOSED_ON_A_TRIP_DATE",
+            "reason": "CLOSED_ON_EVERY_TRIP_DATE",
             "by_date": by_date,
             "closed_dates": closed,
+            "open_dates": [],
         }
-    # Widest window per date, then the overlap across dates.
+    # `WF-041`. The overlap is taken across the days the place is **open**, and the
+    # closed days are reported for the caller to exclude. It used to refuse outright
+    # the moment one trip date was shut, which made a place unschedulable on every
+    # day: Red House is open six of the pilot trip's seven days and was scheduled on
+    # none of them, and five of thirteen landmarks were lost the same way. A
+    # seven-day trip in a city where museums close on Mondays contains one by
+    # construction.
     starts, ends = [], []
-    for windows in by_date.values():
+    for local_date in open_dates:
+        windows = by_date[local_date]
         starts.append(min(window["start"] for window in windows))
         ends.append(max(window["end"] for window in windows))
     start, end = max(starts), min(ends)
     if start >= end:
         return {
             "interval": None,
-            "reason": "NO_WINDOW_COMMON_TO_EVERY_DATE",
+            "reason": "NO_WINDOW_COMMON_TO_EVERY_OPEN_DATE",
             "by_date": by_date,
-            "closed_dates": [],
+            "closed_dates": closed,
+            "open_dates": open_dates,
         }
     return {
         "interval": {"start": start, "end": end},
-        "reason": None,
+        # A usable interval and a reason now coexist: the hours are known and the
+        # place still shuts on a named day. Callers key off `interval`, not `reason`.
+        "reason": "CLOSED_ON_A_TRIP_DATE" if closed else None,
         "by_date": by_date,
-        "closed_dates": [],
+        "closed_dates": closed,
+        "open_dates": open_dates,
     }

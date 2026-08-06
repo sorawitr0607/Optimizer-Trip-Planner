@@ -1,7 +1,7 @@
 ---
 id: WF-041
 title: Decide how per-day opening hours reach the optimizer
-status: open
+status: closed
 labels:
   - "wayfinder:decision"
 parent: WF-MAP-002
@@ -76,6 +76,58 @@ of day trips.
 Whichever is chosen, `OPENING_UNVERIFIED` is the wrong code for this and should not
 survive the fix. The hours are verified; the place is closed. Those are different
 facts and an owner reading the first would go looking for evidence they already have.
+
+## Decided and built 2026-08-06: the intersection option
+
+The owner chose the third option — schedule against the overlap of the open days'
+windows and skip the closed dates. **No new fact type, and the mechanism it needed
+already existed and was dead.**
+
+- `opening.common_interval` now takes the overlap across the days a place is **open**
+  instead of refusing outright, and returns `open_dates` beside the existing
+  `closed_dates`. A usable `interval` and a `CLOSED_ON_A_TRIP_DATE` reason now
+  coexist: the hours are known *and* the place shuts on a named day. Callers key off
+  `interval`.
+- `actions._optimizer_input` sets `applies_to_dates` to the open dates rather than
+  every trip date. **That field was already being written and read by nothing** —
+  which is why the information was present the whole time and still lost.
+- `optimizer._open_on()` is consulted in two places: `_earliest_visit_start` returns
+  `None` for a day the place is shut, and `validate_variant` raises
+  `CLOSED_DURING_VISIT` if one is scheduled anyway. A fact without
+  `applies_to_dates` applies everywhere, so every frozen fixture stays valid.
+
+**Result on the pilot trip: 8 visits became 13, all thirteen chosen landmarks, with
+no closed-door visits.** Opening facts reaching the optimizer went from 8 of 13 to
+13 of 13. Worst day 27 minutes of walking, longest leg 14 minutes, well inside the
+owner's 25/60 cap. 2027-01-04, the Monday, now carries only Sun Yat-sen Memorial Hall
+and Taipei 101 — both open Mondays — and the five Monday-closed venues moved to other
+days.
+
+27 of 27 historic regressions pass unchanged, 327 tests green.
+
+### Three tests asserted the defect and were rewritten
+
+`test_a_place_closed_on_a_trip_date_produces_no_fact` required *no fact* — the bug,
+written down as a requirement. It is now
+`test_a_place_closed_on_one_trip_date_is_still_usable_on_the_others`. Likewise
+`test_closed_on_any_trip_date_yields_no_interval` became
+`test_a_closed_date_narrows_the_window_rather_than_removing_it`, and a new
+`test_closed_on_every_trip_date_yields_no_interval` covers the case that genuinely has
+nothing to offer.
+
+`report["unusable"]` no longer lists these places, because they are no longer
+unusable — the closure is reported on the evidence rather than as a rejection.
+
+### A note on the behavioural test
+
+The end-to-end walk over the proposal is weaker than it looks and says so in the
+test: the fixture's single open day is the one the optimizer would choose anyway, so
+deleting the guard still produced a clean plan. `_earliest_visit_start` is asserted
+directly for that reason, and *that* assertion does fail when the guard is removed.
+
+`OPENING_UNVERIFIED` no longer appears for these places, which was the other half of
+the complaint above — the hours were verified and paid for, and the code sent an owner
+hunting for evidence they already had.
 
 ## Related
 

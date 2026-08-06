@@ -198,12 +198,27 @@ class ReductionTest(unittest.TestCase):
         self.assertEqual({"start": "10:00", "end": "17:00"}, reduced["interval"])
         self.assertIsNone(reduced["reason"])
 
-    def test_closed_on_any_trip_date_yields_no_interval(self) -> None:
+    def test_a_closed_date_narrows_the_window_rather_than_removing_it(self) -> None:
+        """`WF-041`. The overlap is taken across the days the place is open."""
+
         weekly = [{"day": 2, "start": "09:00", "end": "18:00"}]
         reduced = opening.common_interval(weekly, TRIP_DATES)
-        self.assertIsNone(reduced["interval"])
+        self.assertEqual({"start": "09:00", "end": "18:00"}, reduced["interval"])
+        # A usable interval and a reason now coexist: the hours are known, and the
+        # place is still shut on named days. Callers key off `interval`.
         self.assertEqual("CLOSED_ON_A_TRIP_DATE", reduced["reason"])
         self.assertEqual(["2030-01-02", "2030-01-03"], reduced["closed_dates"])
+        self.assertEqual(["2030-01-01"], reduced["open_dates"])
+
+    def test_closed_on_every_trip_date_yields_no_interval(self) -> None:
+        """Nothing to intersect, so nothing to offer."""
+
+        reduced = opening.common_interval(
+            [{"day": 0, "start": "09:00", "end": "18:00"}], ["2030-01-01", "2030-01-02"]
+        )
+        self.assertIsNone(reduced["interval"])
+        self.assertEqual("CLOSED_ON_EVERY_TRIP_DATE", reduced["reason"])
+        self.assertEqual([], reduced["open_dates"])
 
     def test_non_overlapping_windows_yield_no_interval(self) -> None:
         weekly = [
@@ -213,7 +228,7 @@ class ReductionTest(unittest.TestCase):
         ]
         reduced = opening.common_interval(weekly, TRIP_DATES)
         self.assertIsNone(reduced["interval"])
-        self.assertEqual("NO_WINDOW_COMMON_TO_EVERY_DATE", reduced["reason"])
+        self.assertEqual("NO_WINDOW_COMMON_TO_EVERY_OPEN_DATE", reduced["reason"])
 
     def test_no_trip_dates_yields_no_interval(self) -> None:
         reduced = opening.common_interval([{"day": 2, "start": "09:00", "end": "18:00"}], [])
@@ -277,21 +292,101 @@ class OpeningRefreshTest(unittest.TestCase):
         self.assertEqual({"start": "09:00", "end": "18:00"}, facts[0]["value"])
         self.assertEqual(TRIP_DATES, facts[0]["applies_to_dates"])
 
-    def test_a_place_closed_on_a_trip_date_produces_no_fact(self) -> None:
+    def test_a_place_closed_on_one_trip_date_is_still_usable_on_the_others(self) -> None:
+        """`WF-041`. This test asserted the defect: it required *no* fact.
+
+        A place shut on one trip day was unschedulable on every day, because
+        `_optimizer_input` emitted one trip-wide window or nothing. Measured on the
+        pilot trip, Red House is open six of seven days and was scheduled on none,
+        and five of thirteen landmarks were lost the same way. Now the window is the
+        overlap across the **open** days and `applies_to_dates` names them.
+        """
+
         actions = PlannerActions(
             self.path,
             hours_provider=FakeHoursProvider(periods=[period(2, (9, 0), (18, 0))]),
         )
         report = actions.refresh_opening_hours(self.trip.trip_id, force=True)
 
-        self.assertEqual(0, report["usable_intervals"])
-        self.assertEqual(
-            {"CLOSED_ON_A_TRIP_DATE"}, set(report["unusable"].values())
-        )
+        # No longer "unusable": the place is schedulable, just not every day. The
+        # closure is still reported, on the evidence rather than as a rejection.
+        self.assertEqual({}, report["unusable"])
+        self.assertGreater(report["usable_intervals"], 0)
+        evidence = actions.opening_intervals(self.trip.trip_id)
+        reasons = {rec.get("reason") for rec in evidence.values() if rec.get("interval")}
+        self.assertEqual({"CLOSED_ON_A_TRIP_DATE"}, reasons)
         snapshot = actions._optimizer_input(self.trip.trip_id)
-        self.assertEqual(
-            [], [f for f in snapshot["facts"] if f["fact_type"] == "opening_interval"]
+        facts = [f for f in snapshot["facts"] if f["fact_type"] == "opening_interval"]
+        self.assertTrue(facts, "a closed day must not erase the whole window")
+        for fact in facts:
+            self.assertEqual({"start": "09:00", "end": "18:00"}, fact["value"])
+            # Tuesday only: the other two trip dates are shut and must be excluded.
+            self.assertEqual(["2030-01-01"], fact["applies_to_dates"])
+
+    def test_a_closed_day_moves_a_visit_rather_than_dropping_it(self) -> None:
+        """`WF-041` end to end: schedule on the open days, never on the shut one.
+
+        The unit test above proves the window survives a closed date. This proves the
+        optimizer acts on it — the point being that a place open six of seven days
+        should appear on one of the six, not vanish.
+        """
+
+        from travel_planner.optimizer import optimize_trip
+
+        actions = PlannerActions(
+            self.path,
+            hours_provider=FakeHoursProvider(periods=[period(2, (9, 0), (18, 0))]),
         )
+        actions.refresh_opening_hours(self.trip.trip_id, force=True)
+        snapshot = actions._optimizer_input(self.trip.trip_id)
+        facts = {
+            fact["subject_id"]: fact
+            for fact in snapshot["facts"]
+            if fact["fact_type"] == "opening_interval"
+        }
+        self.assertTrue(facts)
+        open_dates = set(next(iter(facts.values()))["applies_to_dates"])
+        shut = set(snapshot["trip"]["local_dates"]) - open_dates
+        self.assertTrue(shut, "the fixture must have a closed trip date to be a test")
+
+        # The guard itself, asserted directly. The walk over the proposal below is a
+        # weaker check than it looks: this fixture's single open day is the one the
+        # optimizer would pick regardless, so removing the guard still produced a
+        # clean plan. `_earliest_visit_start` is where the decision actually lives.
+        from travel_planner.optimizer import _earliest_visit_start
+
+        subject = next(iter(facts))
+        candidate = next(
+            item for item in snapshot["candidates"] if item["id"] == subject
+        )
+        for day in sorted(open_dates):
+            self.assertIsNotNone(
+                _earliest_visit_start(snapshot, candidate, day, 9 * 60, 30),
+                f"{subject} must be schedulable on {day}",
+            )
+        for day in sorted(shut):
+            self.assertIsNone(
+                _earliest_visit_start(snapshot, candidate, day, 9 * 60, 30),
+                f"{subject} must not be schedulable on {day}",
+            )
+
+        proposal = optimize_trip(snapshot)
+        for variant in proposal["variants"]:
+            for day in variant.get("days") or []:
+                for item in day.get("items", []):
+                    if item.get("type") != "visit":
+                        continue
+                    fact = facts.get(item.get("subject_id"))
+                    if fact:
+                        self.assertIn(
+                            day["date"],
+                            fact["applies_to_dates"],
+                            f"{item.get('subject_id')} scheduled on a day it is shut",
+                        )
+            self.assertNotIn(
+                "CLOSED_DURING_VISIT",
+                {error["code"] for error in variant["validation"]["hard_violations"]},
+            )
 
     def test_the_paid_calls_are_priced_and_capped(self) -> None:
         self.actions.refresh_opening_hours(self.trip.trip_id)

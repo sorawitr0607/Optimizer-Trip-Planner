@@ -641,8 +641,12 @@ class PlannerActions:
                         "status": "verified",
                         "source": provider_hours.get("provider") or "provider_hours",
                         "retrieved_at": provider_hours.get("retrieved_at"),
-                        # The reduction across trip dates, recorded for audit.
-                        "applies_to_dates": local_dates,
+                        # `WF-041`. The dates this window is actually good for, which
+                        # excludes any the place is shut. It was every trip date, and
+                        # the optimizer read it as nothing at all -- the field existed
+                        # and no code consumed it, so a place closed on one day was
+                        # unschedulable on all of them.
+                        "applies_to_dates": provider_hours.get("open_dates") or local_dates,
                     }
                 )
                 continue
