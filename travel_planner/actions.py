@@ -42,6 +42,7 @@ from .providers import (
     GtfsTransitProvider,
     OpenRouteServiceProvider,
     OsmMetroProvider,
+    WikidataSummaryProvider,
     OpenStreetMapProvider,
     ProviderBudgetExceeded,
     ProviderUnavailable,
@@ -95,6 +96,7 @@ class PlannerActions:
         place_provider: Any = None,
         route_provider: Any = None,
         transit_provider: Any = None,
+        summary_provider: Any = None,
         timezone_provider: Any = None,
         hours_provider: Any = None,
         card_provider: Any = None,
@@ -106,6 +108,7 @@ class PlannerActions:
         # Injected the same way every other provider is, so a test can hand over a
         # small feed instead of reaching for a city-sized one.
         self.transit_provider = transit_provider
+        self.summary_provider = summary_provider
         self.timezone_provider = timezone_provider
         self.hours_provider = hours_provider
         self.card_provider = card_provider
@@ -1149,7 +1152,10 @@ class PlannerActions:
                 trip_id=trip_id,
                 place_id=place["place_id"],
                 kind=provider.kind,
-                value=value,
+                # `list_place_evidence` returns the stored value and does not add the
+                # id back, so it has to live inside -- the same convention the opening
+                # hours evidence follows.
+                value={**value, "place_id": place["place_id"]},
                 provider=str(provider.name),
                 retrieved_at=now.isoformat(),
                 expires_at=(
@@ -1320,6 +1326,9 @@ class PlannerActions:
                     "name": candidate.get("name") or choice.place_id,
                     "names": candidate.get("names") or {},
                     "category": candidate.get("category") or "attraction",
+                    # Carried so `refresh_place_summaries` can find the Wikidata id.
+                    # Without it that method skipped every place and reported success.
+                    "signals": candidate.get("signals") or {},
                     "destination": trip.destination if trip else "",
                     "latitude": float(candidate["latitude"]),
                     "longitude": float(candidate["longitude"]),
@@ -1397,6 +1406,92 @@ class PlannerActions:
                 "longitude": points[0]["longitude"],
             }
         raise PlannerRefusal("discovery_missing")
+
+    def refresh_place_summaries(
+        self, trip_id: str, *, force: bool = False
+    ) -> dict[str, Any]:
+        """Fetch a description and photo per selected place, in both languages.
+
+        Free: Wikidata and Wikipedia, no key, priced at zero and recorded anyway so
+        call counts stay reconcilable. Replaces what `google_places:card_details`
+        charged US$0.04 a place for, with human-written prose in `en` and `th`.
+
+        A place with no Wikidata id, or none with an article in either language, is
+        left without a summary rather than given an invented one -- the screen shows
+        the gap.
+        """
+
+        if self.store.get_trip(trip_id) is None:
+            raise PlannerRefusal("unknown_trip", trip_id=trip_id)
+        provider = self.summary_provider or WikidataSummaryProvider()
+        now = datetime.now(timezone.utc)
+        # Tolerant of a row written before the id was stored inside the value: a
+        # legacy row simply refetches rather than raising.
+        existing = {
+            row["place_id"]: row
+            for row in self.store.list_place_evidence(trip_id, provider.kind)
+            if row.get("place_id")
+        }
+        fetched = cached = skipped = failed = 0
+        errors: list[str] = []
+        for place in self._selected_places(trip_id):
+            qid = (place.get("signals") or {}).get("wikidata")
+            if not qid:
+                skipped += 1
+                continue
+            held = existing.get(place["place_id"])
+            if not force and held and held["expires_at"] > now.isoformat():
+                cached += 1
+                continue
+            try:
+                self._spend(
+                    operation=provider.operation,
+                    count=1,
+                    trip_id=trip_id,
+                    detail={"place_id": place["place_id"], "qid": str(qid)},
+                )
+                value = provider.summary(str(qid))
+            except ProviderBudgetExceeded:
+                raise
+            except ProviderUnavailable as error:
+                failed += 1
+                message = str(error)[:160]
+                if message not in errors:
+                    errors.append(message)
+                continue
+            self.store.upsert_place_evidence(
+                trip_id=trip_id,
+                place_id=place["place_id"],
+                kind=provider.kind,
+                # `list_place_evidence` returns the stored value and does not add the
+                # id back, so it has to live inside -- the same convention the opening
+                # hours evidence follows.
+                value={**value, "place_id": place["place_id"]},
+                provider=str(provider.name),
+                retrieved_at=now.isoformat(),
+                expires_at=(
+                    now + timedelta(days=int(provider.cache_ttl_days))
+                ).isoformat(),
+            )
+            fetched += 1
+        return {
+            "places": len(self._selected_places(trip_id)),
+            "fetched": fetched,
+            "from_cache": cached,
+            "without_wikidata_id": skipped,
+            "failed": failed,
+            "provider_errors": errors,
+        }
+
+    def list_place_summaries(self, trip_id: str) -> dict[str, Any]:
+        """Stored descriptions and photos, keyed by place id. A read, so free."""
+
+        provider = self.summary_provider or WikidataSummaryProvider()
+        return {
+            row["place_id"]: row
+            for row in self.store.list_place_evidence(trip_id, provider.kind)
+            if row.get("place_id")
+        }
 
     def refresh_routes(self, trip_id: str, *, force: bool = False) -> dict[str, Any]:
         """Fetch walking routes between the selected places, sparsely and capped."""

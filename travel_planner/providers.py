@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from difflib import SequenceMatcher
+from time import sleep
 import json
 from math import asin, ceil, cos, radians, sin, sqrt
 import os
@@ -405,6 +406,139 @@ class OpenRouteServiceProvider:
         }
 
 
+class WikidataSummaryProvider:
+    """A description and a photo per place, in both languages, for nothing.
+
+    The owner's complaint was that `/places` told them nothing about a place: the
+    `why_shown` codes explain the *mechanism* -- you matched a preference -- and its
+    top two appear on 793 of 832 cards. What was missing is what the place **is**.
+
+    Discovery already stores a `wikidata` QID for 373 of 832 Taipei candidates, and
+    Wikidata answers with sitelinks for every language plus a `P18` image claim. So
+    one call there and one Wikipedia summary call per language gives human-written
+    prose in `en` and `th` and a photograph, at **US$0.00 and with no API key**.
+
+    Why not an LLM, which the owner also asked about: it would cost money
+    (`openai:interpret_revision` is US$0.002 a call) to generate something unsourced
+    and worse than an encyclopedia article that already exists in both languages. An
+    LLM earns its place only for gap-filling -- condensing, or translating where
+    `thwiki` is absent -- which is generation from a cited source rather than recall.
+
+    Going straight to Wikipedia does not work: OSM's own tags for Taipei are 333 `zh`
+    against 12 `en`, so the article you reach is Chinese. Wikidata is the bridge.
+    """
+
+    name = "wikidata"
+    operation = "wikidata:summary"
+    kind = "place_summary"
+    cache_version = "wikidata-summary-v1"
+    # An encyclopedia article changes slowly and a description is not a fact the
+    # planner schedules against, so this can sit for a long time.
+    cache_ttl_days = 60
+    languages = ("en", "th")
+
+    def __init__(self) -> None:
+        self.wikidata_url = os.environ.get(
+            "TOURIST_WIKIDATA_URL", "https://www.wikidata.org/w/api.php"
+        )
+        self.user_agent = os.environ.get(
+            "TOURIST_USER_AGENT", "TouristPlannerPersonalPOC/0.2 (local personal use)"
+        )
+
+    def cache_descriptor(self, qid: str) -> dict[str, Any]:
+        return {
+            "operation": "place_summary",
+            "provider": self.name,
+            "version": self.cache_version,
+            "qid": str(qid),
+        }
+
+    # Wikimedia rate-limits bursts and asks for serial requests with a descriptive
+    # agent. Eight of thirteen places came back HTTP 429 without this.
+    pause_seconds = 0.4
+    retries = 2
+
+    def _json(self, url: str) -> Any:
+        request = Request(
+            url, headers={"Accept": "application/json", "User-Agent": self.user_agent}
+        )
+        last: Exception | None = None
+        for attempt in range(self.retries + 1):
+            if attempt or self.pause_seconds:
+                sleep(self.pause_seconds * (attempt + 1))
+            try:
+                return _request_json_shared(request)
+            except ProviderUnavailable as error:
+                last = error
+                if "429" not in str(error):
+                    raise
+        raise last if last else ProviderUnavailable("Wikidata unreachable")
+
+    def summary(self, qid: str) -> dict[str, Any]:
+        """Titles, extracts and an image for one Wikidata entity.
+
+        Returns whichever languages exist. A place with no article in either language
+        yields empty `text`, which is a visible gap rather than an invented sentence.
+        """
+
+        sites = "|".join(f"{code}wiki" for code in self.languages)
+        entity = self._json(
+            f"{self.wikidata_url}?action=wbgetentities&ids={quote(str(qid))}"
+            f"&props=sitelinks|claims&sitefilter={sites}&format=json"
+        )
+        found = ((entity.get("entities") or {}).get(str(qid))) or {}
+        if not found or "missing" in found:
+            raise ProviderUnavailable(f"Wikidata has no entity {qid}")
+        sitelinks = found.get("sitelinks") or {}
+        claims = found.get("claims") or {}
+
+        image = None
+        for claim in claims.get("P18") or []:
+            filename = (claim.get("mainsnak") or {}).get("datavalue", {}).get("value")
+            if filename:
+                # Special:FilePath redirects to the current file, so no thumbnail URL
+                # has to be constructed or kept in step with Wikimedia's layout.
+                image = (
+                    "https://commons.wikimedia.org/wiki/Special:FilePath/"
+                    + quote(str(filename).replace(" ", "_"))
+                    + "?width=640"
+                )
+                break
+
+        text: dict[str, str] = {}
+        for code in self.languages:
+            link = sitelinks.get(f"{code}wiki")
+            if not link:
+                continue
+            title = quote(str(link["title"]).replace(" ", "_"))
+            try:
+                page = self._json(
+                    f"https://{code}.wikipedia.org/api/rest_v1/page/summary/{title}"
+                )
+            except ProviderUnavailable:
+                continue  # one missing language must not lose the other
+            extract = (page.get("extract") or "").strip()
+            if extract:
+                text[code] = extract
+            if image is None:
+                image = ((page.get("thumbnail") or {}).get("source")) or None
+
+        return {
+            "qid": str(qid),
+            "text": text,
+            "image_url": image,
+            # Wikipedia and Commons are CC BY-SA. Recorded with the value so the
+            # screen can attribute it without guessing.
+            "licence": "CC BY-SA, Wikipedia and Wikimedia Commons",
+            "source_urls": {
+                code: f"https://{code}.wikipedia.org/wiki/"
+                + quote(str((sitelinks.get(f"{code}wiki") or {}).get("title", "")).replace(" ", "_"))
+                for code in self.languages
+                if sitelinks.get(f"{code}wiki")
+            },
+        }
+
+
 class OsmMetroProvider:
     """Transit legs from OpenStreetMap metro topology, when no timetable exists.
 
@@ -612,6 +746,20 @@ class GtfsTransitProvider:
             "status": "estimated",
             "provider": self.name,
         }
+
+
+def _request_json_shared(request: Request) -> Any:
+    """The same refusal shape every provider here uses, without inheritance."""
+
+    try:
+        with urlopen(request, timeout=45) as response:  # noqa: S310 - fixed API URLs
+            return json.loads(response.read().decode("utf-8"))
+    except HTTPError as error:
+        raise ProviderUnavailable(f"Provider HTTP {error.code}") from error
+    except (URLError, TimeoutError) as error:
+        raise ProviderUnavailable("Provider unreachable") from error
+    except json.JSONDecodeError as error:
+        raise ProviderUnavailable("Provider returned invalid JSON") from error
 
 
 def _point_key(point: dict[str, Any]) -> dict[str, Any]:

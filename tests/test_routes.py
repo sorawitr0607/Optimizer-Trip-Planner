@@ -560,6 +560,138 @@ class OsmMetroTransitTest(unittest.TestCase):
         self.assertIn("(._;>;);", query)
 
 
+class PlaceSummaryTest(unittest.TestCase):
+    """Free descriptions and photos from Wikidata, in both languages."""
+
+    class FakeWikidataPlaces(FakePlaceProvider):
+        """The shared fake carries no `wikidata` signal, so nothing would be asked.
+
+        Left as a subclass rather than changing the shared fake: a wikidata signal
+        earns +0.5 in `_evidence_score`, so adding it there would move every ranking
+        test's numbers for no reason.
+        """
+
+        def discover(self, destination: str) -> dict:
+            payload = super().discover(destination)
+            for index, item in enumerate(payload["items"], start=1):
+                # `discovery.normalize` reads a nested `signals` map, not a
+                # top-level key.
+                item["signals"] = {"wikidata": f"Q{index}00", "wikipedia": f"en:Place {index}"}
+            return payload
+
+    class FakeSummaryProvider:
+        name = "wikidata"
+        operation = "wikidata:summary"
+        kind = "place_summary"
+        cache_ttl_days = 60
+
+        def __init__(self) -> None:
+            self.asked: list[str] = []
+
+        def summary(self, qid: str) -> dict:
+            self.asked.append(qid)
+            if qid == "Q_MISSING":
+                from travel_planner.providers import ProviderUnavailable
+
+                raise ProviderUnavailable(f"Wikidata has no entity {qid}")
+            return {
+                "qid": qid,
+                "text": {"en": f"A description of {qid}.", "th": f"คำบรรยายของ {qid}"},
+                "image_url": f"https://commons.example/{qid}.jpg?width=640",
+                "licence": "CC BY-SA, Wikipedia and Wikimedia Commons",
+                "source_urls": {"en": f"https://en.wikipedia.org/wiki/{qid}"},
+            }
+
+    def setUp(self) -> None:
+        self.directory = TemporaryDirectory()
+        self.provider = self.FakeSummaryProvider()
+        self.actions = PlannerActions(
+            Path(self.directory.name) / "summaries.sqlite3",
+            place_provider=self.FakeWikidataPlaces(),
+            summary_provider=self.provider,
+        )
+        self.trip = self.actions.create_trip(
+            name="Taipei", destination="Taipei", planning_mode="explore_first"
+        )
+        self.actions.save_setup(
+            trip_id=self.trip.trip_id, main_style=["sightseeing"],
+            start_date="2030-01-01", end_date="2030-01-03",
+            accommodation_status="booked", confirmed=True,
+        )
+        self.actions.discover_places(trip_id=self.trip.trip_id)
+        self.candidates = self.actions.get_latest_discovery(
+            self.trip.trip_id
+        ).candidates.as_dict()["candidates"]
+        for candidate in self.candidates:
+            self.actions.save_candidate_choice(
+                trip_id=self.trip.trip_id, place_id=candidate["place_id"], action="must_do"
+            )
+
+    def tearDown(self) -> None:
+        self.directory.cleanup()
+
+    def test_a_summary_is_stored_per_place_in_both_languages(self) -> None:
+        report = self.actions.refresh_place_summaries(self.trip.trip_id)
+        self.assertEqual(0, report["failed"], report.get("provider_errors"))
+        self.assertGreater(report["fetched"], 0)
+
+        stored = self.actions.list_place_summaries(self.trip.trip_id)
+        self.assertEqual(report["fetched"], len(stored))
+        for place_id, value in stored.items():
+            # The id must live inside the value: list_place_evidence returns the
+            # stored snapshot and does not add it back.
+            self.assertEqual(place_id, value["place_id"])
+            self.assertIn("en", value["text"])
+            self.assertIn("th", value["text"])
+            self.assertTrue(value["image_url"])
+            self.assertIn("CC BY-SA", value["licence"])
+
+    def test_it_reads_the_wikidata_id_from_the_selected_place(self) -> None:
+        """`_selected_places` had to start carrying `signals`.
+
+        Without it every place was skipped for want of a Wikidata id and the report
+        said `fetched: 0` while reporting no failure — a silent no-op that reads as
+        success.
+        """
+
+        self.actions.refresh_place_summaries(self.trip.trip_id)
+        expected = {
+            (c.get("signals") or {}).get("wikidata")
+            for c in self.candidates
+            if (c.get("signals") or {}).get("wikidata")
+        }
+        self.assertTrue(expected, "the fake discovery must supply a wikidata id")
+        self.assertEqual(expected, set(self.provider.asked))
+
+    def test_a_second_run_uses_the_cache_and_spends_nothing_new(self) -> None:
+        first = self.actions.refresh_place_summaries(self.trip.trip_id)
+        second = self.actions.refresh_place_summaries(self.trip.trip_id)
+        self.assertEqual(first["fetched"], second["from_cache"])
+        self.assertEqual(0, second["fetched"])
+
+    def test_it_is_recorded_at_zero_rather_than_left_unpriced(self) -> None:
+        self.actions.refresh_place_summaries(self.trip.trip_id)
+        rows = [
+            row
+            for row in self.actions.store.list_paid_usage()
+            if row["operation"] == "wikidata:summary"
+        ]
+        self.assertTrue(rows)
+        self.assertEqual(0.0, sum(float(row["estimated_usd"]) for row in rows))
+
+    def test_a_place_without_an_article_is_left_blank_not_invented(self) -> None:
+        self.provider.summary = lambda qid: {  # type: ignore[method-assign]
+            "qid": qid, "text": {}, "image_url": None,
+            "licence": "CC BY-SA, Wikipedia and Wikimedia Commons", "source_urls": {},
+        }
+        self.actions.refresh_place_summaries(self.trip.trip_id, force=True)
+        stored = self.actions.list_place_summaries(self.trip.trip_id)
+        self.assertTrue(stored)
+        for value in stored.values():
+            self.assertEqual({}, value["text"])
+            self.assertIsNone(value["image_url"])
+
+
 class TimeZoneTest(unittest.TestCase):
     def setUp(self) -> None:
         self.directory = TemporaryDirectory()

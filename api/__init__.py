@@ -74,6 +74,10 @@ ACTIONS = (
     # mutation like any other refresh and belongs on the allowlist explicitly
     # rather than arriving through introspection.
     "refresh_transit_routes",
+    # Free: Wikidata and Wikipedia, no key. A description and photo per place, which
+    # is what google_places:card_details used to charge US$0.04 for.
+    "refresh_place_summaries",
+    "list_place_summaries",
     "list_routes",
     "paid_usage_status",
     "set_paid_cap",
