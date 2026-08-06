@@ -236,6 +236,40 @@ class FoundationTest(unittest.TestCase):
             set(OPTIMIZER_CODE_TEXT["en"]), set(OPTIMIZER_CODE_TEXT["th"])
         )
 
+    def test_every_refusal_code_raised_has_text_in_both_languages(self) -> None:
+        """Key parity cannot catch a code missing from **both** tables.
+
+        `unknown_split_row` and `unknown_traveller` were raised by the split ledger
+        from S2 and had no entry in `en` or `th`, so every owner saw
+        `⚠ unknown_split_row`. The parity test above passed the whole time, because
+        both languages lacked the key equally — parity is symmetry, not coverage.
+
+        This asserts coverage: every code the core actually raises must be sayable.
+        """
+
+        import ast
+
+        from travel_planner.copy import OPTIMIZER_CODE_TEXT
+
+        raised: set[str] = set()
+        core = Path(__file__).resolve().parents[1] / "travel_planner"
+        for path in sorted(core.glob("*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Name)
+                    and node.func.id == "PlannerRefusal"
+                    and node.args
+                    and isinstance(node.args[0], ast.Constant)
+                ):
+                    raised.add(str(node.args[0].value))
+
+        self.assertGreater(len(raised), 20, "the AST scan must actually find the raises")
+        for language in ("en", "th"):
+            missing = sorted(code for code in raised if code not in OPTIMIZER_CODE_TEXT[language])
+            self.assertEqual([], missing, f"refusal codes with no {language} text: {missing}")
+
     def test_copy_never_uses_a_pictograph_as_the_only_meaning(self) -> None:
         from travel_planner.copy import TABLE_NAMES, _CATALOGUE
         from travel_planner.exporters import PICTOGRAPHS

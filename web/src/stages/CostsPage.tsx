@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { Link, useParams } from "react-router";
 
 import { rpc, type CostItem, type CostTotals, type SetupDraft } from "../api/client";
@@ -25,6 +26,43 @@ export function CostsPage() {
   const setup = useQuery({
     queryKey: ["setup", tripId],
     queryFn: () => rpc<SetupDraft | null>("get_setup", { trip_id: tripId }),
+  });
+  const rate = useQuery({
+    queryKey: ["rate_snapshot", tripId],
+    queryFn: () => rpc<{ rates?: Record<string, number> } | null>("get_rate_snapshot", { trip_id: tripId }),
+  });
+  // This screen had no mutation at all: it told the owner to "add estimates" and gave
+  // them no way to. save_cost_item was allowlisted the whole time and unreachable, so
+  // the planned-versus-actual comparison could only ever compare nothing.
+  const queryClient = useQueryClient();
+  const [draft, setDraft] = useState({
+    label: "",
+    amount: "",
+    currency: "THB",
+    category: "other",
+    paid: false,
+  });
+  const [flash, setFlash] = useState("");
+  const saveCost = useMutation({
+    mutationFn: () =>
+      rpc<CostItem>("save_cost_item", {
+        trip_id: tripId,
+        item: {
+          label: draft.label,
+          category: draft.category,
+          original_amount: Number(draft.amount || 0),
+          original_currency: draft.currency,
+          payment_state: draft.paid ? "paid" : "estimate",
+        },
+      }),
+    onSuccess: async () => {
+      setFlash("estimate_saved");
+      setDraft((current) => ({ ...current, label: "", amount: "" }));
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["cost_items", tripId] }),
+        queryClient.invalidateQueries({ queryKey: ["cost_totals", tripId] }),
+      ]);
+    },
   });
 
   if (totals.isPending || items.isPending) return <p>{copy("loading", language)}</p>;
@@ -172,6 +210,81 @@ export function CostsPage() {
         })}
         {items.data.length === 0 ? <li className="money-row">{copy("costs_no_rows", language)}</li> : null}
       </ul>
+
+      {/* derives-from: element 36 .currency-info-box as .cost-record */}
+      <form
+        className="cost-record"
+        onSubmit={(event) => {
+          event.preventDefault();
+          saveCost.mutate();
+        }}
+      >
+        <h2 className="money-eyebrow">{copy("record_estimate", language)}</h2>
+        {flash ? <p className="setup-flash" aria-live="polite">{copy(flash, language)}</p> : null}
+        {saveCost.isError ? (
+          <p className="field-error" aria-live="polite">⚠ {saveCost.error.message}</p>
+        ) : null}
+        {!rate.data && draft.currency !== "THB" ? (
+          <p className="money-note money-note-warn">
+            <b aria-hidden="true">⚠</b>
+            <span>{copy("no_rate_yet", language)}</span>
+          </p>
+        ) : null}
+        <div className="setup-fields">
+          <label>
+            {copy("what_for", language)}
+            <input
+              onChange={(event) => setDraft({ ...draft, label: event.target.value })}
+              required
+              value={draft.label}
+            />
+          </label>
+          <label>
+            {copy("split_amount", language)}
+            <input
+              inputMode="decimal"
+              onChange={(event) => setDraft({ ...draft, amount: event.target.value })}
+              required
+              value={draft.amount}
+            />
+          </label>
+          <label>
+            {copy("split_currency", language)}
+            <select
+              onChange={(event) => setDraft({ ...draft, currency: event.target.value })}
+              value={draft.currency}
+            >
+              {["THB", "TWD", "JPY", "KRW", "CNY", "HKD", "SGD", "MYR"].map((code) => (
+                <option key={code} value={code}>{code}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            {copy("category", language)}
+            <select
+              onChange={(event) => setDraft({ ...draft, category: event.target.value })}
+              value={draft.category}
+            >
+              {["transport", "accommodation", "activity", "food", "fees", "shopping", "other"].map(
+                (code) => (
+                  <option key={code} value={code}>{copy(code, language)}</option>
+                ),
+              )}
+            </select>
+          </label>
+          <label className="setup-check">
+            <input
+              checked={draft.paid}
+              onChange={(event) => setDraft({ ...draft, paid: event.target.checked })}
+              type="checkbox"
+            />
+            {copy("paid", language)}
+          </label>
+        </div>
+        <button className="setup-primary" disabled={saveCost.isPending} type="submit">
+          {copy("record_estimate", language)}
+        </button>
+      </form>
 
       <Link className="primary-link" to={`/trips/${tripId}/split`}>
         {copy("costs_open_split", language)}

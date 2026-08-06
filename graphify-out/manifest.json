@@ -10,9 +10,9 @@
     "semantic_hash": "d33425215a1a5b514fe4f1a0bbaa33d3"
   },
   "i18n/copy.json": {
-    "mtime": 1786003289.0431929,
-    "ast_hash": "f3817943709d4d10fd5bbe68d5624941",
-    "semantic_hash": "f3817943709d4d10fd5bbe68d5624941"
+    "mtime": 1786005379.4924178,
+    "ast_hash": "c96d54e95117ec34c88aab04d74d4c1f",
+    "semantic_hash": "c96d54e95117ec34c88aab04d74d4c1f"
   },
   "pyproject.toml": {
     "mtime": 1785834132.5329027,
@@ -95,9 +95,9 @@
     "semantic_hash": "2f6bc560b3a85187f6a7f200b6c7f7fa"
   },
   "tests/test_foundation.py": {
-    "mtime": 1785832402.479822,
-    "ast_hash": "63d8ae02def6f86f77939c3e673d840f",
-    "semantic_hash": "63d8ae02def6f86f77939c3e673d840f"
+    "mtime": 1786005137.1694984,
+    "ast_hash": "3407a03dbdb3cce7389663aa3b135487",
+    "semantic_hash": "3407a03dbdb3cce7389663aa3b135487"
   },
   "tests/test_graph_builder.py": {
     "mtime": 1785766358.8725471,
@@ -230,7 +230,7 @@
     "semantic_hash": "6a219a473a7ada13eba32333c7482869"
   },
   "travel_planner/providers.py": {
-    "mtime": 1786003242.760253,
+    "mtime": 1786004736.329057,
     "ast_hash": "ed1b339b459ea4402c59eb4afb92adc5",
     "semantic_hash": "ed1b339b459ea4402c59eb4afb92adc5"
   },
@@ -280,7 +280,7 @@
     "semantic_hash": "39c50ba6ae1dcb8562cfff0bc1bc4135"
   },
   "web/src/api/client.ts": {
-    "mtime": 1786003289.0920022,
+    "mtime": 1786004736.3294108,
     "ast_hash": "9cd369564c26cd9c73d3d13ba5379325",
     "semantic_hash": "9cd369564c26cd9c73d3d13ba5379325"
   },
@@ -335,9 +335,9 @@
     "semantic_hash": "50dc949d3bdefa898ad029501771c5eb"
   },
   "web/src/stages/CostsPage.tsx": {
-    "mtime": 1785821548.1050253,
-    "ast_hash": "70a43e308029371dbea4d1663cfdd792",
-    "semantic_hash": "70a43e308029371dbea4d1663cfdd792"
+    "mtime": 1786005590.3022041,
+    "ast_hash": "7b9fddffe05971fec32daf4090bb7418",
+    "semantic_hash": "7b9fddffe05971fec32daf4090bb7418"
   },
   "web/src/stages/EvidencePage.tsx": {
     "mtime": 1786002791.3742583,
@@ -350,17 +350,17 @@
     "semantic_hash": "5f000259822a66a159acf4202cf2bcce"
   },
   "web/src/stages/OptimizePage.tsx": {
-    "mtime": 1785821548.1067722,
-    "ast_hash": "25ce794c0ae31c7a9857eb4bae7048b2",
-    "semantic_hash": "25ce794c0ae31c7a9857eb4bae7048b2"
+    "mtime": 1786005507.2464747,
+    "ast_hash": "7901157d55de2821fe7fdd847440ccc9",
+    "semantic_hash": "7901157d55de2821fe7fdd847440ccc9"
   },
   "web/src/stages/PlaceDeck.tsx": {
-    "mtime": 1786003352.2430317,
+    "mtime": 1786004736.3299549,
     "ast_hash": "bab2380a56a507abac8484f0acaf4fab",
     "semantic_hash": "bab2380a56a507abac8484f0acaf4fab"
   },
   "web/src/stages/PlacesPage.tsx": {
-    "mtime": 1786003815.2067366,
+    "mtime": 1786004736.3302352,
     "ast_hash": "f42cb0d067d570f75c45df4180fdfcff",
     "semantic_hash": "f42cb0d067d570f75c45df4180fdfcff"
   },
@@ -385,7 +385,7 @@
     "semantic_hash": "28fc6d7c08f495cdb83c2d1427c8c06f"
   },
   "web/src/stages/deck.test.tsx": {
-    "mtime": 1786003636.996169,
+    "mtime": 1786004736.3304949,
     "ast_hash": "5b783b76dc0e6fabb08594d3d1d2539f",
     "semantic_hash": "5b783b76dc0e6fabb08594d3d1d2539f"
   },
@@ -400,9 +400,9 @@
     "semantic_hash": "287c82d9eb1f45452c79a05d65f7e289"
   },
   "web/src/stages/money.test.tsx": {
-    "mtime": 1785770892.382412,
-    "ast_hash": "4732308b677488d5c5d8021816334344",
-    "semantic_hash": "4732308b677488d5c5d8021816334344"
+    "mtime": 1786005617.4197395,
+    "ast_hash": "e62e9c6b23413e217d589b4a2b49601d",
+    "semantic_hash": "e62e9c6b23413e217d589b4a2b49601d"
   },
   "web/src/stages/money.tsx": {
     "mtime": 1785821548.1100733,
@@ -708,6 +708,11 @@
     "mtime": 1785759761.9246192,
     "ast_hash": "2f75c7e38e1c83c56c90f97f23d08fc8",
     "semantic_hash": "2f75c7e38e1c83c56c90f97f23d08fc8"
+  },
+  ".wayfinder/tickets/036-prototype-the-ranked-candidate-card-grid.md": {
+    "mtime": 1786004736.3175993,
+    "ast_hash": "6e14d538cf59c2ae5edf756fdca344b6",
+    "semantic_hash": "6e14d538cf59c2ae5edf756fdca344b6"
   },
   ".wayfinder/tickets/037-decide-how-ranking-handles-crowded-categories-and-landmark-signal.md": {
     "mtime": 1785998488.2537198,

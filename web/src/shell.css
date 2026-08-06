@@ -1062,6 +1062,18 @@
   display: inline;
 }
 
+/* The estimate form. This screen was read-only and told the owner to add estimates,
+   so recording one sits above the link that leaves for the split ledger. */
+.cost-record {
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius-house);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0;
+  padding: 10px;
+}
+
 .place-deck {
   background: var(--bg-card);
   border: 1px solid var(--bg-card-border);

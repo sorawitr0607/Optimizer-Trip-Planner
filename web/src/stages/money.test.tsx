@@ -199,6 +199,18 @@ function expectNoMissingCopy(html: string): void {
 }
 
 describe("CostsPage", () => {
+  it("offers a way to record an estimate, which it previously only asked for", () => {
+    // The screen had zero mutations: it said "add estimates to see the plan against
+    // actual spend" and gave no means, while save_cost_item was allowlisted and
+    // unreachable. So the comparison could only ever compare nothing.
+    const html = render(<CostsPage />, "en");
+    expect(html).toContain("Record an estimate");
+    expect(html).toContain("What is it for");
+    expect(html).toContain("Amount");
+    expect(html).toContain('type="submit"');
+    expectNoMissingCopy(html);
+  });
+
   it("renders the planned-versus-actual comparison in English", () => {
     const html = render(<CostsPage />, "en");
 

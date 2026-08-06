@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 
 import {
   ApiError,
@@ -8,6 +8,7 @@ import {
   type CandidateChoice,
   type PlanPreview,
   type PlanVariant,
+  type PlanVersionRecord,
   type Trip,
 } from "../api/client";
 import { copy, copyFrom } from "../i18n/copy";
@@ -44,6 +45,13 @@ export function OptimizePage() {
   const preview = useQuery({
     queryKey: ["plan_preview", tripId],
     queryFn: () => rpc<PlanPreview | null>("get_plan_preview", { trip_id: tripId }),
+  });
+  // Activation deletes the preview by design, so with a plan already active this
+  // screen rendered a title, a sentence and a button and nothing else — it read as
+  // broken rather than as finished.
+  const active = useQuery({
+    queryKey: ["active_plan", tripId],
+    queryFn: () => rpc<PlanVersionRecord | null>("get_active_plan", { trip_id: tripId }),
   });
 
   const generate = useMutation({
@@ -121,6 +129,22 @@ export function OptimizePage() {
       {/* A disabled primary action always says why. */}
       {considered.length === 0 ? (
         <p className="setup-hint">{copy("choose_before_plan", language)}</p>
+      ) : null}
+
+      {!proposal ? (
+        <>
+          {active.data ? (
+            <>
+              <p className="money-note">
+                <span>{copy("active_plan_exists", language)}</span>
+              </p>
+              <Link className="primary-link" to={`/trips/${tripId}/itinerary`}>
+                {copy("open_itinerary", language)}
+              </Link>
+            </>
+          ) : null}
+          <p className="setup-hint">{copy("no_preview_yet", language)}</p>
+        </>
       ) : null}
 
       {proposal?.mode === "stay_recommendation" ? (
