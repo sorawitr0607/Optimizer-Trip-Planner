@@ -1,0 +1,95 @@
+{
+  "what": "Real opening hours for the 13 must_do landmarks",
+  "date": "2026-08-06",
+  "cost": {
+    "projected_usd": 0.225,
+    "actual_usd": 0.225,
+    "operation": "google_places:search_text",
+    "unit_usd": 0.025,
+    "places": 9,
+    "note": "projected correctly this time; the 2026-08-04 estimate used google_places:details at US$0.017 and undershot by 47%"
+  },
+  "spend": {
+    "lifetime_usd": 2.709,
+    "cap_usd": 10.0
+  },
+  "result": {
+    "places": 13,
+    "fetched": 8,
+    "from_cache": 4,
+    "failed": 1,
+    "failure": "Sun Yat-sen Memorial Hall — Places returns no opening hours for it, twice now"
+  },
+  "what_it_caught": {
+    "finding": "the plan activated an hour earlier scheduled Taipei Confucius Temple, Dalongdong Baoan Temple and Taipei Fine Arts Museum on 2027-01-04, and two of the three are closed that day",
+    "2027-01-04": "a Monday",
+    "closed_on_2027_01_04": [
+      "Red House",
+      "Taipei Fine Arts Museum",
+      "Taipei Confucius Temple",
+      "Beitou Hot Spring Museum",
+      "Botanical Garden herbarium"
+    ],
+    "also_closed": {
+      "Botanical Garden herbarium": "2026-12-29"
+    },
+    "second_time": "the 2026-08-04 purchase caught the same class of error — Red House and the herbarium on 2027-01-04"
+  },
+  "real_hours": {
+    "Lungshan Temple": "06:00-22:00 daily",
+    "Shilin Cixian Temple": "06:00-22:00 daily",
+    "Dalongdong Baoan Temple": "06:00-21:00 daily",
+    "Taipei 101": "10:00-21:00 daily",
+    "Chiang Kai-shek Memorial Hall": "09:00-18:00",
+    "Taipei Zoo": "09:00-17:00",
+    "Huashan 1914 Creative Park": "11:00-21:00",
+    "Red House": "11:00-21:00 except Monday",
+    "Botanical Garden herbarium": "09:30-16:30 except Monday and 2026-12-29"
+  },
+  "plan": {
+    "activated": "plan_403e5fc41e17462e98eee",
+    "valid": true,
+    "status": "provisional",
+    "visits": 8,
+    "of_must_do": 13,
+    "worst_day_walking_min": 34,
+    "longest_leg_min": 14,
+    "closed_door_visits": 0,
+    "days": {
+      "2026-12-30": [
+        "Taipei Zoo"
+      ],
+      "2026-12-31": [
+        "Shilin Cixian Temple"
+      ],
+      "2027-01-01": [
+        "Dalongdong Baoan Temple"
+      ],
+      "2027-01-02": [
+        "Chiang Kai-shek Memorial Hall"
+      ],
+      "2027-01-03": [
+        "Huashan 1914",
+        "Sun Yat-sen Memorial Hall",
+        "Taipei 101"
+      ],
+      "2027-01-04": [
+        "Lungshan Temple"
+      ]
+    }
+  },
+  "exports": {
+    "workbook_kb": 25,
+    "calendar_kb": 10,
+    "calendar_events": 22,
+    "checklist_items": 25
+  },
+  "finding_recorded_as_WF_041": {
+    "problem": "a venue closed on one trip day is unschedulable on every day",
+    "cause": "_optimizer_input emits one trip-wide opening_interval fact per place, or none. opening_intervals() stores per-date windows in by_date and the optimizer never sees them.",
+    "cost": "5 of 13 landmarks unscheduled; Red House is open six of seven days and scheduled on none",
+    "misleading_code": "all five report OPENING_UNVERIFIED, though the hours are verified and paid for — the place is closed, which is a different fact",
+    "why_invisible": "one window is correct for a day trip, and 25 of 27 fixtures are single-day. Same shape as the per-day walking budget bug fixed 2026-08-05.",
+    "not_fixed": "changing the fact shape touches _planning_fact, CLOSED_DURING_VISIT, WF-006's optimizer contract and every frozen fixture carrying an opening_interval"
+  }
+}
