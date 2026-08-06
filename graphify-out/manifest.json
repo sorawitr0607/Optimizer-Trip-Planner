@@ -125,9 +125,9 @@
     "semantic_hash": "ed7918b3afe0955a9d71fb6d43b9e5d2"
   },
   "tests/test_ranking.py": {
-    "mtime": 1785989587.3505647,
-    "ast_hash": "1fac0b19cf3c515c222651bcad7a5644",
-    "semantic_hash": "1fac0b19cf3c515c222651bcad7a5644"
+    "mtime": 1785998402.273376,
+    "ast_hash": "b53f2b527b69e7d51f8dc11a79f75e7f",
+    "semantic_hash": "b53f2b527b69e7d51f8dc11a79f75e7f"
   },
   "tests/test_revision.py": {
     "mtime": 1785832402.48132,
@@ -235,9 +235,9 @@
     "semantic_hash": "26c72077c6bb36f80e0fa444b3eea3ce"
   },
   "travel_planner/ranking.py": {
-    "mtime": 1785989748.94816,
-    "ast_hash": "7c110e008d2b7a683b184958558bb1e8",
-    "semantic_hash": "7c110e008d2b7a683b184958558bb1e8"
+    "mtime": 1785998402.7722473,
+    "ast_hash": "d0c03f5b119810029e1baeadd5f46975",
+    "semantic_hash": "d0c03f5b119810029e1baeadd5f46975"
   },
   "travel_planner/revision.py": {
     "mtime": 1785319833.4900422,
@@ -514,11 +514,6 @@
     "ast_hash": "420e1f2e633c10d6ebabeb1d067f63a8",
     "semantic_hash": "420e1f2e633c10d6ebabeb1d067f63a8"
   },
-  ".wayfinder/map-002-splitter-merge-and-webapp.md": {
-    "mtime": 1785835418.4709735,
-    "ast_hash": "a5f5895818ee54c5e161d86f3604126d",
-    "semantic_hash": "a5f5895818ee54c5e161d86f3604126d"
-  },
   ".wayfinder/map.md": {
     "mtime": 1785272453.0,
     "ast_hash": "f2ea224e665fdb844438af7de7eba063",
@@ -728,11 +723,6 @@
     "mtime": 1785766520.9028397,
     "ast_hash": "1eadb8bff2a10ce33d7930a6411d1154",
     "semantic_hash": "1eadb8bff2a10ce33d7930a6411d1154"
-  },
-  "CLAUDE.md": {
-    "mtime": 1785921729.7615914,
-    "ast_hash": "6e398c17963a1691ec92cd6778727f18",
-    "semantic_hash": "6e398c17963a1691ec92cd6778727f18"
   },
   "README.md": {
     "mtime": 1785835418.4719262,

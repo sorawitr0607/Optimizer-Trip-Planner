@@ -173,8 +173,71 @@ a commercial popularity measure this project has ruled out.
 
 A per-category crowding deduction was tried first and **reverted** — see the section
 above. It ranked within a category using the same biased score and so moved four of
-the six target landmarks *further down*. Worth retrying now the bias is gone, but only
-with the same before-and-after evidence.
+the six target landmarks *further down*.
+
+**Retried and rejected again on 2026-08-06, for a new reason.** With the breadth fix
+in, those twelve museums tie at *exactly* 65.0, so "the k-th best museum" is decided
+by the alphabetical tiebreak. A crowding deduction keyed on that rank would deduct
+alphabetically, which is worse than the tie it replaces. Crowding needs a meaningful
+within-category ordering to exist first, and it does not.
+
+### Phase two, 2026-08-06: score the official designation
+
+What *does* discriminate inside a category is a **heritage listing** — an act by an
+authority rather than taste. It was already collected and, in the `experience_value`
+dimension, **scored at nothing**: `_city_icon` folded it into a boolean and kept the
+basis for display only. So `HERITAGE_BONUS = 2.0` now applies within the existing
+20-point `experience_value`, leaving `FORMULA_WEIGHTS` untouched again.
+
+Two points, because it only has to break a tie where every other term is identical —
+not enough for one tag to outweigh a dimension. Only **25 of 832** candidates carry
+it, so this lifts a named few rather than reshuffling the catalogue.
+
+| Place | Before | After |
+|---|---|---|
+| National Taiwan Museum | #8 | **#1** |
+| Lin An Tai Historical House | #35 | **#19** |
+| Chiang Kai-shek Memorial Hall | #37 | **#20** |
+| Presidential Office Building | #71 | **#50** |
+| Zhongshan Hall | #73 | **#51** |
+| Taipei Guest House | #133 | **#83** |
+| East Gate of Taipei | #146 | **#103** |
+| North Gate of Taipei City Wall | #152 | **#107** |
+
+`unesco` is weighted the *same* as `heritage`, not higher. **Taiwan is not a UNESCO
+member and has no World Heritage sites**, so the single `unesco` tag in this catalogue
+is far more likely a mis-tag than a discovery, and grading it above `heritage` would
+promote a tagging error over the city's actual monuments.
+
+### It inherits OpenStreetMap's tagging bias, and that is a real cost
+
+Heritage coverage is very uneven:
+
+| Category | Tagged |
+|---|---|
+| `historic` | 19 of 126 |
+| `museum` | 4 of 56 |
+| `park` | 1 of 79 |
+| `place_of_worship` | **1 of 307** |
+
+**Lungshan Temple is a designated site in Taiwanese law and carries no heritage tag**,
+so it gained nothing and slid #131 → #144 as tagged museums rose past it. Baoan and
+the Confucius Temple are the same. So this fix helps historic buildings and museums
+and leaves temples behind — not because temples matter less, but because volunteers
+tagged them less.
+
+Net: the head of the list is now right, twenty-five genuinely designated places are
+lifted, nothing is penalised, and the eight remaining museums tied at 65.0 stay tied
+because open data holds nothing further to separate them. That is the ceiling with
+this data.
+
+### One wrong reading on the way, worth recording
+
+The first version of the test measured a **2.5**-point gap and I briefly concluded
+heritage was already worth 0.5 somewhere. It was not: `candidate()` in the test helper
+gives a website only to *even* indices, `_evidence_score` pays 0.5 for a website, and
+the fixture used indices 1 and 2. The fixture was measuring itself. Both indices are
+even now, and the comment in the test says why.
 
 ### The ranker's output had no test at all
 

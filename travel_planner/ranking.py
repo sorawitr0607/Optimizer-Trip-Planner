@@ -22,6 +22,13 @@ REJECTION_REASONS = frozenset(
     {"too_crowded", "too_expensive", "too_tiring", "wrong_vibe", "weak_value", "already_seen"}
 )
 
+# An official designation, worth the same whether national or claimed as UNESCO.
+# Deliberately not graded higher for `unesco`: Taiwan is not a UNESCO member and has
+# no World Heritage sites, so the single `unesco` tag in the Taipei catalogue is far
+# more likely a mis-tag than a discovery. Grading it above `heritage` would promote a
+# tagging error over the city's actual monuments.
+HERITAGE_BONUS = 2.0
+
 CATEGORY_TAGS = {
     "attraction": {"sightseeing", "photography"},
     "museum": {"sightseeing", "culture", "architecture"},
@@ -282,7 +289,19 @@ def _score_candidate(
         20.0,
         float(EXPERIENCE_PRIOR.get(category, 10))
         + (1.0 if candidate.get("signals", {}).get("wikidata") else 0.0)
-        + (1.0 if candidate.get("signals", {}).get("wikipedia") else 0.0),
+        + (1.0 if candidate.get("signals", {}).get("wikipedia") else 0.0)
+        # `WF-037` phase two. An official heritage designation is an act by an
+        # authority, not taste, and it was the one prominence signal already
+        # collected and scored at nothing -- `_city_icon` folded it into a boolean
+        # and recorded the basis for display only. That left the National Taiwan
+        # Museum tied at exactly 65.0 with the Postal Museum, and Taipei's four city
+        # gates, Zhongshan Hall and the Presidential Office Building ranked below it.
+        #
+        # It is worth 2 rather than more because it discriminates inside a category
+        # where every other term is identical, and 2 is enough to break a tie without
+        # letting one tag outweigh a whole dimension. Only 25 of 832 candidates carry
+        # it, so this lifts a named few rather than reshuffling the catalogue.
+        + (HERITAGE_BONUS if _designated(candidate) else 0.0),
     )
     reward_effort = 10.0
     time_fit = _time_fit(candidate)
@@ -486,6 +505,13 @@ def _learned_category_weights(choices: list[dict[str, Any]]) -> Counter[str]:
     for category in list(learned):
         learned[category] = min(3.0, learned[category])
     return learned
+
+
+def _designated(candidate: dict[str, Any]) -> bool:
+    """Whether an authority has formally listed this place. `WF-037`."""
+
+    signals = candidate.get("signals", {})
+    return bool(signals.get("heritage") or signals.get("unesco"))
 
 
 def _city_icon(candidate: dict[str, Any]) -> tuple[bool, list[str]]:

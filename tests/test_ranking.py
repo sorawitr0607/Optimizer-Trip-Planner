@@ -112,6 +112,65 @@ class RankingCoreTest(unittest.TestCase):
             for index, category in enumerate(categories, start=1)
         ]
 
+    def test_an_official_designation_breaks_a_tie_between_identical_museums(self) -> None:
+        """`WF-037` phase two. Heritage listing was collected and scored at nothing.
+
+        `_city_icon` folded it into a boolean and kept the basis for display, so on the
+        real Taipei catalogue the National Taiwan Museum tied at exactly 65.0 with the
+        Postal Museum, and Taipei's four city gates sat below both. Within one category
+        every other term is identical, so a designation is the only discriminator the
+        data offers.
+
+        It inherits OpenStreetMap's tagging unevenness, which is recorded in the
+        ticket: 19 of 126 `historic` places carry the tag but only 1 of 307
+        `place_of_worship`, so Lungshan Temple -- a designated site in Taiwanese law --
+        gains nothing.
+        """
+
+        owner = build_setup_payload(
+            planning_mode="explore_first",
+            owner_age=40,
+            main_style=["sightseeing"],
+            also_enjoy=[],
+            avoid=[],
+            comfort=[],
+            owner_description="",
+            owner_must_respect=[],
+            travellers=[],
+            start_date=None,
+            end_date=None,
+            arrival_time=None,
+            departure_time=None,
+            accommodation_status="unknown",
+            confirmed=True,
+        )
+        # Both even: `candidate()` gives a website only to even indices and
+        # `_evidence_score` pays 0.5 for one, so odd-versus-even would measure the
+        # fixture rather than the designation. That cost one wrong reading already.
+        plain = candidate("plain", "museum", 2, icon=True, opening=True)
+        listed = candidate("listed", "museum", 4, icon=True, opening=True)
+        listed["signals"]["heritage"] = "yes"
+        ranking = build_ranking(
+            setup=owner,
+            candidates=[plain, listed],
+            choices=[],
+            discovery_status="verified",
+        )
+        cards = ranking["cards"]
+        self.assertGreater(
+            cards["listed"]["total_score"],
+            cards["plain"]["total_score"],
+            "a designated museum must outrank an identical undesignated one",
+        )
+        self.assertIn("heritage", cards["listed"]["city_icon_basis"])
+        # Two points, not more: enough to break a tie, not enough for one tag to
+        # outweigh a dimension.
+        self.assertAlmostEqual(
+            2.0,
+            cards["listed"]["total_score"] - cards["plain"]["total_score"],
+            places=1,
+        )
+
     def test_a_landmark_is_not_buried_by_a_richer_tag_vocabulary(self) -> None:
         """`WF-037`. The ranker's output ordering had no test at all.
 
