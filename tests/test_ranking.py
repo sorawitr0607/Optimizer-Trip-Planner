@@ -112,6 +112,61 @@ class RankingCoreTest(unittest.TestCase):
             for index, category in enumerate(categories, start=1)
         ]
 
+    def test_a_landmark_is_not_buried_by_a_richer_tag_vocabulary(self) -> None:
+        """`WF-037`. The ranker's output ordering had no test at all.
+
+        `group_preference_fit` divided the owner's matched styles by how many styles
+        they *named*, so a category carrying more tags won more overlap for the same
+        place. `peak` carries four tags and `attraction` -- where OSM puts Taipei 101
+        -- carries two, so on the real 832-candidate Taipei catalogue a nameless hill
+        scored 27 of 30 against Taipei 101's 12.8 and the top 50 came out as 49 peaks
+        and one park. Taipei 101 ranked 363rd of 832.
+
+        Nothing caught it because the suite asserted the score was internally
+        consistent, which holds under any weighting, and never what the ranking
+        actually recommended.
+        """
+
+        owner = build_setup_payload(
+            planning_mode="explore_first",
+            owner_age=40,
+            main_style=["sightseeing", "nature", "chill"],
+            also_enjoy=[],
+            avoid=[],
+            comfort=[],
+            owner_description="",
+            owner_must_respect=[],
+            travellers=[],
+            start_date=None,
+            end_date=None,
+            arrival_time=None,
+            departure_time=None,
+            accommodation_status="unknown",
+            confirmed=True,
+        )
+        # Twenty near-identical peaks, which carry nature+sightseeing and so match
+        # two of the three stated styles, against one prominent attraction that
+        # carries only sightseeing.
+        peaks = [candidate(f"peak-{n}", "peak", n) for n in range(20)]
+        landmark = candidate("landmark", "attraction", 99, icon=True, opening=True)
+        ranking = build_ranking(
+            setup=owner,
+            candidates=peaks + [landmark],
+            choices=[],
+            discovery_status="verified",
+        )
+        cards = ranking["cards"]
+        order = sorted(cards, key=lambda pid: -cards[pid]["total_score"])
+        peak_best = max(cards[f"peak-{n}"]["total_score"] for n in range(20))
+
+        self.assertGreater(
+            cards["landmark"]["total_score"],
+            peak_best,
+            "a prominent attraction must outrank twenty interchangeable peaks",
+        )
+        self.assertEqual("landmark", order[0])
+        self.assertTrue(cards["landmark"]["is_city_icon"])
+
     def test_all_candidates_are_ranked_with_exact_formula_and_protected_exploration(self) -> None:
         first = build_ranking(
             setup=setup_payload(),

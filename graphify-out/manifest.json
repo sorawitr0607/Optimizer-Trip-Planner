@@ -110,7 +110,7 @@
     "semantic_hash": "286bdf6707e108984145a34b014672f0"
   },
   "tests/test_opening.py": {
-    "mtime": 1785989087.4639978,
+    "mtime": 1785989228.6434813,
     "ast_hash": "42162aeee769e14a6a23ae14e5d374f5",
     "semantic_hash": "42162aeee769e14a6a23ae14e5d374f5"
   },
@@ -125,9 +125,9 @@
     "semantic_hash": "ed7918b3afe0955a9d71fb6d43b9e5d2"
   },
   "tests/test_ranking.py": {
-    "mtime": 1785832402.4808996,
-    "ast_hash": "b0900c7adb090630fab3b9d246eaf615",
-    "semantic_hash": "b0900c7adb090630fab3b9d246eaf615"
+    "mtime": 1785989587.3505647,
+    "ast_hash": "1fac0b19cf3c515c222651bcad7a5644",
+    "semantic_hash": "1fac0b19cf3c515c222651bcad7a5644"
   },
   "tests/test_revision.py": {
     "mtime": 1785832402.48132,
@@ -165,7 +165,7 @@
     "semantic_hash": "ef0aefdeae9a5f201e587415c32b8a5b"
   },
   "travel_planner/actions.py": {
-    "mtime": 1785988764.2889643,
+    "mtime": 1785989228.6438878,
     "ast_hash": "c4a0881adbabf20f5ba2ab07644aa58a",
     "semantic_hash": "c4a0881adbabf20f5ba2ab07644aa58a"
   },
@@ -220,12 +220,12 @@
     "semantic_hash": "4a3506e0951d0398c7a56287366e1eed"
   },
   "travel_planner/opening.py": {
-    "mtime": 1785988752.9795039,
+    "mtime": 1785989228.6442711,
     "ast_hash": "8fc8264f745805b7379f4af56db9a0d5",
     "semantic_hash": "8fc8264f745805b7379f4af56db9a0d5"
   },
   "travel_planner/optimizer.py": {
-    "mtime": 1785989087.9481645,
+    "mtime": 1785989228.6447191,
     "ast_hash": "6a219a473a7ada13eba32333c7482869",
     "semantic_hash": "6a219a473a7ada13eba32333c7482869"
   },
@@ -235,9 +235,9 @@
     "semantic_hash": "26c72077c6bb36f80e0fa444b3eea3ce"
   },
   "travel_planner/ranking.py": {
-    "mtime": 1785840738.5558307,
-    "ast_hash": "9b07e2a114e076bdc2f9534b493e990b",
-    "semantic_hash": "9b07e2a114e076bdc2f9534b493e990b"
+    "mtime": 1785989748.94816,
+    "ast_hash": "7c110e008d2b7a683b184958558bb1e8",
+    "semantic_hash": "7c110e008d2b7a683b184958558bb1e8"
   },
   "travel_planner/revision.py": {
     "mtime": 1785319833.4900422,
@@ -704,11 +704,6 @@
     "ast_hash": "f1b02223bdffe51e72c8ccf3c3dc935d",
     "semantic_hash": "f1b02223bdffe51e72c8ccf3c3dc935d"
   },
-  ".wayfinder/tickets/037-decide-how-ranking-handles-crowded-categories-and-landmark-signal.md": {
-    "mtime": 1785841827.1655192,
-    "ast_hash": "e5e709485ed12348878571ff45097ba5",
-    "semantic_hash": "e5e709485ed12348878571ff45097ba5"
-  },
   ".wayfinder/tickets/038-decide-how-the-planner-gets-transit-routing.md": {
     "mtime": 1785923243.4256158,
     "ast_hash": "d72f42e9e0be67742b1f5a46f2f3aa4e",
@@ -723,6 +718,11 @@
     "mtime": 1785923416.7348952,
     "ast_hash": "e46cd0d92f6050699f2d6e9338b72b77",
     "semantic_hash": "e46cd0d92f6050699f2d6e9338b72b77"
+  },
+  ".wayfinder/tickets/041-decide-how-per-day-opening-hours-reach-the-optimizer.md": {
+    "mtime": 1785989228.6373284,
+    "ast_hash": "8a91dd86f0d6c4f20666f82da66fcc67",
+    "semantic_hash": "8a91dd86f0d6c4f20666f82da66fcc67"
   },
   "AGENTS.md": {
     "mtime": 1785766520.9028397,

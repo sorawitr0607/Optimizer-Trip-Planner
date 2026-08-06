@@ -410,6 +410,17 @@ def _profile_has_preferences(profile: dict[str, Any], *, owner: bool) -> bool:
     return bool(profile.get("tags"))
 
 
+def _breadth(candidate_tags: set[str]) -> int:
+    """How many tags a candidate's category offers, capped. `WF-037`.
+
+    Capped at four because beyond that the divisor stops discriminating and starts
+    punishing richly-tagged categories, which is the mirror of the bug it fixes.
+    Minimum one so a category with no tags cannot divide by zero.
+    """
+
+    return max(1, min(len(candidate_tags), 4))
+
+
 def _preference_fit(
     setup: dict[str, Any], candidate_tags: set[str], effective_weights: dict[str, float]
 ) -> tuple[float, set[str], list[str]]:
@@ -432,8 +443,21 @@ def _preference_fit(
             also_hit = candidate_tags & also
             comfort_hit = candidate_tags & comfort
             person_fit = 0.1
-            person_fit += 0.65 * len(main_hit) / max(1, min(len(main), 2))
-            person_fit += 0.20 * len(also_hit) / max(1, min(len(also), 2))
+            # `WF-037`. Divided by how many tags the *category* carries, not by how
+            # many styles the owner named. The old denominator asked "how many of
+            # your interests does this cover", which a category with more tags wins
+            # for free: `peak` carries four tags and `attraction` -- where OSM puts
+            # Taipei 101 -- carries two, so a nameless hill scored 27 of 30 against
+            # Taipei 101's 12.8 and the top 50 of 832 came out as 49 peaks and one
+            # park. Taipei 101 ranked 363rd, the National Palace Museum 269th.
+            #
+            # Asking instead "how much of what this place *is* matches what you
+            # want" removes an advantage that belongs to the tag vocabulary rather
+            # than to anywhere real. It also unblocks `learned_category_bonus`: the
+            # owner's own 71 peak rejections could not outweigh a structural gap
+            # that large, and now they can.
+            person_fit += 0.65 * len(main_hit) / _breadth(candidate_tags)
+            person_fit += 0.20 * len(also_hit) / _breadth(candidate_tags)
             person_fit += 0.05 * len(comfort_hit) / max(1, min(len(comfort), 2))
             hits = main_hit | also_hit | comfort_hit
         else:

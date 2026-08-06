@@ -1,0 +1,74 @@
+{
+  "ticket": "WF-037, option 3: normalise preference fit by category breadth",
+  "date": "2026-08-06",
+  "problem": "group_preference_fit divided matched styles by how many the owner named, so a category with more tags won more overlap for the same place quality",
+  "change": {
+    "file": "travel_planner/ranking.py",
+    "was": "0.65 * len(main_hit) / max(1, min(len(main), 2))",
+    "now": "0.65 * len(main_hit) / _breadth(candidate_tags)",
+    "breadth_cap": 4,
+    "why_capped": "past four the divisor stops discriminating and starts punishing richly-tagged categories, the mirror of the bug",
+    "formula_weights_untouched": true
+  },
+  "landmark_ranks": {
+    "Sun Yat-sen Memorial Hall": {
+      "after": 12
+    },
+    "Taipei Fine Arts Museum": {
+      "after": 14
+    },
+    "Taipei 101": {
+      "before": 398,
+      "after": 21
+    },
+    "Chiang Kai-shek Memorial Hall": {
+      "before": 181,
+      "after": 37
+    },
+    "National Palace Museum": {
+      "before": 251,
+      "after": 57
+    },
+    "Beitou Hot Spring Museum": {
+      "before": 265,
+      "after": 82
+    },
+    "Lungshan Temple": {
+      "after": 131
+    },
+    "Red House": {
+      "before": 561,
+      "after": 228
+    }
+  },
+  "top_50_mix": {
+    "before": {
+      "peak": 49,
+      "park": 1
+    },
+    "after": {
+      "museum": 34,
+      "attraction": 12,
+      "park": 3,
+      "peak": 1
+    }
+  },
+  "side_effect": "learned_category_bonus was unblocked — the owner's 71 peak rejections could not outweigh a 14-point structural gap on a 30-point dimension, and now they can",
+  "residual": {
+    "finding": "the head is now 12 museums tied at exactly 65.0, including the Postal Museum and a Miniatures Museum",
+    "nature": "a data limit, not a formula bug — all of them carry a Wikipedia article so is_city_icon is true for all, and open data offers nothing more to separate them",
+    "ruled_out": "the signal that would separate them is a commercial popularity measure the destination interview excluded"
+  },
+  "test_gap_closed": {
+    "finding": "the ranker's output ordering had NO test. The suite asserted the score was internally consistent — total equals dimensions minus deductions, true under any weighting — and never what was recommended.",
+    "added": "test_a_landmark_is_not_buried_by_a_richer_tag_vocabulary",
+    "negative_test": "with the old denominator the landmark scores 55.3 against the peaks' 62.2 and loses"
+  },
+  "regressions": "27 of 27 unchanged, 327 tests green",
+  "trip_unaffected": {
+    "activated_plan": "plan_3638d4445a7c4a7bba9d8",
+    "must_do": 13,
+    "note": "this changes what is offered, not what was chosen"
+  },
+  "cost_usd": 0.0
+}

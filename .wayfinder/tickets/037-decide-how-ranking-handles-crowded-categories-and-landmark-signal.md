@@ -1,7 +1,7 @@
 ---
 id: WF-037
 title: Decide how ranking handles crowded categories and landmark signal
-status: open
+status: closed
 labels:
   - "wayfinder:decision"
 parent: WF-MAP-002
@@ -120,6 +120,73 @@ before/after evidence on the real catalogue. And `deterministic_signature` must
 not move for a fixed optimizer input — ranking feeds *which* places are offered,
 not how a fixed input is scheduled, so the optimizer regressions should be
 unaffected; that must be verified rather than assumed.
+
+## Decided and built 2026-08-06: normalise preference fit by category breadth
+
+The third option. `group_preference_fit` divided the owner's matched styles by how
+many styles they *named*, which asks "how many of your interests does this cover" — a
+question a category with more tags wins for free. It now divides by how many tags the
+**category itself carries**, asking "how much of what this place is matches what you
+want". `_breadth()` caps the divisor at four, because past that the divisor stops
+discriminating and starts punishing richly-tagged categories, which is the mirror of
+the bug.
+
+**Measured on the real 832-candidate Taipei catalogue:**
+
+| Place | Before | After |
+|---|---|---|
+| Sun Yat-sen Memorial Hall | — | **#12** |
+| Taipei Fine Arts Museum | — | **#14** |
+| **Taipei 101** | **#398** | **#21** |
+| Chiang Kai-shek Memorial Hall | #181 | **#37** |
+| National Palace Museum | #251 | **#57** |
+| Beitou Hot Spring Museum | #265 | **#82** |
+| Lungshan Temple | — | #131 |
+| Red House | #561 | #228 |
+
+Top-50 category mix went from **49 peaks and 1 park** to **34 museums, 12
+attractions, 3 parks, 1 peak**.
+
+27 of 27 historic regressions pass unchanged, 327 tests green, and the pilot's
+activated plan and its 13 choices are untouched — this changes what is *offered*, not
+what was chosen.
+
+### It also unblocked the learner
+
+`learned_category_bonus` reads the owner's own choices, and the owner had rejected 71
+peaks. That signal could never outweigh a structural gap of 14 points on a 30-point
+dimension. With the gap gone it does, so the museums now at the head are partly the
+owner's own selections being reflected back — which is what learning is for.
+
+### The residual, stated plainly
+
+**The head of the ranking is now 12 museums tied at exactly 65.0**, among them the
+Postal Museum and a Miniatures Museum. The structural bias is fixed; near-identical
+candidates filling the head is not. Taipei 101 at #21 sits behind twenty museums,
+several of them minor.
+
+This is a **data limit rather than a formula bug**. Every one of those museums carries
+a Wikipedia article, so `is_city_icon` is true for all of them and open data offers
+nothing further to separate the National Taiwan Museum from the Postal Museum. The
+out-of-scope note below already anticipated it: the signal that would separate them is
+a commercial popularity measure this project has ruled out.
+
+A per-category crowding deduction was tried first and **reverted** — see the section
+above. It ranked within a category using the same biased score and so moved four of
+the six target landmarks *further down*. Worth retrying now the bias is gone, but only
+with the same before-and-after evidence.
+
+### The ranker's output had no test at all
+
+Nothing caught a world landmark sitting at #363 for months because the suite asserted
+the score was *internally consistent* — total equals the dimensions minus the
+deductions, which holds under any weighting — and never what the ranking actually
+recommended. Not one test pinned an ordering or a score value.
+
+`test_a_landmark_is_not_buried_by_a_richer_tag_vocabulary` is that missing test:
+twenty interchangeable peaks against one prominent attraction, and the attraction must
+come first. Negative-tested — with the old denominator it scores 55.3 against 62.2 and
+loses.
 
 ## Explicitly out of scope
 
