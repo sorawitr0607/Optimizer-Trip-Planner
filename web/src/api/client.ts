@@ -1,3 +1,5 @@
+import type { Language } from "../i18n/copy";
+
 export interface Trip {
   trip_id: string;
   name: string;
@@ -8,6 +10,17 @@ export interface Trip {
 }
 
 export type StageKey = "setup" | "places" | "evidence" | "optimize" | "itinerary";
+
+/** A free Wikidata/Wikipedia summary for one place. `text` may be empty: a place
+ *  with no encyclopedia entry gets a visible gap, never an invented sentence. */
+export interface PlaceSummary {
+  place_id: string;
+  qid: string;
+  text: Partial<Record<Language, string>>;
+  image_url: string | null;
+  licence: string;
+  source_urls: Partial<Record<Language, string>>;
+}
 
 export interface JourneyStage {
   key: StageKey;

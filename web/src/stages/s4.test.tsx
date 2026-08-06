@@ -143,6 +143,18 @@ function render(page: ReactNode, language: Language, seed?: (client: QueryClient
   client.setQueryData(["discovery", TRIP], DISCOVERY);
   client.setQueryData(["candidate_choices", TRIP], CHOICES);
   client.setQueryData(["ranking", TRIP], RANKING);
+  // Free Wikidata summary: the card must lead with real prose and a photo, not with
+  // the templated sentence built from the same codes for every place.
+  client.setQueryData(["place_summaries", TRIP], {
+    "taipei-101": {
+      place_id: "taipei-101",
+      qid: "Q83263",
+      text: { en: "A supertall skyscraper and the tallest building in Taiwan." },
+      image_url: "https://commons.example/taipei-101.jpg?width=640",
+      licence: "CC BY-SA, Wikipedia and Wikimedia Commons",
+      source_urls: { en: "https://en.wikipedia.org/wiki/Taipei_101" },
+    },
+  });
   client.setQueryData(["paid_check", "google_places:card_details"], PAID);
   client.setQueryData(["paid_check", "google_places:photo", 5], PAID);
   client.setQueryData(["export_snapshot", TRIP, language], {
@@ -176,6 +188,48 @@ describe("PlacesPage", () => {
     expect(html).toContain("Current choice: Interested");
     expect(html).toContain("US$0.007");
     expect(html.indexOf("US$0.007")).toBeLessThan(html.indexOf("Load live gallery"));
+    expectNoMissingCopy(html);
+  });
+
+  it("leads a card with the free description and photo, not the templated line", () => {
+    const html = render(<PlacesPage />, "en");
+    expect(html).toContain("About this place");
+    expect(html).toContain("tallest building in Taiwan");
+    expect(html).toContain("commons.example/taipei-101.jpg");
+    expect(html).toContain("CC BY-SA");
+    expect(html).toContain("Read on Wikipedia");
+    // The description must precede the score breakdown, and the mechanism codes are
+    // retitled so nobody reads them as a description of the place.
+    expect(html.indexOf("About this place")).toBeLessThan(html.indexOf("Why it matched your preferences"));
+    expectNoMissingCopy(html);
+  });
+
+  it("offers the free fetch when a card has not been looked up yet", () => {
+    // An absent key means not fetched. Distinct from a fetched place that has no
+    // entry, because one is worth a button and the other is not.
+    const html = render(<PlacesPage />, "en", (client) => {
+      client.setQueryData(["place_summaries", TRIP], {});
+    });
+    expect(html).toContain("Load free descriptions");
+    expect(html).toContain("no charge and no key");
+    // The templated sentence survives as the fallback meanwhile.
+    expect(html).toContain("is worth considering for");
+    expectNoMissingCopy(html);
+  });
+
+  it("says so when a looked-up place genuinely has no entry", () => {
+    // 459 of the 832 real Taipei candidates carry no Wikidata id at all, so this is
+    // the common case, not an edge one.
+    const html = render(<PlacesPage />, "en", (client) => {
+      client.setQueryData(["place_summaries", TRIP], {
+        "taipei-101": {
+          place_id: "taipei-101", qid: "", text: {}, image_url: null,
+          licence: "CC BY-SA, Wikipedia and Wikimedia Commons", source_urls: {},
+        },
+      });
+    });
+    expect(html).toContain("No encyclopedia entry found");
+    expect(html).not.toContain("Load free descriptions");
     expectNoMissingCopy(html);
   });
 

@@ -35,6 +35,29 @@ const SETUP_GAPS = new Set([
 ]);
 
 /**
+ * Gaps grouped by what closes them.
+ *
+ * They used to arrive as one flat ⚠ list, so `ACCOMMODATION_BASE_UNCONFIRMED` and
+ * `OPENING_EVIDENCE_MISSING` sat side by side as though they were the same kind of
+ * problem. They are not: one wants an address typed into setup, the other wants a
+ * button pressed on this screen. Reading the list gave no clue which.
+ *
+ * A gap absent from every group falls through to `owner`, so a code added to the
+ * core later still lands somewhere with a heading rather than vanishing.
+ */
+const GAP_GROUPS = [
+  { key: "gaps_grouped_setup", gaps: SETUP_GAPS },
+  {
+    key: "gaps_grouped_evidence",
+    gaps: new Set([
+      "OPENING_EVIDENCE_MISSING",
+      "ROUTE_SNAPSHOT_MISSING",
+      "DESTINATION_TIMEZONE_UNVERIFIED",
+    ]),
+  },
+] as const;
+
+/**
  * Provenance and paid usage.
  *
  * Each paid enrichment is **its own card: state first, then its cost, then the
@@ -385,11 +408,28 @@ export function EvidencePage() {
             <b aria-hidden="true">⚠</b>
             <span>{copy("evidence_blockers", language)}</span>
           </p>
-          <ul className="revise-list">
-            {gaps.map((gap) => (
-              <li key={gap}>{code(gap, language)}</li>
-            ))}
-          </ul>
+          <p className="setup-hint">{copy("gap_action_hint", language)}</p>
+          {(() => {
+            const grouped = GAP_GROUPS.map((group) => ({
+              key: group.key,
+              items: gaps.filter((gap) => group.gaps.has(gap)),
+            }));
+            const claimed = new Set(grouped.flatMap((group) => group.items));
+            const rest = gaps.filter((gap) => !claimed.has(gap));
+            return [...grouped, { key: "gaps_grouped_owner", items: rest }]
+              .filter((group) => group.items.length)
+              .map((group) => (
+                // derives-from: element 26 .recent-row-item as .evidence-gap-group
+                <div className="evidence-gap-group" key={group.key}>
+                  <h3 className="money-eyebrow">{copy(group.key, language)}</h3>
+                  <ul className="revise-list">
+                    {group.items.map((gap) => (
+                      <li key={gap}>{code(gap, language)}</li>
+                    ))}
+                  </ul>
+                </div>
+              ));
+          })()}
           <div className="setup-actions">
             {gaps.some((gap) => SETUP_GAPS.has(gap)) ? (
               <button onClick={() => navigate(`/trips/${tripId}/setup`)} type="button">

@@ -1043,6 +1043,54 @@
 }
 
 .place-paid-action,
+/* The free Wikidata/Wikipedia block: a photograph and real prose about the place,
+   which is what the ranked codes could never provide. Photo left on a wide screen,
+   stacked below the text on a phone, because the words matter more than the picture
+   when the space is scarce. */
+/* One heading per group of gaps, so "type an address" and "press a button" stop
+   looking like the same kind of problem. */
+.evidence-gap-group {
+  margin: 0 0 8px;
+}
+
+.place-about {
+  align-items: flex-start;
+  border-top: 1px dashed var(--bg-card-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 10px;
+}
+
+.place-about-photo {
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius-house);
+  flex: 0 0 auto;
+  height: 132px;
+  object-fit: cover;
+  width: 176px;
+}
+
+.place-about-text {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.place-about-text h4 {
+  margin: 0 0 4px;
+}
+
+.place-about-text p {
+  margin: 0 0 6px;
+}
+
+@media (max-width: 600px) {
+  .place-about-photo {
+    height: 168px;
+    width: 100%;
+  }
+}
+
 .place-insight {
   background: var(--bg-secondary);
   border: 1px solid var(--bg-card-border);

@@ -9,6 +9,7 @@ import {
   type DiscoveryRun,
   type PaidCallCheck,
   type PlaceInsight,
+  type PlaceSummary,
   type Ranking,
   type RankingLaneEntry,
   type SetupDraft,
@@ -58,7 +59,24 @@ export function PlacesPage() {
   const { language } = useLanguage();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [lane, setLane] = useState<Lane>("main_queue");
+  // Opens on City Icons, not the main queue. Measured on the real Taipei catalogue:
+  // 20 of the main queue's top 20 have no Wikidata id and so no description, and the
+  // lane led with an RC model airplane runway; all 20 of City Icons' top 20 have one.
+  // The queue is still one select away.
+  const [lane, setLane] = useState<Lane>("city_icons");
+  // Free descriptions and photos: Wikidata plus Wikipedia, no key and no charge.
+  // This is what answers "the summary tells me nothing about the place" -- the
+  // templated sentence below is built from the same codes for every card.
+  const fetchSummary = useMutation({
+    mutationFn: (placeId: string) =>
+      rpc("refresh_place_summaries", { trip_id: tripId, place_ids: [placeId] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["place_summaries", tripId] }),
+  });
+  const summaries = useQuery({
+    queryKey: ["place_summaries", tripId],
+    queryFn: () => rpc<Record<string, PlaceSummary>>("list_place_summaries", { trip_id: tripId }),
+    enabled: Boolean(tripId),
+  });
   const [cardId, setCardId] = useState("");
   const [rejectionReason, setRejectionReason] = useState("null");
   const [flash, setFlash] = useState<string | null>(null);
@@ -290,13 +308,68 @@ export function PlacesPage() {
                 <div><h3>{placeName(candidate, language, candidate.name)}</h3>{candidate.names?.local && candidate.names.local !== placeName(candidate, language, candidate.name) ? <p>{candidate.names.local}</p> : null}<span className="money-tag">{categoryName(candidate.category, language)}</span></div>
                 <strong className="place-score">{card.total_score.toFixed(1)}<small>/100</small></strong>
               </header>
-              <p>{copyFormat("place_summary_template", language, {
-                name: placeName(candidate, language, candidate.name),
-                category: categoryName(candidate.category, language),
-                best_for: (card.matched_tags.length ? card.matched_tags : card.candidate_tags).slice(0, 4).map((tag) => copyFrom("TAG_TEXT", tag, language)).join(" · "),
-                reason: copyFrom("EXPLANATION_TEXT", card.why_shown[0], language),
-                caution: card.cons.slice(0, 2).map((code) => copyFrom("EXPLANATION_TEXT", code, language)).join(" · "),
-              })}</p>
+              {(() => {
+                const about = summaries.data?.[selectedId];
+                const prose = about?.text?.[language] ?? about?.text?.en ?? "";
+                const onlyEnglish = language === "th" && !about?.text?.th && Boolean(about?.text?.en);
+                const asking = fetchSummary.isPending;
+                if (!prose && !about?.image_url) {
+                  // Nothing found: say so, and keep the mechanism sentence as the
+                  // fallback rather than showing an empty card.
+                  return (
+                    <>
+                      <div className="place-paid-action">
+                        <p className="setup-hint">
+                          {summaries.data && selectedId in summaries.data
+                            ? copy("no_description_yet", language)
+                            : copy("descriptions_are_free", language)}
+                        </p>
+                        {summaries.data && selectedId in summaries.data ? null : (
+                          <button disabled={asking} onClick={() => fetchSummary.mutate(selectedId)} type="button">
+                            {copy("load_descriptions", language)}
+                          </button>
+                        )}
+                      </div>
+                      <p>{copyFormat("place_summary_template", language, {
+                        name: placeName(candidate, language, candidate.name),
+                        category: categoryName(candidate.category, language),
+                        best_for: (card.matched_tags.length ? card.matched_tags : card.candidate_tags).slice(0, 4).map((tag) => copyFrom("TAG_TEXT", tag, language)).join(" · "),
+                        reason: copyFrom("EXPLANATION_TEXT", card.why_shown[0], language),
+                        caution: card.cons.slice(0, 2).map((code) => copyFrom("EXPLANATION_TEXT", code, language)).join(" · "),
+                      })}</p>
+                    </>
+                  );
+                }
+                return (
+                  // derives-from: element 26 .recent-row-item as .place-about
+                  <div className="place-about">
+                    {about?.image_url ? (
+                      <img
+                        alt={placeName(candidate, language, candidate.name)}
+                        className="place-about-photo"
+                        loading="lazy"
+                        src={about.image_url}
+                      />
+                    ) : null}
+                    <div className="place-about-text">
+                      <h4>{copy("about_this_place", language)}</h4>
+                      {prose ? <p>{prose}</p> : null}
+                      {onlyEnglish ? <p className="setup-hint">{copy("description_thai_missing", language)}</p> : null}
+                      <p className="setup-hint">
+                        {copy("wikipedia_credit", language)}
+                        {about?.source_urls?.[language] || about?.source_urls?.en ? (
+                          <>
+                            {" · "}
+                            <a href={about.source_urls[language] ?? about.source_urls.en} rel="noreferrer" target="_blank">
+                              {copy("read_on_wikipedia", language)}
+                            </a>
+                          </>
+                        ) : null}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
               <div className="place-card-facts">
                 <span><b>{copy("duration", language)}:</b> {card.duration_estimate.minimum_minutes}–{card.duration_estimate.maximum_minutes} {copy("minutes", language)}</span>
                 <span><b>{copy("feasibility", language)}:</b> {copy(card.feasibility.state, language)}</span>
@@ -333,7 +406,10 @@ export function PlacesPage() {
                 <div className="place-detail-grid">
                   {(["why", "pros", "cons"] as const).map((kind) => {
                     const values = kind === "why" ? card.why_shown : card[kind];
-                    return <div key={kind}><h4>{copy(kind, language)}</h4><ul>{values.map((code) => <li key={code}>{copyFrom("EXPLANATION_TEXT", code, language)}</li>)}</ul></div>;
+                    // "Why shown" describes the matcher, not the place: its top two
+                    // codes appear on 793 of 832 cards. Titled for what it is.
+                    const heading = kind === "why" ? copy("why_it_matched_you", language) : copy(kind, language);
+                    return <div key={kind}><h4>{heading}</h4><ul>{values.map((code) => <li key={code}>{copyFrom("EXPLANATION_TEXT", code, language)}</li>)}</ul></div>;
                   })}
                 </div>
                 <h4>{copy("breakdown", language)}</h4>

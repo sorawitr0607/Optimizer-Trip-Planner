@@ -1,8 +1,8 @@
 {
   "api/__init__.py": {
-    "mtime": 1785921729.7618604,
-    "ast_hash": "eb191cfc1008290a4e31c7517724aa56",
-    "semantic_hash": "eb191cfc1008290a4e31c7517724aa56"
+    "mtime": 1786001001.2765458,
+    "ast_hash": "f572232062807bc6365e6c0c2e958ee0",
+    "semantic_hash": "f572232062807bc6365e6c0c2e958ee0"
   },
   "api/__main__.py": {
     "mtime": 1785767189.3726726,
@@ -10,9 +10,9 @@
     "semantic_hash": "d33425215a1a5b514fe4f1a0bbaa33d3"
   },
   "i18n/copy.json": {
-    "mtime": 1785819907.9150572,
-    "ast_hash": "a31fae0b70597ad6812ab64ee1c45c46",
-    "semantic_hash": "a31fae0b70597ad6812ab64ee1c45c46"
+    "mtime": 1786001201.940893,
+    "ast_hash": "4bc3a2eb022d859074f68733ff23e072",
+    "semantic_hash": "4bc3a2eb022d859074f68733ff23e072"
   },
   "pyproject.toml": {
     "mtime": 1785834132.5329027,
@@ -75,9 +75,9 @@
     "semantic_hash": "0f0b97bc1702fe704a6233c14f3c26b1"
   },
   "tests/test_api.py": {
-    "mtime": 1785921729.7670865,
-    "ast_hash": "48a3c6b3ebbad0bfae968b6c581d0fb1",
-    "semantic_hash": "48a3c6b3ebbad0bfae968b6c581d0fb1"
+    "mtime": 1786001001.2768378,
+    "ast_hash": "ab7d11a4b1b0d94b6c8e23d16f57b0c5",
+    "semantic_hash": "ab7d11a4b1b0d94b6c8e23d16f57b0c5"
   },
   "tests/test_checklist.py": {
     "mtime": 1785832402.4787455,
@@ -135,9 +135,9 @@
     "semantic_hash": "74ea0535d1b1e1c1d56615e11dcbfc4d"
   },
   "tests/test_routes.py": {
-    "mtime": 1785925806.2587814,
-    "ast_hash": "787270c5044433feb6b751fef6c28d5a",
-    "semantic_hash": "787270c5044433feb6b751fef6c28d5a"
+    "mtime": 1786001001.2771347,
+    "ast_hash": "f8a1ad7f7be55baba2edcf1bf7bdf99c",
+    "semantic_hash": "f8a1ad7f7be55baba2edcf1bf7bdf99c"
   },
   "tests/test_setup_discovery.py": {
     "mtime": 1785832402.482533,
@@ -165,9 +165,9 @@
     "semantic_hash": "ef0aefdeae9a5f201e587415c32b8a5b"
   },
   "travel_planner/actions.py": {
-    "mtime": 1785989228.6438878,
-    "ast_hash": "c4a0881adbabf20f5ba2ab07644aa58a",
-    "semantic_hash": "c4a0881adbabf20f5ba2ab07644aa58a"
+    "mtime": 1786001641.8960178,
+    "ast_hash": "e311ad5d7fe6aeea4b8da510abdb06a5",
+    "semantic_hash": "e311ad5d7fe6aeea4b8da510abdb06a5"
   },
   "travel_planner/checklist.py": {
     "mtime": 1785316030.1684666,
@@ -230,9 +230,9 @@
     "semantic_hash": "6a219a473a7ada13eba32333c7482869"
   },
   "travel_planner/providers.py": {
-    "mtime": 1785925806.2602105,
-    "ast_hash": "26c72077c6bb36f80e0fa444b3eea3ce",
-    "semantic_hash": "26c72077c6bb36f80e0fa444b3eea3ce"
+    "mtime": 1786001001.2778583,
+    "ast_hash": "9d3970a0242363f12a59e43a756db30c",
+    "semantic_hash": "9d3970a0242363f12a59e43a756db30c"
   },
   "travel_planner/ranking.py": {
     "mtime": 1785998402.7722473,
@@ -265,9 +265,9 @@
     "semantic_hash": "1ef554d9b380bdedc9c8236ab34ba5a1"
   },
   "travel_planner/usage.py": {
-    "mtime": 1785925806.2607238,
-    "ast_hash": "597dac1484a739d4b6e0aeee77bd3892",
-    "semantic_hash": "597dac1484a739d4b6e0aeee77bd3892"
+    "mtime": 1786001001.2781446,
+    "ast_hash": "2bcda33b5a337b0e53028dfed9e16ce0",
+    "semantic_hash": "2bcda33b5a337b0e53028dfed9e16ce0"
   },
   "web/eslint.config.js": {
     "mtime": 1785764956.464039,
@@ -280,9 +280,9 @@
     "semantic_hash": "39c50ba6ae1dcb8562cfff0bc1bc4135"
   },
   "web/src/api/client.ts": {
-    "mtime": 1785818226.4934855,
-    "ast_hash": "dd571323373cd895af3d00e4954c7d96",
-    "semantic_hash": "dd571323373cd895af3d00e4954c7d96"
+    "mtime": 1786001372.4579184,
+    "ast_hash": "4cd07f8f5653810d46cc223afe09bc71",
+    "semantic_hash": "4cd07f8f5653810d46cc223afe09bc71"
   },
   "web/src/i18n/LanguageProvider.tsx": {
     "mtime": 1785770892.378143,
@@ -340,9 +340,9 @@
     "semantic_hash": "70a43e308029371dbea4d1663cfdd792"
   },
   "web/src/stages/EvidencePage.tsx": {
-    "mtime": 1785821548.105559,
-    "ast_hash": "25fa21dafaddeeee3af64ccb53849a59",
-    "semantic_hash": "25fa21dafaddeeee3af64ccb53849a59"
+    "mtime": 1786001438.216751,
+    "ast_hash": "852e1101ba8fc13cd41f3e7cb506209b",
+    "semantic_hash": "852e1101ba8fc13cd41f3e7cb506209b"
   },
   "web/src/stages/ItineraryPage.tsx": {
     "mtime": 1785821548.1062374,
@@ -355,9 +355,9 @@
     "semantic_hash": "25ce794c0ae31c7a9857eb4bae7048b2"
   },
   "web/src/stages/PlacesPage.tsx": {
-    "mtime": 1785815158.5067623,
-    "ast_hash": "a1cf77f1df995ce7aacb14e025beeb79",
-    "semantic_hash": "a1cf77f1df995ce7aacb14e025beeb79"
+    "mtime": 1786001698.0447335,
+    "ast_hash": "e9eeb6b3b1e996a62e1ae8e30c8a7c36",
+    "semantic_hash": "e9eeb6b3b1e996a62e1ae8e30c8a7c36"
   },
   "web/src/stages/ReadinessPage.tsx": {
     "mtime": 1785821548.1072967,
@@ -400,9 +400,9 @@
     "semantic_hash": "ea34a1254b2296e11acd2df2ff6e9ba3"
   },
   "web/src/stages/s4.test.tsx": {
-    "mtime": 1785819907.9161193,
-    "ast_hash": "70a9c3fe19a076d44d5515f4c9f8c91f",
-    "semantic_hash": "70a9c3fe19a076d44d5515f4c9f8c91f"
+    "mtime": 1786001730.187901,
+    "ast_hash": "0b47487da0521da4d145bc97dd083679",
+    "semantic_hash": "0b47487da0521da4d145bc97dd083679"
   },
   "web/src/stages/s5.test.tsx": {
     "mtime": 1785815158.508128,
@@ -513,6 +513,11 @@
     "mtime": 1785757280.0451212,
     "ast_hash": "420e1f2e633c10d6ebabeb1d067f63a8",
     "semantic_hash": "420e1f2e633c10d6ebabeb1d067f63a8"
+  },
+  ".wayfinder/map-002-splitter-merge-and-webapp.md": {
+    "mtime": 1785997634.1886728,
+    "ast_hash": "00930b6f501d719eba4171a47444744d",
+    "semantic_hash": "00930b6f501d719eba4171a47444744d"
   },
   ".wayfinder/map.md": {
     "mtime": 1785272453.0,
@@ -699,6 +704,11 @@
     "ast_hash": "f1b02223bdffe51e72c8ccf3c3dc935d",
     "semantic_hash": "f1b02223bdffe51e72c8ccf3c3dc935d"
   },
+  ".wayfinder/tickets/037-decide-how-ranking-handles-crowded-categories-and-landmark-signal.md": {
+    "mtime": 1785998488.2537198,
+    "ast_hash": "9599f2f3d43183e61c44ea25422f3d45",
+    "semantic_hash": "9599f2f3d43183e61c44ea25422f3d45"
+  },
   ".wayfinder/tickets/038-decide-how-the-planner-gets-transit-routing.md": {
     "mtime": 1785923243.4256158,
     "ast_hash": "d72f42e9e0be67742b1f5a46f2f3aa4e",
@@ -723,6 +733,11 @@
     "mtime": 1785766520.9028397,
     "ast_hash": "1eadb8bff2a10ce33d7930a6411d1154",
     "semantic_hash": "1eadb8bff2a10ce33d7930a6411d1154"
+  },
+  "CLAUDE.md": {
+    "mtime": 1785997309.790899,
+    "ast_hash": "00c70eb648b20e1271e4109639167394",
+    "semantic_hash": "00c70eb648b20e1271e4109639167394"
   },
   "README.md": {
     "mtime": 1785835418.4719262,

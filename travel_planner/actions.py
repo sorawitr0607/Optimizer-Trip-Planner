@@ -1408,7 +1408,11 @@ class PlannerActions:
         raise PlannerRefusal("discovery_missing")
 
     def refresh_place_summaries(
-        self, trip_id: str, *, force: bool = False
+        self,
+        trip_id: str,
+        *,
+        place_ids: Sequence[str] | None = None,
+        force: bool = False,
     ) -> dict[str, Any]:
         """Fetch a description and photo per selected place, in both languages.
 
@@ -1432,9 +1436,22 @@ class PlannerActions:
             for row in self.store.list_place_evidence(trip_id, provider.kind)
             if row.get("place_id")
         }
+        # Named places come from the whole discovered catalogue, not the selection:
+        # `/places` browses 832 candidates and the owner wants a description for the
+        # card in front of them, which is usually one they have not chosen yet.
+        if place_ids is None:
+            wanted = self._selected_places(trip_id)
+        else:
+            discovery = self.get_latest_discovery(trip_id)
+            catalogue = {
+                item["place_id"]: item
+                for item in (discovery.candidates.as_dict()["candidates"] if discovery else [])
+            }
+            wanted = [catalogue[pid] for pid in place_ids if pid in catalogue]
+
         fetched = cached = skipped = failed = 0
         errors: list[str] = []
-        for place in self._selected_places(trip_id):
+        for place in wanted:
             qid = (place.get("signals") or {}).get("wikidata")
             if not qid:
                 skipped += 1
@@ -1475,7 +1492,7 @@ class PlannerActions:
             )
             fetched += 1
         return {
-            "places": len(self._selected_places(trip_id)),
+            "places": len(wanted),
             "fetched": fetched,
             "from_cache": cached,
             "without_wikidata_id": skipped,
