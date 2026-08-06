@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm --prefix web install                                             # first web run only
 uv run --locked python -m api                                        # production shell on 127.0.0.1:8765
 uv run --locked python scripts/check.py                              # every free Python + web gate
-uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 312 tests, ~11s
+uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 328 tests, ~8s
 uv run --locked python -m unittest tests.test_optimizer.OptimizerCoreTest.test_safe_route_and_weather_fallback_are_selected  # one test
 python3 scripts/validate_regression_fixtures.py                      # fixture catalog structure
 uv run --locked python scripts/run_optimizer_regressions.py          # 27 historic cases through the real optimizer
@@ -109,6 +109,45 @@ Each stage is gated on the previous one having a matching hash (`_current_choice
    evidence state move independently, and `validate_item()` refuses a verified `required` item with no
    responsible authority type. Board items are the one mutable record type; readiness warnings are
    explicitly non-blocking (`blocks_itinerary` is always False).
+
+**Transit routing arrived on 2026-08-05 (`WF-038`) and changes what the optimizer can plan.**
+`travel_planner/transit.py` holds `TransitGraph`, the walking constants and **one** Dijkstra;
+`gtfs.TransitFeed` builds one from a timetable zip and `transit.graph_from_osm()` from an
+OpenStreetMap `route=subway` relation. `providers.GtfsTransitProvider` and `providers.OsmMetroProvider`
+wrap them, both `mode: "transit"`, both priced at US$0.00 — priced rather than omitted, because an
+unpriced operation raises. `actions.refresh_transit_routes` stores transit legs **beside** the walking
+ones: the store keys a snapshot by (origin, destination, **mode**) and the optimizer takes the shortest it
+holds, so short hops keep their walk. `PlannerActions._default_transit_provider` prefers a GTFS feed at
+`TOURIST_GTFS_PATH` when one exists and falls back to OSM, which is weaker and says so — GTFS edges carry
+`basis: "timetable"`, OSM edges `basis: "nominal"` with ride time from distance at 33 km/h and wait from
+an assumed 6-minute headway. Taipei's own GTFS is **not sourced**: TDX needs a Taiwan mobile number.
+
+Three consequences worth knowing. **A transit route is `status: "estimated"`, never `"verified"`**, and
+three sites used to admit only `verified` — `actions._optimizer_input`,
+`optimizer._routes_between` and `optimizer._best_inbound_route`. All three now admit `estimated` when
+`allow_provisional_assumptions` is set, which only `explore_first` sets; a `ready_to_schedule` trip is
+unaffected and `ROUTE_UNVERIFIED` stays fatal for it. The precedent is `_planning_fact`'s own docstring —
+"a visible assumption allowed only for an Explore preview". **`walking_minutes` excludes the ride**, which
+is the whole point: `maximum_walking_minutes_per_leg` measures it, so a 43-minute ride reached by a
+2-minute walk passes a 25-minute cap no walk of that distance could. And **`refresh_routes` sorts pairs
+nearest-first**, because the 60-per-run cap bites long before 41 places' 1640 pairs and a missing route
+falls back to a pessimistic estimate — sorting by `place_id` spent 340 free calls on pairs the plan never
+used and produced phantom 68-minute walks.
+
+**Opening hours are per-day as of 2026-08-06 (`WF-041`).** `opening.common_interval` takes the overlap
+across the days a place is **open** rather than refusing the moment one trip date is shut, and returns
+`open_dates`; `_optimizer_input` puts those in the fact's `applies_to_dates`; `optimizer._open_on()` is
+consulted by `_earliest_visit_start` and `validate_variant`. A fact without `applies_to_dates` applies
+everywhere, so frozen fixtures are untouched. Before this a venue closed on one trip day was
+unschedulable on **every** day — five of thirteen pilot landmarks were lost that way.
+
+**Ranking divides by category breadth as of 2026-08-06 (`WF-037`).** `group_preference_fit` divided the
+owner's matched styles by how many they *named*, which a category with more tags wins for free: `peak`
+carries four tags and `attraction` two, so a nameless hill scored 27 of 30 against Taipei 101's 12.8 and
+Taipei 101 ranked **363rd of 832**. It now divides by `_breadth(candidate_tags)`, capped at four.
+`FORMULA_WEIGHTS` is untouched. Do not assume the ranker's ordering is tested by the old suite — it
+asserted only that the score was internally consistent, which holds under any weighting, and
+`test_a_landmark_is_not_buried_by_a_richer_tag_vocabulary` is the first test of what it recommends.
 
 7. **Revision** — `revision.py` holds the whole typed operation set. An operation is a *constraint
    change* on the optimizer input, never a schedule instruction, so nothing in it can write an opening
@@ -235,8 +274,8 @@ expenses into THB against an owner-editable, timestamped rate snapshot; a paid c
 THB so a later rate cannot rewrite it, and a missing rate stays a visible gap rather than a guess.
 **Phase 2 S5 is complete:** `api/` owns the localhost boundary and downloads, `web/` owns the nine
 routes and in-place `StageGate`, and `scripts/check.py` is the one free green command. The allowlist is
-**60 methods**: 51 at S1, five split-ledger ones at S2, `setup_vocabulary` at S3, the paid-call preflight
-and export-snapshot reads at S4, then `checklist_vocabulary` at S5; 28 refusal codes. **All nine routes are
+**61 methods**: 51 at S1, five split-ledger ones at S2, `setup_vocabulary` at S3, the paid-call preflight
+and export-snapshot reads at S4, then `checklist_vocabulary` at S5, and `refresh_transit_routes` for `WF-038`; 28 refusal codes. **All nine routes are
 real screens** as of 2026-08-04 — `/setup`, `/places`, `/evidence`, `/optimize`, `/itinerary`, `/readiness`,
 `/costs`, `/split` and `/revise`. There is no `StagePage`, no `gated()` wrapper and no `stage_stub` copy key;
 they went with the last stub. `/evidence` was built between S5 and S6 because **no slice row owned it** and
@@ -281,7 +320,8 @@ first: `.wayfinder/artifacts/033-phase-2-slice-plan-and-scorecard.md`.
   skipped. S6 may archive the donor whenever it is ready.
 
 **Phase 2 is complete: S0 through S6 are all done as of 2026-08-04.** S6 landed the two-level visual parity
-gate and deleted the POC. `scripts/check.py` is **11 stages**, green in ~24s.
+gate and deleted the POC. `scripts/check.py` is **12 stages**, green in ~17s — the twelfth is the
+reference-workbook coverage gate.
 
 The parity gate is two levels, and neither is a whole-screen comparison against the donor — Auto-Bill has
 two screens and the planner has nine, so that comparison is meaningless:
