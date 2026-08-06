@@ -11,7 +11,12 @@ from unittest.mock import patch
 from scripts.run_optimizer_regressions import run_catalog
 from travel_planner.actions import PlannerActions
 from travel_planner.core import new_optimization_preview
-from travel_planner.optimizer import optimize_trip, validate_variant
+from travel_planner.optimizer import (
+    DEPARTURE_LOGISTICS_MINUTES,
+    optimize_trip,
+    validate_variant,
+)
+from tests.test_routes import FakePlaceProvider
 
 ROOT = Path(__file__).resolve().parents[1]
 CATALOG = json.loads(
@@ -162,6 +167,43 @@ class OptimizerCoreTest(unittest.TestCase):
             {item["code"] for item in validation["hard_violations"]},
         )
 
+    def test_a_departure_day_too_short_for_its_flight_does_not_empty_the_trip(self) -> None:
+        """An early flight consumes the last day; it must not veto every other day.
+
+        `WF-042`. The departure suffix is 180 fixed minutes (pack and check out,
+        transfer, airport), so a flight before roughly 11:00 leaves the last day with
+        no room at all. `_build_day` reported that as a hard error even when nothing
+        was scheduled there, and `_greedy_baseline` only accepts a placement when the
+        **whole trip** builds clean -- so one unusable day emptied the entire plan.
+        """
+
+        snapshot = fixture("dali-hotel-backtracking-pattern")["planner_input"]
+        snapshot["trip"]["include_operational_timeline"] = True
+        snapshot["trip"]["local_dates"] = ["2030-03-02", "2030-03-03"]
+        # A 10:40 flight home: leaving at 07:40 is required, so 09:00 is already late.
+        snapshot["trip"]["usable_windows"][-1]["end"] = "10:40"
+
+        variant = optimize_trip(snapshot)["variants"][0]
+        by_date = {day["date"]: day["items"] for day in variant["days"]}
+
+        self.assertGreater(variant["metrics"]["scheduled_visits"], 0)
+        self.assertNotIn(
+            "NO_SELECTED_PLACE_COULD_BE_SCHEDULED", variant["metrics"]["warnings"]
+        )
+        # The last day carries the departure logistics and no visits, rather than
+        # rendering as a blank day with the flight left implicit.
+        self.assertEqual(
+            [], [item for item in by_date["2030-03-03"] if item["type"] == "visit"]
+        )
+        self.assertEqual(
+            ["pack_and_check_out", "departure_transfer", "airport_departure"],
+            [
+                item["kind"]
+                for item in by_date["2030-03-03"]
+                if item["type"] == "logistics"
+            ],
+        )
+
     def test_all_historic_fixtures_pass_the_real_optimizer(self) -> None:
         self.assertEqual([], run_catalog())
 
@@ -190,6 +232,48 @@ class OptimizerActionsTest(unittest.TestCase):
             self.assertEqual(snapshot, version.snapshot.as_dict()["optimizer_input"])
             self.assertEqual("ready", version.snapshot.as_dict()["variant"]["status"])
             self.assertIsNone(actions.get_plan_preview(trip.trip_id))
+
+    def test_the_departure_day_window_opens_early_enough_for_the_flight(self) -> None:
+        """`WF-042`. The root fix: the window, not the builder's clock.
+
+        Moving only the builder forward fought the independent validator, which
+        judges every item against the snapshot's own `usable_windows` — so the day
+        laid out correctly and was then rejected as `OUTSIDE_USABLE_WINDOW`. The
+        window is what every consumer reads, so the window is what has to be right.
+        """
+
+        with TemporaryDirectory() as directory:
+            actions = PlannerActions(
+                Path(directory) / "flight.sqlite3", place_provider=FakePlaceProvider()
+            )
+            trip = actions.create_trip(name="Taipei", destination="Taipei")
+            actions.save_setup(
+                trip_id=trip.trip_id,
+                main_style=["sightseeing"],
+                start_date="2030-01-01",
+                end_date="2030-01-03",
+                arrival_time="17:40",
+                departure_time="10:40",
+                accommodation_status="booked",
+                confirmed=True,
+            )
+            actions.discover_places(trip_id=trip.trip_id)
+            first = actions.get_latest_discovery(trip.trip_id).candidates.as_dict()[
+                "candidates"
+            ][0]["place_id"]
+            actions.save_candidate_choice(
+                trip_id=trip.trip_id, place_id=first, action="must_do"
+            )
+
+            windows = actions._optimizer_input(trip.trip_id)["trip"]["usable_windows"]
+
+        # 10:40 minus pack-and-check-out, transfer and airport time.
+        self.assertEqual(DEPARTURE_LOGISTICS_MINUTES, 180)
+        self.assertEqual({"date": "2030-01-03", "start": "07:40", "end": "10:40"}, windows[-1])
+        # The arrival day still tightens from its own flight, and the middle day is
+        # untouched — only the departure day borrows time.
+        self.assertEqual("17:40", windows[0]["start"])
+        self.assertEqual({"date": "2030-01-02", "start": "08:00", "end": "22:00"}, windows[1])
 
     def test_missing_dates_returns_stay_length_choices(self) -> None:
         snapshot = fixture("jp-shibuya-sky-morning-view")["planner_input"]

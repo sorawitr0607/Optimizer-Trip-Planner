@@ -16,6 +16,20 @@ from typing import Any
 
 
 OPTIMIZER_VERSION = "whole-trip-v2"
+
+# What the departure day owes before the flight: pack and check out, reach the
+# terminal, be at the airport. Exported because the *usable window* for that day has
+# to open early enough to contain them -- a 10:40 flight means leaving at 07:40
+# however late the owner likes to start sightseeing, and a window that says 08:00
+# makes the day infeasible. See `WF-042`. Kept as one source so the layout below and
+# `actions._optimizer_input` cannot drift apart.
+DEPARTURE_LOGISTICS: tuple[tuple[str, int], ...] = (
+    ("pack_and_check_out", 45),
+    ("departure_transfer", 45),
+    ("airport_departure", 90),
+)
+DEPARTURE_LOGISTICS_MINUTES = sum(minutes for _, minutes in DEPARTURE_LOGISTICS)
+
 VARIANT_CONFIGS = (
     {"id": "best_balance", "duration": "ideal", "buffer_minutes": 10},
     {"id": "relaxed", "duration": "maximum", "buffer_minutes": 20},
@@ -708,7 +722,13 @@ def _build_day(
     for block in operational["prefix"]:
         current = _append_operational(items, day, current, block)
     body_end = window_end - sum(block["duration_minutes"] for block in operational["suffix"])
-    if current > body_end:
+    # `WF-042`. Refuse only when something was actually going to happen here. An
+    # overflowing day with nothing scheduled on it used to abort the same way, and
+    # because `_greedy_baseline` accepts a placement only when **every** day builds
+    # clean, one unusable day emptied the entire trip. Such a day now lays its
+    # logistics out honestly instead; the independent validator still judges whether
+    # they fit, which is not this function's call to make.
+    if current > body_end and (sequence or items):
         hard_errors.append({"code": "OPERATIONAL_TIMELINE_EXCEEDS_DAY", "subject_id": day})
         return {
             "day": {
@@ -939,25 +959,21 @@ def _operational_layout(
 
     suffix: list[dict[str, Any]]
     if last:
-        suffix = [
-            {
-                "type": "logistics",
-                "kind": "pack_and_check_out",
-                "duration_minutes": 45,
-            },
-            {
-                "type": "logistics",
-                "kind": "departure_transfer",
-                "duration_minutes": 45,
+        extra = {
+            "departure_transfer": {
                 "mode": "confirm",
                 "from_name": _base_name(snapshot),
                 "to_name": _terminal_name(snapshot, arrival=False),
-            },
+            }
+        }
+        suffix = [
             {
                 "type": "logistics",
-                "kind": "airport_departure",
-                "duration_minutes": 90,
-            },
+                "kind": kind,
+                "duration_minutes": minutes,
+                **extra.get(kind, {}),
+            }
+            for kind, minutes in DEPARTURE_LOGISTICS
         ]
     else:
         suffix = [

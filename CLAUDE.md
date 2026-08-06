@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm --prefix web install                                             # first web run only
 uv run --locked python -m api                                        # production shell on 127.0.0.1:8765
 uv run --locked python scripts/check.py                              # every free Python + web gate
-uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 328 tests, ~8s
+uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 337 tests, ~8s
 uv run --locked python -m unittest tests.test_optimizer.OptimizerCoreTest.test_safe_route_and_weather_fallback_are_selected  # one test
 python3 scripts/validate_regression_fixtures.py                      # fixture catalog structure
 uv run --locked python scripts/run_optimizer_regressions.py          # 27 historic cases through the real optimizer
@@ -140,6 +140,22 @@ across the days a place is **open** rather than refusing the moment one trip dat
 consulted by `_earliest_visit_start` and `validate_variant`. A fact without `applies_to_dates` applies
 everywhere, so frozen fixtures are untouched. Before this a venue closed on one trip day was
 unschedulable on **every** day — five of thirteen pilot landmarks were lost that way.
+
+**A flight day's window holds its own logistics as of 2026-08-06 (`WF-042`).** The last day owes a fixed
+suffix — `optimizer.DEPARTURE_LOGISTICS`, 45 + 45 + 90 = **180 minutes** of checkout, transfer and airport
+— so `_optimizer_input` opens that day at `min("08:00", departure_time − DEPARTURE_LOGISTICS_MINUTES)`.
+That constant is exported for exactly this reason and is the **one** source both sites read. Before it, a
+morning flight made the departure day infeasible, and because `_greedy_baseline` accepts a placement only
+when the **whole trip** builds clean, one unusable day emptied the entire plan — 13 visits to 0, every
+landmark blamed on `PLAIN_WALK_THRESHOLD`. Two things follow. `_build_day` now refuses only when
+`sequence or items`, so an empty day cannot veto the others. And **do not fix a window problem in the
+builder**: moving `current` without moving `usable_windows` scheduled all 13 visits and then failed
+`validate_variant` with `OUTSIDE_USABLE_WINDOW`, because the validator judges every item against the
+snapshot's window and is meant to. `_skip_reason` is also not a measurement — it returns
+`PLAIN_WALK_THRESHOLD` whenever a place was skipped and that threshold merely exists, so read
+`_build_schedules`' own `hard_errors` when diagnosing. **No test set `include_operational_timeline`**
+before this; it is `True` for every trip `actions.py` builds and absent from all 27 fixtures, so arrival
+transfers, check-in, meals and the airport run were exercised only by the live pilot.
 
 **Ranking divides by category breadth as of 2026-08-06 (`WF-037`).** `group_preference_fit` divided the
 owner's matched styles by how many they *named*, which a category with more tags wins for free: `peak`
@@ -302,9 +318,11 @@ that declaration is what kept the gate working when the POC went.
 
 ## Phase 2 implementation follows the locked slice order
 
-`WF-MAP-002` is **decision-complete as of 2026-08-03**: 19 tickets, **18 closed, 1 open**. The one open
-ticket, `Prototype the ranked candidate card grid`, is **deferred past the pilot by decision** rather than
-outstanding. `Lock the Phase 2 slice plan and validation scorecard` is the destination artifact — read it
+`WF-MAP-002` is **decision-complete as of 2026-08-03**. Across both maps there are 43 tickets, **40
+closed, 3 open**, and all three open ones are open *by decision* rather than outstanding:
+`Decide how an owner accepts a comfort tradeoff` (`WF-039`), `Decide whether the planner recommends where
+to stay` (`WF-040`), and `Decide what a variant returns when it runs out of time` (`WF-043`) — the last
+costing the pilot one of three options on `/optimize`, not the trip. `Lock the Phase 2 slice plan and validation scorecard` is the destination artifact — read it
 first: `.wayfinder/artifacts/033-phase-2-slice-plan-and-scorecard.md`.
 
 **Three S6 decisions the owner settled on 2026-08-04, so nothing is waiting on them:**

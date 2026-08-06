@@ -31,7 +31,7 @@ from .core import (
 from . import checklist, costs, destinations, exports, interpret, opening, revision, split, usage
 from . import setup as setup_module
 from .discovery import build_candidate_catalog
-from .optimizer import date_range, optimize_trip
+from .optimizer import DEPARTURE_LOGISTICS_MINUTES, date_range, optimize_trip
 from .providers import (
     CARD_PHOTO_LIMIT,
     GooglePlacesCardProvider,
@@ -50,6 +50,14 @@ from .providers import (
 from .ranking import build_ranking, validate_choice, _distance_metres
 from .setup import build_setup_payload
 from .store import SQLiteStore
+
+
+def _shift_clock(value: str, minutes: int) -> str:
+    """Move an `HH:MM` local time, clamped to the same day at both ends."""
+
+    hour, minute = value.split(":", 1)
+    moved = min(24 * 60 - 1, max(0, int(hour) * 60 + int(minute) + minutes))
+    return f"{moved // 60:02d}:{moved % 60:02d}"
 
 
 """Fields a generated checklist item takes from its template on every apply.
@@ -598,6 +606,14 @@ class PlannerActions:
                 start = basics["arrival_time"]
             if index == len(local_dates) - 1 and basics.get("departure_time"):
                 end = basics["departure_time"]
+                # `WF-042`. The departure day owes fixed logistics before the flight
+                # and they are not sightseeing, so the window has to open early
+                # enough to hold them. It used to keep the 08:00 leisure start, which
+                # for any flight before ~11:00 made the day infeasible -- and because
+                # the optimizer accepts a placement only when every day builds clean,
+                # that emptied the whole plan. Clamped at midnight: a pre-dawn flight
+                # would owe the previous day, which is not modelled.
+                start = min(start, _shift_clock(end, -DEPARTURE_LOGISTICS_MINUTES))
             if start >= end:
                 raise PlannerRefusal("no_planning_time", local_date=local_date)
             usable_windows.append({"date": local_date, "start": start, "end": end})
