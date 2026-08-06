@@ -11,6 +11,7 @@ from unittest.mock import patch
 from scripts.run_optimizer_regressions import run_catalog
 from travel_planner.actions import PlannerActions
 from travel_planner.core import new_optimization_preview
+from travel_planner import optimizer as optimizer_module
 from travel_planner.optimizer import (
     DEPARTURE_LOGISTICS_MINUTES,
     optimize_trip,
@@ -203,6 +204,57 @@ class OptimizerCoreTest(unittest.TestCase):
                 if item["type"] == "logistics"
             ],
         )
+
+    def test_a_variant_cut_off_by_the_limit_is_never_worse_than_greedy(self) -> None:
+        """`WF-043`. The invariant was measured, reported, and not acted on.
+
+        `objective_improved_or_equal_to_greedy` was `False` on the pilot while
+        `greedy_baseline` sat in the same payload holding 13 visits the variant threw
+        away. A budget small enough to expire immediately is the cheap way to force
+        the branch: greedy has no time limit, so it is always available as a floor.
+        """
+
+        snapshot = fixture("ix-jp-shibuya-hours-view-walk")["planner_input"]
+
+        proposal = optimize_trip(snapshot, time_limit_seconds=0.000001)
+
+        self.assertTrue(proposal["stopped_at_limit"])
+        for variant in proposal["variants"]:
+            with self.subTest(variant=variant["variant_id"]):
+                self.assertTrue(variant["stopped_at_limit"])
+                self.assertTrue(variant["objective_improved_or_equal_to_greedy"])
+                # The beam reached nothing, so every one of these visits came from the
+                # greedy floor.
+                self.assertEqual(
+                    ["harajuku", "magnet_shibuya", "shibuya_sky"],
+                    variant["greedy_baseline"]["scheduled_place_ids"],
+                )
+                self.assertEqual(3, variant["metrics"]["scheduled_visits"])
+
+    def test_each_variant_gets_its_own_time_budget(self) -> None:
+        """`WF-043`. One shared deadline starved whichever variant ran last.
+
+        Consumed in order, so `more_highlights` inherited what the first two left --
+        0.04s of a 30s budget on the pilot, against the 21.5s it needs to place all
+        13. Asserted structurally because reproducing the starvation needs a snapshot
+        slow enough to burn 30 seconds.
+        """
+
+        snapshot = fixture("dali-hotel-backtracking-pattern")["planner_input"]
+        seen: list[float] = []
+        real = optimizer_module._solve_variant
+
+        def record(snap, config, *, deadline):
+            seen.append(deadline)
+            return real(snap, config, deadline=deadline)
+
+        with patch.object(optimizer_module, "_solve_variant", record):
+            optimize_trip(snapshot, time_limit_seconds=5.0)
+
+        self.assertEqual(3, len(seen))
+        # Each deadline is set when its own variant starts, so they strictly increase.
+        self.assertEqual(sorted(seen), seen)
+        self.assertEqual(3, len(set(seen)))
 
     def test_all_historic_fixtures_pass_the_real_optimizer(self) -> None:
         self.assertEqual([], run_catalog())

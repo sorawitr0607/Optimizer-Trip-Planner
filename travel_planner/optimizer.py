@@ -174,9 +174,15 @@ def optimize_trip(
             "stopped_at_limit": False,
         }
 
-    deadline = monotonic() + time_limit_seconds
+    # `WF-043`. One budget **per variant**, not one shared across all three. A single
+    # absolute deadline is consumed in order, so the third variant inherited whatever
+    # the first two left: measured on the pilot at 20.7s + 10.4s of a 30s budget, which
+    # left `more_highlights` already past it. It returned in 0.04s having placed
+    # nothing, while the same variant on its own budget finishes in 21.5s with all 13
+    # visits. Worst case is now len(VARIANT_CONFIGS) x time_limit_seconds.
     variants = [
-        _solve_variant(snapshot, config, deadline=deadline) for config in VARIANT_CONFIGS
+        _solve_variant(snapshot, config, deadline=monotonic() + time_limit_seconds)
+        for config in VARIANT_CONFIGS
     ]
     proposal = {
         "schema_version": 1,
@@ -647,7 +653,18 @@ def _insertion_search(
             stopped = True
             remaining = {_candidate_id(item) for item in ordered[index:]}
             sequences, skipped = states[0]
-            states = [(sequences, skipped | remaining)]
+            skipped = skipped | remaining
+            # `WF-043`. The beam holds only the candidates reached so far, so cutting
+            # out early can leave almost nothing scheduled -- measured at 0 of 13 on
+            # the pilot, against a greedy pass that placed all 13. Greedy sweeps every
+            # candidate and has no time limit, so it is a floor we can always afford.
+            # Returning worse than a schedule already in hand is never right.
+            greedy = _greedy_sequences(snapshot, ordered, config)
+            if _search_objective(
+                snapshot, greedy[0], greedy[1], ordered, config
+            ) < _search_objective(snapshot, sequences, skipped, ordered, config):
+                sequences, skipped = greedy
+            states = [(sequences, skipped)]
             break
         place_id = _candidate_id(candidate)
         generated: list[tuple[dict[str, list[dict[str, Any]]], set[str]]] = []
@@ -1177,14 +1194,20 @@ def _objective(
     }
 
 
-def _greedy_baseline(
+def _greedy_sequences(
     snapshot: dict[str, Any],
     candidates: list[dict[str, Any]],
-    selected: list[dict[str, Any]],
     config: dict[str, Any],
-) -> dict[str, Any]:
+) -> tuple[dict[str, list[dict[str, Any]]], set[str]]:
+    """First-fit over every candidate: one cheap deterministic sweep, no time limit.
+
+    Extracted for `WF-043` so `_insertion_search` can fall back to it. It considers
+    **all** candidates where the beam search considers only those it reached, which is
+    what makes it a safe floor rather than merely a baseline to report.
+    """
+
     dates = [window["date"] for window in snapshot["trip"]["usable_windows"]]
-    sequences = {day: [] for day in dates}
+    sequences: dict[str, list[dict[str, Any]]] = {day: [] for day in dates}
     skipped: set[str] = set()
     for candidate in sorted(candidates, key=lambda item: _candidate_sort_key(snapshot, item)):
         placed = False
@@ -1200,6 +1223,16 @@ def _greedy_baseline(
                 break
         if not placed:
             skipped.add(_candidate_id(candidate))
+    return sequences, skipped
+
+
+def _greedy_baseline(
+    snapshot: dict[str, Any],
+    candidates: list[dict[str, Any]],
+    selected: list[dict[str, Any]],
+    config: dict[str, Any],
+) -> dict[str, Any]:
+    sequences, skipped = _greedy_sequences(snapshot, candidates, config)
     built = _build_schedules(snapshot, sequences, config)
     metrics = _schedule_metrics(snapshot, built["days"])
     scheduled = {

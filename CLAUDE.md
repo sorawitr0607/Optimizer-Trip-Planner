@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm --prefix web install                                             # first web run only
 uv run --locked python -m api                                        # production shell on 127.0.0.1:8765
 uv run --locked python scripts/check.py                              # every free Python + web gate
-uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 337 tests, ~8s
+uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 339 tests, ~9s
 uv run --locked python -m unittest tests.test_optimizer.OptimizerCoreTest.test_safe_route_and_weather_fallback_are_selected  # one test
 python3 scripts/validate_regression_fixtures.py                      # fixture catalog structure
 uv run --locked python scripts/run_optimizer_regressions.py          # 27 historic cases through the real optimizer
@@ -157,6 +157,22 @@ snapshot's window and is meant to. `_skip_reason` is also not a measurement — 
 before this; it is `True` for every trip `actions.py` builds and absent from all 27 fixtures, so arrival
 transfers, check-in, meals and the airport run were exercised only by the live pilot.
 
+**Every variant gets its own time budget as of 2026-08-06 (`WF-043`).** `optimize_trip` used to compute
+**one** absolute deadline and hand it to all three variants, so it was consumed in order and whichever ran
+last inherited the remainder — measured on the pilot at 20.7s + 10.4s of a 30s budget, leaving
+`more_highlights` already past it. It returned in 0.04s having placed **nothing**, was labelled `ready`
+and `valid` because an empty schedule violates nothing, and reported
+`objective_improved_or_equal_to_greedy: false` beside a `greedy_baseline` holding all 13 visits. The
+deadline is now per variant, so worst case is `len(VARIANT_CONFIGS) × time_limit_seconds` and **a full
+proposal takes ~52s, not ~31s** — that is the third variant doing its 21s of real work. Separately,
+`_greedy_sequences` is split out of `_greedy_baseline` and `_insertion_search` **falls back to it** when
+the deadline does fire: greedy sweeps every candidate and has no time limit, so it is a floor the search
+can always afford, and returning worse than a schedule already in hand is never right. Two things not to
+misread: `deterministic_signature` hashes the **input**, so it cannot detect a load-dependent output; and
+an expired budget legitimately yields 0 visits where greedy's only schedule carries a comfort violation,
+because `comfort_violations` outranks `experience_value` in the objective tuple — that ordering is
+`WF-039`'s question.
+
 **Ranking divides by category breadth as of 2026-08-06 (`WF-037`).** `group_preference_fit` divided the
 owner's matched styles by how many they *named*, which a category with more tags wins for free: `peak`
 carries four tags and `attraction` two, so a nameless hill scored 27 of 30 against Taipei 101's 12.8 and
@@ -243,10 +259,14 @@ must stay directed. Rebuild only through `python3 scripts/build_project_graph.py
 failure), and only when explicitly asked or after a topology-changing milestone. After any graph
 change, `--check` must pass before committing. See `AGENTS.md`.
 
-**Rebuilt after S6 on 2026-08-04 and `--check` passes**: 1599 nodes, 3185 → 3851 directed edges, 149
-communities, and **zero nodes sourced from the deleted POC** (there were 82). That run cost US$0.028350
-for one extraction, reused from cache across three clustering failures; recorded cumulative cost is
-US$0.257345.
+**Rebuilt for `WF-042`/`WF-043` on 2026-08-06 and `--check` passes**: 1756 nodes, 4305 directed edges,
+148 communities. Cost **US$0.0125** — the semantic cache hit 66 of 69 documents, so only the two new
+tickets and the edited `CLAUDE.md` were extracted; recorded cumulative cost is US$0.315828 over 30 runs.
+Adding a ticket file **breaks stage 4 of `check.py` until this is re-run**, because `--check` demands a
+node per ticket; that is the normal reason to pay for a rebuild.
+
+The earlier S6 rebuild on 2026-08-04 gave 1599 nodes, 3185 → 3851 directed edges and 149 communities, with
+**zero nodes sourced from the deleted POC** (there were 82), for US$0.028350.
 
 One of those failures was not flaky and is worth knowing: validation refused three times over the same
 lost pair, `test_s4_taipei_journey_reaches_activation_and_both_downloads → web/src/api/client.rpc`. The
@@ -318,11 +338,10 @@ that declaration is what kept the gate working when the POC went.
 
 ## Phase 2 implementation follows the locked slice order
 
-`WF-MAP-002` is **decision-complete as of 2026-08-03**. Across both maps there are 43 tickets, **40
-closed, 3 open**, and all three open ones are open *by decision* rather than outstanding:
-`Decide how an owner accepts a comfort tradeoff` (`WF-039`), `Decide whether the planner recommends where
-to stay` (`WF-040`), and `Decide what a variant returns when it runs out of time` (`WF-043`) — the last
-costing the pilot one of three options on `/optimize`, not the trip. `Lock the Phase 2 slice plan and validation scorecard` is the destination artifact — read it
+`WF-MAP-002` is **decision-complete as of 2026-08-03**. Across both maps there are 43 tickets, **41
+closed, 2 open**, and both open ones are open *by decision* rather than outstanding:
+`Decide how an owner accepts a comfort tradeoff` (`WF-039`) and `Decide whether the planner recommends
+where to stay` (`WF-040`). `Lock the Phase 2 slice plan and validation scorecard` is the destination artifact — read it
 first: `.wayfinder/artifacts/033-phase-2-slice-plan-and-scorecard.md`.
 
 **Three S6 decisions the owner settled on 2026-08-04, so nothing is waiting on them:**
