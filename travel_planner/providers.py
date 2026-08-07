@@ -1126,10 +1126,26 @@ class WikidataSummaryProvider:
     # Rasters only. SVG on a Wikipedia article is almost always an icon, a locator
     # map or a flag, never a photograph of the place.
     photo_suffixes = (".jpg", ".jpeg", ".png")
+    # Wikimedia Commons geosearch: photographs *near* a coordinate. This is the third
+    # source, and it exists because the first two need a Wikidata id and 61% of the
+    # Taipei catalogue has none — those places were skipped outright, which is why so
+    # many cards had no picture at all. Every candidate has coordinates, so this one
+    # always applies.
+    #
+    # It answers "what is photographed at this spot", NOT "photographs of this place",
+    # and the two are not the same: 300m around Taipei 101 returns a sunset over the
+    # city and a street in Keelung. So the radius is tight, the result is used only
+    # where nothing better exists, and it is stored flagged as nearby so the screen can
+    # say so rather than implying the picture is of the place.
+    nearby_radius_metres = 150
+    nearby_limit = 6
 
     def __init__(self) -> None:
         self.wikidata_url = os.environ.get(
             "TOURIST_WIKIDATA_URL", "https://www.wikidata.org/w/api.php"
+        )
+        self.commons_url = os.environ.get(
+            "TOURIST_COMMONS_URL", "https://commons.wikimedia.org/w/api.php"
         )
         self.user_agent = os.environ.get(
             "TOURIST_USER_AGENT", "TouristPlannerPersonalPOC/0.2 (local personal use)"
@@ -1195,6 +1211,50 @@ class WikidataSummaryProvider:
             if found:
                 return found
         return []
+
+    def nearby_photos(self, latitude: float, longitude: float) -> list[str]:
+        """Commons files photographed within `nearby_radius_metres` of a point.
+
+        Returns direct thumbnail URLs, which are the file itself rather than the
+        `Special:FilePath` redirect the other two sources use — so these load in one
+        round trip instead of two.
+
+        Never raises: this is a fallback for a place that already has no picture, and
+        failing to find one is the state it was already in.
+        """
+
+        query = urlencode(
+            {
+                "action": "query",
+                "format": "json",
+                "generator": "geosearch",
+                "ggscoord": f"{latitude}|{longitude}",
+                "ggsradius": str(self.nearby_radius_metres),
+                "ggslimit": str(self.nearby_limit),
+                # Namespace 6 is File:. Without it geosearch returns articles.
+                "ggsnamespace": "6",
+                "prop": "imageinfo",
+                "iiprop": "url",
+                "iiurlwidth": "640",
+            }
+        )
+        try:
+            payload = self._json(f"{self.commons_url}?{query}")
+        except ProviderUnavailable:
+            return []
+        pages = ((payload.get("query") or {}).get("pages") or {})
+        found: list[str] = []
+        for page in pages.values() if isinstance(pages, dict) else []:
+            title = str(page.get("title") or "")
+            if not title.lower().endswith(self.photo_suffixes):
+                continue
+            info = (page.get("imageinfo") or [{}])[0]
+            url = str(info.get("thumburl") or info.get("url") or "")
+            if url:
+                found.append(url)
+        # Deterministic: geosearch returns distance order, but the page map is a dict
+        # keyed by page id, so without sorting the gallery reshuffles between runs.
+        return sorted(found)
 
     def summary(self, qid: str) -> dict[str, Any]:
         """Titles, extracts and an image for one Wikidata entity.
@@ -1704,6 +1764,9 @@ class GooglePlacesCardProvider:
     name = "google_places"
     details_operation = "google_places:card_details"
     photo_operation = "google_places:photo"
+    # Google returns at most five reviews from `places:searchText`, so this is its
+    # ceiling rather than a limit chosen here. Asking for ten would not produce ten.
+    REVIEW_LIMIT = 5
     FIELD_MASK = (
         "places.id,places.displayName,places.location,places.primaryType,places.googleMapsUri,"
         "places.photos,places.rating,places.userRatingCount,places.reviews,"
@@ -1806,7 +1869,10 @@ class GooglePlacesCardProvider:
         match, distance = _best_nearby_match(matches, place)
 
         reviews = []
-        for raw in (match.get("reviews") or [])[:3]:
+        # Every review the response carries, not the first three. `places:searchText`
+        # returns at most five per place — that is Google's ceiling, not a cap chosen
+        # here — and the call is already paid for by the time they are discarded.
+        for raw in (match.get("reviews") or [])[: GooglePlacesCardProvider.REVIEW_LIMIT]:
             text = str(((raw.get("text") or {}).get("text")) or "").strip()
             original = str(((raw.get("originalText") or {}).get("text")) or "").strip()
             if not text and not original:

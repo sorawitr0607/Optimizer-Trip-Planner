@@ -1109,15 +1109,22 @@
   width: 100%;
 }
 
-/* Capped, not full-bleed. At 3/2 across the whole column the photograph pushed the
-   card's own facts and every action button below the fold, so deciding meant
-   scrolling — which is the opposite of a deck. */
+/* Smaller, and the whole picture.
+   `object-fit: cover` at a fixed 16/9 made it smaller by cutting it — a tall shrine
+   lost its roof. Height is capped and the width follows the image's own ratio, so
+   nothing is cropped; the letterbox behind it is what absorbs the difference between
+   a panorama and a portrait. */
 .place-deck-photo img {
-  aspect-ratio: 16 / 9;
   display: block;
-  max-height: 260px;
-  object-fit: cover;
-  width: 100%;
+  margin: 0 auto;
+  max-height: 240px;
+  max-width: 100%;
+  object-fit: contain;
+  width: auto;
+}
+
+.place-deck-photo {
+  background: var(--bg-secondary);
 }
 
 .place-deck-photo span {
@@ -2747,4 +2754,20 @@
 .catalog-empty p {
   margin: 0;
   max-width: 68ch;
+}
+
+/* Deck left, detail right. The detail used to be a separate mode reached from a
+   button at the top, so reading about the card in front of you meant leaving the
+   deck and then finding your place again. */
+.places-workspace {
+  align-items: start;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+@media (max-width: 1100px) {
+  .places-workspace {
+    grid-template-columns: 1fr;
+  }
 }

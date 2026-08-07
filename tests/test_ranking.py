@@ -9,6 +9,7 @@ import unittest
 from unittest.mock import patch
 
 
+from travel_planner import ranking
 from travel_planner.actions import PlannerActions
 from travel_planner.providers import GooglePlacesCardProvider, ProviderUnavailable
 from travel_planner.ranking import FORMULA_WEIGHTS, build_ranking
@@ -562,6 +563,54 @@ class CardEnrichmentTest(unittest.TestCase):
             self.assertEqual(1, usage["google_places:card_details"]["requests"])
             self.assertEqual(5, usage["google_places:photo"]["requests"])
             self.assertEqual([], actions.store.list_place_evidence(trip.trip_id, "card_details"))
+
+
+class CategoryVarietyTest(unittest.TestCase):
+    """`WF-048`. The deck kept offering the same kind of place over and over.
+
+    `_learned_category_weights` only ever argued for *more* of what was already
+    chosen: pick three temples and temples rose, so the fourth and fifth temple led
+    every lane. Right while it is still learning a taste, wrong once the taste is
+    known — the reason to keep swiping is to find what you have not seen.
+    """
+
+    @staticmethod
+    def _picks(category: str, count: int, action: str = "must_do"):
+        return [{"action": action, "candidate": {"category": category}} for _ in range(count)]
+
+    def test_the_first_choices_still_teach_what_the_owner_likes(self) -> None:
+        # Unchanged below saturation: this is the signal that discovers a taste.
+        weights = ranking._learned_category_weights(self._picks("museum", 1))
+
+        self.assertEqual(2.0, weights["museum"])
+
+    def test_a_category_chosen_repeatedly_is_pushed_down_not_up(self) -> None:
+        weights = ranking._learned_category_weights(self._picks("place_of_worship", 4))
+
+        self.assertLess(weights["place_of_worship"], 0.0)
+
+    def test_the_penalty_is_bounded_so_a_category_stays_reachable(self) -> None:
+        # Ten must_do temples must not drive every temple out of the catalogue -- the
+        # owner may simply be on a temple trip, and Browse All has to still work.
+        weights = ranking._learned_category_weights(self._picks("place_of_worship", 10))
+
+        self.assertEqual(ranking.VARIETY_FLOOR, weights["place_of_worship"])
+
+    def test_variety_is_per_category_not_global(self) -> None:
+        choices = self._picks("place_of_worship", 5) + self._picks("museum", 1)
+        weights = ranking._learned_category_weights(choices)
+
+        self.assertLess(weights["place_of_worship"], 0.0)
+        self.assertGreater(weights["museum"], 0.0)
+
+    def test_a_rejection_neither_teaches_nor_saturates(self) -> None:
+        # `not_for_trip` carries no action bonus, so rejecting ten temples must not
+        # read as having chosen them.
+        weights = ranking._learned_category_weights(
+            self._picks("place_of_worship", 10, action="not_for_trip")
+        )
+
+        self.assertEqual(0.0, weights.get("place_of_worship", 0.0))
 
 
 if __name__ == "__main__":

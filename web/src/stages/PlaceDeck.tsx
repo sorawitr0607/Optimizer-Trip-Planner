@@ -48,6 +48,12 @@ const DRAG_SLOP = 6;
 
 type Intent = "interested" | "not_for_trip" | "skip" | "maybe" | null;
 
+/** The same normalisation `discovery.py` dedupes on, so the two agree about what
+ *  counts as the same name: case folded, punctuation and spacing dropped. */
+function nameKey(value: string): string {
+  return value.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+}
+
 interface Drag {
   pointerId: number;
   fromX: number;
@@ -102,6 +108,9 @@ export interface PlaceDeckProps {
   onDecide: (placeId: string, action: string, reason: string | null) => void;
   /** Fetches the free description and photographs for one place. */
   onWantSummary: (placeId: string) => void;
+  /** The card now in front, so the detail panel beside the deck follows it instead of
+   *  sitting on whichever place a select last pointed at. */
+  onCardChange?: (placeId: string) => void;
 }
 
 export function PlaceDeck({
@@ -115,6 +124,7 @@ export function PlaceDeck({
   altNameOf,
   onDecide,
   onWantSummary,
+  onCardChange,
 }: PlaceDeckProps) {
   const [cursor, setCursor] = useState(0);
   const [photo, setPhoto] = useState(0);
@@ -124,10 +134,23 @@ export function PlaceDeck({
   const travelled = useRef(0);
 
   const decided = new Set(choices.map((choice) => choice.place_id));
+  // And by name, not only by id. Discovery merges two records of one place when the
+  // name and the spot match, but it cannot merge what it cannot tell apart — a zoo
+  // signs the same exhibit twice, 200m apart — so the same attraction still reaches
+  // the deck under two ids. Being asked again about a name you just answered is the
+  // complaint whatever the cause, and the name is what the owner recognises.
+  const decidedNames = new Set(
+    choices
+      .map((choice) => nameKey(nameOf(choice.place_id)))
+      .filter(Boolean),
+  );
   // `main_queue` already excludes decided places, but a decision made in this session
   // has not been refetched yet — and the other lanes do not exclude them at all — so
   // filtering here is what makes any lane dealable.
-  const queue = entries.filter((entry) => !decided.has(entry.place_id));
+  const queue = entries.filter(
+    (entry) =>
+      !decided.has(entry.place_id) && !decidedNames.has(nameKey(nameOf(entry.place_id))),
+  );
   const entry = queue[Math.min(cursor, Math.max(0, queue.length - 1))];
   const card = entry ? ranking.cards[entry.place_id] : undefined;
 
@@ -143,6 +166,14 @@ export function PlaceDeck({
   const nextEntry = queue[Math.min(cursor + 1, queue.length - 1)];
   const nextUrl = nextEntry ? summaries[nextEntry.place_id]?.image_url : null;
   const upcoming = gallery.length ? gallery[(photo + 1) % gallery.length] : null;
+  // Report the card in front, so the panel beside the deck tracks it.
+  const currentId = entry?.place_id;
+  useEffect(() => {
+    if (currentId) onCardChange?.(currentId);
+    // `onCardChange` is a fresh closure each render; the card id is what changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentId]);
+
   useEffect(() => {
     for (const url of [upcoming, nextUrl]) {
       if (!url) continue;

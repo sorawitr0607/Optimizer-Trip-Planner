@@ -330,8 +330,13 @@ def _score_candidate(
         why.append("member_preferences_considered")
     if city_icon:
         why.append("city_icon_evidence")
-    if learned_category_bonus:
+    # The same number now argues both ways, so it needs two explanations. Calling a
+    # variety penalty "learned from your choices" would be true and useless: the owner
+    # needs to know this is ranked *down* because they already have several.
+    if learned_category_bonus > 0:
         why.append("learned_from_choices")
+    elif learned_category_bonus < 0:
+        why.append("category_already_well_covered")
     if experience >= 14:
         why.append("high_experience_potential")
     if not why:
@@ -351,6 +356,8 @@ def _score_candidate(
         cons.append("opening_unconfirmed")
     if candidate.get("possible_duplicate"):
         cons.append("possible_duplicate")
+    if learned_category_bonus < 0:
+        cons.append("category_already_well_covered")
     if candidate["operational_evidence"]["access"]["state"] == "unconfirmed":
         cons.append("access_unconfirmed")
 
@@ -495,6 +502,24 @@ def _preference_fit(
     return round(30 * weighted, 1), matched, matched_people
 
 
+# How much weighted choosing a category absorbs before it counts as covered, and how
+# hard each pick past that pushes it down. `WF-048`, from the owner's report that the
+# deck kept offering "the same thing over and over".
+#
+# The bonus alone only ever argued for more of what was already chosen: pick three
+# temples and temples rose, so the fourth, fifth and sixth temple led every lane. That
+# is right while it is still learning taste and wrong once the taste is known -- the
+# reason to keep swiping is to find what you have *not* seen.
+#
+# So it saturates and then reverses. Up to `VARIETY_SATURATION` the old behaviour is
+# unchanged, which keeps the signal that discovers what an owner likes; past it each
+# further pick costs the category `VARIETY_PENALTY`, bounded by `VARIETY_FLOOR` so a
+# category can be pushed down the order but never out of reach.
+VARIETY_SATURATION = 3.0
+VARIETY_PENALTY = 1.5
+VARIETY_FLOOR = -6.0
+
+
 def _learned_category_weights(choices: list[dict[str, Any]]) -> Counter[str]:
     learned: Counter[str] = Counter()
     action_bonus = {"must_do": 2.0, "interested": 1.0, "maybe": 0.25}
@@ -503,7 +528,11 @@ def _learned_category_weights(choices: list[dict[str, Any]]) -> Counter[str]:
         if bonus:
             learned[choice["candidate"]["category"]] += bonus
     for category in list(learned):
-        learned[category] = min(3.0, learned[category])
+        weighted = learned[category]
+        adjusted = min(VARIETY_SATURATION, weighted)
+        if weighted > VARIETY_SATURATION:
+            adjusted -= (weighted - VARIETY_SATURATION) * VARIETY_PENALTY
+        learned[category] = max(VARIETY_FLOOR, adjusted)
     return learned
 
 

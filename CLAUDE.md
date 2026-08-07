@@ -312,6 +312,37 @@ saturating at 30 gave every station a flat 15 of 15 when Taipei really returns 1
 `TransitGraph.journey` returns `None` when nothing needs riding, so travel time takes the **better of
 riding and walking** — otherwise a station across the road from a place scores as unreachable.
 
+**Category variety reverses the learned bonus as of 2026-08-08 (`WF-048`).**
+`ranking._learned_category_weights` only ever argued for *more* of what was already chosen: pick three
+temples and temples rose, so the fourth and fifth led every lane and the deck offered "the same thing
+over and over". It now saturates at `VARIETY_SATURATION = 3.0` weighted picks — unchanged below that,
+which is the signal that discovers a taste — then each further pick costs `VARIETY_PENALTY = 1.5`,
+bounded at `VARIETY_FLOOR = -6.0` so a category is pushed down the order but never out of reach. Five
+temple picks measure −3.0 against a first museum's +2.0. The same number now argues both ways, so it
+carries two explanations: `learned_from_choices` when positive, `category_already_well_covered` when
+negative, and the latter is a `con` as well. Ranking already re-ran on every choice; only the direction
+was missing. Five tests in `tests/test_ranking.py` pin the curve, including that a `not_for_trip`
+neither teaches nor saturates.
+
+**Discovery dedupes on name and place, not on tag, as of 2026-08-08 (`WF-048`).** Requiring an
+identical `category` as well let one attraction through twice whenever OpenStreetMap disagreed with
+itself about what it is — Singapore's "Jelutong Tower" arrived as `viewpoint` and as `landmark`, so the
+owner was asked about it in one lane having already answered in another. An identical normalized name
+within 150 m is the strong signal; the category was the weak one and it was doing the deciding.
+`PlaceDeck` also filters by name, because discovery cannot merge what it cannot tell apart — a zoo
+signs one exhibit twice, 200 m apart.
+
+**Photographs have a third source as of 2026-08-08 (`WF-048`).** Wikidata `P18` and Wikipedia both need
+a QID, and 61% of the Taipei catalogue has none — those places were `skipped` outright in
+`refresh_place_summaries`, which is why so many cards had no picture. Wikimedia Commons **geosearch**
+works from the coordinates every candidate has. It answers "what is photographed at this spot", **not**
+"photographs of this place" — 300 m around Taipei 101 returns a sunset and a street in Keelung — so the
+radius is 150 m, it is used only where nothing better exists, and it is stored `photos_are_nearby:
+true` so the screen can say which it is showing. It returns direct thumbnail URLs rather than
+`Special:FilePath` redirects, so these load in one round trip instead of two. `web/src/shared/photos.ts`
+is the one place a gallery is assembled, and it also reads OpenStreetMap's own `wikimedia_commons` /
+`image` tag, stored as `photo_reference` since discovery was written and never read until now.
+
 **Ranking divides by category breadth as of 2026-08-06 (`WF-037`).** `group_preference_fit` divided the
 owner's matched styles by how many they *named*, which a category with more tags wins for free: `peak`
 carries four tags and `attraction` two, so a nameless hill scored 27 of 30 against Taipei 101's 12.8 and

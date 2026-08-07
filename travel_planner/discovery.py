@@ -26,12 +26,18 @@ def build_candidate_catalog(
         if candidate is None:
             rejected[reason] += 1
             continue
+        # Same name, same spot, one place -- whatever the two records were *tagged*.
+        # Requiring an identical category as well let one attraction through twice
+        # whenever OpenStreetMap disagreed with itself about what it is: Singapore's
+        # "Jelutong Tower" arrived as `viewpoint` and as `landmark` 2026-08-08, so the
+        # owner was asked about it in one lane having already answered in another.
+        # An identical normalized name within 150m is the strong signal here; the
+        # category is the weak one, and it was doing the deciding.
         match = next(
             (
                 existing
                 for existing in candidates
                 if existing["_name_key"] == candidate["_name_key"]
-                and existing["category"] == candidate["category"]
                 and _distance_metres(existing, candidate) <= 150
             ),
             None,

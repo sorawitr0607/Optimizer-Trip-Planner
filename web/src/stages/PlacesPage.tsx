@@ -428,6 +428,12 @@ export function PlacesPage() {
             ) : null}
           </div>
 
+          {/* Deck left, detail right. The detail used to be a whole other mode reached
+              from a button at the top, so reading about the card in front of you meant
+              leaving the deck and finding it again. It follows the deck's own card now
+              and owns no decision buttons — the deck is where deciding happens, and two
+              sets of them under one card was the duplication reported earlier. */}
+          <div className={mode === "deck" ? "places-workspace" : undefined}>
           {mode === "deck" ? (
             <>
               <p className="setup-hint">{copy("deck_help", language)}</p>
@@ -460,23 +466,16 @@ export function PlacesPage() {
                 onDecide={(placeId, action, reason) =>
                   saveChoice.mutate({ action, reason, placeId })
                 }
+                onCardChange={setCardId}
                 onWantSummary={(placeId) => fetchSummary.mutate([placeId])}
                 ranking={ranking.data}
                 summaries={summaries.data ?? {}}
               />
-              {/* `WF-040`, placed here by the owner: the ranking depends on the places
-                  chosen above, so it belongs under the deck rather than beside the
-                  timetable on `/optimize`. */}
-              <StayAreas language={language} tripId={tripId} />
             </>
           ) : null}
           {!entries.length ? <p>{copy("no_lane_cards", language)}</p> : null}
 
-          {/* List mode only. This card rendered in both, so in deck mode it sat below
-              the deck showing whichever place the (hidden) select happened to point at
-              — it never followed the deck, which read as a frozen panel, and its two
-              buttons doubled the deck's own. */}
-          {mode === "list" && candidate && card ? (
+          {candidate && card ? (
             // derives-from: A4 ranked candidate card, reduced to one functional list card for S4.
             <article className="place-card">
               <header className="place-card-head">
@@ -563,7 +562,10 @@ export function PlacesPage() {
                   })() : null}
                   {insight.rating != null ? <p><b>{copy("source_rating", language)}:</b> {insight.rating.toFixed(1)}/5 · {(insight.user_rating_count ?? 0).toLocaleString()} {copy("ratings", language)}</p> : null}
                   {insight.review_summary?.text ? <><h4>{copy("review_summary", language)}</h4><p>{insight.review_summary.text}</p>{insight.review_summary.disclosure ? <p className="setup-hint">{insight.review_summary.disclosure}</p> : null}</> : null}
-                  {insight.reviews?.slice(0, 2).map((review, index) => <blockquote key={`${review.author}-${index}`}><p>{review.text}</p><footer>{review.author ?? copy("google_reviewer", language)}{review.rating != null ? ` · ${review.rating.toFixed(0)}/5` : ""}</footer></blockquote>)}
+                  {/* Every review that came back, not the first two: the call is paid
+                      for whether or not they are rendered, and five short opinions are
+                      what the owner asked the money for. */}
+                  {insight.reviews?.map((review, index) => <blockquote key={`${review.author}-${index}`}><p>{review.text}</p><footer>{review.author ?? copy("google_reviewer", language)}{review.rating != null ? ` · ${review.rating.toFixed(0)}/5` : ""}{review.published ? ` · ${review.published}` : ""}</footer></blockquote>)}
                   <p className="setup-hint">{copy("live_details_session_only", language)}</p>
                 </div>
               ) : (
@@ -574,7 +576,7 @@ export function PlacesPage() {
               )}
 
               {choice ? <p className="setup-hint">{copy("current_choice", language)}: {copy(choice.action, language)}{choice.reason ? ` · ${copyFrom("REJECTION_TEXT", choice.reason, language)}` : ""}</p> : null}
-              <div className="place-choice-actions">
+              <div className="place-choice-actions" hidden={mode === "deck"}>
                 {CHOICES.map((action) => <button className={`choice-${action}`} key={action} onClick={() => saveChoice.mutate({ action })} type="button">{copy(action, language)}</button>)}
                 <details><summary>{copy("not_for_trip", language)}</summary><label>{copy("rejection_reason", language)}<select value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)}>{REJECTION_REASONS.map((reason) => <option key={reason} value={reason}>{copyFrom("REJECTION_TEXT", reason, language)}</option>)}</select></label><button onClick={() => saveChoice.mutate({ action: "not_for_trip", reason: rejectionReason === "null" ? null : rejectionReason })} type="button">{copy("not_for_trip", language)}</button></details>
                 {choice ? <button onClick={() => clearChoice.mutate()} type="button">{copy("clear_choice", language)}</button> : null}
@@ -597,6 +599,11 @@ export function PlacesPage() {
               {candidate.provider_aliases[0]?.source_url ? <a href={candidate.provider_aliases[0].source_url ?? undefined} rel="noreferrer" target="_blank">{copy("source", language)} ↗</a> : null}
             </article>
           ) : null}
+          </div>
+          {/* `WF-040`, placed here by the owner: the ranking depends on the places
+              chosen above, so it belongs under the deck rather than beside the
+              timetable on `/optimize`. Below the whole row, not inside it. */}
+          {mode === "deck" ? <StayAreas language={language} tripId={tripId} /> : null}
         </>
       ) : null}
 

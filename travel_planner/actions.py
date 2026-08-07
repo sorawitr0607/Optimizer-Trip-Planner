@@ -1976,12 +1976,37 @@ class PlannerActions:
         errors: list[str] = []
         for place in wanted:
             qid = (place.get("signals") or {}).get("wikidata")
-            if not qid:
-                skipped += 1
-                continue
             held = existing.get(place["place_id"])
             if not force and held and held["expires_at"] > now.isoformat():
                 cached += 1
+                continue
+            if not qid:
+                # No Wikidata id, which is 61% of the Taipei catalogue. These used to be
+                # skipped outright and so had no picture at all. Commons geosearch works
+                # from the coordinates every candidate has, and answers "what is
+                # photographed here" rather than "photographs of this place" -- stored
+                # flagged as nearby so the screen says which it is showing.
+                photos = self._nearby_photos(provider, place)
+                if not photos:
+                    skipped += 1
+                    continue
+                self._store_summary(
+                    trip_id=trip_id,
+                    place_id=place["place_id"],
+                    provider=provider,
+                    now=now,
+                    value={
+                        "qid": None,
+                        "names": {},
+                        "text": {},
+                        "image_url": photos[0],
+                        "image_urls": photos,
+                        "photos_are_nearby": True,
+                        "licence": "CC BY-SA or compatible, Wikimedia Commons",
+                        "source_urls": {},
+                    },
+                )
+                fetched += 1
                 continue
             try:
                 self._spend(
@@ -1999,19 +2024,23 @@ class PlannerActions:
                 if message not in errors:
                     errors.append(message)
                 continue
-            self.store.upsert_place_evidence(
+            # An article with no photograph is still a place with coordinates, so the
+            # nearby fallback applies here too rather than only where the id is missing.
+            if not value.get("image_urls") and not value.get("image_url"):
+                photos = self._nearby_photos(provider, place)
+                if photos:
+                    value = {
+                        **value,
+                        "image_url": photos[0],
+                        "image_urls": photos,
+                        "photos_are_nearby": True,
+                    }
+            self._store_summary(
                 trip_id=trip_id,
                 place_id=place["place_id"],
-                kind=provider.kind,
-                # `list_place_evidence` returns the stored value and does not add the
-                # id back, so it has to live inside -- the same convention the opening
-                # hours evidence follows.
-                value={**value, "place_id": place["place_id"]},
-                provider=str(provider.name),
-                retrieved_at=now.isoformat(),
-                expires_at=(
-                    now + timedelta(days=int(provider.cache_ttl_days))
-                ).isoformat(),
+                provider=provider,
+                now=now,
+                value=value,
             )
             fetched += 1
         return {
@@ -2022,6 +2051,41 @@ class PlannerActions:
             "failed": failed,
             "provider_errors": errors,
         }
+
+    @staticmethod
+    def _nearby_photos(provider: Any, place: dict[str, Any]) -> list[str]:
+        """Commons photographs near a place, or nothing. Free, and never fatal."""
+
+        latitude, longitude = place.get("latitude"), place.get("longitude")
+        finder = getattr(provider, "nearby_photos", None)
+        if latitude is None or longitude is None or finder is None:
+            return []
+        try:
+            return list(finder(float(latitude), float(longitude)))
+        except (ProviderUnavailable, TypeError, ValueError):
+            return []
+
+    def _store_summary(
+        self,
+        *,
+        trip_id: str,
+        place_id: str,
+        provider: Any,
+        now: datetime,
+        value: dict[str, Any],
+    ) -> None:
+        self.store.upsert_place_evidence(
+            trip_id=trip_id,
+            place_id=place_id,
+            kind=provider.kind,
+            # `list_place_evidence` returns the stored value and does not add the id
+            # back, so it has to live inside -- the same convention the opening hours
+            # evidence follows.
+            value={**value, "place_id": place_id},
+            provider=str(provider.name),
+            retrieved_at=now.isoformat(),
+            expires_at=(now + timedelta(days=int(provider.cache_ttl_days))).isoformat(),
+        )
 
     def list_place_summaries(self, trip_id: str) -> dict[str, Any]:
         """Stored descriptions and photos, keyed by place id. A read, so free."""

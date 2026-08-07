@@ -200,17 +200,18 @@ describe("PlacesPage", () => {
     expectNoMissingCopy(html);
   });
 
-  it("keeps the list card out of deck mode entirely", () => {
-    // It used to render in both. In deck mode it sat under the deck showing whichever
-    // place the hidden select pointed at, never following the deck as it advanced --
-    // reported as a frozen panel -- and its buttons doubled the deck's own.
+  it("puts the detail panel beside the deck, without a second set of decisions", () => {
+    // The panel used to be a whole other mode reached from a button at the top, so
+    // reading about the card in front of you meant leaving the deck. It sits beside it
+    // now and follows it -- but the deck owns deciding, and two sets of choice buttons
+    // under one card is exactly the duplication reported before.
     const html = render(<PlacesPage />, "en", undefined, "");
 
-    // The one place in this fixture is already decided, so the deck is showing its
-    // exhausted state -- which is still the deck, and still not the list card.
-    expect(html).toContain("Every unseen place has had a decision");
-    expect(html).not.toContain("place-card-head");
-    expect(html).not.toContain("Load live gallery");
+    expect(html).toContain("places-workspace");
+    expect(html).toContain("place-card-head");
+    // Present in the markup, hidden in deck mode: the deck's own buttons are the ones
+    // to press, and `hidden` keeps it out of the accessibility tree too.
+    expect(html).toMatch(/class="place-choice-actions"[^>]*hidden/);
     // The lane picker is shared by both views and must survive.
     expect(html).toContain("lane-tabs");
   });

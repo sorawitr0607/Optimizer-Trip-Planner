@@ -88,7 +88,8 @@
       "too_expensive": "Owner marked it too expensive",
       "too_tiring": "Owner marked it too tiring",
       "weak_value": "Owner marked its value too weak",
-      "wrong_vibe": "Owner marked it the wrong vibe"
+      "wrong_vibe": "Owner marked it the wrong vibe",
+      "category_already_well_covered": "You have already chosen several places like this, so it is ranked lower to widen the trip"
     },
     "th": {
       "access_unconfirmed": "ยังไม่ยืนยันทางเข้าและวิธีเข้าถึง",
@@ -116,7 +117,8 @@
       "too_expensive": "เจ้าของระบุว่าแพงเกินไป",
       "too_tiring": "เจ้าของระบุว่าเหนื่อยเกินไป",
       "weak_value": "เจ้าของระบุว่าไม่คุ้ม",
-      "wrong_vibe": "เจ้าของระบุว่าบรรยากาศไม่ตรง"
+      "wrong_vibe": "เจ้าของระบุว่าบรรยากาศไม่ตรง",
+      "category_already_well_covered": "คุณเลือกสถานที่แบบนี้ไว้หลายแห่งแล้ว จึงถูกจัดอันดับต่ำลงเพื่อให้ทริปหลากหลายขึ้น"
     }
   },
   "OPTIMIZER_CODE_TEXT": {
