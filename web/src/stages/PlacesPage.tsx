@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { PlaceDeck } from "./PlaceDeck";
 import { StayAreas } from "./StayAreas";
@@ -34,8 +34,21 @@ const REJECTION_REASONS = [
 ] as const;
 const CONSIDERED = new Set<string>(CHOICES);
 const PHOTO_LIMIT = 5;
+/** How far ahead of the deck to fetch free descriptions. Wikidata and Wikipedia are
+ *  free and uncapped, but each place is several requests, so this stays a window
+ *  that slides rather than a sweep of all 832 candidates. */
+const PREFETCH_AHEAD = 6;
 
 type Lane = (typeof LANES)[number];
+
+/** Whole days between two ISO dates, inclusive, or null when either is missing. */
+function daysBetween(start: string | null | undefined, end: string | null | undefined): number | null {
+  if (!start || !end) return null;
+  const from = Date.parse(`${start}T00:00:00`);
+  const to = Date.parse(`${end}T00:00:00`);
+  if (Number.isNaN(from) || Number.isNaN(to) || to < from) return null;
+  return Math.round((to - from) / 86_400_000) + 1;
+}
 
 function categoryName(category: string, language: Language): string {
   const translated = copyFrom("CATEGORY_TEXT", category, language);
@@ -74,10 +87,13 @@ export function PlacesPage() {
   // This is what answers "the summary tells me nothing about the place" -- the
   // templated sentence below is built from the same codes for every card.
   const fetchSummary = useMutation({
-    mutationFn: (placeId: string) =>
-      rpc("refresh_place_summaries", { trip_id: tripId, place_ids: [placeId] }),
+    mutationFn: (placeIds: string[]) =>
+      rpc("refresh_place_summaries", { trip_id: tripId, place_ids: placeIds }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["place_summaries", tripId] }),
   });
+  // Which places have already been asked for, so the effect below cannot re-fire on
+  // a place Wikidata genuinely has nothing for.
+  const asked = useRef(new Set<string>());
   const summaries = useQuery({
     queryKey: ["place_summaries", tripId],
     queryFn: () => rpc<Record<string, PlaceSummary>>("list_place_summaries", { trip_id: tripId }),
@@ -185,6 +201,28 @@ export function PlacesPage() {
     onSuccess: (value) => setInsights((current) => ({ ...current, [selectedId]: value })),
   });
 
+  // "Image loading very slow" was mostly not the network: a card showed a button
+  // asking the owner to fetch its own description, one place at a time, and the
+  // photo could not start until they pressed it. The queue is known in advance, so
+  // the window ahead of the deck is fetched in one call while the current card is
+  // being read. Free — Wikidata and Wikipedia, no key and no charge.
+  const decided = new Set((choices.data ?? []).map((item) => item.place_id));
+  const upcoming = (ranking.data?.lanes.main_queue ?? [])
+    .filter((item) => !decided.has(item.place_id))
+    .slice(0, PREFETCH_AHEAD)
+    .map((item) => item.place_id);
+  useEffect(() => {
+    if (!summaries.data || fetchSummary.isPending) return;
+    const wanted = upcoming.filter(
+      (placeId) => !(placeId in summaries.data) && !asked.current.has(placeId),
+    );
+    if (!wanted.length) return;
+    for (const placeId of wanted) asked.current.add(placeId);
+    fetchSummary.mutate(wanted);
+    // `upcoming` is rebuilt every render; its contents are what matter.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [upcoming.join(","), summaries.data, fetchSummary.isPending]);
+
   if (setup.isPending || discovery.isPending || choices.isPending) {
     return <p>{copy("loading", language)}</p>;
   }
@@ -193,6 +231,22 @@ export function PlacesPage() {
 
   const report = discovery.data?.report.data;
   const selectedChoices = (choices.data ?? []).filter((item) => CONSIDERED.has(item.action));
+  // The card's own estimate, summed. It excludes travel, meals and rest by
+  // definition, which is why the caption below says the planner adds those.
+  const keptMinutes = selectedChoices.reduce(
+    (total, item) => {
+      const estimate = ranking.data?.cards[item.place_id]?.duration_estimate;
+      return {
+        min: total.min + (estimate?.minimum_minutes ?? 0),
+        max: total.max + (estimate?.maximum_minutes ?? 0),
+      };
+    },
+    { min: 0, max: 0 },
+  );
+  const shortestHours = Math.round(keptMinutes.min / 6) / 10;
+  const longestHours = Math.round(keptMinutes.max / 6) / 10;
+  const basics = setup.data?.snapshot.data.trip_basics;
+  const tripDays = daysBetween(basics?.start_date, basics?.end_date);
   const paidAllowed = Boolean(detailsCost.data?.allowed && photosCost.data?.allowed);
   const paidEstimate = (detailsCost.data?.estimate_usd ?? 0) + (photosCost.data?.estimate_usd ?? 0);
   const paidCaption = copy("live_details_cost", language)
@@ -325,7 +379,7 @@ export function PlacesPage() {
                 onDecide={(placeId, action, reason) =>
                   saveChoice.mutate({ action, reason, placeId })
                 }
-                onWantSummary={(placeId) => fetchSummary.mutate(placeId)}
+                onWantSummary={(placeId) => fetchSummary.mutate([placeId])}
                 ranking={ranking.data}
                 summaries={summaries.data ?? {}}
               />
@@ -380,7 +434,7 @@ export function PlacesPage() {
                             : copy("descriptions_are_free", language)}
                         </p>
                         {summaries.data && selectedId in summaries.data ? null : (
-                          <button disabled={asking} onClick={() => fetchSummary.mutate(selectedId)} type="button">
+                          <button disabled={asking} onClick={() => fetchSummary.mutate([selectedId])} type="button">
                             {copy("load_descriptions", language)}
                           </button>
                         )}
@@ -451,7 +505,7 @@ export function PlacesPage() {
 
               {choice ? <p className="setup-hint">{copy("current_choice", language)}: {copy(choice.action, language)}{choice.reason ? ` · ${copyFrom("REJECTION_TEXT", choice.reason, language)}` : ""}</p> : null}
               <div className="place-choice-actions">
-                {CHOICES.map((action) => <button key={action} onClick={() => saveChoice.mutate({ action })} type="button">{copy(action, language)}</button>)}
+                {CHOICES.map((action) => <button className={`choice-${action}`} key={action} onClick={() => saveChoice.mutate({ action })} type="button">{copy(action, language)}</button>)}
                 <details><summary>{copy("not_for_trip", language)}</summary><label>{copy("rejection_reason", language)}<select value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)}>{REJECTION_REASONS.map((reason) => <option key={reason} value={reason}>{copyFrom("REJECTION_TEXT", reason, language)}</option>)}</select></label><button onClick={() => saveChoice.mutate({ action: "not_for_trip", reason: rejectionReason === "null" ? null : rejectionReason })} type="button">{copy("not_for_trip", language)}</button></details>
                 {choice ? <button onClick={() => clearChoice.mutate()} type="button">{copy("clear_choice", language)}</button> : null}
               </div>
@@ -475,6 +529,75 @@ export function PlacesPage() {
           ) : null}
         </>
       ) : null}
+
+      {/* derives-from: element 18 .trip-summary-box as .shortlist. Deciding place after
+          place with no running record of what had been kept was the reported gap: the
+          deck consumed the queue and showed nothing for it. */}
+      <section className="shortlist">
+        <h2 className="money-eyebrow">{copy("your_shortlist", language)}</h2>
+        <p className="setup-hint">{copy("shortlist_help", language)}</p>
+        {selectedChoices.length ? (
+          <>
+            {CHOICES.map((action) => {
+              const kept = selectedChoices.filter((item) => item.action === action);
+              if (!kept.length) return null;
+              return (
+                <div className="shortlist-group" key={action}>
+                  <span className={`money-tag choice-${action}`}>
+                    {copy(action, language)} · {kept.length}
+                  </span>
+                  <ul>
+                    {kept.map((item) => {
+                      const found = catalog.find((value) => value.place_id === item.place_id);
+                      return (
+                        <li key={item.place_id}>
+                          {found
+                            ? placeName(
+                                mergeNames(found, summaries.data?.[item.place_id]?.names),
+                                language,
+                                found.name,
+                              )
+                            : item.place_id}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              );
+            })}
+
+            {/* Totals only, and labelled an estimate. Dividing them into days would
+                mean holding a copy of the optimizer's pacing constants here, and two
+                copies of a number is how the screen and the workbook start
+                disagreeing. */}
+            <h3>{copy("draft_shape", language)}</h3>
+            <div className="money-tiles">
+              <div className="money-tile">
+                <span className="money-tile-label">{copy("kept_places", language)}</span>
+                <strong className="money-tile-value">{selectedChoices.length}</strong>
+              </div>
+              <div className="money-tile">
+                <span className="money-tile-label">{copy("visiting_time", language)}</span>
+                <strong className="money-tile-value">
+                  {shortestHours}–{longestHours} {copy("hours_short", language)}
+                </strong>
+              </div>
+              <div className="money-tile">
+                <span className="money-tile-label">{copy("days_available", language)}</span>
+                <strong className="money-tile-value">
+                  {tripDays ?? "—"}
+                </strong>
+                {tripDays === null ? (
+                  <span className="money-tile-hint">{copy("days_unknown", language)}</span>
+                ) : null}
+              </div>
+            </div>
+            <p className="setup-hint">{copy("draft_shape_help", language)}</p>
+          </>
+        ) : (
+          <p className="setup-hint">{copy("shortlist_empty", language)}</p>
+        )}
+      </section>
 
       <div className="optimize-actions">
         <button className="setup-primary" disabled={!selectedChoices.length} onClick={() => navigate(`/trips/${tripId}/optimize`)} type="button">{copy("stage_optimize", language)}</button>

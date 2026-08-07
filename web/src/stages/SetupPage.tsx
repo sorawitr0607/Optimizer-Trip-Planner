@@ -12,10 +12,29 @@ import {
 import { copy, copyFormat, copyFrom } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
 
-const STEP_COUNT = 5;
-const STEP_TITLES = ["trip_basics", "owner_style", "travellers", "requirements", "review"];
+// Six, because the wizard now opens on a step that asks for nothing and only says
+// what the other five want and why. The step indicator was already
+// step-count-agnostic by S3's decision, so this is a constant change, not a
+// component change.
+const STEP_COUNT = 6;
+const STEP_TITLES = [
+  "welcome",
+  "trip_basics",
+  "owner_style",
+  "travellers",
+  "requirements",
+  "review",
+];
 // A POC view convention, not a core rule: setup.py accepts any number.
 const MAX_MEMBERS = 8;
+
+/** What the intro step promises, in the order the wizard then asks it. */
+const INTRO_STEPS = [
+  ["trip_basics", "setup_intro_basics"],
+  ["owner_style", "setup_intro_style"],
+  ["travellers", "setup_intro_travellers"],
+  ["requirements", "setup_intro_requirements"],
+] as const;
 
 interface Member {
   traveller_id: string;
@@ -107,7 +126,9 @@ export function SetupPage() {
   const { language } = useLanguage();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [step, setStep] = useState(1);
+  // Null until a step is chosen, so the opening step can depend on the stored
+  // draft — which has not loaded yet when this initialises.
+  const [chosenStep, setChosenStep] = useState<number | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [flash, setFlash] = useState<{ tone: "ok" | "bad"; code: string } | null>(null);
 
@@ -147,6 +168,10 @@ export function SetupPage() {
   const confirmed = Boolean(stored.data?.confirmed);
   const trip = trips.data?.find((item) => item.trip_id === tripId);
   const words = vocabulary.data;
+  // Step 1 explains the wizard, so it is for a first run. An owner returning to a
+  // trip they have already answered for opens on the first question instead — the
+  // intro stays reachable by walking back, because the indicator goes backwards.
+  const step = chosenStep ?? (stored.data ? 2 : 1);
 
   function edit(patch: Partial<Draft>) {
     setDraft({ ...values, ...patch });
@@ -175,7 +200,7 @@ export function SetupPage() {
         return;
       }
       setFlash({ tone: "ok", code: "step_saved" });
-      setStep(Math.min(Math.max(target, 1), STEP_COUNT));
+      setChosenStep(Math.min(Math.max(target, 1), STEP_COUNT));
     } catch (error) {
       setFlash({
         tone: "bad",
@@ -252,8 +277,29 @@ export function SetupPage() {
         </p>
       ) : null}
 
+      {/* Nothing is asked here. The wizard used to open on a date checkbox, so a
+          first-time owner met a form before ever being told what the form is for
+          or how long it runs. */}
       {step === 1 ? (
+        <div className="setup-intro">
+          <p className="setup-intro-lead">{copy("setup_intro_lead", language)}</p>
+          <h2>{copy("setup_intro_what_we_ask", language)}</h2>
+          <ol className="setup-intro-list">
+            {INTRO_STEPS.map(([title, detail]) => (
+              <li key={title}>
+                <strong>{copy(title, language)}</strong>
+                <p>{copy(detail, language)}</p>
+              </li>
+            ))}
+          </ol>
+          <p className="setup-hint">{copy("setup_intro_time", language)}</p>
+          <p className="setup-hint">{copy("setup_intro_next", language)}</p>
+        </div>
+      ) : null}
+
+      {step === 2 ? (
         <div className="setup-fields">
+          <p className="setup-hint setup-wide">{copy("setup_basics_help", language)}</p>
           <label className="setup-check">
             <input
               checked={values.start_date !== null}
@@ -343,11 +389,18 @@ export function SetupPage() {
               ))}
             </select>
           </label>
+          {/* Three one-word options that change what the optimizer anchors every day
+              on, with nothing anywhere saying so. The consequence belongs beside the
+              control, not in a ticket. */}
+          <p className="setup-hint setup-wide">
+            {copy(`accommodation_help_${values.accommodation_status}`, language)}
+          </p>
         </div>
       ) : null}
 
-      {step === 2 ? (
+      {step === 3 ? (
         <div className="setup-fields">
+          <p className="setup-hint setup-wide">{copy("setup_style_help", language)}</p>
           {(["main_style", "also_enjoy", "avoid", "comfort"] as const).map((group) => (
             <fieldset className="setup-tags" key={group}>
               <legend>
@@ -379,19 +432,26 @@ export function SetupPage() {
               value={values.owner_age ?? ""}
             />
           </label>
+          <p className="setup-hint">{copy("owner_age_help", language)}</p>
+          {/* The free-text boxes never said what happens to what you type, so they
+              read as a comment field nobody reads. They are parsed for constraints
+              when the plan is built, and an example is worth more than the label. */}
           <label className="setup-wide">
             {copy("description", language)}
             <textarea
               onChange={(event) => edit({ owner_description: event.target.value })}
+              placeholder={copy("owner_description_placeholder", language)}
               rows={3}
               value={values.owner_description}
             />
           </label>
+          <p className="setup-hint setup-wide">{copy("own_words_help", language)}</p>
         </div>
       ) : null}
 
-      {step === 3 ? (
+      {step === 4 ? (
         <div className="setup-fields">
+          <p className="setup-hint setup-wide">{copy("setup_travellers_help", language)}</p>
           <label>
             {copy("member_count", language)}
             <input
@@ -404,6 +464,7 @@ export function SetupPage() {
               value={values.travellers.length}
             />
           </label>
+          <p className="setup-hint">{copy("member_count_help", language)}</p>
           {values.travellers.map((member, index) => (
             <fieldset className="setup-member setup-wide" key={member.traveller_id}>
               <legend>{member.traveller_id}</legend>
@@ -430,6 +491,7 @@ export function SetupPage() {
               </label>
               <div className="setup-tags">
                 <span className="setup-legend">{copy("member_tags", language)}</span>
+                <p className="setup-hint setup-wide">{copy("member_tags_help", language)}</p>
                 {words.tag_groups.also_enjoy.concat(words.tag_groups.comfort).map((code) => (
                   <button
                     aria-pressed={member.tags.includes(code)}
@@ -452,6 +514,7 @@ export function SetupPage() {
                 {copy("member_notes", language)}
                 <textarea
                   onChange={(event) => editMember(index, { description: event.target.value })}
+                  placeholder={copy("member_notes_placeholder", language)}
                   rows={2}
                   value={member.description}
                 />
@@ -462,6 +525,7 @@ export function SetupPage() {
                   onChange={(event) =>
                     editMember(index, { must_respect: event.target.value.split("\n") })
                   }
+                  placeholder={copy("member_must_placeholder", language)}
                   rows={2}
                   value={member.must_respect.join("\n")}
                 />
@@ -471,23 +535,23 @@ export function SetupPage() {
         </div>
       ) : null}
 
-      {step === 4 ? (
+      {step === 5 ? (
         <div className="setup-fields">
+          <p className="setup-hint setup-wide">{copy("setup_requirements_help", language)}</p>
           <label className="setup-wide">
             {copy("owner_must", language)}
             <textarea
               onChange={(event) => edit({ owner_must_respect: event.target.value })}
+              placeholder={copy("owner_must_placeholder", language)}
               rows={4}
               value={values.owner_must_respect}
             />
           </label>
-          {/* Only what the owner confirms here becomes a hard optimizer
-              constraint; everything on step 2 stays a preference. */}
-          <p className="setup-hint">{copy("preferences", language)}</p>
+          <p className="setup-hint setup-wide">{copy("owner_must_help", language)}</p>
         </div>
       ) : null}
 
-      {step === 5 ? (
+      {step === 6 ? (
         <dl className="setup-review">
           <dt>{copy("mode", language)}</dt>
           <dd>{trip ? copy(trip.planning_mode, language) : "—"}</dd>
@@ -522,9 +586,12 @@ export function SetupPage() {
             {copy("back", language)}
           </button>
         ) : null}
-        <button disabled={save.isPending} onClick={() => go(step)} type="button">
-          {copy("save_draft", language)}
-        </button>
+        {/* Step 1 asks for nothing, so there is nothing to save a draft of. */}
+        {step > 1 ? (
+          <button disabled={save.isPending} onClick={() => go(step)} type="button">
+            {copy("save_draft", language)}
+          </button>
+        ) : null}
         {step < STEP_COUNT ? (
           <button
             className="setup-primary"
@@ -532,7 +599,7 @@ export function SetupPage() {
             onClick={() => go(step + 1)}
             type="button"
           >
-            {copy("save_continue", language)}
+            {copy(step === 1 ? "continue_trip" : "save_continue", language)}
           </button>
         ) : (
           <button

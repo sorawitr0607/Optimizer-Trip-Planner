@@ -112,8 +112,30 @@ describe("PlaceDeck", () => {
       expect(html).toContain(label);
     }
     // A gesture-only deck would exclude keyboard and screen-reader users.
-    expect(html).toContain("Swipe or use the buttons");
+    expect(html).toContain("Drag the card");
+    expect(html).toContain("The buttons do the same thing");
     expect(html).toContain('tabindex="0"');
+  });
+
+  it("separates the drag surface from the actions, and names each action", () => {
+    // A `pointerdown` bound to the whole card meant pressing a button started a
+    // drag and a drag over a button ended in a click. The surface stops above the
+    // action row, and `touch-action` lives on it so the browser cannot claim the
+    // gesture for scrolling — the reason the swipe did nothing on a touchscreen.
+    const html = render(SUMMARY);
+    expect(html).toContain('class="place-deck-drag"');
+    // Colour, not five identical greys, and the class carries the action code so
+    // the stylesheet and the handler cannot drift apart.
+    for (const action of ["must_do", "interested", "maybe", "not_for_trip", "skip"]) {
+      expect(html).toContain(`choice-${action}`);
+    }
+  });
+
+  it("loads the visible photo eagerly, because it is the card", () => {
+    // `loading="lazy"` was delaying the one image the owner is waiting on.
+    const html = render(SUMMARY);
+    expect(html).toMatch(/<img[^>]*loading="eager"/);
+    expect(html).not.toContain('loading="lazy"');
   });
 
   it("labels the exploration card so a low score is not read as a bad pick", () => {

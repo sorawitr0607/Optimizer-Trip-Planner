@@ -241,8 +241,18 @@ def deduplicate_nodes(nodes: list[dict]) -> list[dict]:
     return list(unique.values())
 
 
-# Extensions that appear as node-id suffixes in this repository's extraction.
-SOURCE_SUFFIX_IDS = ("_py", "_tsx", "_ts", "_css", "_json", "_md")
+# Extensions that appear as node-id suffixes in this repository's extraction, in both
+# spellings it has produced: `web_src_shared_names_ts` and `web_src_routestsx`. The
+# separator-less form turned up on the `WF-048` rebuild, two rebuilds after `_ts` did,
+# and cost a paid run to discover. Longest extension first, so `tsx` is tried before
+# `ts` -- the stem-must-exist guard below is what makes a wrong fold unreachable, but
+# ordering keeps the intended one obvious.
+SOURCE_EXTENSIONS = ("json", "tsx", "css", "py", "ts", "md")
+SOURCE_SUFFIX_IDS = tuple(
+    f"{separator}{extension}"
+    for extension in SOURCE_EXTENSIONS
+    for separator in ("_", "")
+)
 
 
 def normalize_raw_graph() -> set[tuple[str, str, str]]:
@@ -281,6 +291,10 @@ def normalize_raw_graph() -> set[tuple[str, str, str]]:
         if node_id.endswith(suffix) and (stem := node_id[: -len(suffix)]) in node_ids
     }
     if suffixed:
+        # Named, not silent: a fold that happens quietly is indistinguishable from the
+        # guard being weakened, and the whole point is that it is not.
+        for twin, stem in sorted(suffixed.items()):
+            print(f"  folded duplicate node {twin} into {stem}", flush=True)
         nodes = [node for node in nodes if node["id"] not in suffixed]
         data["nodes"] = nodes
         node_ids -= set(suffixed)

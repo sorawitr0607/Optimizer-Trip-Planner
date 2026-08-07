@@ -160,15 +160,37 @@ function render(page: ReactNode, language: Language): string {
   );
 }
 
+/** The same tree with no stored setup, which is what a just-created trip has. */
+function renderWithoutSetup(page: ReactNode, language: Language): string {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client.setQueryData(["trips"], TRIPS);
+  client.setQueryData(["setup", TRIP], null);
+  client.setQueryData(["setup_vocabulary"], VOCABULARY);
+  return renderToStaticMarkup(
+    <QueryClientProvider client={client}>
+      <LanguageProvider initial={language}>
+        <MemoryRouter initialEntries={[`/trips/${TRIP}/x`]}>
+          <Routes>
+            <Route element={page} path="/trips/:tripId/x" />
+          </Routes>
+        </MemoryRouter>
+      </LanguageProvider>
+    </QueryClientProvider>,
+  );
+}
+
 function expectNoMissingCopy(html: string): void {
   expect(html).not.toMatch(/⚠ [a-z][a-z0-9_]{3,}/);
 }
 
 describe("SetupPage", () => {
-  it("renders step 1 of 5 with a saved draft loaded", () => {
+  it("opens a returning owner on the first question, not on the intro", () => {
+    // Step 1 explains the wizard, which is worth reading once. This trip already
+    // has a saved draft, so the intro would be six steps of ceremony in front of
+    // an answer that was given weeks ago.
     const html = render(<SetupPage />, "en");
 
-    expect(html).toContain("Step 1 of 5");
+    expect(html).toContain("Step 2 of 6");
     expect(html).toContain("wizard-steps");
     // The saved draft is what the form opens on, not an empty one.
     expect(html).toContain("2026-12-29");
@@ -176,10 +198,23 @@ describe("SetupPage", () => {
     expectNoMissingCopy(html);
   });
 
+  it("explains what the wizard wants before asking anything, on a fresh trip", () => {
+    // A first-time owner used to meet a date checkbox with nothing anywhere saying
+    // what the form was for or how long it ran.
+    const html = renderWithoutSetup(<SetupPage />, "en");
+
+    expect(html).toContain("Step 1 of 6");
+    expect(html).toContain("What you will be asked");
+    expect(html).toContain("about five minutes");
+    // Nothing is asked here, so there is no draft to save.
+    expect(html).not.toContain("Save draft");
+    expectNoMissingCopy(html);
+  });
+
   it("renders the same wizard in Thai", () => {
     const html = render(<SetupPage />, "th");
 
-    expect(html).toContain("ขั้นที่ 1 จาก 5");
+    expect(html).toContain("ขั้นที่ 2 จาก 6");
     expect(html).toContain("2026-12-29");
     expectNoMissingCopy(html);
   });

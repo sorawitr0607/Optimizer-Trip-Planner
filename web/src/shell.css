@@ -2078,3 +2078,376 @@
     border-right: 0;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Landing. The first screen was a heading and two blind text inputs; it never
+   said what the app produces. The hero states that before asking for anything,
+   and "how it works" names the four stages so the wizard is expected rather
+   than sprung. Tokens only, as everywhere below.
+   --------------------------------------------------------------------------- */
+.landing {
+  display: grid;
+  gap: 20px;
+  margin: 40px auto;
+  max-width: 1000px;
+  padding: 0 20px;
+}
+
+.landing-hero {
+  background: var(--color-accent-light);
+  border: 1px solid var(--color-accent);
+  border-left-width: var(--blocked-stripe-width);
+  border-radius: var(--radius);
+  padding: 28px 26px;
+}
+
+.landing-hero h1 {
+  font-size: var(--text-3xl);
+  margin: 0 0 10px;
+}
+
+.landing-lead {
+  color: var(--text-secondary);
+  font-size: var(--text-lg);
+  margin: 0 0 16px;
+  max-width: 62ch;
+}
+
+.landing-bullets {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+}
+
+.landing-bullets li {
+  padding-left: 20px;
+  position: relative;
+}
+
+.landing-bullets li::before {
+  color: var(--color-accent);
+  content: "→";
+  left: 0;
+  position: absolute;
+}
+
+.landing-note {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  margin: 4px 0 0;
+  max-width: 70ch;
+}
+
+.landing-columns {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+}
+
+.landing-main {
+  display: grid;
+  gap: 20px;
+}
+
+.landing-steps {
+  counter-reset: none;
+  display: grid;
+  gap: 12px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.landing-steps li {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto 1fr;
+}
+
+.landing-steps p {
+  color: var(--text-secondary);
+  margin: 2px 0 0;
+}
+
+/* derives-from: element 7 .step-num-4 as .landing-step-num — the donor's own step
+   numeral, reused rather than re-invented for a second numbered list. */
+.landing-step-num {
+  align-items: center;
+  background: var(--color-accent);
+  border-radius: var(--radius-pill);
+  color: var(--color-on-accent);
+  display: flex;
+  font-weight: var(--weight-selected);
+  height: 26px;
+  justify-content: center;
+  width: 26px;
+}
+
+.trip-list a {
+  align-items: center;
+  gap: 12px;
+}
+
+.trip-list-name {
+  display: grid;
+}
+
+.trip-list-name small {
+  color: var(--text-muted);
+}
+
+.trip-list-resume {
+  color: var(--color-accent);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-secondary);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.trip-form select,
+.trip-form textarea {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  padding: 8px 9px;
+}
+
+/* The assembled "City, Country" string, shown because it is what actually gets
+   searched on the map — the two dropdowns are the input, this is the value. */
+.landing-resolved {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+.trip-form .setup-primary {
+  background: var(--color-accent);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-on-accent);
+  cursor: pointer;
+  font-weight: var(--weight-secondary);
+  padding: 10px 14px;
+}
+
+.trip-form .setup-primary:disabled {
+  cursor: not-allowed;
+  opacity: var(--opacity-disabled);
+}
+
+@media (max-width: 992px) {
+  .landing-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Setup step 1. It asks for nothing: the wizard used to open on a date
+   checkbox, so the first thing a new owner met was a form rather than a reason.
+   --------------------------------------------------------------------------- */
+.setup-intro {
+  display: grid;
+  gap: 12px;
+}
+
+.setup-intro-lead {
+  font-size: var(--text-lg);
+  margin: 0;
+  max-width: 70ch;
+}
+
+.setup-intro h2 {
+  font-size: var(--text-md);
+  margin: 4px 0 0;
+}
+
+.setup-intro-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding-left: 20px;
+}
+
+.setup-intro-list p {
+  color: var(--text-secondary);
+  margin: 2px 0 0;
+  max-width: 70ch;
+}
+
+/* ---------------------------------------------------------------------------
+   The deck gesture. Reported as "swipe is not working": the card never moved,
+   the drag was never captured, and the browser claimed the gesture for
+   scrolling. `touch-action` is the one that made it impossible on a touch
+   screen; the transform is the one that made it discoverable.
+   --------------------------------------------------------------------------- */
+.place-deck-drag {
+  cursor: grab;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+  touch-action: pan-y;
+}
+
+.place-deck-drag.dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.place-deck-drag img {
+  -webkit-user-drag: none;
+}
+
+/* What releasing will do, named while the card is still in hand. */
+.place-deck-intent {
+  border: 2px solid currentcolor;
+  border-radius: var(--radius);
+  font-weight: var(--weight-selected);
+  left: 50%;
+  margin: 0;
+  padding: 6px 14px;
+  pointer-events: none;
+  position: absolute;
+  text-transform: uppercase;
+  top: 34px;
+  transform: translateX(-50%);
+  z-index: 1;
+}
+
+.place-deck-intent.intent-interested {
+  background: var(--color-success-light);
+  color: var(--color-success);
+}
+
+.place-deck-intent.intent-not_for_trip {
+  background: var(--color-danger-light);
+  color: var(--color-danger);
+}
+
+.place-deck-intent.intent-skip {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+}
+
+/* ---------------------------------------------------------------------------
+   Choice colour. Five identical grey buttons with the destructive one sitting
+   between two keeps: solid green through amber to a red outline, so the row
+   reads as a scale and the drop action is the only one that is not filled.
+   --------------------------------------------------------------------------- */
+.place-choice-actions .choice-must_do {
+  background: var(--color-success);
+  border-color: var(--bg-card-border);
+  color: var(--color-on-accent);
+  font-weight: var(--weight-secondary);
+}
+
+.place-choice-actions .choice-interested {
+  background: var(--color-success-light);
+  border-color: var(--color-success);
+  color: var(--color-success);
+  font-weight: var(--weight-secondary);
+}
+
+.place-choice-actions .choice-maybe {
+  background: var(--color-warning-light);
+  border-color: var(--color-warning);
+  color: var(--color-warning);
+  font-weight: var(--weight-secondary);
+}
+
+.place-choice-actions .choice-not_for_trip {
+  background: var(--bg-card);
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+  font-weight: var(--weight-secondary);
+}
+
+.place-choice-actions .choice-skip {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+}
+
+.place-deck-actions {
+  flex-wrap: wrap;
+}
+
+/* ---------------------------------------------------------------------------
+   The shortlist. The deck consumed the queue and showed nothing for it, so
+   there was no record of what had been kept and no sense of the trip taking
+   shape. Totals only — dividing them into days would need a second copy of the
+   optimizer's pacing constants.
+   --------------------------------------------------------------------------- */
+.shortlist {
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 10px;
+  margin: 16px 0;
+  padding: 14px;
+}
+
+.shortlist h3 {
+  margin: 6px 0 0;
+}
+
+.shortlist-group ul {
+  columns: 2;
+  margin: 6px 0 0;
+  padding-left: 20px;
+}
+
+.money-tag.choice-must_do {
+  background: var(--color-success-light);
+  color: var(--color-success);
+}
+
+.money-tag.choice-interested {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+}
+
+.money-tag.choice-maybe {
+  background: var(--color-warning-light);
+  color: var(--color-warning);
+}
+
+@media (max-width: 600px) {
+  .shortlist-group ul {
+    columns: 1;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   What the draft assumed. The planner fills a gap rather than refusing, and
+   nothing said which gaps it filled — so a plan built on a flat 09:00-21:00
+   guess looked exactly like one built on fetched hours.
+   --------------------------------------------------------------------------- */
+.plan-assumptions {
+  background: var(--color-warning-light);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 6px;
+  margin: 14px 0;
+  padding: 14px;
+}
+
+.plan-assumptions ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+/* A grid child stretches, and a link that fills the column reads as a banner
+   rather than as the one thing to press next. */
+.plan-assumptions .primary-link {
+  justify-self: start;
+}
+
+.plan-assumptions li {
+  margin-bottom: 4px;
+}

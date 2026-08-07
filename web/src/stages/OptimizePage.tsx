@@ -9,11 +9,12 @@ import {
   rpc,
   type CandidateChoice,
   type PlanPreview,
+  type PlanProposal,
   type PlanVariant,
   type PlanVersionRecord,
   type Trip,
 } from "../api/client";
-import { copy, copyFrom } from "../i18n/copy";
+import { copy, copyFormat, copyFrom } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
 import { placeName } from "../shared/names";
 
@@ -30,6 +31,38 @@ const METRICS = [
 ] as const;
 
 const CONSIDERED = new Set(["must_do", "interested", "maybe"]);
+
+/**
+ * What the draft had to stand in for, read out of the snapshot it was built from.
+ *
+ * The reported gap was "can't see the plan without strict input" — the planner does
+ * not in fact refuse on thin evidence, it fills the hole and carries on, and nothing
+ * on the screen said which holes it filled. Every line below is read from the frozen
+ * `optimizer_input`, so it describes *this* draft and cannot drift from it. The
+ * snapshot's own `capability_gaps` are appended rather than re-derived, for the same
+ * reason: two opinions about the same evidence is how a screen starts lying.
+ */
+function assumptionsOf(preview: PlanPreview | null, proposal: PlanProposal | null): string[] {
+  if (!preview) return [];
+  const input = preview.optimizer_input.data;
+  const lines: string[] = [];
+  if (proposal?.mode === "stay_recommendation") lines.push("assumption_no_dates");
+  const assumedHours = (input.facts ?? []).filter(
+    (fact) => fact.fact_type === "opening_interval" && fact.status === "assumed",
+  ).length;
+  if (assumedHours) lines.push(`assumption_hours:${assumedHours}`);
+  if ((input.routes ?? []).some((route) => route.status === "estimated")) {
+    lines.push("assumption_routes");
+  }
+  if (
+    (input.candidates ?? []).some(
+      (candidate) => candidate.planning_basis === "selected_place_centroid",
+    )
+  ) {
+    lines.push("assumption_accommodation");
+  }
+  return lines;
+}
 
 export function OptimizePage() {
   const { tripId = "" } = useParams();
@@ -104,6 +137,8 @@ export function OptimizePage() {
   const area = optimizerInput?.candidates?.find(
     (candidate) => candidate.id === variant?.hotel_recommendation?.default_area_id,
   );
+  const assumptions = assumptionsOf(preview.data ?? null, proposal);
+  const gaps = optimizerInput?.capability_gaps ?? [];
 
   return (
     <section className="stage-card optimize-screen">
@@ -132,6 +167,12 @@ export function OptimizePage() {
       {considered.length === 0 ? (
         <p className="setup-hint">{copy("choose_before_plan", language)}</p>
       ) : null}
+      {generate.isPending ? (
+        <p className="money-note money-note-info" aria-live="polite">
+          <b aria-hidden="true">ⓘ</b>
+          <span>{copy("optimizing_note", language)}</span>
+        </p>
+      ) : null}
 
       {!proposal ? (
         <>
@@ -146,6 +187,42 @@ export function OptimizePage() {
             </>
           ) : null}
           <p className="setup-hint">{copy("no_preview_yet", language)}</p>
+          {considered.length > 0 ? (
+            <p className="setup-hint">{copy("no_preview_help", language)}</p>
+          ) : null}
+        </>
+      ) : null}
+
+      {proposal ? (
+        <>
+          <p className="money-note money-note-plain">
+            <span>{copy("plan_draft_note", language)}</span>
+          </p>
+          {/* derives-from: element 36 .currency-info-box as .plan-assumptions */}
+          <section className="plan-assumptions">
+            <h2 className="money-eyebrow">{copy("assumptions_title", language)}</h2>
+            <p className="setup-hint">{copy("assumptions_help", language)}</p>
+            {assumptions.length || gaps.length ? (
+              <ul>
+                {assumptions.map((line) => {
+                  const [code, count] = line.split(":");
+                  return (
+                    <li key={line}>
+                      {count ? copyFormat(code, language, { count }) : copy(code, language)}
+                    </li>
+                  );
+                })}
+                {gaps.map((code) => (
+                  <li key={code}>{copyFrom("OPTIMIZER_CODE_TEXT", code, language)}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="setup-hint">{copy("assumption_none", language)}</p>
+            )}
+            <Link className="primary-link" to={`/trips/${tripId}/evidence`}>
+              {copy("open_evidence", language)}
+            </Link>
+          </section>
         </>
       ) : null}
 
@@ -331,9 +408,18 @@ export function OptimizePage() {
               <span>{copy("provisional_activation_help", language)}</span>
             </p>
           ) : null}
-          {!activationAllowed ? (
-            <p className="setup-hint">{copy("activation_disabled", language)}</p>
-          ) : null}
+          {/* The screen used to end at a disabled button with one line of refusal
+              code, so a draft that could not be activated was a dead end rather than
+              a next step. Both branches now say what to do, not only what is wrong. */}
+          <h2 className="money-eyebrow">{copy("what_next", language)}</h2>
+          {activationAllowed ? (
+            <p className="setup-hint">{copy("next_activate", language)}</p>
+          ) : (
+            <>
+              <p className="setup-hint">{copy("activation_disabled", language)}</p>
+              <p className="setup-hint">{copy("next_fix_first", language)}</p>
+            </>
+          )}
           <div className="optimize-actions">
             <button
               className="setup-primary"
@@ -343,6 +429,9 @@ export function OptimizePage() {
             >
               {copy(provisionalAllowed ? "use_provisional_plan" : "activate_plan", language)}
             </button>
+            <Link className="primary-link" to={`/trips/${tripId}/places`}>
+              {copy("stage_places", language)}
+            </Link>
           </div>
         </>
       ) : null}

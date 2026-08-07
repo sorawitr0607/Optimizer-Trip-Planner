@@ -105,6 +105,66 @@ class DuplicateModuleNodeTest(unittest.TestCase):
             suffixed,
         )
 
+    def test_a_twin_spelled_without_a_separator_also_folds(self) -> None:
+        """The same duplicate, spelled with the extension run onto the stem.
+
+        Measured on the `WF-048` rebuild, 2026-08-07: extraction produced
+        `travel_planner_destinationspy` and `web_src_routestsx` beside the real nodes,
+        the pair guard demanded both survive, and the build failed having already been
+        paid for. The `_py`/`_ts` spellings were the only ones listed, so the list is
+        maintained as incomplete rather than exhaustive.
+        """
+
+        from scripts.build_project_graph import SOURCE_SUFFIX_IDS
+
+        node_ids = {
+            "travel_planner_destinations", "travel_planner_destinationspy",
+            "web_src_routes", "web_src_routestsx",
+            "web_src_stages_tripspage", "web_src_stages_tripspagetsx",
+            "travel_planner_areas",
+        }
+        suffixed = {
+            node_id: stem
+            for node_id in node_ids
+            for suffix in SOURCE_SUFFIX_IDS
+            if node_id.endswith(suffix) and (stem := node_id[: -len(suffix)]) in node_ids
+        }
+
+        self.assertEqual(
+            {
+                "travel_planner_destinationspy": "travel_planner_destinations",
+                "web_src_routestsx": "web_src_routes",
+                "web_src_stages_tripspagetsx": "web_src_stages_tripspage",
+            },
+            suffixed,
+        )
+
+    def test_a_word_merely_ending_in_an_extension_is_not_folded(self) -> None:
+        """The separator-less spelling widens what can match, so the guard that keeps it
+        honest is that the stem must itself be a node.
+
+        `wayfinder_tickets` ends in `ts` and `travel_planner_summary` in `md`; neither
+        `wayfinder_ticke` nor `travel_planner_summ` is a node, so neither folds. The
+        residual hazard is a genuine pair like `x_even` and `x_events` both existing --
+        vanishingly unlikely for identifier-derived ids, and every fold is now printed
+        by the build, so a wrong one is visible rather than silent.
+        """
+
+        from scripts.build_project_graph import SOURCE_SUFFIX_IDS
+
+        node_ids = {
+            "wayfinder_tickets", "travel_planner_summary", "web_src_components",
+            "travel_planner_areas",
+        }
+        suffixed = {
+            node_id: stem
+            for node_id in node_ids
+            for suffix in SOURCE_SUFFIX_IDS
+            if node_id.endswith(suffix) and (stem := node_id[: -len(suffix)]) in node_ids
+        }
+
+        self.assertEqual({}, suffixed)
+
     def test_a_lone_py_node_is_left_alone(self) -> None:
         """Only a *twin* is folded. A node that exists solely under the suffixed name is
         the real node, and rewriting it would point edges at nothing."""

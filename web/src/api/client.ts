@@ -393,8 +393,23 @@ export interface PlanProposal {
 
 export interface PlanPreview {
   trip_id: string;
+  /** The frozen snapshot the proposal was built from. `facts`, `routes` and
+   *  `capability_gaps` are read by `/optimize` to say what the draft had to assume —
+   *  the snapshot records its own gaps, so the screen reports them rather than
+   *  re-deriving a second opinion that could disagree with the plan. */
   optimizer_input: {
-    data: { candidates?: { id?: string; name?: string; names?: Names }[] };
+    data: {
+      candidates?: {
+        id?: string;
+        name?: string;
+        names?: Names;
+        /** `selected_place_centroid` when no address was booked. */
+        planning_basis?: string;
+      }[];
+      facts?: { subject_id: string; fact_type: string; status: string; source?: string }[];
+      routes?: { status?: string }[];
+      capability_gaps?: string[];
+    };
     sha256: string;
   };
   proposal: { data: PlanProposal; sha256: string };

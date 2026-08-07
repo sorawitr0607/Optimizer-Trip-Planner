@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { CandidateChoice, PlaceSummary, Ranking } from "../api/client";
 import { copy, copyFrom, type Language } from "../i18n/copy";
@@ -17,10 +17,50 @@ import { copy, copyFrom, type Language } from "../i18n/copy";
  * screen-reader users, so every action has a real button and the arrow keys work.
  * The gesture is an accelerant, never the mechanism — which also lets
  * `renderToStaticMarkup` test the whole thing, since the buttons are the truth.
+ *
+ * The first gesture did not work, and reported as "swipe is not working". Four
+ * causes, all fixed here, none of them the threshold:
+ *
+ * - **No pointer capture.** A drag that left the element never delivered its
+ *   `pointerup`, so the gesture died silently — which is most drags, since a swipe
+ *   that commits is a drag that leaves.
+ * - **No `touch-action`.** The browser claimed the gesture for scrolling and sent
+ *   `pointercancel`, so on a touchscreen or trackpad it could not complete at all.
+ * - **No feedback.** The card never moved, so there was nothing to tell an owner
+ *   the gesture existed, was being recognised, or had passed the threshold.
+ * - **`pointerdown` bound to the whole card**, buttons included, so a press on a
+ *   control started a drag and a drag over a control ended in a click.
  */
 
-/** How far a horizontal drag must travel to count, in pixels. Below this it is a tap. */
-const SWIPE_THRESHOLD = 64;
+/** How far a drag must travel to commit, in pixels. Below this the card springs back. */
+const COMMIT_DISTANCE = 96;
+/** Where the pending action starts being named, as a fraction of the commit distance. */
+const HINT_FRACTION = 0.35;
+
+type Intent = "interested" | "not_for_trip" | "skip" | null;
+
+interface Drag {
+  pointerId: number;
+  fromX: number;
+  fromY: number;
+  x: number;
+  y: number;
+}
+
+/** Which way a drag is going, once it is going anywhere. Down beats sideways only
+ *  when it is clearly downward, so a lazy diagonal still reads as a decision. */
+function intentOf(drag: Drag | null): Intent {
+  if (!drag) return null;
+  const reach = COMMIT_DISTANCE * HINT_FRACTION;
+  if (drag.y > Math.abs(drag.x) && drag.y > reach) return "skip";
+  if (drag.x > reach) return "interested";
+  if (drag.x < -reach) return "not_for_trip";
+  return null;
+}
+
+function committed(drag: Drag): boolean {
+  return Math.abs(drag.x) >= COMMIT_DISTANCE || drag.y >= COMMIT_DISTANCE;
+}
 
 export interface PlaceDeckProps {
   ranking: Ranking;
@@ -52,7 +92,10 @@ export function PlaceDeck({
 }: PlaceDeckProps) {
   const [cursor, setCursor] = useState(0);
   const [photo, setPhoto] = useState(0);
-  const [dragFrom, setDragFrom] = useState<number | null>(null);
+  const [drag, setDrag] = useState<Drag | null>(null);
+  const [leaving, setLeaving] = useState<Intent>(null);
+  // A drag that ends over the photo used to advance the gallery as well as decide.
+  const travelled = useRef(0);
 
   const decided = new Set(choices.map((choice) => choice.place_id));
   // The queue already excludes decided places, but a decision made in this session
@@ -61,18 +104,36 @@ export function PlaceDeck({
   const entry = queue[Math.min(cursor, Math.max(0, queue.length - 1))];
   const card = entry ? ranking.cards[entry.place_id] : undefined;
 
-  if (!entry || !card) {
-    return <p className="setup-hint">{copy("deck_exhausted", language)}</p>;
-  }
-
-  const about = summaries[entry.place_id];
+  const about = entry ? summaries[entry.place_id] : undefined;
   const gallery = about?.image_urls?.length
     ? about.image_urls
     : about?.image_url
       ? [about.image_url]
       : [];
+
+  // Wikimedia serves every one of these through a `Special:FilePath` redirect, so the
+  // first byte costs two round trips. Warming the next photo and the next card's
+  // first photo while this one is being read is the whole fix for "images load very
+  // slowly": by the time the card turns over, the bytes are in the browser cache.
+  const nextEntry = queue[Math.min(cursor + 1, queue.length - 1)];
+  const nextUrl = nextEntry ? summaries[nextEntry.place_id]?.image_url : null;
+  const upcoming = gallery.length ? gallery[(photo + 1) % gallery.length] : null;
+  useEffect(() => {
+    for (const url of [upcoming, nextUrl]) {
+      if (!url) continue;
+      const image = new Image();
+      image.decoding = "async";
+      image.src = url;
+    }
+  }, [upcoming, nextUrl]);
+
+  if (!entry || !card) {
+    return <p className="setup-hint">{copy("deck_exhausted", language)}</p>;
+  }
+
   const name = nameOf(entry.place_id);
   const altName = altNameOf(entry.place_id);
+  const intent = leaving ?? intentOf(drag);
 
   function decide(action: string, reason: string | null = null) {
     onDecide(entry!.place_id, action, reason);
@@ -86,116 +147,214 @@ export function PlaceDeck({
     setCursor((current) => Math.min(Math.max(0, current + step), queue.length - 1));
   }
 
+  /** Commit whatever the gesture, an arrow key or a button asked for. */
+  function act(action: Intent) {
+    if (action === "skip") advance(1);
+    else if (action === "interested") decide("interested");
+    else if (action === "not_for_trip") decide("not_for_trip", null);
+  }
+
+  function endDrag(current: Drag | null) {
+    if (!current) return;
+    travelled.current = Math.abs(current.x) + Math.abs(current.y);
+    const action = committed(current) ? intentOf(current) : null;
+    setDrag(null);
+    if (!action) return;
+    // Let the card finish leaving before the queue swaps under it, so a commit reads
+    // as the card going away rather than as a flicker.
+    setLeaving(action);
+    setTimeout(() => {
+      setLeaving(null);
+      act(action);
+    }, 140);
+  }
+
+  const offsetX = leaving
+    ? (leaving === "interested" ? 1 : leaving === "not_for_trip" ? -1 : 0) * 420
+    : (drag?.x ?? 0);
+  const offsetY = leaving === "skip" ? 420 : (drag?.y ?? 0);
+  const style = {
+    transform: `translate(${offsetX}px, ${offsetY}px) rotate(${offsetX / 26}deg)`,
+    transition: drag ? "none" : "transform var(--duration-standard) var(--ease-out)",
+  };
+
   return (
     // derives-from: element 14 .stat-card as .place-deck
     <section
       aria-label={copy("deck_mode", language)}
       className="place-deck"
       onKeyDown={(event) => {
-        if (event.key === "ArrowRight") advance(1);
-        if (event.key === "ArrowLeft") advance(-1);
+        // The same four directions the drag uses, so one mental model covers both.
+        if (event.key === "ArrowRight") act("interested");
+        else if (event.key === "ArrowLeft") act("not_for_trip");
+        else if (event.key === "ArrowDown") act("skip");
+        else if (event.key === "ArrowUp") advance(-1);
+        else return;
+        event.preventDefault();
       }}
-      onPointerDown={(event) => setDragFrom(event.clientX)}
-      onPointerUp={(event) => {
-        if (dragFrom === null) return;
-        const travelled = event.clientX - dragFrom;
-        setDragFrom(null);
-        if (Math.abs(travelled) < SWIPE_THRESHOLD) return;
-        // Right means keep, left means not for this trip — the same directions the
-        // buttons below are ordered in, so the gesture is learnable from the layout.
-        if (travelled > 0) decide("interested");
-        else decide("not_for_trip", null);
-      }}
+      style={style}
       tabIndex={0}
     >
-      <header className="place-deck-head">
-        <p className="setup-hint">
-          {copy("deck_position", language)
-            .replace("{current}", String(Math.min(cursor + 1, queue.length)))
-            .replace("{total}", String(queue.length))}
-        </p>
-        <strong className="place-score">
-          {card.total_score.toFixed(1)}
-          <small>/100</small>
-        </strong>
-      </header>
+      {/* The drag surface stops above the action row, so pressing a button never
+          starts a gesture and a gesture never ends in a click. */}
+      <div
+        className={`place-deck-drag${drag ? " dragging" : ""}`}
+        onPointerCancel={() => setDrag(null)}
+        onPointerDown={(event) => {
+          if (event.button !== 0) return;
+          event.currentTarget.setPointerCapture(event.pointerId);
+          travelled.current = 0;
+          setDrag({ pointerId: event.pointerId, fromX: event.clientX, fromY: event.clientY, x: 0, y: 0 });
+        }}
+        onPointerMove={(event) => {
+          setDrag((current) =>
+            current && current.pointerId === event.pointerId
+              ? { ...current, x: event.clientX - current.fromX, y: event.clientY - current.fromY }
+              : current,
+          );
+        }}
+        onPointerUp={(event) => {
+          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+          }
+          endDrag(drag);
+        }}
+      >
+        <header className="place-deck-head">
+          <p className="setup-hint">
+            {copy("deck_position", language)
+              .replace("{current}", String(Math.min(cursor + 1, queue.length)))
+              .replace("{total}", String(queue.length))}
+          </p>
+          <strong className="place-score">
+            {card.total_score.toFixed(1)}
+            <small>/100</small>
+          </strong>
+        </header>
 
-      {gallery.length ? (
-        // A tap advances the gallery, which is what the owner asked for. It is a
-        // button so that a keyboard reaches it and a screen reader announces it.
-        <button
-          className="place-deck-photo"
-          onClick={() => setPhoto((current) => (current + 1) % gallery.length)}
-          type="button"
-        >
-          <img alt={name} loading="lazy" src={gallery[photo % gallery.length]} />
-          <span className="setup-hint">
-            {copy("photo_of", language)
-              .replace("{current}", String((photo % gallery.length) + 1))
-              .replace("{total}", String(gallery.length))}
-          </span>
-        </button>
-      ) : (
-        <div className="place-deck-photo place-deck-photo-empty">
-          <p className="setup-hint">{copy("descriptions_are_free", language)}</p>
-          <button onClick={() => onWantSummary(entry.place_id)} type="button">
-            {copy("load_descriptions", language)}
+        {/* What the release will do, named while the card is still in hand. */}
+        {intent ? (
+          <p className={`place-deck-intent intent-${intent}`} aria-hidden="true">
+            {copy(
+              intent === "interested"
+                ? "drop_to_keep"
+                : intent === "not_for_trip"
+                  ? "drop_to_reject"
+                  : "drop_to_skip",
+              language,
+            )}
+          </p>
+        ) : null}
+
+        {gallery.length ? (
+          // A tap advances the gallery, which is what the owner asked for. It is a
+          // button so that a keyboard reaches it and a screen reader announces it.
+          <button
+            className="place-deck-photo"
+            onClick={() => {
+              if (travelled.current > 8) return; // that was a drag, not a tap
+              setPhoto((current) => (current + 1) % gallery.length);
+            }}
+            type="button"
+          >
+            <img
+              alt={name}
+              // Eager and high priority: this image is the card, always above the
+              // fold, and `loading="lazy"` was actively delaying the one photo the
+              // owner is waiting on.
+              decoding="async"
+              draggable={false}
+              fetchPriority="high"
+              loading="eager"
+              src={gallery[photo % gallery.length]}
+            />
+            <span className="setup-hint">
+              {copy("photo_of", language)
+                .replace("{current}", String((photo % gallery.length) + 1))
+                .replace("{total}", String(gallery.length))}
+            </span>
           </button>
-        </div>
-      )}
+        ) : entry.place_id in summaries ? (
+          // Asked and answered with nothing — a great many of these places have no
+          // Wikidata entry at all. Offering the fetch button again would be a control
+          // that cannot work, which reads as the app being broken rather than the
+          // encyclopedia being empty.
+          <div className="place-deck-photo place-deck-photo-empty">
+            <p className="setup-hint">{copy("no_description_yet", language)}</p>
+          </div>
+        ) : (
+          <div className="place-deck-photo place-deck-photo-empty">
+            <p className="setup-hint">{copy("descriptions_are_free", language)}</p>
+            <p className="setup-hint">{copy("photos_load_themselves", language)}</p>
+            <button onClick={() => onWantSummary(entry.place_id)} type="button">
+              {copy("load_descriptions", language)}
+            </button>
+          </div>
+        )}
 
-      <h3>
-        {name}
-        {altName ? <small className="place-alt-name">{altName}</small> : null}
-      </h3>
-      {entry.role === "protected_exploration" ? (
-        <p className="setup-hint">{copy("deck_exploration_note", language)}</p>
-      ) : null}
+        <h3>
+          {name}
+          {altName ? <small className="place-alt-name">{altName}</small> : null}
+        </h3>
+        {entry.role === "protected_exploration" ? (
+          <p className="setup-hint">{copy("deck_exploration_note", language)}</p>
+        ) : null}
 
-      {about?.text?.[language] || about?.text?.en ? (
-        <>
-          <p>{about.text[language] ?? about.text.en}</p>
-          <p className="setup-hint">{copy("wikipedia_credit", language)}</p>
-        </>
-      ) : null}
+        {about?.text?.[language] || about?.text?.en ? (
+          <>
+            <p>{about.text[language] ?? about.text.en}</p>
+            <p className="setup-hint">{copy("wikipedia_credit", language)}</p>
+          </>
+        ) : null}
 
-      {/* `WF-005`'s minimum card content, one labelled topic per line so each is
-          readable on its own rather than run together in a sentence. */}
-      <dl className="place-deck-topics">
-        <dt>{copy("duration", language)}</dt>
-        <dd>
-          {card.duration_estimate.minimum_minutes}–{card.duration_estimate.maximum_minutes}{" "}
-          {copy("minutes", language)}
-        </dd>
-        <dt>{copy("feasibility", language)}</dt>
-        <dd>{copy(card.feasibility.state, language)}</dd>
-        <dt>{copy("effort_access", language)}</dt>
-        <dd>{copyFrom("DIMENSION_TEXT", "reward_vs_effort", language)}: {card.dimensions.reward_vs_effort.score}/{card.dimensions.reward_vs_effort.max}</dd>
-        <dt>{copy("crowd_signal", language)}</dt>
-        <dd>
-          {card.cons.length
-            ? card.cons.map((code) => copyFrom("EXPLANATION_TEXT", code, language)).join(" · ")
-            : copy("none", language)}
-        </dd>
-        <dt>{copy("cost_reservation", language)}</dt>
-        <dd>{copy("no_licensed_rating", language)}</dd>
-      </dl>
+        {/* `WF-005`'s minimum card content, one labelled topic per line so each is
+            readable on its own rather than run together in a sentence. */}
+        <dl className="place-deck-topics">
+          <dt>{copy("duration", language)}</dt>
+          <dd>
+            {card.duration_estimate.minimum_minutes}–{card.duration_estimate.maximum_minutes}{" "}
+            {copy("minutes", language)}
+          </dd>
+          <dt>{copy("feasibility", language)}</dt>
+          <dd>{copy(card.feasibility.state, language)}</dd>
+          <dt>{copy("effort_access", language)}</dt>
+          <dd>
+            {copyFrom("DIMENSION_TEXT", "reward_vs_effort", language)}:{" "}
+            {card.dimensions.reward_vs_effort.score}/{card.dimensions.reward_vs_effort.max}
+          </dd>
+          <dt>{copy("crowd_signal", language)}</dt>
+          <dd>
+            {card.cons.length
+              ? card.cons.map((code) => copyFrom("EXPLANATION_TEXT", code, language)).join(" · ")
+              : copy("none", language)}
+          </dd>
+          <dt>{copy("cost_reservation", language)}</dt>
+          <dd>{copy("no_licensed_rating", language)}</dd>
+        </dl>
+      </div>
 
-      <p className="setup-hint">{copy("swipe_hint", language)}</p>
-      <div className="place-choice-actions">
-        <button onClick={() => decide("must_do")} type="button">
+      <p className="setup-hint">{copy("drag_hint", language)}</p>
+      {/* Colour separates keep from drop from defer. Before this the five actions
+          were five identical grey buttons and the destructive one sat between two
+          keeps. */}
+      <div className="place-choice-actions place-deck-actions">
+        <button className="choice-must_do" onClick={() => decide("must_do")} type="button">
           {copy("must_do", language)}
         </button>
-        <button onClick={() => decide("interested")} type="button">
+        <button className="choice-interested" onClick={() => decide("interested")} type="button">
           {copy("interested", language)}
         </button>
-        <button onClick={() => decide("maybe")} type="button">
+        <button className="choice-maybe" onClick={() => decide("maybe")} type="button">
           {copy("maybe", language)}
         </button>
-        <button onClick={() => decide("not_for_trip", null)} type="button">
+        <button
+          className="choice-not_for_trip"
+          onClick={() => decide("not_for_trip", null)}
+          type="button"
+        >
           {copy("not_for_trip", language)}
         </button>
-        <button onClick={() => advance(1)} type="button">
+        <button className="choice-skip" onClick={() => advance(1)} type="button">
           {copy("deck_skip", language)}
         </button>
       </div>

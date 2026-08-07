@@ -387,8 +387,20 @@ must stay directed. Rebuild only through `python3 scripts/build_project_graph.py
 failure), and only when explicitly asked or after a topology-changing milestone. After any graph
 change, `--check` must pass before committing. See `AGENTS.md`.
 
-**Rebuilt for `WF-047` on 2026-08-07 and `--check` passes**: 2026 nodes, 5002 directed edges, 165
-communities; recorded cumulative cost is US$0.405697 over 38 runs.
+**Rebuilt for `WF-048` on 2026-08-07 and `--check` passes**: 2043 nodes, 5032 directed edges, 167
+communities; recorded cumulative cost is US$0.420408 over 39 runs. The `WF-047` rebuild earlier the
+same day gave 2026 nodes, 5002 edges and 165 communities for US$0.4057 cumulative.
+
+**A duplicate node twin can be spelled without a separator, and that cost a paid run.** The
+`WF-048` rebuild failed after being billed: extraction emitted `travel_planner_destinationspy` and
+`web_src_routestsx` beside the real nodes, where `SOURCE_SUFFIX_IDS` listed only `_py` / `_ts`. Same
+trap as below, new spelling — so the list is now generated from one extension tuple in **both**
+spellings, and `normalize_raw_graph` **prints every fold it makes**, because a silent fold is
+indistinguishable from the pair guard being weakened. Two tests in `tests/test_graph_builder.py`
+pin it, including the negative case: `wayfinder_tickets` ends in `ts` and does not fold, because the
+stem must itself be a node. **A retry after a failed rebuild is free** — the semantic cache stays
+warm, so the second run reported 74 hit / 0 miss and US$0.00. Do not treat a failed rebuild as money
+that must be spent again.
 
 **A second name collision, and the same fix the first one needed.** A provider method called `fetch`
 collided with the browser `fetch()` that `web/src/api/client.ts`'s `rpc` calls: extraction invented an edge
@@ -497,8 +509,33 @@ that declaration is what kept the gate working when the POC went.
 
 ## Phase 2 implementation follows the locked slice order
 
-`WF-MAP-002` is **decision-complete as of 2026-08-03**. Across both maps there are 47 tickets, **47
+`WF-MAP-002` is **decision-complete as of 2026-08-03**. Across both maps there are 48 tickets, **48
 closed, 0 open**. Nothing is outstanding.
+
+**`WF-048` rebuilt the journey's explanations on 2026-08-07**, after the owner walked the whole
+thing and could not use it. The findings were mechanical, not matters of taste: the landing page
+never said what the app produces and asked for a geocoder query as free text; the setup wizard
+opened on a form with no statement of what it wanted; the swipe gesture had never worked because
+nothing captured the pointer or set `touch-action`; photographs were slow because the visible one
+was `loading="lazy"` and nothing was prefetched; and neither the shortlist nor the optimizer's
+assumptions were shown at all. Four rules from it bind later work. **The destination is
+`"City, Country"`** — `AppShell.countrySlug()` takes the last comma-separated segment, so a
+city-only string silently loses the destination accent. **Both destination dropdowns keep a typed
+fallback**, because `travel_planner/destinations.py` is a picker convenience and the
+worldwide-acceptance check requires a city absent from it to still complete setup. **The
+assumptions on `/optimize` are read out of the frozen `optimizer_input`, never recomputed** — the
+snapshot already records its own `capability_gaps`, and a second opinion derived beside it could
+disagree with the plan it claims to describe. And **the places screen shows totals, not a
+per-day fit**, because dividing by the optimizer's pacing constants would put a second copy of them
+in TypeScript. Two things it deliberately left: the deck is still fed `main_queue`, whose top 20
+have no Wikidata id and therefore no photograph (`WF-005`'s lane choice, and its own ticket), and
+the 1440×900 viewport is unchanged, so `WF-025`'s blind spot now hides three more features.
+
+**Eight of the 36 screen baselines drift on their own**, found while re-approving for `WF-048`:
+`/evidence` renders the running paid-usage counter and `/itinerary` the export timestamp, so those
+images move with the ledger and the clock rather than with the code. `/evidence` crosses the 0.1%
+tolerance unaided; `/itinerary` stays under it. Excluding a region from a baseline is a `WF-025`
+decision and has not been taken — so expect `evidence-*-en` to go red after any paid call.
 
 Two measured facts from those worth carrying. **`verified` means a provider said so, not that it is
 true** — Google returns Mon–Fri 08:30–17:30 with weekends closed for Sun Yat-sen Memorial Hall, which
