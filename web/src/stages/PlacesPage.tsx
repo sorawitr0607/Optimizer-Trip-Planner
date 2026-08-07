@@ -19,7 +19,7 @@ import {
 } from "../api/client";
 import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
-import { placeAltName, placeName } from "../shared/names";
+import { mergeNames, placeAltName, placeName } from "../shared/names";
 
 const LANES = ["main_queue", "city_icons", "worth_it_if", "local_alternatives", "browse_all"] as const;
 const CHOICES = ["must_do", "interested", "maybe"] as const;
@@ -303,12 +303,24 @@ export function PlacesPage() {
                 language={language}
                 altNameOf={(placeId) => {
                   const found = catalog.find((item) => item.place_id === placeId);
-                  return found ? placeAltName(found, language) : null;
+                  if (!found) return null;
+                  return placeAltName(
+                    mergeNames(found, summaries.data?.[placeId]?.names),
+                    language,
+                  );
                 }}
                 nameOf={(placeId) => {
                   // `catalog` is already the normalized candidate list on this page.
+                  // Merged with the Wikidata label, which is the only English name most
+                  // of this catalogue has -- and which arrives only once descriptions
+                  // have been loaded, so the heading gains it then rather than never.
                   const found = catalog.find((item) => item.place_id === placeId);
-                  return found ? placeName(found, language, found.name) : placeId;
+                  if (!found) return placeId;
+                  return placeName(
+                    mergeNames(found, summaries.data?.[placeId]?.names),
+                    language,
+                    found.name,
+                  );
                 }}
                 onDecide={(placeId, action, reason) =>
                   saveChoice.mutate({ action, reason, placeId })

@@ -16,6 +16,10 @@ export type StageKey = "setup" | "places" | "evidence" | "optimize" | "itinerary
 export interface PlaceSummary {
   place_id: string;
   qid: string;
+  /** Wikidata's label per language — the entity's *name*, which is what a place with no
+   *  OpenStreetMap `name:en` is missing. Present even when the place has no Wikipedia
+   *  article, so `text` can be empty while this is not. */
+  names?: Partial<Record<Language, string>>;
   text: Partial<Record<Language, string>>;
   image_url: string | null;
   /** The curated image first, then article photographs. Free, capped at six. */

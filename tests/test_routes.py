@@ -609,6 +609,7 @@ class PlaceSummaryTest(unittest.TestCase):
                 raise ProviderUnavailable(f"Wikidata has no entity {qid}")
             return {
                 "qid": qid,
+                "names": {"en": f"Name of {qid}"},
                 "text": {"en": f"A description of {qid}.", "th": f"คำบรรยายของ {qid}"},
                 "image_url": f"https://commons.example/{qid}.jpg?width=640",
                 "licence": "CC BY-SA, Wikipedia and Wikimedia Commons",
@@ -642,6 +643,72 @@ class PlaceSummaryTest(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.directory.cleanup()
+
+    def test_a_wikidata_label_becomes_an_english_name(self) -> None:
+        """61% of the Taipei catalogue has no OSM `name:en`, and for the places that
+        carry a QID the label is a real English name rather than a translation:
+        三井物產株式會社舊廈 is "Mitsui & Co., Ltd. Old Building". Parsed here against the
+        real API shape, because the parse is what a `props=` typo would break silently.
+        """
+
+        from travel_planner.providers import WikidataSummaryProvider
+
+        provider = WikidataSummaryProvider()
+        provider._json = lambda url: (  # type: ignore[method-assign]
+            {
+                "entities": {
+                    "Q1": {
+                        "labels": {"en": {"language": "en", "value": "Mitsui Old Building"}},
+                        # No article in either language, so `text` stays empty -- the
+                        # name still has to survive.
+                        "sitelinks": {},
+                        "claims": {},
+                    }
+                }
+            }
+            if "wbgetentities" in url
+            else {}
+        )
+
+        summary = provider.summary("Q1")
+
+        self.assertEqual({"en": "Mitsui Old Building"}, summary["names"])
+        self.assertEqual({}, summary["text"])
+
+    def test_the_label_request_asks_for_labels_in_both_languages(self) -> None:
+        """A `props=` that omits `labels` returns no error, just no names."""
+
+        from travel_planner.providers import WikidataSummaryProvider
+
+        provider = WikidataSummaryProvider()
+        asked: list[str] = []
+        provider._json = lambda url: (asked.append(url), {"entities": {"Q1": {}}})[1]  # type: ignore[method-assign]
+
+        with self.assertRaises(Exception):
+            provider.summary("Q1")
+
+        self.assertIn("labels", asked[0])
+        self.assertIn("languages=en|th", asked[0])
+
+    def test_an_article_title_stands_in_where_there_is_no_label(self) -> None:
+        from travel_planner.providers import WikidataSummaryProvider
+
+        provider = WikidataSummaryProvider()
+        provider._json = lambda url: (  # type: ignore[method-assign]
+            {
+                "entities": {
+                    "Q1": {
+                        "labels": {},
+                        "sitelinks": {"enwiki": {"title": "Some Temple"}},
+                        "claims": {},
+                    }
+                }
+            }
+            if "wbgetentities" in url
+            else {"extract": ""}
+        )
+
+        self.assertEqual({"en": "Some Temple"}, provider.summary("Q1")["names"])
 
     def test_a_summary_is_stored_per_place_in_both_languages(self) -> None:
         report = self.actions.refresh_place_summaries(self.trip.trip_id)

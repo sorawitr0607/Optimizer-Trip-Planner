@@ -636,9 +636,14 @@ class WikidataSummaryProvider:
         """
 
         sites = "|".join(f"{code}wiki" for code in self.languages)
+        codes = "|".join(self.languages)
         entity = self._json(
             f"{self.wikidata_url}?action=wbgetentities&ids={quote(str(qid))}"
-            f"&props=sitelinks|claims&sitefilter={sites}&format=json"
+            # `labels` rides along in the request already being made, so an English name
+            # for a Chinese-only place costs nothing extra. 61% of the Taipei catalogue
+            # has no `name:en` in OpenStreetMap at all.
+            f"&props=sitelinks|claims|labels&languages={codes}&sitefilter={sites}"
+            f"&format=json"
         )
         found = ((entity.get("entities") or {}).get(str(qid))) or {}
         if not found or "missing" in found:
@@ -685,8 +690,22 @@ class WikidataSummaryProvider:
 
         gallery.extend(self._gallery(sitelinks))
 
+        # Wikidata's label is the entity's name in that language, which is exactly what a
+        # place with no `name:en` is missing. Preferred over the Wikipedia article title
+        # in `sitelinks`, which carries disambiguation a name should not -- "Zhongshan
+        # (Taipei)" is an article title, not what anyone calls the place. The title is
+        # the fallback where no label exists.
+        names: dict[str, str] = {}
+        for code in self.languages:
+            label = ((found.get("labels") or {}).get(code) or {}).get("value")
+            title = (sitelinks.get(f"{code}wiki") or {}).get("title")
+            value = str(label or title or "").strip()
+            if value:
+                names[code] = value
+
         return {
             "qid": str(qid),
+            "names": names,
             "text": text,
             "image_url": image or (gallery[0] if gallery else None),
             # First is the curated P18 where there is one, then article photographs.

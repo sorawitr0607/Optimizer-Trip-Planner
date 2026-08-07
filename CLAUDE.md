@@ -190,6 +190,22 @@ are properties of the whole variant, so routing consent through a per-place reco
 `has_unaccepted_tradeoff` and the `exports.py` tradeoff list stay dead for that reason; deleting them is
 its own decision.
 
+**Two names, and two sources, as of 2026-08-07.** `shared/names.ts` is still the one place
+naming happens, and it now answers two questions: `placeName()` for the readable name and
+`placeAltName()` for the local-script one beside it — `null` where they would be identical, so a card
+never prints the same string twice. Both are shown because a traveller needs each: the local name is
+what the station sign and a taxi driver use. Two sources feed it via `mergeNames()`, **OpenStreetMap
+winning** because `name:en` is the name on the ground, with Wikidata's label filling gaps. That matters
+because **61% of the Taipei catalogue (525 of 849) has no `name:en` at all**; 131 of those carry a QID,
+and sampling 17 of them recovered a real English name for 13 — 三井物產株式會社舊廈 is "Mitsui & Co.,
+Ltd. Old Building", not a translation. `WikidataSummaryProvider` gets labels in the request it was
+already making (`props=sitelinks|claims|labels`), so the cost is zero, and a label arrives with the free
+description rather than before it. A place with no article still yields a name: `text` can be empty while
+`names` is not, and `refresh_place_summaries` stores the whole value, so nothing drops it.
+
+Do not machine-translate the rest. The residual is places like 華江橋下自行車練習場 (a bicycle practice
+ground) with no name in any free source, and inventing one is fabrication, not naming.
+
 **The planner recommends where to stay as of 2026-08-06 (`WF-040`).** `travel_planner/areas.py` is a new
 pure module and `actions.recommend_areas` the coordinator; `recommend_areas` is the **64th** allowlisted
 method. **The unit is a transit station, not a hotel and not a district** — that is how the owner
