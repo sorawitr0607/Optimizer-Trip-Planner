@@ -154,14 +154,35 @@ returns its exact 09:30–17:30.
 The general rule worth keeping: **an assumption looser than the one it replaces is not an
 improvement**, however specific it looks.
 
-### The prices are now over-estimates and should be corrected
+### The prices were corrected from measurement, 2026-08-07
 
-`openai:opening_window`, `openai:interpret_revision` and `openai:explain_revision` were
-calibrated for `gpt-4.1-mini`. `gpt-5.6-luna`'s published rate is not known here, so all
-three were raised **tenfold as deliberate over-estimates**, following the rule
-`google_places:search_text` already states: an over-estimate protects the cap, an
-under-estimate spends past it. They are wrong on purpose and should be replaced with the
-real rates — an over-estimate that is wildly high will refuse calls the cap could afford.
+The owner supplied luna's rate card: **US$0.20 per million input tokens and US$1.20 per
+million output** at short context, doubling at long context. Nothing here approaches long
+context — the largest payload is `interpret.build_payload`, measured at 363 characters —
+and caching never applies because every call sets `store: false`.
+
+luna is a **reasoning** model, so output is mostly hidden reasoning and varies far more
+than input. Six measured `opening_window` calls:
+
+| | input | output | cost |
+|---|---|---|---|
+| range | 156–163 | 48–195 | **US$0.000090 – US$0.000266** |
+| mean | ~159 | ~110 | US$0.000160 |
+
+`openai:opening_window` is priced at **US$0.0005**, just under twice the measured worst
+case — margin for reasoning variance, tight enough that the cap stays meaningful. The
+whole 13-place refresh costs **US$0.0065**.
+
+`interpret_revision` and `explain_revision` are **not measured end to end**, because the
+GenAI revision surface is deferred past the pilot. They are sized from the real payload —
+~531 input tokens including the schema, which at 1200 output tokens is US$0.0015 — and
+priced above that at US$0.0020 and US$0.0040.
+
+**The ledger over-reports by about US$0.325 and cannot be corrected.** Thirty OpenAI calls
+were recorded at the interim tenfold prices, totalling US$0.3300 against a real cost near
+US$0.0048. `paid_usage` is append-only by SQLite trigger, which is right — spend history
+is history — and the error is in the safe direction, so it stands and decays as new rows
+use the measured price.
 
 ## Related
 

@@ -52,19 +52,25 @@ PRICES_USD = {
     "google_timezone:lookup": 0.005,
     # One small structured-output call. Priced conservatively above the
     # token cost of a short request and reply.
-    # WF-046. One structured-output call per place for a better *assumption* than the
-    # hardcoded 09:00-21:00. Priced separately from interpret_revision so the two are
-    # distinguishable in the ledger.
+    # These three run on `gpt-5.6-luna` (`TOURIST_OPENAI_MODEL`), whose published
+    # short-context rate is **US$0.20 per million input tokens and US$1.20 per million
+    # output**. Long context doubles both, and nothing here comes close to it -- the
+    # largest payload is `interpret.build_payload`, measured at 363 characters. Caching
+    # never applies because every call sets `store: false`.
     #
-    # !! These three were calibrated for `gpt-4.1-mini`. The default model became
-    # `gpt-5.6-luna` on 2026-08-07 and its published rate is **not known here**, so these
-    # are deliberate OVER-estimates at ten times the old figure, following the same rule
-    # google_places:search_text states: an over-estimate protects the cap, an
-    # under-estimate spends past it. Replace them with the real published rates -- an
-    # over-estimate that is wildly wrong will refuse calls the cap could afford.
-    "openai:opening_window": 0.020,
-    "openai:interpret_revision": 0.020,
-    "openai:explain_revision": 0.040,
+    # luna is a *reasoning* model, so output tokens are mostly hidden reasoning and vary
+    # far more than input. Six measured `opening_window` calls on 2026-08-07 ran 156-163
+    # input and 48-195 output, costing **US$0.000090 to US$0.000266**. The price below is
+    # set just under twice the measured worst case: enough margin for reasoning variance,
+    # close enough that the cap stays meaningful. Re-measure if the model changes.
+    "openai:opening_window": 0.0005,
+    # Not measured end to end -- the GenAI revision surface is deferred past the pilot --
+    # but sized from the real payload: ~531 input tokens including the schema, which at
+    # 1200 output tokens is US$0.0015. Priced above that, and above `opening_window`
+    # because the slice and the reasoning are both larger.
+    "openai:interpret_revision": 0.0020,
+    # Same basis, double the output allowance: this one returns prose, not one enum.
+    "openai:explain_revision": 0.0040,
 }
 
 

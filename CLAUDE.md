@@ -298,10 +298,15 @@ Behavior changes to the optimizer should be expressed there.
 
 **The default model is `gpt-5.6-luna` as of 2026-08-07** (`TOURIST_OPENAI_MODEL` still overrides), and it
 beat `gpt-4.1-mini` on the `WF-046` benchmark — 6 of 12 exact against 5 of 13, four overshoots against
-five, and it declines rather than claiming to know all thirteen. **The three `openai:*` prices are now
-deliberate ten-times over-estimates**: they were calibrated for `gpt-4.1-mini` and luna's published rate
-is not recorded here. Replace them with the real rates — an over-estimate protects the cap but a wildly
-high one refuses calls the cap could afford.
+five, and it declines rather than claiming to know all thirteen. **The three `openai:*` prices were measured against
+luna's rate card** (US$0.20/M input, US$1.20/M output at short context; nothing here reaches long
+context, and `store: false` means caching never applies). luna is a *reasoning* model, so output is
+mostly hidden reasoning and varies: six measured `opening_window` calls ran US$0.000090–US$0.000266, so
+it is priced at **US$0.0005** and a 13-place refresh costs US$0.0065. `interpret_revision` and
+`explain_revision` are sized from the real payload rather than measured end to end, since that surface
+is deferred. **The ledger over-reports OpenAI spend by ~US$0.325** from 30 calls recorded at interim
+tenfold prices; `paid_usage` is append-only by design, the error is in the safe direction, and it decays
+as new rows use the measured price.
 
 `TOURIST_DB_PATH` (default `data/tourist.sqlite3`), `TOURIST_NOMINATIM_URL`, `TOURIST_OVERPASS_URL`,
 `TOURIST_USER_AGENT`, `TOURIST_GTFS_PATH` (default
