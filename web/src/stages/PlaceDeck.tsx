@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 
-import type { CandidateChoice, PlaceSummary, Ranking } from "../api/client";
+import type { CandidateChoice, DiscoveryCandidate, PlaceSummary, Ranking } from "../api/client";
 import { copy, copyFrom, type Language } from "../i18n/copy";
+import { galleryFor } from "../shared/photos";
 
 /**
  * The swipe deck `WF-005` decided on 2026-07-28 and `WF-036` left to prototype.
@@ -36,8 +37,16 @@ import { copy, copyFrom, type Language } from "../i18n/copy";
 const COMMIT_DISTANCE = 96;
 /** Where the pending action starts being named, as a fraction of the commit distance. */
 const HINT_FRACTION = 0.35;
+/**
+ * How far the pointer must move before a press becomes a drag.
+ *
+ * Capturing on `pointerdown` broke tapping the photograph to see the next one: a
+ * captured pointer retargets its events, so the inner button never received the click.
+ * Nothing is captured until the pointer has actually travelled, so a tap stays a tap.
+ */
+const DRAG_SLOP = 6;
 
-type Intent = "interested" | "not_for_trip" | "skip" | null;
+type Intent = "interested" | "not_for_trip" | "skip" | "maybe" | null;
 
 interface Drag {
   pointerId: number;
@@ -47,19 +56,25 @@ interface Drag {
   y: number;
 }
 
-/** Which way a drag is going, once it is going anywhere. Down beats sideways only
- *  when it is clearly downward, so a lazy diagonal still reads as a decision. */
+/** Which way a drag is going, once it is going anywhere. Vertical beats sideways only
+ *  when it is clearly vertical, so a lazy diagonal still reads as a decision. */
 function intentOf(drag: Drag | null): Intent {
   if (!drag) return null;
   const reach = COMMIT_DISTANCE * HINT_FRACTION;
-  if (drag.y > Math.abs(drag.x) && drag.y > reach) return "skip";
+  if (Math.abs(drag.y) > Math.abs(drag.x)) {
+    if (drag.y > reach) return "skip";
+    // Up is `maybe`: a real decision, unlike skip, and the two are opposite gestures
+    // because they are the two ways of not answering yet.
+    if (drag.y < -reach) return "maybe";
+    return null;
+  }
   if (drag.x > reach) return "interested";
   if (drag.x < -reach) return "not_for_trip";
   return null;
 }
 
 function committed(drag: Drag): boolean {
-  return Math.abs(drag.x) >= COMMIT_DISTANCE || drag.y >= COMMIT_DISTANCE;
+  return Math.abs(drag.x) >= COMMIT_DISTANCE || Math.abs(drag.y) >= COMMIT_DISTANCE;
 }
 
 export interface PlaceDeckProps {
@@ -71,6 +86,8 @@ export interface PlaceDeckProps {
    *  that reason at S4 and the deck did not follow; now it does, and the lane picker
    *  drives both. Every lane still reaches `main_queue` in one select. */
   entries: Ranking["lanes"]["main_queue"];
+  /** The normalized catalogue by place id, for OpenStreetMap's own photo tag. */
+  candidates: Record<string, DiscoveryCandidate>;
   summaries: Record<string, PlaceSummary>;
   choices: CandidateChoice[];
   language: Language;
@@ -90,6 +107,7 @@ export interface PlaceDeckProps {
 export function PlaceDeck({
   ranking,
   entries,
+  candidates,
   summaries,
   choices,
   language,
@@ -114,11 +132,9 @@ export function PlaceDeck({
   const card = entry ? ranking.cards[entry.place_id] : undefined;
 
   const about = entry ? summaries[entry.place_id] : undefined;
-  const gallery = about?.image_urls?.length
-    ? about.image_urls
-    : about?.image_url
-      ? [about.image_url]
-      : [];
+  // Encyclopedia photographs plus OpenStreetMap's own tag, which costs no extra request
+  // and is often the only picture a place without an article has.
+  const gallery = galleryFor(about, entry ? candidates[entry.place_id] : undefined);
 
   // Wikimedia serves every one of these through a `Special:FilePath` redirect, so the
   // first byte costs two round trips. Warming the next photo and the next card's
@@ -160,12 +176,12 @@ export function PlaceDeck({
   function act(action: Intent) {
     if (action === "skip") advance(1);
     else if (action === "interested") decide("interested");
+    else if (action === "maybe") decide("maybe");
     else if (action === "not_for_trip") decide("not_for_trip", null);
   }
 
   function endDrag(current: Drag | null) {
     if (!current) return;
-    travelled.current = Math.abs(current.x) + Math.abs(current.y);
     const action = committed(current) ? intentOf(current) : null;
     setDrag(null);
     if (!action) return;
@@ -181,7 +197,9 @@ export function PlaceDeck({
   const offsetX = leaving
     ? (leaving === "interested" ? 1 : leaving === "not_for_trip" ? -1 : 0) * 420
     : (drag?.x ?? 0);
-  const offsetY = leaving === "skip" ? 420 : (drag?.y ?? 0);
+  const offsetY = leaving
+    ? (leaving === "skip" ? 420 : leaving === "maybe" ? -420 : 0)
+    : (drag?.y ?? 0);
   const style = {
     transform: `translate(${offsetX}px, ${offsetY}px) rotate(${offsetX / 26}deg)`,
     transition: drag ? "none" : "transform var(--duration-standard) var(--ease-out)",
@@ -197,7 +215,7 @@ export function PlaceDeck({
         if (event.key === "ArrowRight") act("interested");
         else if (event.key === "ArrowLeft") act("not_for_trip");
         else if (event.key === "ArrowDown") act("skip");
-        else if (event.key === "ArrowUp") advance(-1);
+        else if (event.key === "ArrowUp") act("maybe");
         else return;
         event.preventDefault();
       }}
@@ -211,16 +229,25 @@ export function PlaceDeck({
         onPointerCancel={() => setDrag(null)}
         onPointerDown={(event) => {
           if (event.button !== 0) return;
-          event.currentTarget.setPointerCapture(event.pointerId);
+          // No capture yet. Capturing here retargets every later event at this element,
+          // which is why tapping the photograph to advance the gallery did nothing.
           travelled.current = 0;
           setDrag({ pointerId: event.pointerId, fromX: event.clientX, fromY: event.clientY, x: 0, y: 0 });
         }}
         onPointerMove={(event) => {
-          setDrag((current) =>
-            current && current.pointerId === event.pointerId
-              ? { ...current, x: event.clientX - current.fromX, y: event.clientY - current.fromY }
-              : current,
-          );
+          const surface = event.currentTarget;
+          setDrag((current) => {
+            if (!current || current.pointerId !== event.pointerId) return current;
+            const x = event.clientX - current.fromX;
+            const y = event.clientY - current.fromY;
+            travelled.current = Math.abs(x) + Math.abs(y);
+            // Past the slop it is a drag, so capture it — this is what keeps a gesture
+            // alive once the pointer leaves the card, which is most gestures that commit.
+            if (travelled.current > DRAG_SLOP && !surface.hasPointerCapture(event.pointerId)) {
+              surface.setPointerCapture(event.pointerId);
+            }
+            return { ...current, x, y };
+          });
         }}
         onPointerUp={(event) => {
           if (event.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -249,7 +276,9 @@ export function PlaceDeck({
                 ? "drop_to_keep"
                 : intent === "not_for_trip"
                   ? "drop_to_reject"
-                  : "drop_to_skip",
+                  : intent === "maybe"
+                    ? "drop_to_maybe"
+                    : "drop_to_skip",
               language,
             )}
           </p>
@@ -342,7 +371,16 @@ export function PlaceDeck({
         </dl>
       </div>
 
+      {/* Four directions is more than a sentence can carry, so the legend is a diagram:
+          each way you can throw the card, beside what it means. */}
+      <ul className="place-deck-legend">
+        <li><b aria-hidden="true">←</b> {copy("drop_to_reject", language)}</li>
+        <li><b aria-hidden="true">→</b> {copy("drop_to_keep", language)}</li>
+        <li><b aria-hidden="true">↑</b> {copy("drop_to_maybe", language)}</li>
+        <li><b aria-hidden="true">↓</b> {copy("drop_to_skip", language)}</li>
+      </ul>
       <p className="setup-hint">{copy("drag_hint", language)}</p>
+      <p className="setup-hint">{copy("tap_photo_hint", language)}</p>
       {/* Colour separates keep from drop from defer. Before this the five actions
           were five identical grey buttons and the destructive one sat between two
           keeps. */}

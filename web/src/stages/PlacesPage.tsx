@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { PlaceDeck } from "./PlaceDeck";
 import { StayAreas } from "./StayAreas";
-import { useNavigate, useParams } from "react-router";
+import { useNavigate, useParams, useSearchParams } from "react-router";
 
 import {
   ApiError,
@@ -20,6 +20,7 @@ import {
 import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
 import { mergeNames, placeAltName, placeName } from "../shared/names";
+import { galleryFor } from "../shared/photos";
 
 const LANES = ["main_queue", "city_icons", "worth_it_if", "local_alternatives", "browse_all"] as const;
 const CHOICES = ["must_do", "interested", "maybe"] as const;
@@ -82,7 +83,17 @@ export function PlacesPage() {
   const [lane, setLane] = useState<Lane>("city_icons");
   // Deck first, because WF-005 designed this stage as a swipe queue and the list is
   // the fallback for comparing two places side by side. The list is one button away.
-  const [mode, setMode] = useState<"deck" | "list">("deck");
+  //
+  // In the URL rather than in state, so a reload does not throw an owner comparing two
+  // places back into the deck — and so the two views are separately linkable.
+  const [params, setParams] = useSearchParams();
+  const mode: "deck" | "list" = params.get("view") === "list" ? "list" : "deck";
+  const setMode = (next: "deck" | "list") => {
+    const updated = new URLSearchParams(params);
+    if (next === "list") updated.set("view", "list");
+    else updated.delete("view");
+    setParams(updated, { replace: true });
+  };
   // Free descriptions and photos: Wikidata plus Wikipedia, no key and no charge.
   // This is what answers "the summary tells me nothing about the place" -- the
   // templated sentence below is built from the same codes for every card.
@@ -103,6 +114,7 @@ export function PlacesPage() {
   const [rejectionReason, setRejectionReason] = useState("null");
   const [flash, setFlash] = useState<string | null>(null);
   const [insights, setInsights] = useState<Record<string, PlaceInsight>>({});
+  const [shortlistOpen, setShortlistOpen] = useState(false);
   const [photoIndexes, setPhotoIndexes] = useState<Record<string, number>>({});
 
   const setup = useQuery({
@@ -118,6 +130,7 @@ export function PlacesPage() {
     queryFn: () => rpc<CandidateChoice[]>("list_candidate_choices", { trip_id: tripId }),
   });
   const catalog = discovery.data?.candidates.data.candidates ?? [];
+  const byId = Object.fromEntries(catalog.map((item) => [item.place_id, item]));
   const ranking = useQuery({
     queryKey: ["ranking", tripId],
     queryFn: () => rpc<Ranking>("rank_candidates", { trip_id: tripId }),
@@ -209,10 +222,16 @@ export function PlacesPage() {
   const decided = new Set((choices.data ?? []).map((item) => item.place_id));
   // The selected lane, not `main_queue`: the deck deals from whichever lane is picked,
   // so prefetching the other one would warm cards nobody is about to see.
-  const upcoming = entries
-    .filter((item) => !decided.has(item.place_id))
-    .slice(0, PREFETCH_AHEAD)
-    .map((item) => item.place_id);
+  const upcoming = [
+    // The card being looked at right now comes first. Prefetching only the head of the
+    // lane left the list view blank for any card chosen further down a 500-entry
+    // select, which read as "the Wikipedia pictures do not work".
+    ...(selectedId ? [selectedId] : []),
+    ...entries
+      .filter((item) => !decided.has(item.place_id))
+      .slice(0, PREFETCH_AHEAD)
+      .map((item) => item.place_id),
+  ];
   useEffect(() => {
     if (!summaries.data || fetchSummary.isPending) return;
     const wanted = upcoming.filter(
@@ -354,14 +373,24 @@ export function PlacesPage() {
           {/* The lane picker drives both modes now. In deck mode it was hidden, so the
               deck always dealt from `main_queue` while the list opened on City Icons —
               and the queue's top 20 have no Wikidata id, so the deck showed twenty
-              photo-less cards and the fix for that was a control you could not see. */}
+              photo-less cards and the fix for that was a control you could not see.
+              Buttons rather than a select: five lanes is a small enough set to show at
+              once, and which lane you are in is then readable without opening anything. */}
           <div className="places-pickers">
-            <label className="optimize-variant">
-              {copy("lane", language)}
-              <select value={lane} onChange={(event) => { setLane(event.target.value as Lane); setCardId(""); }}>
-                {LANES.map((value) => <option key={value} value={value}>{copy(value, language)} ({laneEntries(ranking.data!, value).length})</option>)}
-              </select>
-            </label>
+            <div className="lane-tabs" role="group" aria-label={copy("lane", language)}>
+              {LANES.map((value) => (
+                <button
+                  aria-pressed={lane === value}
+                  className={`lane-tab${lane === value ? " active" : ""}`}
+                  key={value}
+                  onClick={() => { setLane(value); setCardId(""); }}
+                  type="button"
+                >
+                  {copy(value, language)}
+                  <span className="lane-tab-count">{laneEntries(ranking.data!, value).length}</span>
+                </button>
+              ))}
+            </div>
             {mode === "list" && entries.length ? (
               <label className="optimize-variant">
                 {copy("select_card", language)}
@@ -379,6 +408,7 @@ export function PlacesPage() {
             <>
               <p className="setup-hint">{copy("deck_help", language)}</p>
               <PlaceDeck
+                candidates={byId}
                 choices={choices.data ?? []}
                 entries={entries}
                 language={language}
@@ -418,7 +448,11 @@ export function PlacesPage() {
           ) : null}
           {!entries.length ? <p>{copy("no_lane_cards", language)}</p> : null}
 
-          {candidate && card ? (
+          {/* List mode only. This card rendered in both, so in deck mode it sat below
+              the deck showing whichever place the (hidden) select happened to point at
+              — it never followed the deck, which read as a frozen panel, and its two
+              buttons doubled the deck's own. */}
+          {mode === "list" && candidate && card ? (
             // derives-from: A4 ranked candidate card, reduced to one functional list card for S4.
             <article className="place-card">
               <header className="place-card-head">
@@ -430,7 +464,10 @@ export function PlacesPage() {
                 const prose = about?.text?.[language] ?? about?.text?.en ?? "";
                 const onlyEnglish = language === "th" && !about?.text?.th && Boolean(about?.text?.en);
                 const asking = fetchSummary.isPending;
-                if (!prose && !about?.image_url) {
+                // OpenStreetMap's own tag counts as a picture: a place with no article
+                // still often carries one, and it costs no extra request.
+                const photo = galleryFor(about, candidate)[0] ?? null;
+                if (!prose && !photo) {
                   // Nothing found: say so, and keep the mechanism sentence as the
                   // fallback rather than showing an empty card.
                   return (
@@ -460,12 +497,13 @@ export function PlacesPage() {
                 return (
                   // derives-from: element 26 .recent-row-item as .place-about
                   <div className="place-about">
-                    {about?.image_url ? (
+                    {photo ? (
                       <img
                         alt={placeName(candidate, language, candidate.name)}
                         className="place-about-photo"
+                        decoding="async"
                         loading="lazy"
-                        src={about.image_url}
+                        src={photo}
                       />
                     ) : null}
                     <div className="place-about-text">
@@ -540,9 +578,31 @@ export function PlacesPage() {
 
       {/* derives-from: element 18 .trip-summary-box as .shortlist. Deciding place after
           place with no running record of what had been kept was the reported gap: the
-          deck consumed the queue and showed nothing for it. */}
-      <section className="shortlist">
-        <h2 className="money-eyebrow">{copy("your_shortlist", language)}</h2>
+          deck consumed the queue and showed nothing for it.
+          A drawer rather than a block at the foot of the page: while swiping, what you
+          have kept is the thing you want to glance at without losing your place, and at
+          the bottom of a long screen it was neither visible nor reachable. */}
+      <button
+        aria-controls="shortlist-pane"
+        aria-expanded={shortlistOpen}
+        className="shortlist-handle"
+        onClick={() => setShortlistOpen((open) => !open)}
+        type="button"
+      >
+        {copy("your_shortlist", language)}
+        <span className="shortlist-handle-count">{selectedChoices.length}</span>
+      </button>
+      <section
+        className={`shortlist${shortlistOpen ? " open" : ""}`}
+        id="shortlist-pane"
+        hidden={!shortlistOpen}
+      >
+        <div className="shortlist-head">
+          <h2 className="money-eyebrow">{copy("your_shortlist", language)}</h2>
+          <button onClick={() => setShortlistOpen(false)} type="button">
+            {copy("close", language)}
+          </button>
+        </div>
         <p className="setup-hint">{copy("shortlist_help", language)}</p>
         {selectedChoices.length ? (
           <>

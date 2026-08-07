@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import type { PlaceSummary, Ranking } from "../api/client";
+import type { DiscoveryCandidate, PlaceSummary, Ranking } from "../api/client";
 import { PlaceDeck } from "./PlaceDeck";
 
 /**
@@ -72,6 +72,13 @@ const SUMMARY: Record<string, PlaceSummary> = {
   },
 };
 
+/** `explore` has no encyclopedia entry but does carry OpenStreetMap's own photo tag,
+ *  which is the case the third image source exists for. */
+const CANDIDATES = {
+  first: { place_id: "first", photo_reference: null },
+  explore: { place_id: "explore", photo_reference: "File:Quiet Park.jpg" },
+} as unknown as Record<string, DiscoveryCandidate>;
+
 function render(
   summaries: Record<string, PlaceSummary>,
   choices: string[] = [],
@@ -79,6 +86,7 @@ function render(
 ) {
   return renderToStaticMarkup(
     <PlaceDeck
+      candidates={CANDIDATES}
       choices={choices.map((place_id) => ({ place_id, action: "must_do", reason: null }) as never)}
       entries={entries}
       language="en"
@@ -165,6 +173,25 @@ describe("PlaceDeck", () => {
     expect(html).toContain("Load free descriptions");
     expect(html).toContain("no charge and no key");
     expect(html).not.toContain("Photo 1 of");
+  });
+
+  it("shows OpenStreetMap's own photo when there is no encyclopedia entry", () => {
+    // Most of a dense city's catalogue has no Wikidata id, so Wikipedia alone left the
+    // card blank. `photo_reference` is already on every candidate and cost nothing.
+    const html = render({}, [], [{ place_id: "explore" }]);
+
+    expect(html).toContain("Special:FilePath/Quiet_Park.jpg");
+    expect(html).toContain("Photo 1 of 1");
+  });
+
+  it("names all four directions, up included", () => {
+    // Up is `maybe`: a decision, unlike skip, and the opposite gesture because they are
+    // the two ways of not answering yet.
+    const html = render(SUMMARY);
+    for (const label of ["Keep", "Not for trip", "Maybe", "Skip"]) {
+      expect(html).toContain(label);
+    }
+    expect(html).toContain("Tap the photo");
   });
 
   it("says so when every unseen place has been decided", () => {

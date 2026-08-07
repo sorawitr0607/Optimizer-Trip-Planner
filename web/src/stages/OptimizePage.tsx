@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 
 import { ComfortTradeoffs } from "./ComfortTradeoffs";
+import { StayPlanner } from "./StayPlanner";
 
 import {
   ApiError,
@@ -226,32 +227,11 @@ export function OptimizePage() {
         </>
       ) : null}
 
+      {/* A trip with no dates used to end here, at a table of how many days its places
+          want and no way to act on it. The recommendation is now the input to choosing
+          dates, which is the one thing that unlocks a timetable. */}
       {proposal?.mode === "stay_recommendation" ? (
-        <>
-          <h2 className="money-eyebrow">{copy("stay_recommendation", language)}</h2>
-          <div className="money-table-scroll">
-            <table className="money-table">
-              <thead>
-                <tr>
-                  <th>{copy("stay_option", language)}</th>
-                  <th>{copy("days", language)}</th>
-                  <th>{copy("daily_capacity", language)}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(proposal.stay_recommendations ?? []).map((item) => (
-                  <tr key={item.id}>
-                    <td>{copy(item.id, language)}</td>
-                    <td className="money-num">{item.days}</td>
-                    <td className="money-num">
-                      {item.daily_capacity_minutes} {copy("minutes", language)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
+        <StayPlanner language={language} proposal={proposal} tripId={tripId} />
       ) : null}
 
       {/* `WF-039`. Above the variant picker, because an overage is the reason a variant

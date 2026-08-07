@@ -137,7 +137,16 @@ const SNAPSHOT = {
   },
 } satisfies Frozen<ExportSnapshot>;
 
-function render(page: ReactNode, language: Language, seed?: (client: QueryClient) => void): string {
+/** `view` is the places screen's list/deck toggle, which lives in the URL so a reload
+ *  keeps it. The list card is what these assertions are about, and in deck mode it is
+ *  correctly absent -- it used to render in both, showing a place the deck had already
+ *  moved past. */
+function render(
+  page: ReactNode,
+  language: Language,
+  seed?: (client: QueryClient) => void,
+  search = "?view=list",
+): string {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   client.setQueryData(["setup", TRIP], SETUP);
   client.setQueryData(["discovery", TRIP], DISCOVERY);
@@ -165,7 +174,7 @@ function render(page: ReactNode, language: Language, seed?: (client: QueryClient
   return renderToStaticMarkup(
     <QueryClientProvider client={client}>
       <LanguageProvider initial={language}>
-        <MemoryRouter initialEntries={[`/trips/${TRIP}/x`]}>
+        <MemoryRouter initialEntries={[`/trips/${TRIP}/x${search}`]}>
           <Routes><Route element={page} path="/trips/:tripId/x" /></Routes>
         </MemoryRouter>
       </LanguageProvider>
@@ -189,6 +198,21 @@ describe("PlacesPage", () => {
     expect(html).toContain("US$0.007");
     expect(html.indexOf("US$0.007")).toBeLessThan(html.indexOf("Load live gallery"));
     expectNoMissingCopy(html);
+  });
+
+  it("keeps the list card out of deck mode entirely", () => {
+    // It used to render in both. In deck mode it sat under the deck showing whichever
+    // place the hidden select pointed at, never following the deck as it advanced --
+    // reported as a frozen panel -- and its buttons doubled the deck's own.
+    const html = render(<PlacesPage />, "en", undefined, "");
+
+    // The one place in this fixture is already decided, so the deck is showing its
+    // exhausted state -- which is still the deck, and still not the list card.
+    expect(html).toContain("Every unseen place has had a decision");
+    expect(html).not.toContain("place-card-head");
+    expect(html).not.toContain("Load live gallery");
+    // The lane picker is shared by both views and must survive.
+    expect(html).toContain("lane-tabs");
   });
 
   it("leads a card with the free description and photo, not the templated line", () => {

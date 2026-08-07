@@ -1109,9 +1109,13 @@
   width: 100%;
 }
 
+/* Capped, not full-bleed. At 3/2 across the whole column the photograph pushed the
+   card's own facts and every action button below the fold, so deciding meant
+   scrolling — which is the opposite of a deck. */
 .place-deck-photo img {
-  aspect-ratio: 3 / 2;
+  aspect-ratio: 16 / 9;
   display: block;
+  max-height: 260px;
   object-fit: cover;
   width: 100%;
 }
@@ -2457,13 +2461,67 @@
    shape. Totals only — dividing them into days would need a second copy of the
    optimizer's pacing constants.
    --------------------------------------------------------------------------- */
-.shortlist {
+/* The drawer, and the tab that opens it. Fixed to the right edge so what has been
+   kept is one glance away while swiping, instead of at the foot of a long page. */
+.shortlist-handle {
+  align-items: center;
+  background: var(--color-accent);
   border: 1px solid var(--bg-card-border);
   border-radius: var(--radius);
+  box-shadow: var(--shadow-hard-sm);
+  color: var(--color-on-accent);
+  cursor: pointer;
+  display: inline-flex;
+  font-weight: var(--weight-secondary);
+  gap: 8px;
+  padding: 9px 14px;
+  position: fixed;
+  right: 0;
+  top: 96px;
+  z-index: 3;
+}
+
+.shortlist-handle-count {
+  background: var(--color-on-accent);
+  border-radius: var(--radius-pill);
+  color: var(--color-accent);
+  font-size: var(--text-2xs);
+  min-width: 20px;
+  padding: 1px 6px;
+  text-align: center;
+}
+
+.shortlist {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius);
+  bottom: 0;
+  box-shadow: var(--shadow-hard-lg);
   display: grid;
   gap: 10px;
-  margin: 16px 0;
-  padding: 14px;
+  grid-auto-rows: min-content;
+  overflow-y: auto;
+  padding: 16px;
+  position: fixed;
+  right: 0;
+  top: 0;
+  width: min(380px, 92vw);
+  z-index: 4;
+}
+
+.shortlist-head {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.shortlist-head button {
+  background: var(--bg-secondary);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  cursor: pointer;
+  padding: 4px 10px;
 }
 
 .shortlist h3 {
@@ -2525,4 +2583,146 @@
 
 .plan-assumptions li {
   margin-bottom: 4px;
+}
+
+/* ---------------------------------------------------------------------------
+   Lane tabs. Five lanes is a small enough set to show at once, and which lane
+   you are in is then readable without opening a select.
+   --------------------------------------------------------------------------- */
+.lane-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.lane-tab {
+  align-items: center;
+  background: var(--bg-secondary);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-secondary);
+  gap: 7px;
+  padding: 6px 11px;
+}
+
+.lane-tab.active {
+  background: var(--color-accent);
+  border-color: var(--bg-card-border);
+  box-shadow: var(--shadow-hard-sm);
+  color: var(--color-on-accent);
+}
+
+.lane-tab-count {
+  background: var(--bg-card);
+  border-radius: var(--radius-pill);
+  color: var(--text-muted);
+  font-size: var(--text-2xs);
+  padding: 0 6px;
+}
+
+.lane-tab.active .lane-tab-count {
+  color: var(--color-accent);
+}
+
+/* Four directions is more than a sentence carries, so the legend is a diagram. */
+.place-deck-legend {
+  display: grid;
+  gap: 4px 14px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+}
+
+.place-deck-legend li {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.place-deck-legend b {
+  color: var(--color-accent);
+  display: inline-block;
+  font-size: var(--text-md);
+  min-width: 16px;
+}
+
+.place-deck-intent.intent-maybe {
+  background: var(--color-warning-light);
+  color: var(--color-warning);
+}
+
+/* ---------------------------------------------------------------------------
+   The no-dates way forward. A stay recommendation used to be a table and a dead
+   end; it is now the input to choosing dates, which is what unlocks a timetable.
+   --------------------------------------------------------------------------- */
+.stay-planner {
+  background: var(--bg-secondary);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+}
+
+.stay-pace-options {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.stay-pace {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  display: grid;
+  gap: 2px;
+  padding: 12px;
+  text-align: left;
+}
+
+.stay-pace.active {
+  background: var(--color-accent-light);
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-hard-sm);
+}
+
+.stay-pace strong {
+  font-size: var(--text-md);
+}
+
+.stay-pace small {
+  color: var(--text-muted);
+}
+
+.stay-months {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.stay-month {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  padding: 5px 10px;
+}
+
+.stay-month.active {
+  background: var(--color-accent);
+  box-shadow: var(--shadow-hard-sm);
+  color: var(--color-on-accent);
+}
+
+.stay-dates {
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+  margin: 0;
 }
