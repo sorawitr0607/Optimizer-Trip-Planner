@@ -313,8 +313,9 @@ must stay directed. Rebuild only through `python3 scripts/build_project_graph.py
 failure), and only when explicitly asked or after a topology-changing milestone. After any graph
 change, `--check` must pass before committing. See `AGENTS.md`.
 
-**Rebuilt for `WF-039` on 2026-08-07 and `--check` passes**: 1868 nodes, 4589 directed edges, 150
-communities. Recorded cumulative cost is US$0.336961 over 32 runs. The `WF-040` rebuild the day before
+**Rebuilt for `WF-044`/`WF-045` on 2026-08-07 and `--check` passes**: 1888 nodes, 4637 directed edges,
+163 communities; recorded cumulative cost is US$0.347745 over 33 runs. The `WF-039` rebuild the same day
+gave 1868 nodes, 4589 edges and 150 communities. The `WF-040` rebuild the day before
 gave 1818 nodes, 4492 edges and 153 communities for US$0.0121.
 
 Two ticket-authoring gotchas learned paying for that run. **Cite a module by its path** — a bare
@@ -404,8 +405,17 @@ that declaration is what kept the gate working when the POC went.
 
 ## Phase 2 implementation follows the locked slice order
 
-`WF-MAP-002` is **decision-complete as of 2026-08-03**, and as of 2026-08-07 all 43 tickets across both
-maps are **closed**. Nothing is outstanding.
+`WF-MAP-002` is **decision-complete as of 2026-08-03**. Across both maps there are 45 tickets, **43
+closed, 2 open**, both opened 2026-08-07 while measuring the pilot's opening hours and neither blocking
+it: `Decide whether a venue's own site fills the holiday-hours gap` (`WF-044`) and `Decide what happens
+to an activated plan when evidence improves` (`WF-045`).
+
+Two measured facts from those worth carrying. **`verified` means a provider said so, not that it is
+true** — Google returns Mon–Fri 08:30–17:30 with weekends closed for Sun Yat-sen Memorial Hall, which
+reads like the administration office rather than the visitor hall. And **an opening fact is a weekly
+pattern**, so nothing in the current shape can express "closed 1 January"; `capability_gaps` is empty
+for a trip whose likeliest failure is a closure the app cannot represent. Do not close either by
+asserting hours a model recalls: the fix has to come from a fetched, citable source or from the owner.
 `Lock the Phase 2 slice plan and validation scorecard` is the destination artifact — read it
 first: `.wayfinder/artifacts/033-phase-2-slice-plan-and-scorecard.md`.
 
