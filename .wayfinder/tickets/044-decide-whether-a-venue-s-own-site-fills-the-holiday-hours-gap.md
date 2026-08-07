@@ -62,10 +62,8 @@ citable source or from the owner.
   what `WF-038` did for `estimated` transit routes. A venue page is also **untrusted
   content**, so the strict output schema is a containment boundary and not just a parser.
   Costs about US$0.002 a place at `openai:interpret_revision`'s rate.
-- **Read schema.org `OpeningHoursSpecification` from the page instead.** Many venue and
-  museum sites publish JSON-LD. Deterministic, free, no model, no prompt-injection
-  surface — and it fails silently on the sites that do not publish it, which is probably
-  most Taiwanese government venues. Worth measuring before assuming the LLM is needed.
+- ~~**Read schema.org `OpeningHoursSpecification` from the page instead.**~~ **Measured
+  2026-08-07 and it does not work: 0 of 9.** See below.
 - **Re-fetch Google nearer the trip.** US$0.325 for all 13. Fixes *stale* hours, which is
   a real risk for August data, and does **nothing** for the holiday case, because the
   shape is still weekly. Cheap, and not a substitute.
@@ -78,6 +76,57 @@ Whichever is chosen, `interpret.py` **cannot** be widened to do it. Measured: al
 `revision.OPERATIONS` take arguments like `factor`, `place_id` and `minutes`, and not one
 can carry a time, a closure or a fare. That is deliberate — an operation is a constraint
 change, never a fact — so this needs a separate provider, not a bigger interpreter.
+
+## Measured 2026-08-07: the structured-data option is dead, and the model option is
+## smaller and riskier than it looks
+
+Nine of the thirteen chosen places publish a website. All nine were fetched read-only
+with the app's own user agent, one second apart, and parsed for structured data only.
+
+**schema.org: 0 of 9.** Not one site carries a single `application/ld+json` block — no
+opening hours, no structured data of any kind. Eight returned HTTP 200; Beitou Hot Spring
+Museum times out from here on repeated attempts. Nor is there any
+`itemprop="openingHours"` microdata. So the deterministic, model-free, injection-free
+option is simply not available for this trip, and that option is struck above.
+
+**Plain text: 6 of 9 name an hours concept, 5 of 9 contain any `HH:MM`.** But usefulness
+is much narrower than that suggests:
+
+| Site | What is actually there |
+|---|---|
+| Taipei Fine Arts Museum | **Complete weekly hours on the landing page**: 週一 休館, 週二至週日 9:30–17:30, 週六 9:30–20:30 |
+| Huashan 1914 | A real one-off change notice — hours altered by **typhoon** 巴威 — exactly the shape Google cannot carry |
+| CKS Memorial, Taipei Zoo | 開放時間 appears in **navigation only** |
+| Taipei 101 | 觀景台營業時間 in navigation only, and no nav link a probe can follow |
+| Baoan Temple, Lungshan Temple | **Nothing.** Zero times, zero keywords — temples do not publish hours |
+| Beitou Hot Spring Museum | Unreachable |
+
+**One hop is not enough.** Following the anchor whose own text says 開放時間 lands on
+another index page — `cksmh.gov.tw/cl.aspx?n=6025` and
+`zoo.gov.taipei/Content_List.aspx?n=…` both contain **zero** `HH:MM`. These are government
+CMS sites where the hours sit two or more hops in. So this is not "fetch the site and
+extract"; it is "crawl a CMS to find the hours page, then extract", which is a different
+and much more fragile piece of work.
+
+**And the one place that most needed it is the trap.** Sun Yat-sen Memorial Hall — the
+place whose Google hours look like an office schedule — publishes a 休館公告 (closure
+announcement) dated 2026-08-06 that is about a **server-room migration affecting the
+website**, not about the hall being shut. A naive extractor reading "closure
+announcement" plus a date produces a confident closure that does not exist. That is worse
+than no data: an invented closure silently removes a landmark from the plan, and the
+owner has no way to tell it from a real one.
+
+### What this implies for the decision
+
+Extraction would reliably help **one** of nine sites today, catch a genuine change notice
+on a second, need a CMS crawler for three, find nothing at two, and can reach the ninth
+not at all — while carrying a demonstrated failure mode on the very place the gap was
+found. Against that, the readiness board's 13 manual checks are performed by someone who
+reads Chinese and can tell a website outage notice from a building closure.
+
+Any build should therefore be judged on whether it can be **safely wrong**: an extracted
+closure must be visibly weaker than a verified one, must cite the sentence it came from
+so the owner can judge it, and must never remove a place from a plan on its own.
 
 ## Related
 
