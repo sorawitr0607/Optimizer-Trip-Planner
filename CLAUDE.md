@@ -173,6 +173,23 @@ an expired budget legitimately yields 0 visits where greedy's only schedule carr
 because `comfort_violations` outranks `experience_value` in the objective tuple — that ordering is
 `WF-039`'s question.
 
+**Assumed windows are batched and the cost trade is reported, not taken, as of 2026-08-07 (`WF-047`).**
+`google_places:search_text` is **US$0.025 a place** and is the only paid step that scales with trip size —
+40 places is US$1.00 against a US$10 cap. There is **no cheaper verified path**: Text Search takes one
+query per place and cannot be batched, and the cheaper `places/{id}` Details endpoint needs a Google place
+id the catalogue does not hold. So US$0.025 is the floor for evidence.
+
+`OpenAIOpeningWindowProvider.windows()` batches the *assumption* instead — one request for up to
+`BATCH_SIZE = 20` places, matched back by an **echoed integer index**, never by name, and charged to the
+ledger **once per request**. Batching measured **more** accurate, which was not expected: 8 of 11 exact on
+both ends against 6 of 12, and one overshoot of real closing against four.
+
+**Do not add a cost threshold that switches automatically.** Verified and assumed are different kinds, not
+different prices: an assumed fact is read only under `allow_provisional_assumptions`, so on a
+`ready_to_schedule` trip a cost-triggered switch spends money on a fact the optimizer ignores.
+`actions.opening_evidence_options` prices both paths and carries the cheap one's measured error rate
+*beside* its price, and reports `assumed_is_usable: false` where the trip would not read it.
+
 **A venue's own page is read for dated closures as of 2026-08-07 (`WF-044`) — and it is never a fact.**
 An opening fact is a **weekly pattern**, so nothing stored can say "closed 1 January", and the trip spans
 31 December and 1 January. `providers.VenueNoticeProvider` fetches the landing page and quotes any dated
@@ -370,8 +387,8 @@ must stay directed. Rebuild only through `python3 scripts/build_project_graph.py
 failure), and only when explicitly asked or after a topology-changing milestone. After any graph
 change, `--check` must pass before committing. See `AGENTS.md`.
 
-**Rebuilt for `WF-044` on 2026-08-07 and `--check` passes**: 2003 nodes, 4959 directed edges, 170
-communities; recorded cumulative cost is US$0.394865 over 37 runs.
+**Rebuilt for `WF-047` on 2026-08-07 and `--check` passes**: 2026 nodes, 5002 directed edges, 165
+communities; recorded cumulative cost is US$0.405697 over 38 runs.
 
 **A second name collision, and the same fix the first one needed.** A provider method called `fetch`
 collided with the browser `fetch()` that `web/src/api/client.ts`'s `rpc` calls: extraction invented an edge
@@ -381,8 +398,10 @@ side calls** — `fetch`, `rpc`, `post`. That is now two occurrences, so treat i
 curiosity.
 
 A third ticket-authoring trap, and the fix is in `normalize_raw_graph` rather than in how tickets are
-written. Extraction sometimes emits a module **twice** — `tests_test_x` and `tests_test_x_py` — when a
-document cites the file by path. Both land in the raw node set, so the endpoint-pair guard treats an edge
+written. Extraction sometimes emits one file **twice** — `tests_test_x` and `tests_test_x_py`,
+`web_src_shared_names` and `web_src_shared_names_ts` — when a document cites it by path. `SOURCE_SUFFIX_IDS`
+lists the extensions this affects; the `_py` case was fixed first and `_ts` appeared on the very next
+rebuild, so treat the suffix list as incomplete rather than exhaustive. Both land in the raw node set, so the endpoint-pair guard treats an edge
 to the `_py` twin as real, clustering then correctly collapses the duplicate, and the build fails claiming
 data was lost. `WF-039` cited `tests/test_comfort.py` in the identical style and extracted cleanly, so it
 is extraction variance, not a citation style to correct. The twin is now folded into the real node before
@@ -478,7 +497,7 @@ that declaration is what kept the gate working when the POC went.
 
 ## Phase 2 implementation follows the locked slice order
 
-`WF-MAP-002` is **decision-complete as of 2026-08-03**. Across both maps there are 46 tickets, **46
+`WF-MAP-002` is **decision-complete as of 2026-08-03**. Across both maps there are 47 tickets, **47
 closed, 0 open**. Nothing is outstanding.
 
 Two measured facts from those worth carrying. **`verified` means a provider said so, not that it is

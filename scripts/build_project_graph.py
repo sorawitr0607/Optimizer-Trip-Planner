@@ -241,6 +241,10 @@ def deduplicate_nodes(nodes: list[dict]) -> list[dict]:
     return list(unique.values())
 
 
+# Extensions that appear as node-id suffixes in this repository's extraction.
+SOURCE_SUFFIX_IDS = ("_py", "_tsx", "_ts", "_css", "_json", "_md")
+
+
 def normalize_raw_graph() -> set[tuple[str, str, str]]:
     data = json.loads(GRAPH.read_text(encoding="utf-8"))
     nodes = deduplicate_nodes(data.get("nodes", []))
@@ -257,21 +261,24 @@ def normalize_raw_graph() -> set[tuple[str, str, str]]:
             candidates.setdefault(match.group(1), []).append(node_id)
     aliases = {short: ids[0] for short, ids in candidates.items() if len(ids) == 1}
 
-    # Extraction sometimes emits a module twice, once as `tests_test_x` and once as
-    # `tests_test_x_py`, when a document cites the file by path. Both land in `node_ids`,
-    # so the pair guard treats an edge to the `_py` twin as real -- then clustering
-    # correctly collapses the duplicate and the build fails claiming data was lost.
-    # Measured 2026-08-07 on `wayfinder_tickets_046... -> tests_test_assumed_windows_py`,
-    # while `WF-039` cited `tests/test_comfort.py` in the identical style and extracted
-    # cleanly, so this is extraction variance and not a citation style to correct.
+    # Extraction sometimes emits one file twice -- `tests_test_x` and `tests_test_x_py`,
+    # `web_src_shared_names` and `web_src_shared_names_ts` -- when a document cites it by
+    # path. Both land in `node_ids`, so the pair guard treats an edge to the twin as real,
+    # clustering then correctly collapses the duplicate, and the build fails claiming data
+    # was lost. Seen 2026-08-07 on `..._046 -> tests_test_assumed_windows_py` and
+    # `web_src_shared_names_ts -> travel_planner_destinations`, while other tickets cited
+    # files in the identical style and extracted cleanly -- so it is extraction variance,
+    # not a citation style to correct.
     #
     # Folding the twin into the real node is the same normalisation `aliases` above
     # already performs, not a relaxation of the guard: the edge is preserved, pointed at
-    # the node that survives.
+    # the node that survives. Only a *twin* folds; a file that exists solely under the
+    # suffixed name is the real node and rewriting it would point edges at nothing.
     suffixed = {
-        node_id: node_id[: -len("_py")]
+        node_id: stem
         for node_id in node_ids
-        if node_id.endswith("_py") and node_id[: -len("_py")] in node_ids
+        for suffix in SOURCE_SUFFIX_IDS
+        if node_id.endswith(suffix) and (stem := node_id[: -len(suffix)]) in node_ids
     }
     if suffixed:
         nodes = [node for node in nodes if node["id"] not in suffixed]

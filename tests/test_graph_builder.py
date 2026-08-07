@@ -83,24 +83,40 @@ class DuplicateModuleNodeTest(unittest.TestCase):
         collapses the duplicate and the build fails claiming data was lost. Measured on
         `wayfinder_tickets_046... -> tests_test_assumed_windows_py`, 2026-08-07."""
 
-        node_ids = {"tests_test_x", "tests_test_x_py", "travel_planner_areas"}
+        from scripts.build_project_graph import SOURCE_SUFFIX_IDS
+
+        node_ids = {
+            "tests_test_x", "tests_test_x_py",
+            "web_src_shared_names", "web_src_shared_names_ts",
+            "travel_planner_areas",
+        }
         suffixed = {
-            node_id: node_id[: -len("_py")]
+            node_id: stem
             for node_id in node_ids
-            if node_id.endswith("_py") and node_id[: -len("_py")] in node_ids
+            for suffix in SOURCE_SUFFIX_IDS
+            if node_id.endswith(suffix) and (stem := node_id[: -len(suffix)]) in node_ids
         }
 
-        self.assertEqual({"tests_test_x_py": "tests_test_x"}, suffixed)
+        self.assertEqual(
+            {
+                "tests_test_x_py": "tests_test_x",
+                "web_src_shared_names_ts": "web_src_shared_names",
+            },
+            suffixed,
+        )
 
     def test_a_lone_py_node_is_left_alone(self) -> None:
         """Only a *twin* is folded. A node that exists solely under the suffixed name is
         the real node, and rewriting it would point edges at nothing."""
 
-        node_ids = {"tests_only_here_py", "travel_planner_areas"}
+        from scripts.build_project_graph import SOURCE_SUFFIX_IDS
+
+        node_ids = {"tests_only_here_py", "web_src_only_here_ts", "travel_planner_areas"}
         suffixed = {
-            node_id: node_id[: -len("_py")]
+            node_id: stem
             for node_id in node_ids
-            if node_id.endswith("_py") and node_id[: -len("_py")] in node_ids
+            for suffix in SOURCE_SUFFIX_IDS
+            if node_id.endswith(suffix) and (stem := node_id[: -len(suffix)]) in node_ids
         }
 
         self.assertEqual({}, suffixed)

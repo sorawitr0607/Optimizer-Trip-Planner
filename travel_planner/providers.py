@@ -558,6 +558,121 @@ class OpenAIOpeningWindowProvider:
         )
         self.model = os.environ.get("TOURIST_OPENAI_MODEL", "gpt-5.6-luna")
 
+    # How many places go in one batched request. Bounded so a large trip cannot put an
+    # unpredictable payload behind a single price, and so one bad reply loses one chunk
+    # rather than the whole trip's answers.
+    BATCH_SIZE = 20
+
+    BATCH_SCHEMA = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["places"],
+        "properties": {
+            "places": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["ref", "known", "start", "end"],
+                    "properties": {
+                        # The index it was asked about. Names are unreliable to match on --
+                        # the model may translate or normalise one -- so the mapping back is
+                        # an integer it is told to echo.
+                        "ref": {"type": "integer"},
+                        "known": {"type": "boolean"},
+                        "start": {"type": ["string", "null"]},
+                        "end": {"type": ["string", "null"]},
+                    },
+                },
+            }
+        },
+    }
+
+    def windows(self, places: list[dict[str, str]], *, destination: str) -> dict[int, dict[str, Any]]:
+        """One call for many places, keyed by their index in `places`. `WF-047`.
+
+        Verified hours cost US$0.025 each and cannot be batched -- Google's Text Search
+        takes one query per place -- so a 40-place trip is US$1.00. This is the cheap
+        alternative made properly cheap: one request instead of N, which at luna's rates
+        is fractions of a cent for a whole trip.
+
+        It is still an **assumption**, and batching does not change that. What it changes
+        is that the honest comparison an owner is offered stops being "US$1.00 against
+        US$0.02" and becomes "US$1.00 against a rounding error", which makes the
+        *evidential* difference the only thing left to weigh.
+
+        Results are matched by an echoed integer, never by name, and a reply that omits or
+        invents an index simply yields no answer for that place -- the constant stands.
+        """
+
+        key = os.environ.get("OPENAI_API_KEY", "").strip()
+        if not key:
+            raise ProviderUnavailable("OPENAI_API_KEY is not configured")
+        if not places:
+            return {}
+        listing = "\n".join(
+            f"{index}. {item['name']}"
+            + (f" ({item['local_name']})" if item.get("local_name") and item["local_name"] != item["name"] else "")
+            for index, item in enumerate(places)
+        )
+        body = json.dumps(
+            {
+                "model": self.model,
+                "store": False,
+                "input": [
+                    {"role": "system", "content": self.SYSTEM_PROMPT + self.BATCH_NOTE},
+                    {
+                        "role": "user",
+                        "content": f"City: {destination}\n\nPlaces:\n{listing}",
+                    },
+                ],
+                "text": {
+                    "format": {
+                        "type": "json_schema",
+                        "name": "opening_windows",
+                        "strict": True,
+                        "schema": self.BATCH_SCHEMA,
+                    }
+                },
+            }
+        ).encode("utf-8")
+        request = Request(
+            self.url,
+            data=body,
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"},
+        )
+        try:
+            with urlopen(request, timeout=120) as response:  # noqa: S310 - fixed API URL
+                raw = json.load(response)
+        except HTTPError as error:
+            raise ProviderUnavailable(f"Model returned HTTP {error.code}") from None
+        except (URLError, TimeoutError, json.JSONDecodeError) as error:
+            raise ProviderUnavailable(f"Model unreachable: {type(error).__name__}") from None
+
+        parsed = self._parse(raw)
+        found: dict[int, dict[str, Any]] = {}
+        for entry in parsed.get("places") or []:
+            try:
+                ref = int(entry.get("ref"))
+            except (TypeError, ValueError):
+                continue
+            if not 0 <= ref < len(places) or ref in found:
+                continue  # invented or repeated index: no answer for it
+            if not entry.get("known"):
+                continue
+            window = _clock_window(entry.get("start"), entry.get("end"))
+            if window is None or _span_minutes(window) >= self.DEGENERATE_SPAN_MINUTES:
+                continue
+            found[ref] = {"known": True, **window, "model": self.model}
+        return found
+
+    BATCH_NOTE = (
+        " You are given a numbered list. Answer with one entry per place, echoing its "
+        "number in `ref`. Judge each place independently; do not copy one place's hours "
+        "onto another because they are similar. Omit nothing: a place you are unsure of "
+        "gets an entry with known set to false."
+    )
+
     def window(self, *, name: str, local_name: str, destination: str) -> dict[str, Any]:
         """One window, or `known: false`. Raises rather than inventing on any failure."""
 

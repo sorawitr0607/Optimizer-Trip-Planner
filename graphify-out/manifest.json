@@ -1,8 +1,8 @@
 {
   "api/__init__.py": {
-    "mtime": 1786101359.4521458,
-    "ast_hash": "8ccf5368222f7193bea09eb5d7d332f4",
-    "semantic_hash": "8ccf5368222f7193bea09eb5d7d332f4"
+    "mtime": 1786109687.3238537,
+    "ast_hash": "4901b89fb6b9a4722cce1a61cfba4d8d",
+    "semantic_hash": "4901b89fb6b9a4722cce1a61cfba4d8d"
   },
   "api/__main__.py": {
     "mtime": 1785767189.3726726,
@@ -20,9 +20,9 @@
     "semantic_hash": "d94c93d37914dcdf9fd8fbf61d37750e"
   },
   "scripts/build_project_graph.py": {
-    "mtime": 1786100706.5604362,
-    "ast_hash": "b423bf80df1df9444a385e433e80420f",
-    "semantic_hash": "b423bf80df1df9444a385e433e80420f"
+    "mtime": 1786109972.8070543,
+    "ast_hash": "745c50f595aae98bca88cdb8da33eafc",
+    "semantic_hash": "745c50f595aae98bca88cdb8da33eafc"
   },
   "scripts/capture_screen_baselines.py": {
     "mtime": 1785829623.6161757,
@@ -50,9 +50,9 @@
     "semantic_hash": "fb72d57ae95ccd42548784fb1f370c37"
   },
   "scripts/check_screen_baselines.py": {
-    "mtime": 1785829623.6170175,
-    "ast_hash": "32774a914014ea531d09d1b506df34cf",
-    "semantic_hash": "32774a914014ea531d09d1b506df34cf"
+    "mtime": 1786102302.7028885,
+    "ast_hash": "5ac59a460fdb3b5e415afbee6c552fd3",
+    "semantic_hash": "5ac59a460fdb3b5e415afbee6c552fd3"
   },
   "scripts/run_optimizer_regressions.py": {
     "mtime": 1785295134.0,
@@ -75,9 +75,9 @@
     "semantic_hash": "0f0b97bc1702fe704a6233c14f3c26b1"
   },
   "tests/test_api.py": {
-    "mtime": 1786101631.766794,
-    "ast_hash": "8032166f5fa7e8b687e9a93c96c96e44",
-    "semantic_hash": "8032166f5fa7e8b687e9a93c96c96e44"
+    "mtime": 1786109705.5633948,
+    "ast_hash": "897280365ea0bcfd39051bbb83ad993a",
+    "semantic_hash": "897280365ea0bcfd39051bbb83ad993a"
   },
   "tests/test_areas.py": {
     "mtime": 1786084040.691155,
@@ -85,9 +85,9 @@
     "semantic_hash": "ff19e6dc21a1f47ebd31ac3e4820cd8a"
   },
   "tests/test_assumed_windows.py": {
-    "mtime": 1786098964.4818916,
-    "ast_hash": "9f16951cbf05988dbb00bac0585b9631",
-    "semantic_hash": "9f16951cbf05988dbb00bac0585b9631"
+    "mtime": 1786109678.8336546,
+    "ast_hash": "3237dd838514a7bcabde1789097b46df",
+    "semantic_hash": "3237dd838514a7bcabde1789097b46df"
   },
   "tests/test_checklist.py": {
     "mtime": 1785832402.4787455,
@@ -115,9 +115,9 @@
     "semantic_hash": "3407a03dbdb3cce7389663aa3b135487"
   },
   "tests/test_graph_builder.py": {
-    "mtime": 1786100719.9111502,
-    "ast_hash": "9aa5bb967e61a54b17488439b57edfea",
-    "semantic_hash": "9aa5bb967e61a54b17488439b57edfea"
+    "mtime": 1786109972.8391812,
+    "ast_hash": "07ff6c29ddb674da65803f8cbe80ea1b",
+    "semantic_hash": "07ff6c29ddb674da65803f8cbe80ea1b"
   },
   "tests/test_interpret.py": {
     "mtime": 1785764174.4091427,
@@ -159,6 +159,11 @@
     "ast_hash": "d763a81946453819a0ba400bd6a0335c",
     "semantic_hash": "d763a81946453819a0ba400bd6a0335c"
   },
+  "tests/test_screen_baseline_gate.py": {
+    "mtime": 1786102289.0201347,
+    "ast_hash": "5a0f20935229e6f7609282ba1ea1175e",
+    "semantic_hash": "5a0f20935229e6f7609282ba1ea1175e"
+  },
   "tests/test_setup_discovery.py": {
     "mtime": 1785832402.482533,
     "ast_hash": "415ee1164a8110db8c55c5d4a921e7d1",
@@ -190,9 +195,9 @@
     "semantic_hash": "ef0aefdeae9a5f201e587415c32b8a5b"
   },
   "travel_planner/actions.py": {
-    "mtime": 1786101526.8022957,
-    "ast_hash": "361e16f02d8c81de192ae6915734fe4d",
-    "semantic_hash": "361e16f02d8c81de192ae6915734fe4d"
+    "mtime": 1786109651.6285288,
+    "ast_hash": "6129742dd857355bb6a21fa708892a36",
+    "semantic_hash": "6129742dd857355bb6a21fa708892a36"
   },
   "travel_planner/areas.py": {
     "mtime": 1786014566.5037527,
@@ -260,9 +265,9 @@
     "semantic_hash": "de82966718de7aaff97404630282da1c"
   },
   "travel_planner/providers.py": {
-    "mtime": 1786101890.57729,
-    "ast_hash": "fd56aa3f261abca96dfe6e952f55ddc0",
-    "semantic_hash": "fd56aa3f261abca96dfe6e952f55ddc0"
+    "mtime": 1786109528.6798053,
+    "ast_hash": "7a57938aca84bae30d775fcf2ce2c4ef",
+    "semantic_hash": "7a57938aca84bae30d775fcf2ce2c4ef"
   },
   "travel_planner/ranking.py": {
     "mtime": 1785998402.7722473,
@@ -809,15 +814,20 @@
     "ast_hash": "dbbfadae7a14a40d2bc92610a9b3b3ab",
     "semantic_hash": "dbbfadae7a14a40d2bc92610a9b3b3ab"
   },
+  ".wayfinder/tickets/047-decide-how-cost-chooses-between-verified-and-assumed-hours.md": {
+    "mtime": 1786109836.1857593,
+    "ast_hash": "52519a65e4f2b1321453e0783c6239e9",
+    "semantic_hash": "52519a65e4f2b1321453e0783c6239e9"
+  },
   "AGENTS.md": {
     "mtime": 1785766520.9028397,
     "ast_hash": "1eadb8bff2a10ce33d7930a6411d1154",
     "semantic_hash": "1eadb8bff2a10ce33d7930a6411d1154"
   },
   "CLAUDE.md": {
-    "mtime": 1786101824.201608,
-    "ast_hash": "83b216a30d05321e8265607951f0af6c",
-    "semantic_hash": "83b216a30d05321e8265607951f0af6c"
+    "mtime": 1786109861.2750375,
+    "ast_hash": "73a4f94a35cb623a60f3e053cd23c6e6",
+    "semantic_hash": "73a4f94a35cb623a60f3e053cd23c6e6"
   },
   "README.md": {
     "mtime": 1785835418.4719262,

@@ -94,6 +94,10 @@ ACTIONS = (
     # owner-triggered like every other refresh.
     "refresh_assumed_windows",
     "list_assumed_windows",
+    # WF-047. A read: what hours cost each way, and what the cheap way gives up.
+    # It reports the trade rather than taking it -- verified and assumed are not
+    # the same kind of thing, whatever they cost.
+    "opening_evidence_options",
     # WF-045. A read: has the evidence under the activated plan moved, and did
     # anything break. It reports and never repairs -- regenerating would rewrite a
     # plan the owner may have printed.

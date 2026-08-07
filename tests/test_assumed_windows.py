@@ -112,12 +112,27 @@ class FakeWindowProvider:
         self.answer = answer or {"known": True, "start": "09:00", "end": "18:00", "model": "fake-1"}
         self.fail = fail
         self.asked: list[str] = []
+        self.calls = 0
+
+    BATCH_SIZE = 20
 
     def window(self, *, name: str, local_name: str, destination: str):
         self.asked.append(name)
         if self.fail:
             raise ProviderUnavailable("Model returned HTTP 429")
         return {**self.answer, "asked": f"{name} in {destination}"}
+
+    def windows(self, places, *, destination: str):
+        """`WF-047`. One call for many places, keyed by index."""
+
+        self.calls += 1
+        for item in places:
+            self.asked.append(item["name"])
+        if self.fail:
+            raise ProviderUnavailable("Model returned HTTP 429")
+        if not self.answer.get("known"):
+            return {}
+        return {index: dict(self.answer) for index in range(len(places))}
 
 
 def build(
@@ -259,7 +274,70 @@ class AssumedWindowTest(unittest.TestCase):
         for fact in self.opening_facts(actions, trip_id):
             self.assertEqual("verified", fact["status"])
 
-    def test_the_free_and_paid_counts_stay_reconcilable(self) -> None:
+    def test_the_preflight_prices_both_paths_and_shows_the_batching(self) -> None:
+        """`WF-047`. The owner asked for a rule that switches when Google gets expensive.
+        The trade is reported rather than taken, because the two are not the same kind of
+        thing -- and after batching the money is no longer the interesting part."""
+
+        provider = FakeWindowProvider()
+        actions, trip_id = build(
+            self.directory.name, "pre.sqlite3", mode="explore_first", provider=provider
+        )
+
+        options = actions.opening_evidence_options(trip_id)
+
+        self.assertEqual(3, options["needing_hours"])
+        self.assertEqual(0, options["with_verified_hours"])
+        # Google: one query per place, and it cannot be batched.
+        self.assertEqual(3, options["verified"]["calls"])
+        self.assertFalse(options["verified"]["batchable"])
+        self.assertEqual("verified", options["verified"]["status"])
+        # The model: one request for all three.
+        self.assertEqual(1, options["assumed"]["calls"])
+        self.assertTrue(options["assumed"]["batchable"])
+        self.assertEqual("assumed", options["assumed"]["status"])
+        self.assertLess(options["assumed"]["estimate_usd"], options["verified"]["estimate_usd"])
+        # The error rate travels with the price, so the cheap option is never chosen
+        # without it in view.
+        self.assertEqual(1, options["assumed"]["measured"]["ends_after_real_closing"])
+        self.assertTrue(options["assumed_is_usable"])
+
+    def test_the_preflight_says_an_assumption_is_unusable_when_it_would_be(self) -> None:
+        """A `ready_to_schedule` trip never reads an assumed fact, so offering the cheap
+        path there would be selling something that does nothing."""
+
+        actions, trip_id = build(
+            self.directory.name,
+            "ready.sqlite3",
+            mode="ready_to_schedule",
+            provider=FakeWindowProvider(),
+        )
+
+        self.assertFalse(actions.opening_evidence_options(trip_id)["assumed_is_usable"])
+
+    def test_the_preflight_stops_counting_places_already_covered(self) -> None:
+        provider = FakeWindowProvider()
+        actions, trip_id = build(
+            self.directory.name, "covered.sqlite3", mode="explore_first", provider=provider
+        )
+        before = actions.opening_evidence_options(trip_id)
+
+        actions.refresh_assumed_windows(trip_id)
+        after = actions.opening_evidence_options(trip_id)
+
+        self.assertEqual(0, before["already_assumed"])
+        self.assertEqual(before["needing_hours"], after["already_assumed"])
+        # Still needing *verified* hours: an assumption does not satisfy that.
+        self.assertEqual(before["needing_hours"], after["needing_hours"])
+
+    def test_the_ledger_is_charged_per_call_not_per_place(self) -> None:
+        """`WF-047`. This is the whole saving, so it is pinned.
+
+        Verified hours cost US$0.025 *each* and cannot be batched -- Google's Text Search
+        takes one query per place -- so the assumption has to be charged per request or the
+        comparison an owner is offered is wrong.
+        """
+
         provider = FakeWindowProvider()
         actions, trip_id = build(
             self.directory.name, "f.sqlite3", mode="explore_first", provider=provider
@@ -268,11 +346,24 @@ class AssumedWindowTest(unittest.TestCase):
         report = actions.refresh_assumed_windows(trip_id)
         status = actions.paid_usage_status()
 
-        self.assertIn("openai:opening_window", status["by_operation"])
+        self.assertGreater(report["asked"], 1, "fixture must have several places")
+        self.assertEqual(1, provider.calls, "one request for the whole chunk")
         self.assertEqual(
-            report["asked"] + report["failed"],
-            status["by_operation"]["openai:opening_window"]["requests"],
+            1, status["by_operation"]["openai:opening_window"]["requests"]
         )
+
+    def test_a_trip_larger_than_one_chunk_makes_one_call_per_chunk(self) -> None:
+        provider = FakeWindowProvider()
+        provider.BATCH_SIZE = 2
+        actions, trip_id = build(
+            self.directory.name, "chunks.sqlite3", mode="explore_first", provider=provider
+        )
+
+        report = actions.refresh_assumed_windows(trip_id)
+
+        # Three fake places at a chunk size of two: two requests, not three.
+        self.assertEqual(3, report["asked"])
+        self.assertEqual(2, provider.calls)
 
     def test_a_second_run_does_not_re_ask(self) -> None:
         provider = FakeWindowProvider()

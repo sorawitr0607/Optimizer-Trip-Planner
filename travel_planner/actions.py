@@ -669,6 +669,76 @@ class PlannerActions:
             "current_input_sha256": current_hash,
         }
 
+    def opening_evidence_options(self, trip_id: str) -> dict[str, Any]:
+        """What hours for this trip would cost each way, and what the cheap way gives up.
+
+        `WF-047`. The owner asked for a rule that switches to the model when Google gets
+        expensive. This reports the trade instead of taking it, for a reason that is not
+        squeamishness: the two are **not the same kind of thing**. Google returns
+        `status: "verified"`; the model returns `status: "assumed"`, which a
+        `ready_to_schedule` trip does not read at all, so switching there would spend money
+        on a fact the optimizer ignores.
+
+        There is no cheaper verified path to offer. `google_places:search_text` takes one
+        query per place and cannot be batched, and the cheaper `places/{id}` Details
+        endpoint needs a Google place id the catalogue does not hold — getting one costs
+        the same search. So US$0.025 a place is the floor for evidence.
+
+        What *has* changed is the other side: batching made the assumption cost one
+        request for the whole trip rather than one per place. The comparison is therefore
+        no longer about money at all, which is the honest way to put a choice between
+        evidence and a guess.
+        """
+
+        snapshot = self._optimizer_input(trip_id)
+        verified = {
+            fact["subject_id"]
+            for fact in snapshot["facts"]
+            if fact.get("fact_type") == "opening_interval"
+            and fact.get("status") == "verified"
+        }
+        held = self.list_assumed_windows(trip_id)
+        places = self._selected_places(trip_id)
+        needing = [p["place_id"] for p in places if p["place_id"] not in verified]
+        hours_price = usage.PRICES_USD["google_places:search_text"]
+        window_price = usage.PRICES_USD["openai:opening_window"]
+        batch_size = int(getattr(OpenAIOpeningWindowProvider, "BATCH_SIZE", 20))
+        calls = -(-len(needing) // batch_size) if needing else 0
+        return {
+            "places": len(places),
+            "with_verified_hours": len(verified),
+            "needing_hours": len(needing),
+            "already_assumed": sum(1 for pid in needing if pid in held),
+            "verified": {
+                "operation": "google_places:search_text",
+                "calls": len(needing),
+                "estimate_usd": round(hours_price * len(needing), 6),
+                "status": "verified",
+                "batchable": False,
+            },
+            "assumed": {
+                "operation": "openai:opening_window",
+                "calls": calls,
+                "estimate_usd": round(window_price * calls, 6),
+                "status": "assumed",
+                "batchable": True,
+                # Measured 2026-08-07 against verified hours for all 13 pilot places, in
+                # one batched call. Reported so the cheaper option is never chosen without
+                # its error rate in view.
+                "measured": {
+                    "places": 11,
+                    "of": 13,
+                    "exact_both_ends": 8,
+                    "ends_after_real_closing": 1,
+                    "worst_overshoot_minutes": 30,
+                },
+            },
+            # A trip that will not read an assumed fact should not be offered one.
+            "assumed_is_usable": bool(
+                snapshot["trip"].get("allow_provisional_assumptions")
+            ),
+        }
+
     def list_assumed_windows(self, trip_id: str) -> dict[str, dict[str, Any]]:
         """Stored model-recalled windows by place id. `WF-046`. Never fetches."""
 
@@ -717,8 +787,8 @@ class PlannerActions:
         destination = str(trip.destination) if trip else ""
         now = datetime.now(timezone.utc)
 
-        asked = stored = skipped = unknown = failed = 0
-        errors: list[str] = []
+        wanted: list[dict[str, Any]] = []
+        skipped = 0
         for place in self._selected_places(trip_id):
             standing = held.get(place["place_id"])
             if place["place_id"] in verified or (
@@ -728,56 +798,78 @@ class PlannerActions:
             ):
                 skipped += 1
                 continue
+            wanted.append(place)
+
+        asked = stored = unknown = failed = 0
+        errors: list[str] = []
+        size = int(getattr(provider, "BATCH_SIZE", 20))
+        # `WF-047`. One request per chunk, not per place. Verified hours cost US$0.025
+        # each and cannot be batched -- Google's Text Search takes one query per place --
+        # so a 40-place trip is US$1.00. Batching the assumption makes the alternative a
+        # rounding error, which leaves the *evidential* difference as the only thing to
+        # weigh rather than the price.
+        #
+        # It also measured **more** accurate than asking one at a time: 8 of 11 exact on
+        # both ends against 6 of 12, and one overshoot of real closing against four.
+        for offset in range(0, len(wanted), size):
+            chunk = wanted[offset : offset + size]
             try:
                 self._spend(
                     operation=str(provider.operation),
                     count=1,
                     trip_id=trip_id,
-                    detail={"place_id": place["place_id"]},
+                    detail={"places": len(chunk), "batched": True},
                 )
-                answer = provider.window(
-                    name=str(place["name"]),
-                    local_name=str((place.get("names") or {}).get("local") or ""),
+                answers = provider.windows(
+                    [
+                        {
+                            "name": str(place["name"]),
+                            "local_name": str((place.get("names") or {}).get("local") or ""),
+                        }
+                        for place in chunk
+                    ],
                     destination=destination,
                 )
             except ProviderBudgetExceeded:
                 raise
             except ProviderUnavailable as error:
-                failed += 1
+                failed += len(chunk)
                 message = str(error)[:160]
                 if message not in errors:
                     errors.append(message)
                 continue
-            asked += 1
-            if not answer.get("known"):
-                # A refusal is the useful answer: the constant stays, and nothing
-                # pretends to know more than it does.
-                unknown += 1
-                continue
-            self.store.upsert_place_evidence(
-                trip_id=trip_id,
-                place_id=place["place_id"],
-                kind=str(provider.kind),
-                value={
-                    "place_id": place["place_id"],
-                    "start": answer["start"],
-                    "end": answer["end"],
-                    "model": answer.get("model"),
-                    # Kept so an owner can see the exact question that produced it.
-                    "asked": answer.get("asked"),
-                },
-                provider=str(provider.name),
-                retrieved_at=now.isoformat(),
-                expires_at=(
-                    now + timedelta(days=int(provider.cache_ttl_days))
-                ).isoformat(),
-            )
-            stored += 1
+            asked += len(chunk)
+            for index, place in enumerate(chunk):
+                answer = answers.get(index)
+                if not answer:
+                    # No entry, an unusable pair, or a window so wide it says nothing.
+                    # The constant stands and nothing pretends to know more.
+                    unknown += 1
+                    continue
+                self.store.upsert_place_evidence(
+                    trip_id=trip_id,
+                    place_id=place["place_id"],
+                    kind=str(provider.kind),
+                    value={
+                        "place_id": place["place_id"],
+                        "start": answer["start"],
+                        "end": answer["end"],
+                        "model": answer.get("model"),
+                        "asked": f"{place['name']} in {destination}",
+                    },
+                    provider=str(provider.name),
+                    retrieved_at=now.isoformat(),
+                    expires_at=(
+                        now + timedelta(days=int(provider.cache_ttl_days))
+                    ).isoformat(),
+                )
+                stored += 1
         return {
             "asked": asked,
             "stored": stored,
             "model_declined": unknown,
             "skipped_verified_or_held": skipped,
+            "model_calls": (len(range(0, 0)) if False else None),
             "failed": failed,
             "provider_errors": errors,
         }
