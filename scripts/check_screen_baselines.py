@@ -18,6 +18,13 @@ switched off.
 
 Skips cleanly when there is nothing to compare, so it is safe as a `check.py`
 stage on a machine that has never captured anything.
+
+**It refuses a capture older than the code it claims to have photographed.**
+Capturing is manual — it needs a running server and headless Chrome — so this stage
+compares whatever was last written to `screen-current`. Three times on 2026-08-07 that
+was an image taken before the frontend changed, and the stage printed PASS having
+compared nothing relevant. A green gate that tested nothing is worse than a red one,
+so a stale capture now fails and names the command that fixes it.
 """
 
 from __future__ import annotations
@@ -36,6 +43,29 @@ MAX_DIFFERING_FRACTION = 0.001  # 0.1% of pixels
 MIN_CHANNEL_DELTA = 8  # out of 255
 
 
+SOURCE = ROOT / "web" / "src"
+SOURCE_SUFFIXES = (".tsx", ".ts", ".css")
+
+
+def stale_sources() -> list[str]:
+    """Frontend files modified after the oldest current capture.
+
+    Compared against the **oldest** capture, not the newest: the 36 images are written
+    over about a minute, and an edit landing mid-run would otherwise be judged against
+    whichever screens happened to be photographed after it.
+    """
+
+    captures = list(CURRENT.glob("*.png"))
+    if not captures or not SOURCE.is_dir():
+        return []
+    oldest = min(path.stat().st_mtime for path in captures)
+    return sorted(
+        str(path.relative_to(ROOT))
+        for path in SOURCE.rglob("*")
+        if path.suffix in SOURCE_SUFFIXES and path.stat().st_mtime > oldest
+    )
+
+
 def main() -> int:
     if not BASELINES.is_dir() or not any(BASELINES.glob("*.png")):
         print("SKIP: no approved baselines yet — run capture_screen_baselines.py --approve",
@@ -44,6 +74,23 @@ def main() -> int:
     if not CURRENT.is_dir() or not any(CURRENT.glob("*.png")):
         print("SKIP: no current captures to compare — run capture_screen_baselines.py", flush=True)
         return 0
+
+    stale = stale_sources()
+    if stale:
+        print(
+            f"FAILED: the capture predates {len(stale)} frontend file(s), so this compares "
+            "images that do not show the current code",
+            file=sys.stderr,
+        )
+        for name in stale[:5]:
+            print(f"  - {name}", file=sys.stderr)
+        if len(stale) > 5:
+            print(f"  - ...and {len(stale) - 5} more", file=sys.stderr)
+        print(
+            "  run: uv run --locked python scripts/capture_screen_baselines.py --trip <id>",
+            file=sys.stderr,
+        )
+        return 1
 
     try:
         from PIL import Image, ImageChops

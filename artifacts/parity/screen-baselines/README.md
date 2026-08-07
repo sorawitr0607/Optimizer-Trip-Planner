@@ -104,3 +104,31 @@ swipe deck and `/optimize` grew a comfort-acceptance control (`WF-039`), and
 viewport above them. The gate is not evidence about those sections in either
 direction. Recorded rather than worked around, because changing the viewport
 invalidates all 36 and is `WF-025`'s decision to revisit, not a capture setting.
+
+## The gate now refuses a capture older than the code
+
+Added 2026-08-07 after this failed three times in one day. Capturing is manual, so the
+comparison stage compares whatever was last written to `screen-current` — and three times
+that was an image taken before the frontend changed, while the stage printed **PASS**
+having compared nothing relevant. A green gate that tested nothing is worse than a red
+one, because it is trusted.
+
+`check_screen_baselines.py` now lists every `.tsx`, `.ts` or `.css` file under `web/src`
+modified after the **oldest** capture, and fails naming them and the command that fixes
+it. Oldest rather than newest because the 36 images are written over about a minute; an
+edit landing mid-run would otherwise be judged only against the screens photographed after
+it.
+
+## Four features this gate cannot see
+
+Everything below the 1440×900 fold, and that is now most of what was built on 2026-08-07:
+
+- `/places` — the stay-area ranking (`WF-040`), under the swipe deck
+- `/optimize` — the comfort-acceptance control (`WF-039`), under the plan summary
+- `/evidence` — the venue-notice card (`WF-044`), the fifth card down
+- `/itinerary` — the drift banner (`WF-045`) renders **only when the plan has drifted**,
+  which the pilot's has not, so no baseline will ever contain it
+
+Recorded rather than worked around: widening the viewport invalidates all 36 and is
+`WF-025`'s decision to revisit. But the erosion is worth knowing — a passing screen gate
+now says less about this app than it did in August.
