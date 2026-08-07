@@ -41,6 +41,7 @@ from .providers import (
     CARD_PHOTO_LIMIT,
     GooglePlacesCardProvider,
     GooglePlacesOpeningHoursProvider,
+    OpenAIOpeningWindowProvider,
     OpenAIRevisionInterpreter,
     RevisionInterpretationUnavailable,
     GoogleTimeZoneProvider,
@@ -112,6 +113,7 @@ class PlannerActions:
         route_provider: Any = None,
         transit_provider: Any = None,
         area_amenities_provider: Any = None,
+        opening_window_provider: Any = None,
         summary_provider: Any = None,
         timezone_provider: Any = None,
         hours_provider: Any = None,
@@ -125,6 +127,7 @@ class PlannerActions:
         # small feed instead of reaching for a city-sized one.
         self.transit_provider = transit_provider
         self.area_amenities_provider = area_amenities_provider
+        self.opening_window_provider = opening_window_provider
         self.summary_provider = summary_provider
         self.timezone_provider = timezone_provider
         self.hours_provider = hours_provider
@@ -510,6 +513,119 @@ class PlannerActions:
         details["photo_uri"] = gallery[0]["uri"] if gallery else None
         return details
 
+    def list_assumed_windows(self, trip_id: str) -> dict[str, dict[str, Any]]:
+        """Stored model-recalled windows by place id. `WF-046`. Never fetches."""
+
+        # `list_place_evidence` spreads the stored value flat and adds `retrieved_at` and
+        # `expires_at`; there is no `value` key to unwrap. Expiry is deliberately not
+        # filtered here — an assumption does not go stale the way a lookup does, and
+        # dropping it would silently revert the fact to the flat constant. `refresh`
+        # honours the TTL instead.
+        return {
+            str(row["place_id"]): dict(row)
+            for row in self.store.list_place_evidence(trip_id, "assumed_opening_window")
+            if row.get("place_id") and row.get("start") and row.get("end")
+        }
+
+    def refresh_assumed_windows(
+        self, trip_id: str, *, force: bool = False
+    ) -> dict[str, Any]:
+        """Ask the model for an opening window for places that have no verified hours.
+
+        `WF-046`. Owner-triggered and paid, like every other provider refresh, and scoped
+        to the places that would otherwise fall back to a flat 09:00-21:00. A place with
+        verified hours is **skipped** — there is nothing an assumption can add to
+        evidence, and asking would invite someone to compare them as equals.
+
+        Refuses on a `ready_to_schedule` trip: an assumed window is only ever consumed
+        under `allow_provisional_assumptions`, so buying one there would spend money on a
+        fact the optimizer will not read.
+        """
+
+        setup = self.store.get_setup(trip_id)
+        if setup is None:
+            raise PlannerRefusal("setup_missing")
+        snapshot = self._optimizer_input(trip_id)
+        if not snapshot["trip"].get("allow_provisional_assumptions"):
+            raise PlannerRefusal("assumptions_not_used_by_this_trip")
+
+        verified = {
+            fact["subject_id"]
+            for fact in snapshot["facts"]
+            if fact.get("fact_type") == "opening_interval"
+            and fact.get("status") == "verified"
+        }
+        provider = self.opening_window_provider or OpenAIOpeningWindowProvider()
+        held = self.list_assumed_windows(trip_id)
+        trip = self.store.get_trip(trip_id)
+        destination = str(trip.destination) if trip else ""
+        now = datetime.now(timezone.utc)
+
+        asked = stored = skipped = unknown = failed = 0
+        errors: list[str] = []
+        for place in self._selected_places(trip_id):
+            standing = held.get(place["place_id"])
+            if place["place_id"] in verified or (
+                not force
+                and standing
+                and str(standing.get("expires_at") or "") > now.isoformat()
+            ):
+                skipped += 1
+                continue
+            try:
+                self._spend(
+                    operation=str(provider.operation),
+                    count=1,
+                    trip_id=trip_id,
+                    detail={"place_id": place["place_id"]},
+                )
+                answer = provider.window(
+                    name=str(place["name"]),
+                    local_name=str((place.get("names") or {}).get("local") or ""),
+                    destination=destination,
+                )
+            except ProviderBudgetExceeded:
+                raise
+            except ProviderUnavailable as error:
+                failed += 1
+                message = str(error)[:160]
+                if message not in errors:
+                    errors.append(message)
+                continue
+            asked += 1
+            if not answer.get("known"):
+                # A refusal is the useful answer: the constant stays, and nothing
+                # pretends to know more than it does.
+                unknown += 1
+                continue
+            self.store.upsert_place_evidence(
+                trip_id=trip_id,
+                place_id=place["place_id"],
+                kind=str(provider.kind),
+                value={
+                    "place_id": place["place_id"],
+                    "start": answer["start"],
+                    "end": answer["end"],
+                    "model": answer.get("model"),
+                    # Kept so an owner can see the exact question that produced it.
+                    "asked": answer.get("asked"),
+                },
+                provider=str(provider.name),
+                retrieved_at=now.isoformat(),
+                expires_at=(
+                    now + timedelta(days=int(provider.cache_ttl_days))
+                ).isoformat(),
+            )
+            stored += 1
+        return {
+            "asked": asked,
+            "stored": stored,
+            "model_declined": unknown,
+            "skipped_verified_or_held": skipped,
+            "failed": failed,
+            "provider_errors": errors,
+        }
+
     def comfort_tradeoffs(self, trip_id: str) -> dict[str, Any]:
         """What the current plan exceeds, what is agreed, and by how much. `WF-039`.
 
@@ -736,6 +852,7 @@ class PlannerActions:
         facts = []
         opening_missing = False
         opening_evidence = self.opening_intervals(trip_id)
+        assumed_windows = self.list_assumed_windows(trip_id)
         current_by_id = {item["place_id"]: item for item in current_candidates}
         for choice in choices:
             candidate = choice.candidate.as_dict()
@@ -805,13 +922,30 @@ class PlannerActions:
                     "EVIDENCE_EXPIRED",
                     "EVIDENCE_NORMALIZER_OUTDATED",
                 }:
+                    # `WF-046`. A model's recollection of *this* place when one has been
+                    # fetched and stored, otherwise the flat constant. Both are
+                    # `status: "assumed"` -- the point is a better guess, not a stronger
+                    # claim -- and `source` says which, so the evidence screen can tell
+                    # them apart and an owner can see where a window came from.
+                    #
+                    # Read from storage, never fetched here: `_optimizer_input` runs on
+                    # every read and must not make a network call.
+                    recalled = assumed_windows.get(choice.place_id)
                     facts.append(
                         {
                             "subject_id": choice.place_id,
                             "fact_type": "opening_interval",
-                            "value": {"start": "09:00", "end": "21:00"},
+                            "value": (
+                                {"start": recalled["start"], "end": recalled["end"]}
+                                if recalled
+                                else {"start": "09:00", "end": "21:00"}
+                            ),
                             "status": "assumed",
-                            "source": "explore_first_planning_assumption",
+                            "source": (
+                                f"model_recalled_window:{recalled['model']}"
+                                if recalled
+                                else "explore_first_planning_assumption"
+                            ),
                             "applies_to_dates": local_dates,
                         }
                     )

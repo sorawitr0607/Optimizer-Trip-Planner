@@ -209,7 +209,8 @@
       "unknown_comfort_code": "That is not a comfort budget this planner tracks",
       "comfort_value_not_a_number": "Enter the number of minutes you are agreeing to",
       "no_comfort_threshold_set": "You have set no limit for this, so there is nothing to agree to",
-      "comfort_value_within_threshold": "That is already inside your limit — nothing needs agreeing"
+      "comfort_value_within_threshold": "That is already inside your limit — nothing needs agreeing",
+      "assumptions_not_used_by_this_trip": "This trip plans against verified evidence only, so an assumed window would not be used"
     },
     "th": {
       "ACCESS_UNVERIFIED": "ยังไม่ยืนยันทางเข้าและกฎการเข้าถึง",
@@ -300,7 +301,8 @@
       "unknown_comfort_code": "นี่ไม่ใช่งบความสบายที่ตัวช่วยวางแผนนี้ติดตาม",
       "comfort_value_not_a_number": "กรอกจำนวนนาทีที่คุณยอมรับ",
       "no_comfort_threshold_set": "คุณยังไม่ได้ตั้งขีดจำกัดสำหรับเรื่องนี้ จึงไม่มีอะไรให้ยอมรับ",
-      "comfort_value_within_threshold": "ค่านี้อยู่ในขีดจำกัดของคุณอยู่แล้ว ไม่ต้องยอมรับอะไร"
+      "comfort_value_within_threshold": "ค่านี้อยู่ในขีดจำกัดของคุณอยู่แล้ว ไม่ต้องยอมรับอะไร",
+      "assumptions_not_used_by_this_trip": "ทริปนี้วางแผนจากหลักฐานที่ยืนยันแล้วเท่านั้น ช่วงเวลาที่คาดการณ์จึงไม่ถูกนำไปใช้"
     }
   },
   "REJECTION_TEXT": {

@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm --prefix web install                                             # first web run only
 uv run --locked python -m api                                        # production shell on 127.0.0.1:8765
 uv run --locked python scripts/check.py                              # every free Python + web gate
-uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 365 tests, ~9s
+uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 386 tests, ~9s
 uv run --locked python -m unittest tests.test_optimizer.OptimizerCoreTest.test_safe_route_and_weather_fallback_are_selected  # one test
 python3 scripts/validate_regression_fixtures.py                      # fixture catalog structure
 uv run --locked python scripts/run_optimizer_regressions.py          # 27 historic cases through the real optimizer
@@ -173,6 +173,21 @@ an expired budget legitimately yields 0 visits where greedy's only schedule carr
 because `comfort_violations` outranks `experience_value` in the objective tuple — that ordering is
 `WF-039`'s question.
 
+**A model may supply the assumed opening window as of 2026-08-07 (`WF-046`) — and nothing more.** The app
+always guessed when a place had no verified hours: `_optimizer_input` emitted a flat **09:00–21:00** for
+every place on earth. So the question was never evidence versus a guess, it was *which* guess, and the
+constant is the worse one — the pilot scheduled a visit at 17:17–19:32 against real hours ending 17:30 and
+passed validation. Benchmarked against verified ground truth for all 13 places: the model's window ends
+after real closing 5 times by **30–60 min**, the constant 6 times by **180–270 min**.
+
+Four rules not to relax. **The status stays `assumed`** whichever guess fills it — only `source` differs
+(`model_recalled_window:<model>`), so nothing is upgraded. **A place with verified hours is never asked
+about.** **`closed_weekdays` is not requested at all**: the same benchmark got 7 closure claims of which
+**2 were invented** (Huashan 1914, Taipei Zoo), a false closure silently drops a place, and 29 December is
+a Tuesday — do not add the field back without re-running the benchmark. And **`_optimizer_input` never
+fetches**; it runs on every read, so the window is read from storage or the constant stands. Recall cannot
+reach a *holiday* closure at all — that is `WF-044` and needs a fetch.
+
 **A comfort tradeoff can be accepted as of 2026-08-07 (`WF-039`), and the acceptance is a number.**
 `comfort_acceptances` (schema **14**) stores the *measured value* the owner agreed to per threshold
 code, and `optimizer._accepts` requires `measured <= accepted_value` — so agreeing to a 27-minute
@@ -313,8 +328,8 @@ must stay directed. Rebuild only through `python3 scripts/build_project_graph.py
 failure), and only when explicitly asked or after a topology-changing milestone. After any graph
 change, `--check` must pass before committing. See `AGENTS.md`.
 
-**Rebuilt for `WF-044`/`WF-045` on 2026-08-07 and `--check` passes**: 1888 nodes, 4637 directed edges,
-163 communities; recorded cumulative cost is US$0.347745 over 33 runs. The `WF-039` rebuild the same day
+**Rebuilt for `WF-046` on 2026-08-07 and `--check` passes**: 1928 nodes, 4765 directed edges, 178
+communities; recorded cumulative cost is US$0.359420 over 34 runs. The `WF-039` rebuild the same day
 gave 1868 nodes, 4589 edges and 150 communities. The `WF-040` rebuild the day before
 gave 1818 nodes, 4492 edges and 153 communities for US$0.0121.
 
@@ -405,7 +420,7 @@ that declaration is what kept the gate working when the POC went.
 
 ## Phase 2 implementation follows the locked slice order
 
-`WF-MAP-002` is **decision-complete as of 2026-08-03**. Across both maps there are 45 tickets, **43
+`WF-MAP-002` is **decision-complete as of 2026-08-03**. Across both maps there are 46 tickets, **44
 closed, 2 open**, both opened 2026-08-07 while measuring the pilot's opening hours and neither blocking
 it: `Decide whether a venue's own site fills the holiday-hours gap` (`WF-044`) and `Decide what happens
 to an activated plan when evidence improves` (`WF-045`).

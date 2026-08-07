@@ -198,9 +198,15 @@
       "input_tokens": 18616,
       "output_tokens": 2086,
       "estimated_usd": 0.010784
+    },
+    {
+      "date": "2026-08-07T10:28:53.896083+00:00",
+      "input_tokens": 20363,
+      "output_tokens": 2206,
+      "estimated_usd": 0.011675
     }
   ],
-  "total_input_tokens": 585595,
-  "total_output_tokens": 70966,
-  "estimated_usd": 0.347745
+  "total_input_tokens": 605958,
+  "total_output_tokens": 73172,
+  "estimated_usd": 0.35942
 }

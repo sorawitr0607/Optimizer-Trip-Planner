@@ -52,6 +52,10 @@ PRICES_USD = {
     "google_timezone:lookup": 0.005,
     # One small structured-output call. Priced conservatively above the
     # token cost of a short request and reply.
+    # WF-046. One structured-output call per place for a better *assumption* than the
+    # hardcoded 09:00-21:00. Same model and rate as interpret_revision; priced
+    # separately so the two are distinguishable in the ledger.
+    "openai:opening_window": 0.002,
     "openai:interpret_revision": 0.002,
     "openai:explain_revision": 0.004,
 }

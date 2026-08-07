@@ -1,8 +1,8 @@
 {
   "api/__init__.py": {
-    "mtime": 1786081526.092474,
-    "ast_hash": "dcd00c0da18619f82a0290b2c6aed31c",
-    "semantic_hash": "dcd00c0da18619f82a0290b2c6aed31c"
+    "mtime": 1786098180.1092114,
+    "ast_hash": "8f78be0718f7274d09fce0a2fe3f5f46",
+    "semantic_hash": "8f78be0718f7274d09fce0a2fe3f5f46"
   },
   "api/__main__.py": {
     "mtime": 1785767189.3726726,
@@ -10,9 +10,9 @@
     "semantic_hash": "d33425215a1a5b514fe4f1a0bbaa33d3"
   },
   "i18n/copy.json": {
-    "mtime": 1786081526.09919,
-    "ast_hash": "c1fa39787a13254f89a6e6f8aee006b6",
-    "semantic_hash": "c1fa39787a13254f89a6e6f8aee006b6"
+    "mtime": 1786098180.156827,
+    "ast_hash": "b790769debf9a173ee31400d1bbd81fc",
+    "semantic_hash": "b790769debf9a173ee31400d1bbd81fc"
   },
   "pyproject.toml": {
     "mtime": 1785834132.5329027,
@@ -75,14 +75,19 @@
     "semantic_hash": "0f0b97bc1702fe704a6233c14f3c26b1"
   },
   "tests/test_api.py": {
-    "mtime": 1786081526.099825,
-    "ast_hash": "4b5345b8653628e41c8eefb549ddcee5",
-    "semantic_hash": "4b5345b8653628e41c8eefb549ddcee5"
+    "mtime": 1786098371.1981847,
+    "ast_hash": "4ebe19d4ea1f9c99da104dc66b6a3e3c",
+    "semantic_hash": "4ebe19d4ea1f9c99da104dc66b6a3e3c"
   },
   "tests/test_areas.py": {
     "mtime": 1786084040.691155,
     "ast_hash": "ff19e6dc21a1f47ebd31ac3e4820cd8a",
     "semantic_hash": "ff19e6dc21a1f47ebd31ac3e4820cd8a"
+  },
+  "tests/test_assumed_windows.py": {
+    "mtime": 1786098325.891874,
+    "ast_hash": "190242dc4565bd9abbb38fa4f73dc13c",
+    "semantic_hash": "190242dc4565bd9abbb38fa4f73dc13c"
   },
   "tests/test_checklist.py": {
     "mtime": 1785832402.4787455,
@@ -175,9 +180,9 @@
     "semantic_hash": "ef0aefdeae9a5f201e587415c32b8a5b"
   },
   "travel_planner/actions.py": {
-    "mtime": 1786084107.7828355,
-    "ast_hash": "1cc456fb5f25da2b16eecb58ee75a3b3",
-    "semantic_hash": "1cc456fb5f25da2b16eecb58ee75a3b3"
+    "mtime": 1786098343.667451,
+    "ast_hash": "99d3c07d9524b33ecfc1cc21b53439d9",
+    "semantic_hash": "99d3c07d9524b33ecfc1cc21b53439d9"
   },
   "travel_planner/areas.py": {
     "mtime": 1786014566.5037527,
@@ -245,9 +250,9 @@
     "semantic_hash": "de82966718de7aaff97404630282da1c"
   },
   "travel_planner/providers.py": {
-    "mtime": 1786084574.1530037,
-    "ast_hash": "c983cc37e027523a770942ea30062a92",
-    "semantic_hash": "c983cc37e027523a770942ea30062a92"
+    "mtime": 1786098090.3491783,
+    "ast_hash": "6ffcd85b9ef88fbf9e3ad73e7306910b",
+    "semantic_hash": "6ffcd85b9ef88fbf9e3ad73e7306910b"
   },
   "travel_planner/ranking.py": {
     "mtime": 1785998402.7722473,
@@ -280,9 +285,9 @@
     "semantic_hash": "5dbcd43fc2ca05aace3175f31716672a"
   },
   "travel_planner/usage.py": {
-    "mtime": 1786014566.5045671,
-    "ast_hash": "e8c6e08336ffb0f63c4600907ab27d16",
-    "semantic_hash": "e8c6e08336ffb0f63c4600907ab27d16"
+    "mtime": 1786098099.373896,
+    "ast_hash": "9e2cf783726e8781993ac8432c8a6fdc",
+    "semantic_hash": "9e2cf783726e8781993ac8432c8a6fdc"
   },
   "web/eslint.config.js": {
     "mtime": 1785764956.464039,
@@ -778,6 +783,11 @@
     "mtime": 1786011108.027682,
     "ast_hash": "c5115d12c7730cb5efa13b31fba37e53",
     "semantic_hash": "c5115d12c7730cb5efa13b31fba37e53"
+  },
+  ".wayfinder/tickets/045-decide-what-happens-to-an-activated-plan-when-evidence-improves.md": {
+    "mtime": 1786096885.0102046,
+    "ast_hash": "0e9b1a9d09656f8e2522dc6e98a4a52e",
+    "semantic_hash": "0e9b1a9d09656f8e2522dc6e98a4a52e"
   },
   "AGENTS.md": {
     "mtime": 1785766520.9028397,

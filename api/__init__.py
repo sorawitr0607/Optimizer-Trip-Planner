@@ -89,6 +89,11 @@ ACTIONS = (
     # request for the whole shortlist -- but it does spend a (zero-priced) provider
     # call and writes the provider cache, so it is a mutation, not a read.
     "recommend_areas",
+    # WF-046. A model-recalled opening window is an *assumption*, never evidence --
+    # it replaces a hardcoded 09:00-21:00 and keeps status "assumed". Paid, so it is
+    # owner-triggered like every other refresh.
+    "refresh_assumed_windows",
+    "list_assumed_windows",
     "list_routes",
     "paid_usage_status",
     "set_paid_cap",
@@ -151,6 +156,8 @@ REFUSAL_STATUS = {
     "comfort_value_not_a_number": 422,
     "no_comfort_threshold_set": 409,
     "comfort_value_within_threshold": 409,
+    # WF-046. An assumed window is only read under allow_provisional_assumptions.
+    "assumptions_not_used_by_this_trip": 409,
 }
 
 

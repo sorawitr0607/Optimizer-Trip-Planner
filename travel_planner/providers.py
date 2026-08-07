@@ -5,6 +5,7 @@ from __future__ import annotations
 from difflib import SequenceMatcher
 from time import sleep
 import json
+import re
 from math import asin, ceil, cos, radians, sin, sqrt
 import os
 from pathlib import Path
@@ -310,6 +311,160 @@ def _address(tags: dict[str, Any]) -> str | None:
     ]
     address = ", ".join(str(part) for part in parts if part)
     return address or None
+
+
+class OpenAIOpeningWindowProvider:
+    """A better *assumption* about opening hours than a hardcoded constant. `WF-046`.
+
+    This does not produce evidence and must never be read as such. When a place has no
+    verified hours and the trip is `explore_first`, `actions._optimizer_input` has always
+    emitted an assumed window — a flat **09:00–21:00** for every place on earth. This
+    replaces the constant with a model's recollection of that specific place, and the fact
+    keeps `status: "assumed"` either way. Nothing is upgraded; one guess is swapped for a
+    better one.
+
+    **Measured against Google's verified hours for the pilot's 13 places, 2026-08-07:**
+
+    | | Window ends after real closing | By |
+    |---|---|---|
+    | this provider | 5 of 13 | 30–60 min |
+    | the 09:00–21:00 constant | 6 of 13 | 180–270 min |
+
+    Five of thirteen matched both ends exactly. Overshooting closing time is the failure
+    that matters, because it is what schedules a visit that cannot happen — the pilot had
+    one at 17:17–19:32 against real hours ending 17:30, and it passed validation. On that
+    place this provider is 30 minutes wrong where the constant was 210.
+
+    **Closures are deliberately not requested.** The same benchmark asked for weekly
+    closed days and got 7 claims, of which **2 were invented** — Huashan 1914 and Taipei
+    Zoo, neither closed on any trip date. A false closure silently removes a place from a
+    day, and 29 December is a Tuesday. Google supplies real closures anyway, so the risky
+    half buys nothing. Do not add the field back without re-running the benchmark.
+
+    It also cannot help with a **holiday** closure: "closed 1 January 2027" is after any
+    training cutoff and venues publish it weeks ahead. That gap is `WF-044`, and this
+    provider does not touch it.
+    """
+
+    name = "openai_opening_window"
+    operation = "openai:opening_window"
+    kind = "assumed_opening_window"
+    schema_version = 1
+    # An assumption about a building's habits, not a timetable. Long, because re-asking
+    # cannot make a recollection fresher -- only a real lookup can.
+    cache_ttl_days = 90
+
+    SYSTEM_PROMPT = (
+        "You state the usual visitor opening hours of one named place. Answer only from "
+        "what you actually know about that specific place. If you are not confident, set "
+        "known to false and leave start and end null -- a refusal is more useful than a "
+        "generic tourist schedule. Times are 24-hour HH:MM in the place's local time. "
+        "Never state a holiday closure, a weekly closed day, a route, a fare or a price."
+    )
+    RESPONSE_SCHEMA = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["known", "start", "end"],
+        "properties": {
+            "known": {"type": "boolean"},
+            "start": {"type": ["string", "null"]},
+            "end": {"type": ["string", "null"]},
+        },
+    }
+
+    def __init__(self) -> None:
+        self.url = os.environ.get(
+            "TOURIST_OPENAI_URL", "https://api.openai.com/v1/responses"
+        )
+        self.model = os.environ.get("TOURIST_OPENAI_MODEL", "gpt-4.1-mini")
+
+    def window(self, *, name: str, local_name: str, destination: str) -> dict[str, Any]:
+        """One window, or `known: false`. Raises rather than inventing on any failure."""
+
+        key = os.environ.get("OPENAI_API_KEY", "").strip()
+        if not key:
+            raise ProviderUnavailable("OPENAI_API_KEY is not configured")
+        asked = f"Place: {name}"
+        if local_name and local_name != name:
+            asked += f" ({local_name})"
+        asked += f" in {destination}."
+        body = json.dumps(
+            {
+                "model": self.model,
+                "store": False,
+                "input": [
+                    {"role": "system", "content": self.SYSTEM_PROMPT},
+                    {"role": "user", "content": asked},
+                ],
+                "text": {
+                    "format": {
+                        "type": "json_schema",
+                        "name": "opening_window",
+                        "strict": True,
+                        "schema": self.RESPONSE_SCHEMA,
+                    }
+                },
+            }
+        ).encode("utf-8")
+        request = Request(
+            self.url,
+            data=body,
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"},
+        )
+        try:
+            with urlopen(request, timeout=45) as response:  # noqa: S310 - fixed API URL
+                raw = json.load(response)
+        except HTTPError as error:
+            raise ProviderUnavailable(f"Model returned HTTP {error.code}") from None
+        except (URLError, TimeoutError, json.JSONDecodeError) as error:
+            raise ProviderUnavailable(
+                f"Model unreachable: {type(error).__name__}"
+            ) from None
+
+        parsed = self._parse(raw)
+        if not parsed.get("known"):
+            return {"known": False, "model": self.model, "asked": asked}
+        window = _clock_window(parsed.get("start"), parsed.get("end"))
+        if window is None:
+            # A malformed or inverted pair is a refusal, not something to repair. Guessing
+            # what was meant is how a bad assumption becomes an invisible one.
+            return {"known": False, "model": self.model, "asked": asked}
+        return {"known": True, **window, "model": self.model, "asked": asked}
+
+    @staticmethod
+    def _parse(raw: dict[str, Any]) -> dict[str, Any]:
+        if raw.get("status") == "incomplete":
+            raise ProviderUnavailable("Model reply was cut short")
+        for item in raw.get("output") or []:
+            if item.get("type") == "refusal" or item.get("refusal"):
+                raise ProviderUnavailable("The model refused this request")
+            for part in item.get("content") or []:
+                if part.get("type") == "refusal":
+                    raise ProviderUnavailable("The model refused this request")
+                text = part.get("text")
+                if text:
+                    try:
+                        return json.loads(text)
+                    except json.JSONDecodeError:
+                        raise ProviderUnavailable("Model returned invalid JSON") from None
+        raise ProviderUnavailable("Model returned no content")
+
+
+def _clock_window(start: Any, end: Any) -> dict[str, str] | None:
+    """`{"start", "end"}` for a well-formed HH:MM pair that runs forwards, else None."""
+
+    def minutes(value: Any) -> int | None:
+        if not isinstance(value, str):
+            return None
+        match = re.fullmatch(r"([01]?\d|2[0-3]):([0-5]\d)", value.strip())
+        if not match:
+            return None
+        return int(match.group(1)) * 60 + int(match.group(2))
+
+    first, last = minutes(start), minutes(end)
+    if first is None or last is None or first >= last:
+        return None
+    return {"start": f"{first // 60:02d}:{first % 60:02d}", "end": f"{last // 60:02d}:{last % 60:02d}"}
 
 
 class OsmAreaAmenitiesProvider:
