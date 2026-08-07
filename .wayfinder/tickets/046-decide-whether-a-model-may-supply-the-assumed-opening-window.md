@@ -119,6 +119,50 @@ had no verified hours, so the branch was never exercised, and a test using
 includes the 13 benchmark calls and 2 live wiring checks recorded after the fact — they
 were made from a scratch probe that bypassed `_spend`, and the cap has to stay honest.
 
+## The model changed to `gpt-5.6-luna` on 2026-08-07, and the benchmark was re-run
+
+The owner asked for `5.6 luna`. It was not a name recognisable from here, so it was
+**looked up rather than guessed** — `GET /v1/models` lists `gpt-5.6-luna`, and writing a
+plausible-looking model string into config would have been the same fabrication this
+ticket is about. It works on the existing Responses call with no code change.
+
+Re-benchmarked against the same verified ground truth, through the shipped provider:
+
+| | `gpt-4.1-mini` | `gpt-5.6-luna` |
+|---|---|---|
+| Answered | 13 of 13 | **12** of 13 |
+| Exact on both ends | 5 of 13 | **6 of 12** |
+| Ends after real closing | 5 | **4** |
+
+Better on every count that matters, and better calibrated: it **declined** Shilin Cixian
+Temple where `mini` claimed to know all thirteen. It also fixed `mini`'s worst answer —
+Taipei Confucius Temple exactly right at 08:30–21:00, where `mini` said 09:00–17:00, four
+hours short.
+
+### One new failure mode, and the guard it forced
+
+`gpt-5.6-luna` answered **00:00–23:59** for Huashan 1914, whose real hours are 11:00–21:00.
+That is not a wrong window, it is a **non-answer that permits more than the constant it
+replaces** — which inverts the entire justification for asking. `mini` never did this.
+
+So `DEGENERATE_SPAN_MINUTES = 20 * 60`: a window spanning twenty hours or more is
+discarded as `known: false` and the constant stands. The bar has to sit above sixteen
+hours because temples really do open 06:00–22:00, and below a full day. Confirmed against
+the live model — Huashan now returns `known: false` while Taipei Fine Arts Museum still
+returns its exact 09:30–17:30.
+
+The general rule worth keeping: **an assumption looser than the one it replaces is not an
+improvement**, however specific it looks.
+
+### The prices are now over-estimates and should be corrected
+
+`openai:opening_window`, `openai:interpret_revision` and `openai:explain_revision` were
+calibrated for `gpt-4.1-mini`. `gpt-5.6-luna`'s published rate is not known here, so all
+three were raised **tenfold as deliberate over-estimates**, following the rule
+`google_places:search_text` already states: an over-estimate protects the cap, an
+under-estimate spends past it. They are wrong on purpose and should be replaced with the
+real rates — an over-estimate that is wildly high will refuse calls the cap could afford.
+
 ## Related
 
 - `WF-044` — the holiday-closure gap this does not close.

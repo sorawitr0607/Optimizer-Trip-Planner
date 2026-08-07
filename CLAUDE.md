@@ -180,9 +180,11 @@ constant is the worse one — the pilot scheduled a visit at 17:17–19:32 again
 passed validation. Benchmarked against verified ground truth for all 13 places: the model's window ends
 after real closing 5 times by **30–60 min**, the constant 6 times by **180–270 min**.
 
-Four rules not to relax. **The status stays `assumed`** whichever guess fills it — only `source` differs
+Five rules not to relax. **The status stays `assumed`** whichever guess fills it — only `source` differs
 (`model_recalled_window:<model>`), so nothing is upgraded. **A place with verified hours is never asked
-about.** **`closed_weekdays` is not requested at all**: the same benchmark got 7 closure claims of which
+about.** **A window spanning 20 hours or more is discarded** (`DEGENERATE_SPAN_MINUTES`): `gpt-5.6-luna`
+answered `00:00–23:59` for Huashan 1914, and a non-answer that permits *more* than the constant inverts
+the reason for asking — the bar sits above sixteen hours because temples really do open 06:00–22:00. **`closed_weekdays` is not requested at all**: the same benchmark got 7 closure claims of which
 **2 were invented** (Huashan 1914, Taipei Zoo), a false closure silently drops a place, and 29 December is
 a Tuesday — do not add the field back without re-running the benchmark. And **`_optimizer_input` never
 fetches**; it runs on every read, so the window is read from storage or the constant stands. Recall cannot
@@ -294,6 +296,13 @@ Behavior changes to the optimizer should be expressed there.
 
 ## Configuration
 
+**The default model is `gpt-5.6-luna` as of 2026-08-07** (`TOURIST_OPENAI_MODEL` still overrides), and it
+beat `gpt-4.1-mini` on the `WF-046` benchmark — 6 of 12 exact against 5 of 13, four overshoots against
+five, and it declines rather than claiming to know all thirteen. **The three `openai:*` prices are now
+deliberate ten-times over-estimates**: they were calibrated for `gpt-4.1-mini` and luna's published rate
+is not recorded here. Replace them with the real rates — an over-estimate protects the cap but a wildly
+high one refuses calls the cap could afford.
+
 `TOURIST_DB_PATH` (default `data/tourist.sqlite3`), `TOURIST_NOMINATIM_URL`, `TOURIST_OVERPASS_URL`,
 `TOURIST_USER_AGENT`, `TOURIST_GTFS_PATH` (default
 `data/gtfs/transit.zip`; a GTFS zip read locally for transit legs — see `WF-038`). Providers still read keys from `os.environ` and nowhere else — that is what keeps
@@ -328,8 +337,8 @@ must stay directed. Rebuild only through `python3 scripts/build_project_graph.py
 failure), and only when explicitly asked or after a topology-changing milestone. After any graph
 change, `--check` must pass before committing. See `AGENTS.md`.
 
-**Rebuilt for `WF-046` on 2026-08-07 and `--check` passes**: 1928 nodes, 4765 directed edges, 178
-communities; recorded cumulative cost is US$0.359420 over 34 runs. The `WF-039` rebuild the same day
+**Rebuilt for the `gpt-5.6-luna` switch on 2026-08-07 and `--check` passes**: 1927 nodes, 4760 directed
+edges, 159 communities; recorded cumulative cost is US$0.367515 over 35 runs. The `WF-039` rebuild the same day
 gave 1868 nodes, 4589 edges and 150 communities. The `WF-040` rebuild the day before
 gave 1818 nodes, 4492 edges and 153 communities for US$0.0121.
 

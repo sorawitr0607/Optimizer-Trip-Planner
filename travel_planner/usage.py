@@ -53,11 +53,18 @@ PRICES_USD = {
     # One small structured-output call. Priced conservatively above the
     # token cost of a short request and reply.
     # WF-046. One structured-output call per place for a better *assumption* than the
-    # hardcoded 09:00-21:00. Same model and rate as interpret_revision; priced
-    # separately so the two are distinguishable in the ledger.
-    "openai:opening_window": 0.002,
-    "openai:interpret_revision": 0.002,
-    "openai:explain_revision": 0.004,
+    # hardcoded 09:00-21:00. Priced separately from interpret_revision so the two are
+    # distinguishable in the ledger.
+    #
+    # !! These three were calibrated for `gpt-4.1-mini`. The default model became
+    # `gpt-5.6-luna` on 2026-08-07 and its published rate is **not known here**, so these
+    # are deliberate OVER-estimates at ten times the old figure, following the same rule
+    # google_places:search_text states: an over-estimate protects the cap, an
+    # under-estimate spends past it. Replace them with the real published rates -- an
+    # over-estimate that is wildly wrong will refuse calls the cap could afford.
+    "openai:opening_window": 0.020,
+    "openai:interpret_revision": 0.020,
+    "openai:explain_revision": 0.040,
 }
 
 

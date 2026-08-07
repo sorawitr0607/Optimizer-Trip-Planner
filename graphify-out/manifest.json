@@ -85,9 +85,9 @@
     "semantic_hash": "ff19e6dc21a1f47ebd31ac3e4820cd8a"
   },
   "tests/test_assumed_windows.py": {
-    "mtime": 1786098325.891874,
-    "ast_hash": "190242dc4565bd9abbb38fa4f73dc13c",
-    "semantic_hash": "190242dc4565bd9abbb38fa4f73dc13c"
+    "mtime": 1786098964.4818916,
+    "ast_hash": "9f16951cbf05988dbb00bac0585b9631",
+    "semantic_hash": "9f16951cbf05988dbb00bac0585b9631"
   },
   "tests/test_checklist.py": {
     "mtime": 1785832402.4787455,
@@ -250,9 +250,9 @@
     "semantic_hash": "de82966718de7aaff97404630282da1c"
   },
   "travel_planner/providers.py": {
-    "mtime": 1786098090.3491783,
-    "ast_hash": "6ffcd85b9ef88fbf9e3ad73e7306910b",
-    "semantic_hash": "6ffcd85b9ef88fbf9e3ad73e7306910b"
+    "mtime": 1786098965.681341,
+    "ast_hash": "a82688a0b60c4a3c9bb9a4caaa86eea0",
+    "semantic_hash": "a82688a0b60c4a3c9bb9a4caaa86eea0"
   },
   "travel_planner/ranking.py": {
     "mtime": 1785998402.7722473,
@@ -285,9 +285,9 @@
     "semantic_hash": "5dbcd43fc2ca05aace3175f31716672a"
   },
   "travel_planner/usage.py": {
-    "mtime": 1786098099.373896,
-    "ast_hash": "9e2cf783726e8781993ac8432c8a6fdc",
-    "semantic_hash": "9e2cf783726e8781993ac8432c8a6fdc"
+    "mtime": 1786098940.6036808,
+    "ast_hash": "c7887a0cdc9123bf6434aac398fb7944",
+    "semantic_hash": "c7887a0cdc9123bf6434aac398fb7944"
   },
   "web/eslint.config.js": {
     "mtime": 1785764956.464039,
@@ -783,6 +783,11 @@
     "mtime": 1786011108.027682,
     "ast_hash": "c5115d12c7730cb5efa13b31fba37e53",
     "semantic_hash": "c5115d12c7730cb5efa13b31fba37e53"
+  },
+  ".wayfinder/tickets/044-decide-whether-a-venue-s-own-site-fills-the-holiday-hours-gap.md": {
+    "mtime": 1786097371.4467857,
+    "ast_hash": "cabd524a2851dddbd09610d1aa700556",
+    "semantic_hash": "cabd524a2851dddbd09610d1aa700556"
   },
   ".wayfinder/tickets/045-decide-what-happens-to-an-activated-plan-when-evidence-improves.md": {
     "mtime": 1786096885.0102046,

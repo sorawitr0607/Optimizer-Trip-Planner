@@ -63,6 +63,37 @@ class WindowParsingTest(unittest.TestCase):
             provider._parse(reply({"known": True, "start": "nonsense", "end": "18:00"})),
         )
 
+    def test_an_all_day_window_is_discarded_as_a_non_answer(self) -> None:
+        """"Open all day" permits *more* than the 09:00-21:00 constant it would replace,
+        which inverts the whole reason for asking. Measured: `gpt-5.6-luna` returned
+        00:00-23:59 for Huashan 1914, whose real hours are 11:00-21:00."""
+
+        provider = OpenAIOpeningWindowProvider()
+        provider._parse = lambda raw: raw  # type: ignore[method-assign]
+        calls = {}
+
+        def fake_open(request, timeout=None):
+            calls["asked"] = True
+            raise AssertionError("unused")
+
+        # Exercise the span rule directly rather than the transport.
+        from travel_planner.providers import _span_minutes
+
+        self.assertGreaterEqual(
+            _span_minutes({"start": "00:00", "end": "23:59"}),
+            provider.DEGENERATE_SPAN_MINUTES,
+        )
+        # A temple really does open 06:00-22:00, so the bar must sit above sixteen hours.
+        self.assertLess(
+            _span_minutes({"start": "06:00", "end": "22:00"}),
+            provider.DEGENERATE_SPAN_MINUTES,
+        )
+        # And the constant itself must never be discarded by its own rule.
+        self.assertLess(
+            _span_minutes({"start": "09:00", "end": "21:00"}),
+            provider.DEGENERATE_SPAN_MINUTES,
+        )
+
     def test_a_refusal_in_the_reply_raises(self) -> None:
         provider = OpenAIOpeningWindowProvider()
         with self.assertRaises(ProviderUnavailable):

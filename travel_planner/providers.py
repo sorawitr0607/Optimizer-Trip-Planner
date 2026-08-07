@@ -354,6 +354,13 @@ class OpenAIOpeningWindowProvider:
     # cannot make a recollection fresher -- only a real lookup can.
     cache_ttl_days = 90
 
+    # A window this wide or wider is discarded as a non-answer. The constant it would
+    # replace is twelve hours, so anything approaching a full day is *less* constraining
+    # than doing nothing -- and a visitor attraction genuinely open twenty hours a day is
+    # rare enough that losing it to the constant costs almost nothing. Temples really do
+    # open 06:00-22:00, sixteen hours, so the bar has to sit above that.
+    DEGENERATE_SPAN_MINUTES = 20 * 60
+
     SYSTEM_PROMPT = (
         "You state the usual visitor opening hours of one named place. Answer only from "
         "what you actually know about that specific place. If you are not confident, set "
@@ -376,7 +383,7 @@ class OpenAIOpeningWindowProvider:
         self.url = os.environ.get(
             "TOURIST_OPENAI_URL", "https://api.openai.com/v1/responses"
         )
-        self.model = os.environ.get("TOURIST_OPENAI_MODEL", "gpt-4.1-mini")
+        self.model = os.environ.get("TOURIST_OPENAI_MODEL", "gpt-5.6-luna")
 
     def window(self, *, name: str, local_name: str, destination: str) -> dict[str, Any]:
         """One window, or `known: false`. Raises rather than inventing on any failure."""
@@ -429,6 +436,12 @@ class OpenAIOpeningWindowProvider:
             # A malformed or inverted pair is a refusal, not something to repair. Guessing
             # what was meant is how a bad assumption becomes an invisible one.
             return {"known": False, "model": self.model, "asked": asked}
+        if _span_minutes(window) >= self.DEGENERATE_SPAN_MINUTES:
+            # "Open all day" is not an opening time, it is the absence of one -- and it
+            # permits *more* than the 09:00-21:00 constant it would replace, which
+            # inverts the entire reason for asking. Measured: `gpt-5.6-luna` returned
+            # 00:00-23:59 for Huashan 1914, whose real hours are 11:00-21:00.
+            return {"known": False, "model": self.model, "asked": asked}
         return {"known": True, **window, "model": self.model, "asked": asked}
 
     @staticmethod
@@ -448,6 +461,14 @@ class OpenAIOpeningWindowProvider:
                     except json.JSONDecodeError:
                         raise ProviderUnavailable("Model returned invalid JSON") from None
         raise ProviderUnavailable("Model returned no content")
+
+
+def _span_minutes(window: dict[str, str]) -> int:
+    def minutes(value: str) -> int:
+        hour, minute = value.split(":")
+        return int(hour) * 60 + int(minute)
+
+    return minutes(window["end"]) - minutes(window["start"])
 
 
 def _clock_window(start: Any, end: Any) -> dict[str, str] | None:
@@ -1631,7 +1652,7 @@ class OpenAIRevisionInterpreter:
             "TOURIST_OPENAI_URL", "https://api.openai.com/v1/responses"
         )
         # Configurable, and recorded with every revision; never silently changed.
-        self.model = os.environ.get("TOURIST_OPENAI_MODEL", "gpt-4.1-mini")
+        self.model = os.environ.get("TOURIST_OPENAI_MODEL", "gpt-5.6-luna")
 
     def interpret(self, payload: dict[str, Any], *, retry: bool = True) -> dict[str, Any]:
         key = os.environ.get("OPENAI_API_KEY", "").strip()
