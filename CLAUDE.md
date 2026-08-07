@@ -94,7 +94,17 @@ Each stage is gated on the previous one having a matching hash (`_current_choice
    which hurts a *small* city most, where little carries a Wikipedia article. And a catalog missing a
    block is **`stale`, never `verified`**, applied after the cache branches so a partial payload is not
    laundered into `verified` on the next read; `coverage.incomplete_blocks` and `known_gaps` name which
-   half is missing. `out center qt` with a 500-record limit truncates in quadtile
+   half is missing.
+   **A 504 is not always a spent slot.** `overpass-api.de` balances across backends and an unhealthy one
+   answers 504 in *seconds*. Measured 2026-08-08 on Singapore: both blocks 504 at 9.0 s and 9.5 s with
+   both slots free, and the identical query returned 200 a minute later — an empty catalog for a fault
+   that had already passed. `_attempt_block` therefore retries **once**, and only when the failure was
+   **fast** (`FAST_FAILURE_SECONDS = 20`) and an HTTP 5xx. That distinction is the whole safety of it: a
+   block that died at 90 s died of its own declared timeout, and asking again would spend another 90 s
+   to fail identically. A `remark` is never retried — that is the query engine reporting its own
+   timeout, not a gateway. `DISCOVERY_BUDGET_SECONDS = 100` is a deadline shared across both blocks and
+   their retries, which is what keeps the pair inside `client.ts`'s 120 s abort however the retries
+   fall. Do not raise it without moving that abort first. `out center qt` with a 500-record limit truncates in quadtile
    order, so a big city's catalog can miss its landmarks; see the walkthrough notes in
    `artifacts/validation/2026-07-29-slice5-6-evidence-notes.md`.
    normalizes and dedupes into provider-neutral candidates with an explicit status

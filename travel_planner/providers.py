@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from difflib import SequenceMatcher
-from time import sleep
+from time import monotonic, sleep
 import json
 import re
 from math import asin, ceil, cos, radians, sin, sqrt
@@ -37,6 +37,15 @@ class OpenStreetMapProvider:
     # before the second asks for one. Small on purpose: it is paid on every discovery
     # and the pair still has to finish inside the webapp's 120s RPC abort.
     BLOCK_PAUSE_SECONDS = 3
+    # A failure this quick never reached the query engine — it is a gateway or a spent
+    # slot, not a timeout — so it is worth asking again. Anything slower died of the
+    # 60-90s budget the query itself declares, and a retry would only spend it twice.
+    FAST_FAILURE_SECONDS = 20
+    RETRY_PAUSE_SECONDS = 6
+    # The ceiling for one discovery, retries included, under `client.ts`'s 120s abort.
+    # A pair that outlives the page waiting for it fails the same way it would have
+    # anyway, having spent the time.
+    DISCOVERY_BUDGET_SECONDS = 100
 
     def __init__(self) -> None:
         self.nominatim_url = os.environ.get(
@@ -123,6 +132,32 @@ class OpenStreetMapProvider:
             raise ProviderUnavailable(f"OpenStreetMap query incomplete: {payload['remark']}")
         return elements
 
+    def _attempt_block(self, query: str, deadline: float) -> list[Any]:
+        """One block, retried once if it failed *fast* and there is budget for it.
+
+        `overpass-api.de` balances across backends and an unhealthy one answers 504 in
+        seconds. Measured 2026-08-08 on Singapore: both blocks 504 at 9.0s and 9.5s with
+        both slots free, and the identical query returned 200 a minute later — so the
+        owner got an empty catalog for a fault that had already passed.
+
+        Only a **fast** failure is retried, and that distinction is the whole safety of
+        this. A block that died at 90s died of the server-side timeout, and asking again
+        would spend another 90s to fail the same way — while a block that died at 9s
+        never reached the query engine at all. The shared deadline is what keeps the pair
+        inside the webapp's 120s RPC abort no matter how the retries fall.
+        """
+
+        started = monotonic()
+        try:
+            return self._overpass_elements(query)
+        except ProviderUnavailable as error:
+            elapsed = monotonic() - started
+            retryable = "HTTP 5" in str(error) and elapsed <= self.FAST_FAILURE_SECONDS
+            if not retryable or monotonic() + self.RETRY_PAUSE_SECONDS >= deadline:
+                raise
+        sleep(self.RETRY_PAUSE_SECONDS)
+        return self._overpass_elements(query)
+
     def _discover_bbox(self, bbox: list[float], *, geocoded_name: str) -> dict[str, Any]:
         # Two requests, sequential, each best-effort.
         #
@@ -141,6 +176,7 @@ class OpenStreetMapProvider:
             ("landmarks", self._landmark_query(bbox)),
             ("baseline", self._baseline_query(bbox)),
         )
+        deadline = monotonic() + self.DISCOVERY_BUDGET_SECONDS
         returned_elements: list[Any] = []
         incomplete: dict[str, str] = {}
         for index, (name, query) in enumerate(blocks):
@@ -153,7 +189,7 @@ class OpenStreetMapProvider:
             if index:
                 sleep(self.BLOCK_PAUSE_SECONDS)
             try:
-                returned_elements.extend(self._overpass_elements(query))
+                returned_elements.extend(self._attempt_block(query, deadline))
             except ProviderUnavailable as error:
                 incomplete[name] = str(error)[:240]
         if not returned_elements:

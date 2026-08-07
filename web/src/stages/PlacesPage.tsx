@@ -306,6 +306,30 @@ export function PlacesPage() {
           {new Set(["unavailable", "error", "stale"]).has(discovery.data.status) ? (
             <p className="money-note money-note-warn"><b aria-hidden="true">⚠</b>{copy("provider_gap", language)}</p>
           ) : null}
+          {/* The empty case had only that one warning to show for itself: the sentence
+              explaining it sits inside the coverage report, which is collapsed, so a run
+              that returned nothing looked like a screen with nothing on it. The map
+              service's own words go here too — a transient gateway 504 and a genuinely
+              unknown city need different reactions from the owner. */}
+          {!catalog.length ? (
+            <div className="catalog-empty">
+              <h3>{copy("catalog_empty_title", language)}</h3>
+              <p>{copy("catalog_empty_help", language)}</p>
+              {report?.provider_error ? (
+                <p className="setup-hint">
+                  <b>{copy("catalog_empty_reason", language)}:</b> {String(report.provider_error)}
+                </p>
+              ) : null}
+              <button
+                className="setup-primary"
+                disabled={discover.isPending}
+                onClick={() => discover.mutate(true)}
+                type="button"
+              >
+                {discover.isPending ? copy("discovering", language) : copy("discover", language)}
+              </button>
+            </div>
+          ) : null}
           <details className="places-coverage">
           <summary><h2 className="money-eyebrow">{copy("coverage", language)}</h2></summary>
           <p className="places-status">

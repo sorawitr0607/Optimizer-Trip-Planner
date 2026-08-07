@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import sqlite3
 from tempfile import TemporaryDirectory
+from time import monotonic
 import unittest
 from unittest.mock import patch
 
@@ -394,6 +395,87 @@ class ConcreteProviderTest(unittest.TestCase):
         self.assertTrue(
             any("timed out" in gap for gap in result["coverage"]["known_gaps"])
         )
+
+    def test_a_fast_gateway_failure_is_retried_once(self) -> None:
+        """`overpass-api.de` balances across backends and an unhealthy one 504s in
+        seconds. Measured 2026-08-08 on Singapore: both blocks 504 at 9.0s and 9.5s with
+        both slots free, and the same query returned 200 a minute later — so the owner
+        got an empty catalog for a fault that had already passed."""
+
+        provider = OpenStreetMapProvider()
+        provider.RETRY_PAUSE_SECONDS = 0
+        calls: list[str] = []
+
+        def fake_overpass(query: str) -> list[dict]:
+            calls.append(query)
+            if len(calls) == 1:
+                raise ProviderUnavailable("Provider HTTP 504")
+            return [
+                {
+                    "type": "node", "id": 7, "lat": 1.3, "lon": 103.8,
+                    "tags": {"name": "Merlion", "tourism": "attraction"},
+                }
+            ]
+
+        provider._overpass_elements = fake_overpass  # type: ignore[method-assign]
+        elements = provider._attempt_block("<query>", monotonic() + 100)
+
+        self.assertEqual(2, len(calls), "a fast 504 should be asked again")
+        self.assertEqual(1, len(elements))
+
+    def test_a_slow_failure_is_not_retried(self) -> None:
+        """A block that died at 90s died of the timeout the query itself declares.
+        Asking again spends another 90s to fail the same way, and two of those outlive
+        the webapp's 120s abort — so the retry would cost the catalog it meant to save."""
+
+        provider = OpenStreetMapProvider()
+        calls: list[str] = []
+
+        def slow_failure(query: str) -> list[dict]:
+            calls.append(query)
+            # Push the clock past the fast-failure window without actually waiting.
+            provider.FAST_FAILURE_SECONDS = -1
+            raise ProviderUnavailable("Provider HTTP 504")
+
+        provider._overpass_elements = slow_failure  # type: ignore[method-assign]
+        with self.assertRaises(ProviderUnavailable):
+            provider._attempt_block("<query>", monotonic() + 100)
+
+        self.assertEqual(1, len(calls))
+
+    def test_a_timed_out_block_is_never_retried(self) -> None:
+        """A `remark` is the query engine reporting its own timeout, not a gateway."""
+
+        provider = OpenStreetMapProvider()
+        provider.RETRY_PAUSE_SECONDS = 0
+        calls: list[str] = []
+
+        def timed_out(query: str) -> list[dict]:
+            calls.append(query)
+            raise ProviderUnavailable("OpenStreetMap query incomplete: runtime error")
+
+        provider._overpass_elements = timed_out  # type: ignore[method-assign]
+        with self.assertRaises(ProviderUnavailable):
+            provider._attempt_block("<query>", monotonic() + 100)
+
+        self.assertEqual(1, len(calls), "only an HTTP 5xx is worth asking again")
+
+    def test_the_retry_is_skipped_when_the_budget_is_gone(self) -> None:
+        """The shared deadline is what keeps the pair inside the 120s RPC abort however
+        the retries fall."""
+
+        provider = OpenStreetMapProvider()
+        calls: list[str] = []
+
+        def failing(query: str) -> list[dict]:
+            calls.append(query)
+            raise ProviderUnavailable("Provider HTTP 504")
+
+        provider._overpass_elements = failing  # type: ignore[method-assign]
+        with self.assertRaises(ProviderUnavailable):
+            provider._attempt_block("<query>", monotonic())  # no budget left
+
+        self.assertEqual(1, len(calls))
 
     def test_both_blocks_failing_is_still_a_provider_failure(self) -> None:
         """Degrading is not the same as pretending. Nothing back is still nothing."""

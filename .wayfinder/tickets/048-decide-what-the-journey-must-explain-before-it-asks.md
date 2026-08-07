@@ -180,6 +180,29 @@ end: **3082 items where there had been none**, `incomplete_blocks: ["baseline"]`
 reason named in `known_gaps` so the screen can say which half is missing rather than only
 that something is.
 
+**A 504 is not always a spent slot, and that cost a whole catalog.** Found by the owner
+on Singapore the next day: the screen showed the provider warning and no places at all.
+Both blocks answered `Provider HTTP 504` in **9.0s and 9.5s** with both Overpass slots
+free, twice, 66 seconds apart — and the identical query returned 200 a minute later.
+`overpass-api.de` balances across backends and an unhealthy one refuses in seconds, so
+the owner got an empty catalog for a fault that had already passed.
+
+`_attempt_block` now retries **once**, and only when the failure was **fast**
+(`FAST_FAILURE_SECONDS = 20`) and an HTTP 5xx. The distinction is the whole safety of it:
+a block that died at 90s died of the timeout its own query declares, and asking again
+would spend another 90s to fail identically — two of which outlive the 120s RPC abort and
+lose the catalog the retry meant to save. A `remark` is never retried, because that is the
+query engine reporting its own timeout rather than a gateway. `DISCOVERY_BUDGET_SECONDS`
+is a deadline shared across both blocks and their retries, so no arrangement of failures
+can outlive the page waiting for it. Four tests pin those four rules.
+
+**And an empty catalog now says so where it can be seen.** The sentence explaining it
+lives inside the coverage report, which is collapsed, so a run that returned nothing
+looked like a screen with nothing on it — one generic warning and no next step. The empty
+state names what the map service actually said, says a transient outage is the usual
+cause, and puts Discover back within reach. A gateway 504 and a genuinely unknown city
+need different reactions, and only the provider's own words distinguish them.
+
 Three things that fell out of measuring rather than reasoning:
 
 - **A partial catalog is `stale`, not `verified`.** The downgrade is applied after the
