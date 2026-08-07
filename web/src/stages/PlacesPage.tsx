@@ -207,7 +207,9 @@ export function PlacesPage() {
   // the window ahead of the deck is fetched in one call while the current card is
   // being read. Free — Wikidata and Wikipedia, no key and no charge.
   const decided = new Set((choices.data ?? []).map((item) => item.place_id));
-  const upcoming = (ranking.data?.lanes.main_queue ?? [])
+  // The selected lane, not `main_queue`: the deck deals from whichever lane is picked,
+  // so prefetching the other one would warm cards nobody is about to see.
+  const upcoming = entries
     .filter((item) => !decided.has(item.place_id))
     .slice(0, PREFETCH_AHEAD)
     .map((item) => item.place_id);
@@ -349,11 +351,36 @@ export function PlacesPage() {
               {copy(mode === "deck" ? "list_mode" : "deck_mode", language)}
             </button>
           </div>
+          {/* The lane picker drives both modes now. In deck mode it was hidden, so the
+              deck always dealt from `main_queue` while the list opened on City Icons —
+              and the queue's top 20 have no Wikidata id, so the deck showed twenty
+              photo-less cards and the fix for that was a control you could not see. */}
+          <div className="places-pickers">
+            <label className="optimize-variant">
+              {copy("lane", language)}
+              <select value={lane} onChange={(event) => { setLane(event.target.value as Lane); setCardId(""); }}>
+                {LANES.map((value) => <option key={value} value={value}>{copy(value, language)} ({laneEntries(ranking.data!, value).length})</option>)}
+              </select>
+            </label>
+            {mode === "list" && entries.length ? (
+              <label className="optimize-variant">
+                {copy("select_card", language)}
+                <select value={selectedId} onChange={(event) => setCardId(event.target.value)}>
+                  {entries.map((entry) => {
+                    const item = catalog.find((value) => value.place_id === entry.place_id);
+                    return <option key={entry.place_id} value={entry.place_id}>{item ? placeName(item, language, item.name) : entry.place_id} · {ranking.data!.cards[entry.place_id]?.total_score.toFixed(1)}/100</option>;
+                  })}
+                </select>
+              </label>
+            ) : null}
+          </div>
+
           {mode === "deck" ? (
             <>
               <p className="setup-hint">{copy("deck_help", language)}</p>
               <PlaceDeck
                 choices={choices.data ?? []}
+                entries={entries}
                 language={language}
                 altNameOf={(placeId) => {
                   const found = catalog.find((item) => item.place_id === placeId);
@@ -389,25 +416,6 @@ export function PlacesPage() {
               <StayAreas language={language} tripId={tripId} />
             </>
           ) : null}
-          <div className="places-pickers" hidden={mode === "deck"}>
-            <label className="optimize-variant">
-              {copy("lane", language)}
-              <select value={lane} onChange={(event) => { setLane(event.target.value as Lane); setCardId(""); }}>
-                {LANES.map((value) => <option key={value} value={value}>{copy(value, language)} ({laneEntries(ranking.data, value).length})</option>)}
-              </select>
-            </label>
-            {entries.length ? (
-              <label className="optimize-variant">
-                {copy("select_card", language)}
-                <select value={selectedId} onChange={(event) => setCardId(event.target.value)}>
-                  {entries.map((entry) => {
-                    const item = catalog.find((value) => value.place_id === entry.place_id);
-                    return <option key={entry.place_id} value={entry.place_id}>{item ? placeName(item, language, item.name) : entry.place_id} · {ranking.data.cards[entry.place_id]?.total_score.toFixed(1)}/100</option>;
-                  })}
-                </select>
-              </label>
-            ) : null}
-          </div>
           {!entries.length ? <p>{copy("no_lane_cards", language)}</p> : null}
 
           {candidate && card ? (

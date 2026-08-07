@@ -2095,43 +2095,89 @@
 
 .landing-hero {
   background: var(--color-accent-light);
-  border: 1px solid var(--color-accent);
+  border: 1px solid var(--bg-card-border);
   border-left-width: var(--blocked-stripe-width);
+  border-left-color: var(--color-accent);
   border-radius: var(--radius);
-  padding: 28px 26px;
+  box-shadow: var(--shadow-hard-md);
+  padding: 34px 30px;
 }
 
+/* derives-from: element 12 .hero-banner-badge as .landing-badge */
+.landing-badge {
+  align-items: center;
+  background: var(--color-accent);
+  border-radius: var(--radius-pill);
+  color: var(--color-on-accent);
+  display: inline-flex;
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-selected);
+  gap: 6px;
+  letter-spacing: 0.09em;
+  margin: 0 0 14px;
+  padding: 5px 12px;
+  text-transform: uppercase;
+}
+
+/* Big on purpose. The old heading sat at the same weight as a section title, so the
+   one sentence that says what this is read as just another label. */
 .landing-hero h1 {
-  font-size: var(--text-3xl);
-  margin: 0 0 10px;
+  font-size: var(--text-4xl);
+  font-weight: var(--weight-selected);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  margin: 0 0 12px;
+  max-width: 18ch;
 }
 
 .landing-lead {
   color: var(--text-secondary);
   font-size: var(--text-lg);
-  margin: 0 0 16px;
-  max-width: 62ch;
+  margin: 0 0 22px;
+  max-width: 60ch;
 }
 
+/* Two up, not auto-fit: four cards at three columns leaves one stranded on its own
+   row, which reads as a missing fifth capability rather than as a tidy set. */
 .landing-bullets {
   display: grid;
-  gap: 6px;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   list-style: none;
-  margin: 0 0 16px;
+  margin: 0 0 18px;
   padding: 0;
 }
 
-.landing-bullets li {
-  padding-left: 20px;
-  position: relative;
+@media (max-width: 700px) {
+  .landing-bullets {
+    grid-template-columns: 1fr;
+  }
 }
 
-.landing-bullets li::before {
+/* derives-from: element 14 .stat-card as .landing-bullets. Each capability is a card
+   rather than a dash, so four claims read as four things the app does. */
+.landing-bullets li {
+  align-items: flex-start;
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-hard-sm);
+  display: flex;
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+/* derives-from: element 5 .feature-icon as .landing-bullet-icon */
+.landing-bullet-icon {
+  align-items: center;
+  background: var(--color-accent-light);
+  border-radius: var(--radius);
   color: var(--color-accent);
-  content: "→";
-  left: 0;
-  position: absolute;
+  display: flex;
+  flex: none;
+  height: 30px;
+  justify-content: center;
+  width: 30px;
 }
 
 .landing-note {
@@ -2162,14 +2208,38 @@
 }
 
 .landing-steps li {
+  align-items: flex-start;
+  background: var(--bg-secondary);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius);
   display: grid;
   gap: 10px;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto 1fr auto;
+  padding: 12px 14px;
+  transition: box-shadow var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out);
+}
+
+.landing-steps li:hover {
+  box-shadow: var(--shadow-hard-sm);
+  transform: translateY(-2px);
+}
+
+.landing-step-body strong {
+  align-items: center;
+  display: flex;
+  gap: 7px;
 }
 
 .landing-steps p {
   color: var(--text-secondary);
-  margin: 2px 0 0;
+  margin: 3px 0 0;
+}
+
+/* Points at the next step, so four cards read as a sequence rather than a menu. */
+.landing-step-arrow {
+  align-self: center;
+  color: var(--text-muted);
 }
 
 /* derives-from: element 7 .step-num-4 as .landing-step-num — the donor's own step
@@ -2188,7 +2258,12 @@
 
 .trip-list a {
   align-items: center;
+  border-radius: var(--radius);
   gap: 12px;
+}
+
+.trip-list a:hover {
+  box-shadow: var(--shadow-hard-sm);
 }
 
 .trip-list-name {

@@ -1,4 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  ArrowRight,
+  CalendarClock,
+  Compass,
+  FileSpreadsheet,
+  ListChecks,
+  MapPinned,
+  Route,
+  Sparkles,
+  Wallet,
+} from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router";
 
@@ -26,18 +37,20 @@ import { useLanguage } from "../i18n/LanguageProvider";
 /** Sentinel for the typed fallback. Not a country code, so it cannot collide. */
 const TYPE_IT = "__type_it__";
 
+// Icons carry no meaning on their own — every one sits beside its own sentence, so a
+// screen reader loses nothing by skipping them and they stay `aria-hidden`.
 const BULLETS = [
-  "landing_bullet_places",
-  "landing_bullet_schedule",
-  "landing_bullet_money",
-  "landing_bullet_export",
+  [MapPinned, "landing_bullet_places"],
+  [CalendarClock, "landing_bullet_schedule"],
+  [Wallet, "landing_bullet_money"],
+  [FileSpreadsheet, "landing_bullet_export"],
 ] as const;
 
 const STEPS = [
-  ["stage_setup", "landing_how_setup"],
-  ["stage_places", "landing_how_places"],
-  ["stage_optimize", "landing_how_plan"],
-  ["stage_itinerary", "landing_how_use"],
+  [Sparkles, "stage_setup", "landing_how_setup"],
+  [MapPinned, "stage_places", "landing_how_places"],
+  [Route, "stage_optimize", "landing_how_plan"],
+  [ListChecks, "stage_itinerary", "landing_how_use"],
 ] as const;
 
 export function TripsPage() {
@@ -96,11 +109,20 @@ export function TripsPage() {
           is the one element in the catalogue whose job is explaining a product before
           asking for input, which is exactly what was missing here. */}
       <section className="landing-hero">
+        <p className="landing-badge">
+          <Compass aria-hidden="true" size={15} /> Optimizer Trip Planner
+        </p>
         <h1>{copy("landing_headline", language)}</h1>
         <p className="landing-lead">{copy("landing_subtext", language)}</p>
+        {/* derives-from: element 5 .feature-bullets-list as .landing-bullets */}
         <ul className="landing-bullets">
-          {BULLETS.map((code) => (
-            <li key={code}>{copy(code, language)}</li>
+          {BULLETS.map(([Icon, code]) => (
+            <li key={code}>
+              <span className="landing-bullet-icon">
+                <Icon aria-hidden="true" size={17} />
+              </span>
+              {copy(code, language)}
+            </li>
           ))}
         </ul>
         <p className="landing-note">{copy("landing_local_note", language)}</p>
@@ -113,13 +135,19 @@ export function TripsPage() {
           <section className="stage-card landing-how">
             <h2>{copy("landing_how", language)}</h2>
             <ol className="landing-steps">
-              {STEPS.map(([title, detail], index) => (
+              {STEPS.map(([Icon, title, detail], index) => (
                 <li key={title}>
                   <span className="landing-step-num">{index + 1}</span>
-                  <div>
-                    <strong>{copy(title, language)}</strong>
+                  <div className="landing-step-body">
+                    <strong>
+                      <Icon aria-hidden="true" size={16} />
+                      {copy(title, language)}
+                    </strong>
                     <p>{copy(detail, language)}</p>
                   </div>
+                  {index < STEPS.length - 1 ? (
+                    <ArrowRight aria-hidden="true" className="landing-step-arrow" size={16} />
+                  ) : null}
                 </li>
               ))}
             </ol>

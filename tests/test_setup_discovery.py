@@ -315,13 +315,108 @@ class SchemaMigrationTest(unittest.TestCase):
 
 
 class ConcreteProviderTest(unittest.TestCase):
-    def test_dense_city_query_protects_landmarks_and_balances_families(self) -> None:
-        query = OpenStreetMapProvider()._overpass_query([24.9, 121.4, 25.2, 121.7])
+    def setUp(self) -> None:
+        """No slot to wait for when `_request_json` is a stub.
 
-        self.assertIn('["wikipedia"]', query)
-        self.assertEqual(2, query.count("out center qt"))
-        self.assertIn("out center qt;", query)
-        self.assertIn("out center qt 500", query)
+        The real pause exists so Overpass releases the first block's slot before the
+        second asks for one; against a fake it is six tests times three seconds of
+        nothing, on a suite that runs in nine.
+        """
+
+        patcher = patch.object(OpenStreetMapProvider, "BLOCK_PAUSE_SECONDS", 0)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_dense_city_query_protects_landmarks_and_balances_families(self) -> None:
+        """Two blocks, issued as two requests so one can fail alone.
+
+        As one script a dense city lost everything: Tokyo's unindexed family block
+        exceeded `[timeout:90]` at 91s and 93s on 2026-08-07, and Overpass has no
+        partial result, so the indexed landmarks died with it.
+        """
+
+        provider = OpenStreetMapProvider()
+        bbox = [24.9, 121.4, 25.2, 121.7]
+        landmarks = provider._landmark_query(bbox)
+        baseline = provider._baseline_query(bbox)
+
+        # The landmark block is the indexed, cheap, valuable half.
+        self.assertIn('["wikipedia"]', landmarks)
+        self.assertIn("out center qt;", landmarks)
+        # The baseline block is unbounded by index and so is bounded by count.
+        self.assertNotIn('["wikipedia"]', baseline)
+        self.assertIn("out center qt 500", baseline)
+        # One family list feeds both, so they cannot drift apart.
+        for selector in OpenStreetMapProvider.FAMILY_SELECTORS:
+            self.assertIn(selector, landmarks)
+            self.assertIn(selector, baseline)
+
+    def test_a_timed_out_baseline_keeps_the_landmarks_it_did_get(self) -> None:
+        """The whole point of splitting: a dense city keeps its landmarks."""
+
+        provider = OpenStreetMapProvider()
+        responses = iter(
+            [
+                [
+                    {
+                        "display_name": "Tokyo, Japan",
+                        "lat": "35.6762",
+                        "lon": "139.6503",
+                        "boundingbox": ["35.5", "35.8", "139.5", "139.8"],
+                    }
+                ],
+                {
+                    "elements": [
+                        {
+                            "type": "node",
+                            "id": 1,
+                            "lat": 35.68,
+                            "lon": 139.65,
+                            "tags": {"name": "Sensoji", "historic": "temple"},
+                        }
+                    ]
+                },
+                # Exactly what Overpass returned for Tokyo: a remark, not an HTTP error.
+                {
+                    "elements": [],
+                    "remark": 'runtime error: Query timed out in "query" at line 14 after 91 seconds.',
+                },
+            ]
+        )
+        provider._request_json = lambda request: next(responses)
+
+        result = provider.discover("Tokyo, Japan")
+
+        self.assertEqual(["Sensoji"], [item["name"] for item in result["items"]])
+        # Named, so the screen can say which half is missing rather than only that
+        # something is.
+        self.assertEqual(["baseline"], result["coverage"]["incomplete_blocks"])
+        self.assertTrue(
+            any("timed out" in gap for gap in result["coverage"]["known_gaps"])
+        )
+
+    def test_both_blocks_failing_is_still_a_provider_failure(self) -> None:
+        """Degrading is not the same as pretending. Nothing back is still nothing."""
+
+        provider = OpenStreetMapProvider()
+        responses = iter(
+            [
+                [
+                    {
+                        "display_name": "Tokyo, Japan",
+                        "lat": "35.6762",
+                        "lon": "139.6503",
+                        "boundingbox": ["35.5", "35.8", "139.5", "139.8"],
+                    }
+                ],
+                {"elements": [], "remark": "runtime error: Query timed out"},
+                {"elements": [], "remark": "runtime error: Query timed out"},
+            ]
+        )
+        provider._request_json = lambda request: next(responses)
+
+        with self.assertRaisesRegex(ProviderUnavailable, "timed out"):
+            provider.discover("Tokyo, Japan")
 
     def test_osm_adapter_normalizes_local_names_without_network(self) -> None:
         provider = OpenStreetMapProvider()
@@ -352,6 +447,10 @@ class ConcreteProviderTest(unittest.TestCase):
                         }
                     ]
                 },
+                # The baseline block, now its own request. Empty is not a failure —
+                # this place carries `wikipedia`-adjacent tags and came back in the
+                # landmark block already.
+                {"elements": []},
             ]
         )
         requests = []
@@ -364,7 +463,9 @@ class ConcreteProviderTest(unittest.TestCase):
 
         result = provider.discover("Taipei")
 
-        self.assertEqual(2, len(requests))
+        # Nominatim, then the two Overpass blocks.
+        self.assertEqual(3, len(requests))
+        self.assertEqual([], result["coverage"]["incomplete_blocks"])
         self.assertEqual("Taipei Place", result["items"][0]["name"])
         self.assertEqual("台北景點", result["items"][0]["names"]["local"])
         self.assertEqual("node/123", result["items"][0]["provider_place_id"])
@@ -388,6 +489,7 @@ class ConcreteProviderTest(unittest.TestCase):
                         "boundingbox": ["24.9", "25.2", "121.4", "121.7"],
                     }
                 ],
+                {"elements": []},
                 {"elements": []},
             ]
         )
@@ -442,7 +544,8 @@ class ConcreteProviderTest(unittest.TestCase):
             },
         )
 
-        self.assertEqual(1, len(requests))
+        # Two Overpass blocks and no Nominatim call: the cached boundary is the point.
+        self.assertEqual(2, len(requests))
         self.assertEqual("Taipei, Taiwan", result["coverage"]["geocoded_name"])
 
 

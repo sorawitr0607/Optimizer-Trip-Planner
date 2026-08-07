@@ -386,6 +386,14 @@ class PlannerActions:
                 retrieved_at = now.isoformat()
                 expires_at = now.isoformat()
 
+        # A catalog missing one of its two query blocks is usable but not complete, and
+        # calling it `verified` would overstate it. Applied after the cache branches so
+        # a partial payload served from cache is not laundered into `verified` on the
+        # next read. `stale` is the existing word for "use it, and be told".
+        coverage = payload.get("coverage") if isinstance(payload, Mapping) else None
+        if status == "verified" and isinstance(coverage, Mapping) and coverage.get("incomplete_blocks"):
+            status = "stale"
+
         candidates, report = build_candidate_catalog(
             dict(payload), provider=provider_name, retrieved_at=retrieved_at, status=status
         )

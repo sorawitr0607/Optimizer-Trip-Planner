@@ -33,6 +33,10 @@ class OpenStreetMapProvider:
     cache_version = "osm-baseline-v6"
     cache_ttl_days = 7
     result_limit = 500
+    # Seconds between the two discovery blocks, so the first query's slot is released
+    # before the second asks for one. Small on purpose: it is paid on every discovery
+    # and the pair still has to finish inside the webapp's 120s RPC abort.
+    BLOCK_PAUSE_SECONDS = 3
 
     def __init__(self) -> None:
         self.nominatim_url = os.environ.get(
@@ -95,11 +99,13 @@ class OpenStreetMapProvider:
             bbox, geocoded_name=str(coverage.get("geocoded_name") or destination)
         )
 
-    def _discover_bbox(self, bbox: list[float], *, geocoded_name: str) -> dict[str, Any]:
+    def _overpass_elements(self, query: str) -> list[Any]:
+        """One Overpass request. Raises rather than returning a truncated answer."""
+
         payload = self._request_json(
             Request(
                 self.overpass_url,
-                data=urlencode({"data": self._overpass_query(bbox)}).encode("utf-8"),
+                data=urlencode({"data": query}).encode("utf-8"),
                 headers={
                     "Accept": "application/json",
                     "Content-Type": "application/x-www-form-urlencoded",
@@ -108,13 +114,53 @@ class OpenStreetMapProvider:
                 method="POST",
             )
         )
-        returned_elements = payload.get("elements") if isinstance(payload, dict) else None
-        if not isinstance(returned_elements, list):
+        elements = payload.get("elements") if isinstance(payload, dict) else None
+        if not isinstance(elements, list):
             raise ProviderUnavailable("OpenStreetMap discovery returned no element list")
+        # Overpass reports a server-side timeout as a `remark` beside a partial
+        # element list, never as an HTTP error. Treated as a failure of *this* block.
         if payload.get("remark"):
             raise ProviderUnavailable(f"OpenStreetMap query incomplete: {payload['remark']}")
+        return elements
+
+    def _discover_bbox(self, bbox: list[float], *, geocoded_name: str) -> dict[str, Any]:
+        # Two requests, sequential, each best-effort.
+        #
+        # As one query this failed outright on a dense city: Tokyo's Nominatim boundary
+        # is capped to the 0.60-degree window, and the *unindexed* family block scanning
+        # 66km of it exceeded `[timeout:90]` at lines 14 and 16 — measured 2026-08-07 at
+        # 91s and 93s across two attempts. Overpass has no partial result, so a timeout
+        # in the cheap half discarded the expensive half too and the screen showed no
+        # attractions at all.
+        #
+        # Splitting them means a city can lose the noisy half and keep its landmarks. The
+        # `["wikipedia"]`-indexed block is the valuable one — every one of City Icons'
+        # top 20 comes from it — and it is also the one that never timed out. Sequential,
+        # so this still occupies one of Overpass's two slots at a time.
+        blocks = (
+            ("landmarks", self._landmark_query(bbox)),
+            ("baseline", self._baseline_query(bbox)),
+        )
+        returned_elements: list[Any] = []
+        incomplete: dict[str, str] = {}
+        for index, (name, query) in enumerate(blocks):
+            # Overpass grants two slots and answers 504 the instant they are spent, so
+            # firing the second block the moment the first returns loses it to a rate
+            # limit rather than to a timeout. Measured: back to back, the baseline came
+            # back `Provider HTTP 504` while the landmarks succeeded. That matters most
+            # for a *small* city, where little carries a Wikipedia article and the
+            # unindexed block is where nearly every place comes from.
+            if index:
+                sleep(self.BLOCK_PAUSE_SECONDS)
+            try:
+                returned_elements.extend(self._overpass_elements(query))
+            except ProviderUnavailable as error:
+                incomplete[name] = str(error)[:240]
         if not returned_elements:
-            raise ProviderUnavailable("OpenStreetMap returned an empty baseline; retry later")
+            raise ProviderUnavailable(
+                "; ".join(incomplete.values())
+                or "OpenStreetMap returned an empty baseline; retry later"
+            )
         # The same referenced landmark can appear in both the priority and family
         # query blocks. Keep one provider record instead of inflating coverage and
         # candidate aliases with identical copies.
@@ -145,10 +191,14 @@ class OpenStreetMapProvider:
                     "seasonal_events_night",
                     "rest_wellness",
                 ],
+                # Named per block, because "some of the catalog is missing" and "which
+                # half" are different facts and the screen can only report what it is told.
+                "incomplete_blocks": sorted(incomplete),
                 "known_gaps": [
                     "OpenStreetMap is uneven and not an exhaustive attraction catalog.",
                     "This baseline does not verify live events, crowds, ratings, transit, best time, or holiday opening hours.",
                     "Unreferenced attraction families have bounded quotas so one dense category cannot consume the whole catalog.",
+                    *(f"{name}: {reason}" for name, reason in sorted(incomplete.items())),
                 ],
                 "query_strategy": "referenced_landmarks_then_balanced_families",
             },
@@ -189,32 +239,50 @@ class OpenStreetMapProvider:
             round(center_lon + lon_span / 2, 6),
         ]
 
-    def _overpass_query(self, bbox: list[float]) -> str:
+    # The seven attraction families, as Overpass tag selectors. One list, so the
+    # indexed and unindexed blocks cannot drift apart.
+    FAMILY_SELECTORS = (
+        '["tourism"~"^(attraction|museum|gallery|viewpoint|artwork|theme_park|zoo|aquarium)$"]',
+        '["historic"]',
+        '["amenity"~"^(place_of_worship|marketplace|theatre|arts_centre)$"]',
+        '["leisure"~"^(park|garden|nature_reserve|water_park|sports_centre|spa)$"]',
+        '["natural"~"^(beach|peak)$"]',
+        '["shop"~"^(mall|department_store)$"]',
+        '["man_made"="tower"]',
+    )
+
+    def _landmark_query(self, bbox: list[float]) -> str:
+        """Wikipedia-referenced landmarks. Indexed, cheap, and the half worth keeping."""
+
         bounds = ",".join(map(str, bbox))
-        # One global `out ... 500` let dense minor peaks and temples consume the
-        # entire Taipei response before major landmarks appeared. Emit selective,
-        # indexed Wikipedia matches first, then one bounded balanced baseline.
-        return f"""[out:json][timeout:90];
-(
-  nwr[\"name\"][\"tourism\"~\"^(attraction|museum|gallery|viewpoint|artwork|theme_park|zoo|aquarium)$\"][\"wikipedia\"]({bounds});
-  nwr[\"name\"][\"historic\"][\"wikipedia\"]({bounds});
-  nwr[\"name\"][\"amenity\"~\"^(place_of_worship|marketplace|theatre|arts_centre)$\"][\"wikipedia\"]({bounds});
-  nwr[\"name\"][\"leisure\"~\"^(park|garden|nature_reserve|water_park|sports_centre|spa)$\"][\"wikipedia\"]({bounds});
-  nwr[\"name\"][\"natural\"~\"^(beach|peak)$\"][\"wikipedia\"]({bounds});
-  nwr[\"name\"][\"shop\"~\"^(mall|department_store)$\"][\"wikipedia\"]({bounds});
-  nwr[\"name\"][\"man_made\"=\"tower\"][\"wikipedia\"]({bounds});
-);
-out center qt;
-(
-nwr[\"name\"][\"tourism\"~\"^(attraction|museum|gallery|viewpoint|artwork|theme_park|zoo|aquarium)$\"]({bounds});
-nwr[\"name\"][\"historic\"]({bounds});
-nwr[\"name\"][\"amenity\"~\"^(place_of_worship|marketplace|theatre|arts_centre)$\"]({bounds});
-nwr[\"name\"][\"leisure\"~\"^(park|garden|nature_reserve|water_park|sports_centre|spa)$\"]({bounds});
-nwr[\"name\"][\"natural\"~\"^(beach|peak)$\"]({bounds});
-nwr[\"name\"][\"shop\"~\"^(mall|department_store)$\"]({bounds});
-nwr[\"name\"][\"man_made\"=\"tower\"]({bounds});
-);
-out center qt 500;"""
+        lines = "\n".join(
+            f'  nwr["name"]{selector}["wikipedia"]({bounds});'
+            for selector in self.FAMILY_SELECTORS
+        )
+        return f"[out:json][timeout:90];\n(\n{lines}\n);\nout center qt;"
+
+    def _baseline_query(self, bbox: list[float]) -> str:
+        """The balanced family baseline. Unindexed, and the half that times out on a
+        dense city — Tokyo exceeded 90s here while the landmark block returned fine.
+
+        Its budget is **60s, not the landmark block's 90s**, and that is a browser
+        constraint rather than an Overpass one. Two requests can now run back to back,
+        and `web/src/api/client.ts` aborts an RPC at 120s: at 90s each the pair could
+        outlive the page waiting for it, which would look exactly like the failure this
+        split exists to remove. Measured Tokyo end to end at 85.8s before this and it
+        still gave 3082 landmarks, so the margin is what changed, not the outcome —
+        and Taipei's whole two-block query takes ~34s, so nothing there comes near 60.
+        """
+
+        bounds = ",".join(map(str, bbox))
+        lines = "\n".join(
+            f'nwr["name"]{selector}({bounds});' for selector in self.FAMILY_SELECTORS
+        )
+        return (
+            f"[out:json][timeout:60];\n(\n{lines}\n);\n"
+            f"out center qt {self.result_limit};"
+        )
+
 
     @staticmethod
     def _item(element: Any) -> dict[str, Any] | None:

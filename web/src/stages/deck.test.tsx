@@ -72,10 +72,15 @@ const SUMMARY: Record<string, PlaceSummary> = {
   },
 };
 
-function render(summaries: Record<string, PlaceSummary>, choices: string[] = []) {
+function render(
+  summaries: Record<string, PlaceSummary>,
+  choices: string[] = [],
+  entries = RANKING.lanes.main_queue,
+) {
   return renderToStaticMarkup(
     <PlaceDeck
       choices={choices.map((place_id) => ({ place_id, action: "must_do", reason: null }) as never)}
+      entries={entries}
       language="en"
       altNameOf={(placeId) => (placeId === "first" ? "台北101" : null)}
       nameOf={(placeId) => (placeId === "first" ? "Taipei 101" : "A quiet park")}
@@ -165,5 +170,26 @@ describe("PlaceDeck", () => {
   it("says so when every unseen place has been decided", () => {
     const html = render(SUMMARY, ["first", "explore"]);
     expect(html).toContain("Every unseen place has had a decision");
+  });
+
+  it("deals from whichever lane it is given, not always from main_queue", () => {
+    // The deck hardcoded `main_queue`, whose top 20 have no Wikidata id on the real
+    // Taipei catalogue — so it opened on twenty cards with no photograph while the
+    // list beside it had already moved to City Icons for that exact reason.
+    const html = render(SUMMARY, [], [{ place_id: "explore" }]);
+
+    expect(html).toContain("A quiet park");
+    expect(html).not.toContain("Taipei 101");
+    // A lane that is not the queue carries no role, so the exploration note stays off.
+    expect(html).not.toContain("widen the search");
+  });
+
+  it("filters decided places out of any lane, not only the queue", () => {
+    // `main_queue` excludes decided places server-side; the other lanes do not, so
+    // without the local filter a City Icons deck would re-deal answered cards.
+    const html = render(SUMMARY, ["explore"], [{ place_id: "explore" }, { place_id: "first" }]);
+
+    expect(html).toContain("Taipei 101");
+    expect(html).not.toContain("A quiet park");
   });
 });

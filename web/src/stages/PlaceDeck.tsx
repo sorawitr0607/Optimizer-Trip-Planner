@@ -64,6 +64,13 @@ function committed(drag: Drag): boolean {
 
 export interface PlaceDeckProps {
   ranking: Ranking;
+  /** Which lane the deck deals from. `main_queue` is `WF-005`'s 4:1 ranked-to-exploration
+   *  queue and stays the default *shape* of the stage — but on the real Taipei catalogue
+   *  20 of its top 20 have no Wikidata id, so the deck opened on twenty cards with no
+   *  photograph and no description. The list beside it moved to `city_icons` for exactly
+   *  that reason at S4 and the deck did not follow; now it does, and the lane picker
+   *  drives both. Every lane still reaches `main_queue` in one select. */
+  entries: Ranking["lanes"]["main_queue"];
   summaries: Record<string, PlaceSummary>;
   choices: CandidateChoice[];
   language: Language;
@@ -82,6 +89,7 @@ export interface PlaceDeckProps {
 
 export function PlaceDeck({
   ranking,
+  entries,
   summaries,
   choices,
   language,
@@ -98,9 +106,10 @@ export function PlaceDeck({
   const travelled = useRef(0);
 
   const decided = new Set(choices.map((choice) => choice.place_id));
-  // The queue already excludes decided places, but a decision made in this session
-  // has not been refetched yet, so filter again rather than show a stale card.
-  const queue = ranking.lanes.main_queue.filter((entry) => !decided.has(entry.place_id));
+  // `main_queue` already excludes decided places, but a decision made in this session
+  // has not been refetched yet — and the other lanes do not exclude them at all — so
+  // filtering here is what makes any lane dealable.
+  const queue = entries.filter((entry) => !decided.has(entry.place_id));
   const entry = queue[Math.min(cursor, Math.max(0, queue.length - 1))];
   const card = entry ? ranking.cards[entry.place_id] : undefined;
 

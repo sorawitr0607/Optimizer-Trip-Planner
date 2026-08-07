@@ -156,14 +156,62 @@ Colour was added to the five choice actions, which had been five identical grey 
 with the destructive one sitting between two keeps. Solid green through amber to a red
 outline, so the row reads as a scale and dropping a place is the only action not filled.
 
+## A dense city returned no attractions at all
+
+Found by the owner testing the above, on Tokyo, and it predates this ticket. The places
+screen said only *"The provider could not return a current catalog"*. Four runs, recorded
+in the trip's own discovery history:
+
+    "Thailand"      verified
+    "Tokyo, Japan"  Provider HTTP 504
+    "Tokyo, Japan"  Query timed out in "query" at line 16 after 93 seconds
+    "Tokyo, Japan"  Query timed out in "query" at line 14 after 91 seconds
+
+Lines 14 and 16 are both in the **second, unindexed block**. The Overpass script has two:
+`["wikipedia"]`-indexed landmarks, then a balanced family baseline over the same box.
+Tokyo's Nominatim boundary is clamped to the 0.60-degree window, so the baseline scans
+66km of the densest city in the table with selectors no index helps, and it exceeds
+`[timeout:90]`. **Overpass has no partial result**, so a timeout in the cheap half
+discarded the expensive half with it — and the indexed half had returned fine.
+
+**Decided: two requests, each best-effort, failing only when both come back empty.** A
+dense city now loses the noisy half and keeps its landmarks. Measured on Tokyo end to
+end: **3082 items where there had been none**, `incomplete_blocks: ["baseline"]`, and the
+reason named in `known_gaps` so the screen can say which half is missing rather than only
+that something is.
+
+Three things that fell out of measuring rather than reasoning:
+
+- **A partial catalog is `stale`, not `verified`.** The downgrade is applied after the
+  cache branches, so a partial payload served from cache is not laundered into `verified`
+  on the next read.
+- **The baseline block gets 60s, not 90.** That is a browser constraint, not an Overpass
+  one: two requests can now run back to back and `web/src/api/client.ts` aborts an RPC at
+  120s. Tokyo measured 85.8s at 90s each — inside the limit, but not by enough. Taipei's
+  whole two-block query takes ~34s, so nothing there comes near 60.
+- **Three seconds between the blocks.** Fired back to back, the second block came back
+  `Provider HTTP 504` — Overpass grants two slots and refuses instantly once they are
+  spent, so the split was losing the baseline to a rate limit rather than to a timeout.
+  That matters most for a *small* city, where little carries a Wikipedia article and the
+  unindexed block is where nearly every place comes from.
+
+## The deck now deals from the lane you pick
+
+Listed below as deliberately not done, then done at the owner's request in the same
+session. The deck hardcoded `main_queue` while the list beside it opened on City Icons —
+and 20 of the queue's top 20 have no Wikidata id, so the deck opened on twenty cards with
+no photograph while the fix for that was a control the deck mode did not render. The lane
+picker now drives both modes and `main_queue` is one select away, so `WF-005`'s 4:1 queue
+is still reachable, just no longer the only thing dealable. Decided places are filtered
+locally for every lane, because only `main_queue` excludes them server-side.
+
 ## What was deliberately not done
 
-- **The deck is still fed `main_queue`.** Its top 20 have no Wikidata id and therefore no
-  photograph, which is a large part of why images seemed slow — `PlacesPage` already opens
-  its *list* on City Icons for exactly this reason, and the deck never was. Changing which
-  lane feeds the deck is `WF-005`'s design, not a UX repair, and it needs its own ticket.
 - **The 1440×900 viewport is unchanged**, so the four features `WF-025` cannot see remain
   invisible to the screen gate, and the three added by this ticket join them.
+- **The 0.60-degree boundary clamp is untouched.** Shrinking it would make the baseline
+  block affordable in Tokyo, but it is a tuned constant governing every city and belongs
+  in its own ticket with its own measurements.
 - **Two baselines drift on their own and were left alone.** `/evidence` renders the running
   paid-usage counter and `/itinerary` the export timestamp, so eight of the 36 images move
   with the clock and the ledger rather than with the code. `/evidence` crosses the 0.1%

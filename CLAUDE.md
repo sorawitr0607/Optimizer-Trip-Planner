@@ -81,7 +81,20 @@ Each stage is gated on the previous one having a matching hash (`_current_choice
    A dense city takes about 34 s of Overpass time, so the query declares `[timeout:90]` and the socket
    allows 105 s; the earlier 25 s budget failed every Taipei attempt. The endpoint grants 2 concurrent
    slots and answers 504 immediately once they are spent, so a burst of retries reads as an outage that
-   is really self-inflicted — space them. `out center qt` with a 500-record limit truncates in quadtile
+   is really self-inflicted — space them.
+   **Discovery is two Overpass requests, not one, as of `WF-048`** — indexed `["wikipedia"]` landmarks,
+   then the balanced family baseline — and each is **best-effort**, failing only when both come back
+   empty. As one script Tokyo returned nothing at all: the unindexed baseline scanning the clamped
+   0.60-degree window exceeded `[timeout:90]` at 91 s and 93 s, and **Overpass has no partial result**,
+   so it discarded the indexed half that had succeeded. Split, Tokyo yields **3082 items**. Three
+   consequences. The baseline gets **`[timeout:60]`, not 90** — a browser constraint, since two requests
+   run back to back and `web/src/api/client.ts` aborts an RPC at 120 s (Tokyo measured 85.8 s at 90 s
+   each). There is a **3 s pause between the blocks**, because fired immediately the second came back
+   `Provider HTTP 504` on the 2-slot budget — losing the baseline to a rate limit rather than a timeout,
+   which hurts a *small* city most, where little carries a Wikipedia article. And a catalog missing a
+   block is **`stale`, never `verified`**, applied after the cache branches so a partial payload is not
+   laundered into `verified` on the next read; `coverage.incomplete_blocks` and `known_gaps` name which
+   half is missing. `out center qt` with a 500-record limit truncates in quadtile
    order, so a big city's catalog can miss its landmarks; see the walkthrough notes in
    `artifacts/validation/2026-07-29-slice5-6-evidence-notes.md`.
    normalizes and dedupes into provider-neutral candidates with an explicit status
@@ -530,6 +543,10 @@ per-day fit**, because dividing by the optimizer's pacing constants would put a 
 in TypeScript. Two things it deliberately left: the deck is still fed `main_queue`, whose top 20
 have no Wikidata id and therefore no photograph (`WF-005`'s lane choice, and its own ticket), and
 the 1440×900 viewport is unchanged, so `WF-025`'s blind spot now hides three more features.
+The deck's lane was the first of those two and the owner asked for it in the same session: the **lane
+picker now drives both modes**, defaulting to City Icons, and decided places are filtered locally
+because only `main_queue` excludes them server-side. `main_queue` is one select away, so `WF-005`'s
+4:1 queue is still reachable — it is just no longer the only dealable lane.
 
 **Eight of the 36 screen baselines drift on their own**, found while re-approving for `WF-048`:
 `/evidence` renders the running paid-usage counter and `/itinerary` the export timestamp, so those
