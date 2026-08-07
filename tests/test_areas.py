@@ -169,8 +169,11 @@ def two_station_graph() -> TransitGraph:
     stops = {
         # Two nodes for one station, which is what OSM really returns -- the platform
         # and the stop position. They must collapse to one area.
-        "n1": Stop("n1", "Central", 25.0450, 121.5750),
-        "n1b": Stop("n1b", "Central", 25.0451, 121.5751),
+        # Chinese primary name with an English tag, which is the Taipei case.
+        "n1": Stop("n1", "中山", 25.0450, 121.5750, name_en="Zhongshan"),
+        # The same station's other platform node, with the tag missing on this one.
+        "n1b": Stop("n1b", "中山", 25.0451, 121.5751),
+        # No English name anywhere: the local name has to stand alone.
         "n2": Stop("n2", "Harbour", 25.0550, 121.5850),
         # No name: unusable as advice, so it must be skipped rather than listed by id.
         "n3": Stop("n3", "n3", 25.0500, 121.5800),
@@ -219,9 +222,22 @@ class AreaRecommendationTest(unittest.TestCase):
 
         names = [item["name"] for item in report["areas"]]
         self.assertEqual(sorted(set(names)), sorted(names))
-        self.assertIn("Central", names)
+        self.assertIn("中山", names)
         # The unnamed stop is absent: an area the app cannot name is not advice.
         self.assertNotIn("n3", names)
+
+    def test_a_station_carries_its_english_name_beside_the_local_one(self) -> None:
+        """`en` was the Chinese string until 2026-08-07, so every area rendered as 中山
+        or 西門 with nothing readable beside it. OSM tags `name:en` on 370 of Taipei's
+        437 stop nodes and `graph_from_osm` was discarding all of them."""
+
+        report = self.actions.recommend_areas(self.trip.trip_id)
+        by_local = {item["names"].get("local"): item["names"] for item in report["areas"]}
+
+        self.assertEqual({"local": "中山", "en": "Zhongshan"}, by_local["中山"])
+        # No `name:en` in OSM means no `en` key at all, rather than the local string
+        # copied into it — or the screen would print the same name twice.
+        self.assertEqual({"local": "Harbour"}, by_local["Harbour"])
 
     def test_amenity_counts_reach_the_score_and_are_fetched_once(self) -> None:
         first = self.actions.recommend_areas(self.trip.trip_id)

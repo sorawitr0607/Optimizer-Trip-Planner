@@ -454,7 +454,8 @@ class OsmMetroTransitTest(unittest.TestCase):
         # Tagged as real stations would be: the graph rejects untagged nodes, because
         # the Overpass recursion drags in every node of every track way.
         {"type": "node", "id": 1, "lat": 25.0405, "lon": 121.5705,
-         "tags": {"name": "Tower", "railway": "station", "station": "subway"}},
+         "tags": {"name": "Tower", "name:en": "Tower Station",
+                  "railway": "station", "station": "subway"}},
         {"type": "node", "id": 2, "lat": 25.0498, "lon": 121.5798,
          "tags": {"name": "Temple", "railway": "station", "station": "subway"}},
         {"type": "node", "id": 3, "lat": 25.0603, "lon": 121.5903,
@@ -475,6 +476,18 @@ class OsmMetroTransitTest(unittest.TestCase):
         from travel_planner.transit import graph_from_osm
 
         return graph_from_osm(self.ELEMENTS)
+
+    def test_an_english_station_name_is_carried_beside_the_local_one(self) -> None:
+        """OSM tags `name:en` on 370 of Taipei's 437 stop nodes and the graph discarded
+        every one, so `WF-040`'s stay areas rendered as 中山 and 西門 with nothing
+        readable beside them. Empty rather than duplicated when the tag is absent, so a
+        caller can tell "no English name" from "the same name"."""
+
+        stops = self.graph().stops
+
+        self.assertEqual("Tower Station", stops["n1"].name_en)
+        self.assertEqual("Tower", stops["n1"].name)
+        self.assertEqual("", stops["n2"].name_en)
 
     def test_a_relation_yields_both_directions(self) -> None:
         """A relation lists one direction; a metro runs both.

@@ -30,6 +30,10 @@ export interface PlaceDeckProps {
   /** Resolves a display name. Passed in so `shared/names.ts` stays the one place
    *  naming happens, per the S5 consolidation. */
   nameOf: (placeId: string) => string;
+  /** The local-script name to show beside it, or null when it would repeat. 61% of the
+   *  Taipei catalogue has no `name:en` at all, so this is often the only readable pair
+   *  the app can offer. */
+  altNameOf: (placeId: string) => string | null;
   /** Records a decision and advances. `null` reason means none was given. */
   onDecide: (placeId: string, action: string, reason: string | null) => void;
   /** Fetches the free description and photographs for one place. */
@@ -42,6 +46,7 @@ export function PlaceDeck({
   choices,
   language,
   nameOf,
+  altNameOf,
   onDecide,
   onWantSummary,
 }: PlaceDeckProps) {
@@ -67,6 +72,7 @@ export function PlaceDeck({
       ? [about.image_url]
       : [];
   const name = nameOf(entry.place_id);
+  const altName = altNameOf(entry.place_id);
 
   function decide(action: string, reason: string | null = null) {
     onDecide(entry!.place_id, action, reason);
@@ -138,7 +144,10 @@ export function PlaceDeck({
         </div>
       )}
 
-      <h3>{name}</h3>
+      <h3>
+        {name}
+        {altName ? <small className="place-alt-name">{altName}</small> : null}
+      </h3>
       {entry.role === "protected_exploration" ? (
         <p className="setup-hint">{copy("deck_exploration_note", language)}</p>
       ) : null}

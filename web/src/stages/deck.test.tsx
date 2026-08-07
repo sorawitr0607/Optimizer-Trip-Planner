@@ -77,6 +77,7 @@ function render(summaries: Record<string, PlaceSummary>, choices: string[] = [])
     <PlaceDeck
       choices={choices.map((place_id) => ({ place_id, action: "must_do", reason: null }) as never)}
       language="en"
+      altNameOf={(placeId) => (placeId === "first" ? "台北101" : null)}
       nameOf={(placeId) => (placeId === "first" ? "Taipei 101" : "A quiet park")}
       onDecide={() => {}}
       onWantSummary={() => {}}
@@ -90,6 +91,9 @@ describe("PlaceDeck", () => {
   it("shows one card with every fact WF-005 requires on it", () => {
     const html = render(SUMMARY);
     expect(html).toContain("Taipei 101");
+    // Both names, because 61% of the Taipei catalogue has no `name:en` and the local
+    // string is what the signage and a taxi driver use.
+    expect(html).toContain("台北101");
     expect(html).toContain("71.5");
     expect(html).toContain("A landmark tower");
     expect(html).toContain("Visit estimate");

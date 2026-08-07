@@ -39,6 +39,12 @@ class Stop:
     name: str
     latitude: float
     longitude: float
+    # The `name:en` tag when OSM carries one, which for Taipei Metro is 370 of 437 stop
+    # nodes. Kept beside `name` rather than replacing it: a traveller needs the local
+    # name for signage and a taxi driver, and the English one to read. Empty when the
+    # tag is absent, so a caller can tell "no English name" from "English name equals
+    # the local one".
+    name_en: str = ""
 
 
 @dataclass(frozen=True)
@@ -247,6 +253,7 @@ def graph_from_osm(elements: list[dict]) -> TransitGraph:
             name=str(tags.get("name") or tags.get("name:en") or stop_id),
             latitude=latitude,
             longitude=longitude,
+            name_en=str(tags.get("name:en") or "").strip(),
         )
 
     edges: dict[tuple[str, str], Edge] = {}

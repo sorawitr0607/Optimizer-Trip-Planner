@@ -19,7 +19,7 @@ import {
 } from "../api/client";
 import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
-import { placeName } from "../shared/names";
+import { placeAltName, placeName } from "../shared/names";
 
 const LANES = ["main_queue", "city_icons", "worth_it_if", "local_alternatives", "browse_all"] as const;
 const CHOICES = ["must_do", "interested", "maybe"] as const;
@@ -301,6 +301,10 @@ export function PlacesPage() {
               <PlaceDeck
                 choices={choices.data ?? []}
                 language={language}
+                altNameOf={(placeId) => {
+                  const found = catalog.find((item) => item.place_id === placeId);
+                  return found ? placeAltName(found, language) : null;
+                }}
                 nameOf={(placeId) => {
                   // `catalog` is already the normalized candidate list on this page.
                   const found = catalog.find((item) => item.place_id === placeId);

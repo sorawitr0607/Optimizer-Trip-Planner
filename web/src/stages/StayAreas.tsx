@@ -2,6 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 
 import { rpc, type StayAreaReport } from "../api/client";
 import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
+import { placeAltName, placeName } from "../shared/names";
 
 /**
  * Where to stay, for an owner who has not booked. `WF-040`.
@@ -65,7 +66,13 @@ export function StayAreas({ tripId, language }: StayAreasProps) {
               // derives-from: element 26 .recent-row-item as .stay-area-row
               <li className="stay-area-row" key={area.area_id}>
                 <header>
-                  <strong>{area.names[language] ?? area.name}</strong>
+                  <strong>
+                    {placeName(area, language, area.name)}
+                    {placeAltName(area, language) ? (
+                      // The station sign and the taxi driver both use the local name.
+                      <small className="place-alt-name">{placeAltName(area, language)}</small>
+                    ) : null}
+                  </strong>
                   <span className="place-score">
                     {area.total_score.toFixed(1)}
                     <small>/100</small>

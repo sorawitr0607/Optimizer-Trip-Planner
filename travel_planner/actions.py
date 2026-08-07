@@ -1686,10 +1686,21 @@ class PlannerActions:
         trip = self.store.get_trip(trip_id)
         return OsmMetroProvider(destination=str(trip.destination) if trip else "")
 
-    # How many areas survive the free travel-time ranking and go on to be counted. The
-    # Overpass query is one request whatever this is, but 8 keeps the answer readable and
-    # the query well inside the endpoint's patience.
-    AREA_SHORTLIST = 8
+    # How many areas survive the free travel-time ranking and go on to be counted. One
+    # Overpass request whatever this is -- 12 areas is 36 statements.
+    #
+    # It was 8, and 8 put the cut inside a dead heat. Measured on the pilot: the top
+    # twelve Taipei stations span 21.5 to 24.6 minutes per place, and 台北車站 sat ninth
+    # at 23.46 against 西門's 23.14 -- **0.32 minutes** out. That matters because the
+    # shortlist is a prefilter on travel time alone, which is 45 of the 100 points, so an
+    # area cut here never has its food, nightlife or lodging counted at all. 台北車站 has
+    # 586 places to eat and 90 listed beds and ranked third overall on the run that
+    # happened to include it.
+    #
+    # 12 does not remove that: it moves the boundary somewhere less crowded. A cut on one
+    # factor is a real limit of this design and `recommend_areas` reports the boundary so
+    # it is visible rather than silent.
+    AREA_SHORTLIST = 12
 
     def recommend_areas(self, trip_id: str) -> dict[str, Any]:
         """Rank transit-station neighbourhoods as places to stay. `WF-040`.
@@ -1769,11 +1780,15 @@ class PlannerActions:
             if not reachable:
                 continue
             ids = {stop.stop_id for stop in stops}
+            # `en` was the Chinese string here until 2026-08-07, because the graph threw
+            # `name:en` away — so every area rendered as 中山 / 西門 with no way to read
+            # it. OSM carries an English name for 370 of Taipei's 437 stop nodes.
+            english = next((stop.name_en for stop in stops if stop.name_en), "")
             candidates.append(
                 {
                     "area_id": min(ids),
                     "name": name,
-                    "names": {"en": name, "local": name},
+                    "names": {"local": name, **({"en": english} if english else {})},
                     "latitude": latitude,
                     "longitude": longitude,
                     "total_travel_minutes": round(total),
@@ -1808,6 +1823,16 @@ class PlannerActions:
         report = areas.score_areas(shortlist, place_count=len(places))
         report["amenities_counted"] = counted
         report["considered_area_count"] = len(candidates)
+        # The travel time of the first area that missed the cut, so a reader can see how
+        # close the boundary was. `None` when nothing was cut.
+        report["excluded_next_best_minutes"] = (
+            round(
+                candidates[self.AREA_SHORTLIST]["total_travel_minutes"]
+                / candidates[self.AREA_SHORTLIST]["reachable_place_count"]
+            )
+            if len(candidates) > self.AREA_SHORTLIST
+            else None
+        )
         return report
 
     def _area_amenity_counts(
