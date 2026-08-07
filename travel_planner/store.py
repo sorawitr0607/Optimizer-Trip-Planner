@@ -25,7 +25,7 @@ from .core import (
 )
 
 
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 14
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS trips (
     id TEXT PRIMARY KEY,
@@ -177,6 +177,23 @@ CREATE TABLE IF NOT EXISTS split_settled_markers (
     settled_net_thb REAL NOT NULL,
     updated_at TEXT NOT NULL,
     PRIMARY KEY (trip_id, traveller_id),
+    FOREIGN KEY (trip_id) REFERENCES trips(id)
+);
+
+-- `WF-039`. One row per comfort threshold the owner has agreed to exceed, holding the
+-- **measured value they agreed to**. Not a boolean: an acceptance of a 27-minute walking
+-- leg must not silently bless a 90-minute one after a replan, so the value is the ceiling
+-- and `validate_variant` compares against it.
+--
+-- Mutable and deletable like the split ledger, and for the same reason: withdrawing an
+-- acceptance is a correction, not history worth keeping. No append-only trigger.
+CREATE TABLE IF NOT EXISTS comfort_acceptances (
+    trip_id TEXT NOT NULL,
+    code TEXT NOT NULL,
+    accepted_value REAL NOT NULL,
+    threshold_value REAL NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (trip_id, code),
     FOREIGN KEY (trip_id) REFERENCES trips(id)
 );
 
@@ -864,6 +881,53 @@ class SQLiteStore:
                 (trip_id,),
             ).fetchall()
         return {row["traveller_id"]: float(row["settled_net_thb"]) for row in rows}
+
+    def save_comfort_acceptance(
+        self,
+        *,
+        trip_id: str,
+        code: str,
+        accepted_value: float,
+        threshold_value: float,
+        now: str,
+    ) -> None:
+        with self.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO comfort_acceptances (
+                    trip_id, code, accepted_value, threshold_value, updated_at
+                ) VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT (trip_id, code) DO UPDATE SET
+                    accepted_value = excluded.accepted_value,
+                    threshold_value = excluded.threshold_value,
+                    updated_at = excluded.updated_at
+                """,
+                (trip_id, code, float(accepted_value), float(threshold_value), now),
+            )
+
+    def clear_comfort_acceptance(self, trip_id: str, code: str) -> None:
+        with self.connect() as connection:
+            connection.execute(
+                "DELETE FROM comfort_acceptances WHERE trip_id = ? AND code = ?",
+                (trip_id, code),
+            )
+
+    def list_comfort_acceptances(self, trip_id: str) -> list[dict[str, Any]]:
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT code, accepted_value, threshold_value, updated_at"
+                " FROM comfort_acceptances WHERE trip_id = ? ORDER BY code",
+                (trip_id,),
+            ).fetchall()
+        return [
+            {
+                "code": row["code"],
+                "accepted_value": float(row["accepted_value"]),
+                "threshold_value": float(row["threshold_value"]),
+                "updated_at": row["updated_at"],
+            }
+            for row in rows
+        ]
 
     def save_revision_draft(
         self, *, trip_id: str, base_version_id: str | None, draft: dict[str, Any], now: str

@@ -100,22 +100,25 @@ class JsonableContractTest(unittest.TestCase):
 class DispatchContractTest(unittest.TestCase):
     def test_allowlist_is_literal_and_excludes_internal_writes(self) -> None:
         self.assertIsInstance(ACTIONS, tuple)
-        # 64: WF-038 added refresh_transit_routes, the free Wikidata place summaries
-        # added refresh_place_summaries and list_place_summaries, and WF-040 added
-        # recommend_areas. The count is asserted so a
+        # 68: WF-038 added refresh_transit_routes, the free Wikidata place summaries
+        # added refresh_place_summaries and list_place_summaries, WF-040 added
+        # recommend_areas, and WF-039 added the four comfort-acceptance methods. The
+        # count is asserted so a
         # method cannot join the allowlist unnoticed -- save_plan_version writes an
         # activated version with no optimizer validation and record_paid_call forges
         # ledger rows, so what is reachable over the socket has to be deliberate.
-        self.assertEqual(64, len(ACTIONS))
+        self.assertEqual(68, len(ACTIONS))
         self.assertIn("refresh_transit_routes", ACTIONS)
         self.assertIn("refresh_place_summaries", ACTIONS)
         self.assertIn("recommend_areas", ACTIONS)
+        self.assertIn("accept_comfort_tradeoff", ACTIONS)
+        self.assertIn("withdraw_comfort_tradeoff", ACTIONS)
         self.assertEqual(len(ACTIONS), len(set(ACTIONS)))
         self.assertNotIn("save_plan_version", ACTIONS)
         self.assertNotIn("record_paid_call", ACTIONS)
         self.assertIn("check_paid_call", ACTIONS)
         self.assertIn("build_export_snapshot", ACTIONS)
-        self.assertEqual(28, len(REFUSAL_STATUS))
+        self.assertEqual(34, len(REFUSAL_STATUS))
 
     def test_the_split_ledger_is_reachable_but_deletion_is_not(self) -> None:
         for name in (

@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 
+import { ComfortTradeoffs } from "./ComfortTradeoffs";
+
 import {
   ApiError,
   rpc,
@@ -174,6 +176,11 @@ export function OptimizePage() {
           </div>
         </>
       ) : null}
+
+      {/* `WF-039`. Above the variant picker, because an overage is the reason a variant
+          is unactivatable and the owner needs the choice before, not after, the button
+          that refuses. Renders nothing when no budget is exceeded or agreed. */}
+      <ComfortTradeoffs language={language} tripId={tripId} />
 
       {variant ? (
         <>

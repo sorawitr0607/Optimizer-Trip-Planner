@@ -205,7 +205,11 @@
       "metro_access": "Metro access",
       "food_nearby": "Places to eat nearby",
       "after_dark": "Open after dark",
-      "lodging_choice": "Choice of places to stay"
+      "lodging_choice": "Choice of places to stay",
+      "unknown_comfort_code": "That is not a comfort budget this planner tracks",
+      "comfort_value_not_a_number": "Enter the number of minutes you are agreeing to",
+      "no_comfort_threshold_set": "You have set no limit for this, so there is nothing to agree to",
+      "comfort_value_within_threshold": "That is already inside your limit — nothing needs agreeing"
     },
     "th": {
       "ACCESS_UNVERIFIED": "ยังไม่ยืนยันทางเข้าและกฎการเข้าถึง",
@@ -292,7 +296,11 @@
       "metro_access": "การเข้าถึงรถไฟฟ้า",
       "food_nearby": "ร้านอาหารใกล้เคียง",
       "after_dark": "เปิดหลังค่ำ",
-      "lodging_choice": "ตัวเลือกที่พัก"
+      "lodging_choice": "ตัวเลือกที่พัก",
+      "unknown_comfort_code": "นี่ไม่ใช่งบความสบายที่ตัวช่วยวางแผนนี้ติดตาม",
+      "comfort_value_not_a_number": "กรอกจำนวนนาทีที่คุณยอมรับ",
+      "no_comfort_threshold_set": "คุณยังไม่ได้ตั้งขีดจำกัดสำหรับเรื่องนี้ จึงไม่มีอะไรให้ยอมรับ",
+      "comfort_value_within_threshold": "ค่านี้อยู่ในขีดจำกัดของคุณอยู่แล้ว ไม่ต้องยอมรับอะไร"
     }
   },
   "REJECTION_TEXT": {
@@ -1000,7 +1008,17 @@
       "areas_not_evaluated": "What this does not know",
       "area_travel_summary": "{minutes} min average to {reachable} of {total} places",
       "areas_amenities_unavailable": "Nearby counts are unavailable right now, so only travel time and metro access are scored.",
-      "areas_considered": "Ranked {shortlist} of {considered} stations"
+      "areas_considered": "Ranked {shortlist} of {considered} stations",
+      "comfort_tradeoffs": "Comfort limits",
+      "comfort_tradeoffs_hint": "Your plan may exceed a limit you set. Agree to the exact amount you saw, and it will not carry over to a worse plan.",
+      "comfort_within_limit": "Within your limit",
+      "comfort_over_limit": "{measured} min against your {threshold} min limit",
+      "comfort_no_limit_set": "No limit set",
+      "comfort_agreed_to": "Agreed up to {value} min",
+      "comfort_agreed_but_stale": "You agreed to {value} min, but the plan is now {measured} min — agree again or change the plan",
+      "accept_this_amount": "Agree to {measured} min",
+      "withdraw_agreement": "Withdraw",
+      "comfort_needs_a_plan": "Build a plan first — there is nothing measured to agree to yet."
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -1638,7 +1656,17 @@
       "areas_not_evaluated": "สิ่งที่ยังไม่รู้",
       "area_travel_summary": "เฉลี่ย {minutes} นาที ถึง {reachable} จาก {total} สถานที่",
       "areas_amenities_unavailable": "ยังดึงจำนวนสถานที่ใกล้เคียงไม่ได้ จึงให้คะแนนเฉพาะเวลาเดินทางและการเข้าถึงรถไฟฟ้า",
-      "areas_considered": "จัดอันดับ {shortlist} จาก {considered} สถานี"
+      "areas_considered": "จัดอันดับ {shortlist} จาก {considered} สถานี",
+      "comfort_tradeoffs": "ขีดจำกัดความสบาย",
+      "comfort_tradeoffs_hint": "แผนของคุณอาจเกินขีดจำกัดที่ตั้งไว้ ยอมรับตามจำนวนที่เห็นจริง แล้วจะไม่ถูกนำไปใช้กับแผนที่แย่กว่าเดิม",
+      "comfort_within_limit": "อยู่ในขีดจำกัด",
+      "comfort_over_limit": "{measured} นาที เทียบกับขีดจำกัด {threshold} นาที",
+      "comfort_no_limit_set": "ยังไม่ได้ตั้งขีดจำกัด",
+      "comfort_agreed_to": "ยอมรับได้ถึง {value} นาที",
+      "comfort_agreed_but_stale": "คุณยอมรับไว้ที่ {value} นาที แต่แผนตอนนี้ {measured} นาที ยอมรับใหม่หรือแก้แผน",
+      "accept_this_amount": "ยอมรับ {measured} นาที",
+      "withdraw_agreement": "ถอนการยอมรับ",
+      "comfort_needs_a_plan": "สร้างแผนก่อน ยังไม่มีค่าที่วัดได้ให้ยอมรับ"
     }
   }
 }

@@ -1149,6 +1149,49 @@
   margin: 0;
 }
 
+/* WF-039. Same card treatment as the panels around it on /optimize. */
+.comfort-tradeoffs {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius-house);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+}
+
+.comfort-tradeoffs h3 {
+  margin: 0;
+}
+
+.comfort-rule-list {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Element 26 .recent-row-item. */
+.comfort-rule {
+  align-items: flex-start;
+  border-top: 1px dashed var(--bg-card-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 9px 0;
+}
+
+.comfort-rule:first-child {
+  border-top: 0;
+}
+
+.comfort-rule p {
+  margin: 2px 0 0;
+}
+
 /* WF-040. The section wrapper takes the same card treatment as .place-deck above it,
    since it sits directly under the deck and reads as the next panel in the same column. */
 .stay-areas {

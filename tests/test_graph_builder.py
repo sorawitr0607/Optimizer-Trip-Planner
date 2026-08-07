@@ -45,18 +45,33 @@ class TicketNodeResolutionTest(unittest.TestCase):
             "ticket_node", resolve_ticket_node("WF-012", self.TITLE, candidates)["id"]
         )
 
-    def test_empty_or_ambiguous_extraction_still_blocks(self) -> None:
-        with self.assertRaisesRegex(RuntimeError, "produced no node"):
-            resolve_ticket_node("WF-012", self.TITLE, [])
+    AMBIGUOUS = [
+        {"id": "beta", "label": "Another section"},
+        {"id": "alpha", "label": "One section"},
+    ]
+
+    def test_an_empty_extraction_always_blocks(self) -> None:
+        """The per-ticket presence guard `--check` relies on. Not weakened."""
+
+        for required in (True, False):
+            with self.subTest(required=required):
+                with self.assertRaisesRegex(RuntimeError, "produced no node"):
+                    resolve_ticket_node("WF-012", self.TITLE, [], required=required)
+
+    def test_ambiguity_blocks_when_the_chosen_id_is_used(self) -> None:
         with self.assertRaisesRegex(RuntimeError, "Could not resolve"):
-            resolve_ticket_node(
-                "WF-012",
-                self.TITLE,
-                [
-                    {"id": "alpha", "label": "One section"},
-                    {"id": "beta", "label": "Another section"},
-                ],
-            )
+            resolve_ticket_node("WF-012", self.TITLE, self.AMBIGUOUS, required=True)
+
+    def test_ambiguity_is_resolved_deterministically_when_the_id_is_unused(self) -> None:
+        """`WF-039`. Its node id is read only as an endpoint of a `blocked_by` edge, and
+        it neither has blockers nor is one — so a paid rebuild aborted twice over a value
+        nothing reads. Candidates are already scoped to the ticket's own file, so the
+        smallest id still anchors the right document."""
+
+        self.assertEqual(
+            "alpha",
+            resolve_ticket_node("WF-012", self.TITLE, self.AMBIGUOUS, required=False)["id"],
+        )
 
 
 class GraphBuilderEdgeValidationTest(unittest.TestCase):

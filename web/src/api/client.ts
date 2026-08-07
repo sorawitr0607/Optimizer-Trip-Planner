@@ -299,6 +299,23 @@ export interface StayAreaReport {
   considered_area_count: number;
 }
 
+/** One comfort budget, what the plan measures against it, and what was agreed. `WF-039`.
+ *  `accepted_value` is the measurement consented to, not a boolean, so `covered` is false
+ *  once a replan pushes past what the owner actually saw. */
+export interface ComfortRuleState {
+  code: string;
+  threshold: number | null;
+  measured: number | null;
+  exceeds: boolean;
+  accepted_value: number | null;
+  covered: boolean;
+}
+
+export interface ComfortTradeoffReport {
+  rules: ComfortRuleState[];
+  has_plan: boolean;
+}
+
 export interface PaidCallCheck {
   allowed: boolean;
   estimate_usd: number;

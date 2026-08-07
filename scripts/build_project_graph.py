@@ -92,7 +92,7 @@ def annotate_report_cost() -> None:
 
 
 def resolve_ticket_node(
-    ticket_id: str, title: str, candidates: list[dict]
+    ticket_id: str, title: str, candidates: list[dict], *, required: bool = True
 ) -> dict:
     """Pick the canonical graph node for one Wayfinder ticket.
 
@@ -100,6 +100,19 @@ def resolve_ticket_node(
     requiring one exact title match made a paid rebuild fail on wording alone.
     Prefer the exact title, then a node carrying the ticket number, then a lone
     candidate; only genuine ambiguity or an empty extraction blocks the build.
+
+    **An empty extraction always blocks**, whatever `required` says: that is the
+    per-ticket presence guard `--check` relies on, and a ticket absent from the graph
+    is the data loss it exists to catch.
+
+    `required` is False when the chosen id will not be used. The id is only ever an
+    endpoint of a `blocked_by` edge, so for a ticket that neither has blockers nor is
+    one, refusing over ambiguity aborts a paid rebuild for a value nothing reads.
+    `WF-039` did exactly that on 2026-08-07: its extraction produced three concept nodes
+    (`comfort_acceptances Table`, `COMFORT_RULES`, `comfort_tradeoffs`) and no titled
+    node, and the build failed twice on a node it never needed. Candidates are already
+    scoped to the ticket's own file by `nodes_by_source`, so the deterministic pick
+    still anchors the right document.
     """
 
     if not candidates:
@@ -117,6 +130,8 @@ def resolve_ticket_node(
         return min(numbered, key=lambda node: str(node["id"]))
     if len(candidates) == 1:
         return candidates[0]
+    if not required:
+        return min(candidates, key=lambda node: str(node["id"]))
     raise RuntimeError(
         f"Could not resolve graph node for {ticket_id} among "
         f"{len(candidates)} candidates"
@@ -149,7 +164,9 @@ def wayfinder_blocker_edges(nodes: list[dict]) -> list[dict]:
         if source:
             nodes_by_source.setdefault(source_path(source), []).append(node)
 
-    tickets: dict[str, tuple[str, Path, list[str]]] = {}
+    # Parsed first, resolved second: whether a ticket's node id is ever used depends on
+    # the blocker graph as a whole, and only a used id has to be unambiguous.
+    parsed: list[tuple[str, str, Path, list[str]]] = []
     for path in sorted((ROOT / ".wayfinder" / "tickets").glob("*.md")):
         parts = path.read_text(encoding="utf-8").split("---", 2)
         if len(parts) != 3:
@@ -159,10 +176,6 @@ def wayfinder_blocker_edges(nodes: list[dict]) -> list[dict]:
         title_match = re.search(r"(?m)^title:\s*(.+?)\s*$", metadata)
         if not ticket_match or not title_match:
             continue
-        title = title_match.group(1).strip('"')
-        chosen = resolve_ticket_node(
-            ticket_match.group(1), title, nodes_by_source.get(path.resolve(), [])
-        )
 
         blocked_by: list[str] = []
         in_blocked_by = False
@@ -178,7 +191,24 @@ def wayfinder_blocker_edges(nodes: list[dict]) -> list[dict]:
             elif line and not line[0].isspace():
                 in_blocked_by = False
 
-        tickets[ticket_match.group(1)] = (chosen["id"], path.resolve(), blocked_by)
+        parsed.append(
+            (ticket_match.group(1), title_match.group(1).strip('"'), path.resolve(), blocked_by)
+        )
+
+    # A node id is read only as an endpoint of a `blocked_by` edge — as the source for a
+    # ticket that has blockers, or the target for one that is a blocker.
+    used = {ticket_id for ticket_id, _, _, blockers in parsed if blockers}
+    used |= {blocker for _, _, _, blockers in parsed for blocker in blockers}
+
+    tickets: dict[str, tuple[str, Path, list[str]]] = {}
+    for ticket_id, title, path, blocked_by in parsed:
+        chosen = resolve_ticket_node(
+            ticket_id,
+            title,
+            nodes_by_source.get(path, []),
+            required=ticket_id in used,
+        )
+        tickets[ticket_id] = (chosen["id"], path, blocked_by)
 
     result: list[dict] = []
     for ticket_id, (source, path, blockers) in tickets.items():

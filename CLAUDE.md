@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm --prefix web install                                             # first web run only
 uv run --locked python -m api                                        # production shell on 127.0.0.1:8765
 uv run --locked python scripts/check.py                              # every free Python + web gate
-uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 351 tests, ~9s
+uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 365 tests, ~9s
 uv run --locked python -m unittest tests.test_optimizer.OptimizerCoreTest.test_safe_route_and_weather_fallback_are_selected  # one test
 python3 scripts/validate_regression_fixtures.py                      # fixture catalog structure
 uv run --locked python scripts/run_optimizer_regressions.py          # 27 historic cases through the real optimizer
@@ -173,6 +173,23 @@ an expired budget legitimately yields 0 visits where greedy's only schedule carr
 because `comfort_violations` outranks `experience_value` in the objective tuple — that ordering is
 `WF-039`'s question.
 
+**A comfort tradeoff can be accepted as of 2026-08-07 (`WF-039`), and the acceptance is a number.**
+`comfort_acceptances` (schema **14**) stores the *measured value* the owner agreed to per threshold
+code, and `optimizer._accepts` requires `measured <= accepted_value` — so agreeing to a 27-minute
+walking leg never blesses the 90-minute one a replan produces, while a tighter plan stays covered.
+`optimizer.COMFORT_RULES` is the one table pairing each reason code with its violation code, metric and
+threshold key; validator, soft count, `actions.comfort_tradeoffs` and the screen all read it.
+
+Two things not to undo. **Consent must reach `_comfort_violation_count`, not just `validate_variant`** —
+`comfort_violations` outranks `experience_value` in the objective tuple, so the search drops a place
+rather than exceed a budget and the owner silently loses a stop; clearing only the hard error leaves
+that intact. Measured on `jp-shibuya-plain-walk-overload`: 2 of 3 visits without an acceptance, **3 of 3
+with one**. And **do not revive `fits_with_tradeoff`** — no call site has ever produced it (only `fits`
+and `cannot_currently_fit`), and the three threshold violations carry `subject_id: None` because they
+are properties of the whole variant, so routing consent through a per-place record was the wrong shape.
+`has_unaccepted_tradeoff` and the `exports.py` tradeoff list stay dead for that reason; deleting them is
+its own decision.
+
 **The planner recommends where to stay as of 2026-08-06 (`WF-040`).** `travel_planner/areas.py` is a new
 pure module and `actions.recommend_areas` the coordinator; `recommend_areas` is the **64th** allowlisted
 method. **The unit is a transit station, not a hotel and not a district** — that is how the owner
@@ -280,9 +297,20 @@ must stay directed. Rebuild only through `python3 scripts/build_project_graph.py
 failure), and only when explicitly asked or after a topology-changing milestone. After any graph
 change, `--check` must pass before committing. See `AGENTS.md`.
 
-**Rebuilt for `WF-040` on 2026-08-06 and `--check` passes**: 1818 nodes, 4492 directed edges, 153
-communities, after `areas.py`, `StayAreas.tsx` and `test_areas.py` joined. Cost **US$0.0121**; recorded
-cumulative cost is US$0.327973 over 31 runs. The `WF-042`/`WF-043` rebuild earlier the same day gave 1756
+**Rebuilt for `WF-039` on 2026-08-07 and `--check` passes**: 1868 nodes, 4589 directed edges, 150
+communities. Recorded cumulative cost is US$0.336961 over 32 runs. The `WF-040` rebuild the day before
+gave 1818 nodes, 4492 edges and 153 communities for US$0.0121.
+
+Two ticket-authoring gotchas learned paying for that run. **Cite a module by its path** — a bare
+`exports.py` extracted as a node id `exports` that does not exist, clustering rightly dropped the edge,
+and the endpoint-pair guard then demanded a false edge survive; every other ticket writes
+`travel_planner/exports.py`, which resolves. And **a ticket dense in code identifiers may extract no
+titled node at all**: `WF-039` produced only `comfort_acceptances Table`, `COMFORT_RULES` and
+`comfort_tradeoffs`, so `resolve_ticket_node` could not choose among three candidates and aborted the
+build. That was fixed at the root rather than worked around — a ticket's node id is read **only** as an
+endpoint of a `blocked_by` edge, so `resolve_ticket_node` now takes `required=` and only refuses over
+ambiguity when the id is actually used. An **empty** extraction still always raises, because that is the
+per-ticket presence guard `--check` depends on. The `WF-042`/`WF-043` rebuild earlier the same day gave 1756
 nodes, 4305 edges and 148 communities for US$0.0125.
 Adding a ticket file **breaks stage 4 of `check.py` until this is re-run**, because `--check` demands a
 node per ticket; that is the normal reason to pay for a rebuild.
@@ -360,16 +388,9 @@ that declaration is what kept the gate working when the POC went.
 
 ## Phase 2 implementation follows the locked slice order
 
-`WF-MAP-002` is **decision-complete as of 2026-08-03**. Across both maps there are 43 tickets, **42
-closed, 1 open**. The one open ticket is `Decide how an owner accepts a comfort tradeoff` (`WF-039`),
-and it is worth reading before touching comfort thresholds: the acceptance path is **dead code by
-construction** (`_reconciliation` sets `owner_acceptance_required` to exactly the condition
-`validate_variant` requires to be false), so an owner two minutes over a cap can only abandon the plan
-or drop the cap for the whole trip. It has a second consequence found while fixing `WF-043`:
-`comfort_violations` outranks `experience_value` in the objective tuple, so the optimizer prefers
-**scheduling nothing** to scheduling three places with one comfort overage — measured on
-`jp-shibuya-plain-walk-overload`. The pilot currently sits inside both caps (longest leg 22 of 25,
-worst day 39 of 60), so it does not bite today. `Lock the Phase 2 slice plan and validation scorecard` is the destination artifact — read it
+`WF-MAP-002` is **decision-complete as of 2026-08-03**, and as of 2026-08-07 all 43 tickets across both
+maps are **closed**. Nothing is outstanding.
+`Lock the Phase 2 slice plan and validation scorecard` is the destination artifact — read it
 first: `.wayfinder/artifacts/033-phase-2-slice-plan-and-scorecard.md`.
 
 **Three S6 decisions the owner settled on 2026-08-04, so nothing is waiting on them:**
@@ -491,12 +512,17 @@ Four things from it bind later work:
   integer satang and the remainder spreads one satang at a time over the first participants in the
   row's own order. That deviates from the donor's dump-it-on-the-first-person and is recorded as a
   deviation, not drift.
-- **Schema is 13.** `split_rows` and `split_settled_markers` carry **no append-only triggers** by
+- **Schema was 13 at S2; it is 14 since `WF-039`.** `split_rows` and `split_settled_markers` carry **no append-only triggers** by
   decision. `store._copy_before_bump()` copies to `data/tourist-pre-v<n>-<date>.sqlite3` before any
   bump and raises rather than migrating if the copy fails. It is gated on
   `0 < on_disk_version < SCHEMA_VERSION`: version 0 is a database being created and an equal version
   is not a bump, and without that gate every temp database in the suite would leave a junk copy.
-  **`data/tourist.sqlite3` was bumped 12 → 13 on 2026-08-04** by owner decision, rehearsed on a
+  **Schema is 14 as of 2026-08-07**, when `WF-039` added `comfort_acceptances` — mutable and
+trigger-free like the split ledger, since withdrawing an acceptance is a correction rather than
+history. Rehearsed on a byte-identical copy first, which confirmed one new table and **no row-count
+change in any pre-existing table**; `data/tourist-pre-v14-2026-08-07.sqlite3` is the only way back.
+It had to land before `WF-024`'s no-schema-change window (29 Dec–4 Jan, the trip itself).
+**`data/tourist.sqlite3` was bumped 12 → 13 on 2026-08-04** by owner decision, rehearsed on a
   byte-identical copy first and leaving `data/tourist-pre-v13-2026-08-04.sqlite3` — verified byte-identical
   to the pre-bump file — as the only way back. It happened then rather than nearer the trip because
   `WF-024`'s no-schema-change window, 29 December 2026 to 4 January 2027, **is the trip's own dates**:

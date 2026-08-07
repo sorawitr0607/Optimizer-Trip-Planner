@@ -50,6 +50,13 @@ ACTIONS = (
     "generate_plan_preview",
     "get_plan_preview",
     "activate_plan_preview",
+    # WF-039. The acceptance path was dead by construction; these are what make
+    # it reachable. accept_comfort_tradeoff carries the measured value it agreed
+    # to, so a later, worse plan is not blessed by an earlier consent.
+    "comfort_tradeoffs",
+    "accept_comfort_tradeoff",
+    "withdraw_comfort_tradeoff",
+    "list_comfort_acceptances",
     "restore_plan_version",
     "get_active_plan",
     "build_export_snapshot",
@@ -136,6 +143,14 @@ REFUSAL_STATUS = {
     "revision_base_moved": 409,
     "revision_no_variant": 409,
     "no_planning_time": 409,
+    # WF-040. Area ranking needs a metro graph and at least one reachable place.
+    "no_transit_graph_for_areas": 409,
+    "no_area_reaches_any_place": 409,
+    # WF-039. Accepting a comfort tradeoff.
+    "unknown_comfort_code": 422,
+    "comfort_value_not_a_number": 422,
+    "no_comfort_threshold_set": 409,
+    "comfort_value_within_threshold": 409,
 }
 
 

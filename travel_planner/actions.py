@@ -31,7 +31,12 @@ from .core import (
 from . import areas, checklist, costs, destinations, exports, interpret, opening, revision, split, usage
 from . import setup as setup_module
 from .discovery import build_candidate_catalog
-from .optimizer import DEPARTURE_LOGISTICS_MINUTES, date_range, optimize_trip
+from .optimizer import (
+    COMFORT_RULES,
+    DEPARTURE_LOGISTICS_MINUTES,
+    date_range,
+    optimize_trip,
+)
 from .providers import (
     CARD_PHOTO_LIMIT,
     GooglePlacesCardProvider,
@@ -505,6 +510,111 @@ class PlannerActions:
         details["photo_uri"] = gallery[0]["uri"] if gallery else None
         return details
 
+    def comfort_tradeoffs(self, trip_id: str) -> dict[str, Any]:
+        """What the current plan exceeds, what is agreed, and by how much. `WF-039`.
+
+        One read for the screen, so it never has to know which metric belongs to which
+        threshold — `optimizer.COMFORT_RULES` is the single source and this walks it.
+        """
+
+        snapshot = self._optimizer_input(trip_id)
+        thresholds = snapshot["thresholds"]
+        accepted = {item["code"]: item for item in snapshot["comfort_acceptances"]}
+        active = self.get_active_plan(trip_id)
+        variant = (
+            active.snapshot.as_dict().get("variant", {}) if active is not None else {}
+        )
+        preview = self.get_plan_preview(trip_id)
+        if not variant and preview is not None:
+            variants = preview.proposal.as_dict().get("variants", [])
+            variant = variants[0] if variants else {}
+        metrics = variant.get("metrics", {})
+
+        rules = []
+        for rule in COMFORT_RULES:
+            cap = thresholds.get(rule["threshold"])
+            if cap is None:
+                # No cap set for this budget, so there is nothing to accept. Reported
+                # anyway: an owner who set no walking preference should see that, not
+                # silently get no control.
+                rules.append(
+                    {"code": rule["reason"], "threshold": None, "measured": None,
+                     "exceeds": False, "accepted_value": None, "covered": False}
+                )
+                continue
+            measured = metrics.get(rule["metric"])
+            if measured is None:
+                measured = metrics.get(rule["fallback_metric"])
+            agreed = accepted.get(rule["reason"])
+            rules.append(
+                {
+                    "code": rule["reason"],
+                    "threshold": int(cap),
+                    "measured": None if measured is None else round(float(measured)),
+                    "exceeds": measured is not None and float(measured) > int(cap),
+                    "accepted_value": (
+                        None if agreed is None else round(float(agreed["accepted_value"]))
+                    ),
+                    "covered": (
+                        agreed is not None
+                        and measured is not None
+                        and float(measured) <= float(agreed["accepted_value"])
+                    ),
+                }
+            )
+        return {"rules": rules, "has_plan": bool(metrics)}
+
+    def accept_comfort_tradeoff(
+        self, trip_id: str, code: str, value: float
+    ) -> dict[str, Any]:
+        """Agree to exceed one comfort budget, up to `value`. `WF-039`.
+
+        The value is required rather than inferred from the current plan, because an
+        acceptance recorded as "yes" would go on applying to whatever the next replan
+        produces. Recording the number the owner saw is what keeps consent attached to
+        the thing consented to.
+        """
+
+        trip = self.store.get_trip(trip_id)
+        if trip is None:
+            raise PlannerRefusal("unknown_trip", trip_id=trip_id)
+        known = {rule["reason"] for rule in COMFORT_RULES}
+        if code not in known:
+            raise PlannerRefusal("unknown_comfort_code", comfort_code=code)
+        try:
+            accepted = float(value)
+        except (TypeError, ValueError):
+            raise PlannerRefusal("comfort_value_not_a_number", comfort_code=code) from None
+        if accepted <= 0:
+            raise PlannerRefusal("comfort_value_not_a_number", comfort_code=code)
+        rule = next(item for item in COMFORT_RULES if item["reason"] == code)
+        threshold = self._optimizer_input(trip_id)["thresholds"].get(rule["threshold"])
+        if threshold is None:
+            raise PlannerRefusal("no_comfort_threshold_set", comfort_code=code)
+        if accepted <= float(threshold):
+            # Nothing to accept: the plan is already inside the budget, and storing an
+            # acceptance would leave a permission lying around for a later plan to use.
+            raise PlannerRefusal(
+                "comfort_value_within_threshold",
+                comfort_code=code,
+                threshold=int(threshold),
+            )
+        self.store.save_comfort_acceptance(
+            trip_id=trip_id,
+            code=code,
+            accepted_value=accepted,
+            threshold_value=float(threshold),
+            now=datetime.now(timezone.utc).isoformat(),
+        )
+        return {"code": code, "accepted_value": accepted, "threshold_value": threshold}
+
+    def withdraw_comfort_tradeoff(self, trip_id: str, code: str) -> dict[str, Any]:
+        self.store.clear_comfort_acceptance(trip_id, code)
+        return {"code": code, "withdrawn": True}
+
+    def list_comfort_acceptances(self, trip_id: str) -> list[dict[str, Any]]:
+        return self.store.list_comfort_acceptances(trip_id)
+
     def generate_plan_preview(
         self, trip_id: str, *, time_limit_seconds: float = 30.0
     ) -> OptimizationPreview:
@@ -859,6 +969,9 @@ class PlannerActions:
             "locks": [],
             "weights": setup_payload.get("group_preference_weights", {}),
             "thresholds": _comfort_thresholds(owner),
+            # `WF-039`. Each carries the measurement it was agreed at, so the optimizer
+            # can tell an accepted overage from a worse one that merely shares its code.
+            "comfort_acceptances": self.store.list_comfort_acceptances(trip_id),
         }
 
     def save_plan_version(

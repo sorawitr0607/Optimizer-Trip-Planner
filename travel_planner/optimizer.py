@@ -30,6 +30,60 @@ DEPARTURE_LOGISTICS: tuple[tuple[str, int], ...] = (
 )
 DEPARTURE_LOGISTICS_MINUTES = sum(minutes for _, minutes in DEPARTURE_LOGISTICS)
 
+# The three comfort budgets an owner may agree to exceed, in one table so the validator,
+# the soft-violation count and the screen cannot drift apart on which is which. `WF-039`.
+#
+# `reason` is the code an acceptance is recorded under; `code` is the hard violation
+# raised when there is no acceptance covering the measurement.
+COMFORT_RULES: tuple[dict[str, str], ...] = (
+    {
+        "reason": "PLAIN_WALK_THRESHOLD",
+        "code": "UNAPPROVED_PLAIN_WALK_THRESHOLD",
+        "metric": "maximum_plain_walking_minutes_per_day",
+        "fallback_metric": "plain_walking_minutes",
+        "threshold": "plain_walking_minutes_per_day",
+    },
+    {
+        "reason": "LONG_TRANSFER_WALK",
+        "code": "UNAPPROVED_WALKING_LEG_THRESHOLD",
+        "metric": "maximum_walking_minutes_per_leg",
+        "fallback_metric": "maximum_walking_minutes_per_leg",
+        "threshold": "walking_minutes_per_leg",
+    },
+    {
+        "reason": "HEAT_AND_CYCLING_LOAD",
+        "code": "UNAPPROVED_CYCLING_THRESHOLD",
+        "metric": "cycling_minutes",
+        "fallback_metric": "cycling_minutes",
+        "threshold": "cycling_minutes_per_day",
+    },
+)
+
+
+def _accepts(snapshot: dict[str, Any], reason: str, measured: float) -> bool:
+    """Has the owner agreed to *this much* of this overage? `WF-039`.
+
+    Bounded by the value accepted, not a boolean. Agreeing to a 27-minute walking leg
+    must not silently bless the 90-minute one a later replan produces, and the ticket
+    named that as the thing any fix had to get right. A tighter plan than the one agreed
+    to is still covered, so an owner is not asked again for an improvement.
+
+    Read from the snapshot rather than from `variant["reconciliation"]`, which is where
+    the original dead code looked. These violations carry `subject_id: None` -- they are
+    properties of the whole variant, not of a place -- so routing consent through a
+    per-place record was the wrong shape, and no call site ever produced the
+    `fits_with_tradeoff` status that route required.
+    """
+
+    for item in snapshot.get("comfort_acceptances", []):
+        if item.get("code") != reason:
+            continue
+        try:
+            return measured <= float(item["accepted_value"])
+        except (KeyError, TypeError, ValueError):
+            return False
+    return False
+
 VARIANT_CONFIGS = (
     {"id": "best_balance", "duration": "ideal", "buffer_minutes": 10},
     {"id": "relaxed", "duration": "maximum", "buffer_minutes": 20},
@@ -270,26 +324,13 @@ def validate_variant(snapshot: dict[str, Any], variant: dict[str, Any]) -> dict[
 
     metrics = variant.get("metrics", {})
     thresholds = _thresholds(snapshot)
-    accepted_reasons = {
-        item["reason"]
-        for item in variant.get("reconciliation", [])
-        if item["status"] == "fits_with_tradeoff"
-        and not item.get("owner_acceptance_required", True)
-    }
-    if metrics.get(
-        "maximum_plain_walking_minutes_per_day", metrics.get("plain_walking_minutes", 0)
-    ) > int(
-        thresholds.get("plain_walking_minutes_per_day", 10**9)
-    ) and "PLAIN_WALK_THRESHOLD" not in accepted_reasons:
-        errors.append({"code": "UNAPPROVED_PLAIN_WALK_THRESHOLD", "subject_id": None})
-    if metrics.get("maximum_walking_minutes_per_leg", 0) > int(
-        thresholds.get("walking_minutes_per_leg", 10**9)
-    ) and "LONG_TRANSFER_WALK" not in accepted_reasons:
-        errors.append({"code": "UNAPPROVED_WALKING_LEG_THRESHOLD", "subject_id": None})
-    if metrics.get("cycling_minutes", 0) > int(
-        thresholds.get("cycling_minutes_per_day", 10**9)
-    ) and "HEAT_AND_CYCLING_LOAD" not in accepted_reasons:
-        errors.append({"code": "UNAPPROVED_CYCLING_THRESHOLD", "subject_id": None})
+    for rule in COMFORT_RULES:
+        measured = float(
+            metrics.get(rule["metric"], metrics.get(rule["fallback_metric"], 0) or 0)
+        )
+        cap = int(thresholds.get(rule["threshold"], 10**9))
+        if measured > cap and not _accepts(snapshot, rule["reason"], measured):
+            errors.append({"code": rule["code"], "subject_id": None})
 
     meal_window = _meal_window(snapshot)
     if meal_window:
@@ -1303,18 +1344,25 @@ def _search_objective(
 
 
 def _comfort_violation_count(snapshot: dict[str, Any], metrics: dict[str, Any]) -> int:
+    """Soft violations, which an acceptance also clears. `WF-039`.
+
+    Suppressing only the hard error would leave the objective still counting the
+    overage, and `comfort_violations` outranks `experience_value` in the tuple -- so the
+    optimizer would go on preferring an **empty** schedule to an accepted one. Measured
+    on `jp-shibuya-plain-walk-overload`, which returns 0 visits rather than 3 for exactly
+    that reason. Consent has to reach both readings or it only half works.
+    """
+
     thresholds = _thresholds(snapshot)
     count = 0
-    if metrics.get(
-        "maximum_plain_walking_minutes_per_day", metrics["plain_walking_minutes"]
-    ) > int(thresholds.get("plain_walking_minutes_per_day", 10**9)):
-        count += 1
-    if metrics["maximum_walking_minutes_per_leg"] > int(
-        thresholds.get("walking_minutes_per_leg", 10**9)
-    ):
-        count += 1
-    if metrics["cycling_minutes"] > int(thresholds.get("cycling_minutes_per_day", 10**9)):
-        count += 1
+    for rule in COMFORT_RULES:
+        measured = float(
+            metrics.get(rule["metric"], metrics.get(rule["fallback_metric"], 0) or 0)
+        )
+        if measured > int(thresholds.get(rule["threshold"], 10**9)) and not _accepts(
+            snapshot, rule["reason"], measured
+        ):
+            count += 1
     return count
 
 
