@@ -313,6 +313,179 @@ def _address(tags: dict[str, Any]) -> str | None:
     return address or None
 
 
+def visible_text(html: str, *, limit: int = 6000) -> str:
+    """Readable text from an HTML page, scripts and styles removed, whitespace collapsed.
+
+    Capped because a notice sits near the top of a landing page and the rest is
+    navigation — and because the cap is what keeps a page from deciding how much of the
+    owner's money one call spends.
+    """
+
+    stripped = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", html, flags=re.S | re.I)
+    stripped = re.sub(r"<[^>]+>", " ", stripped)
+    return re.sub(r"\s+", " ", stripped).strip()[:limit]
+
+
+class VenueNoticeProvider:
+    """A venue's own page, read for a dated closure notice the weekly hours cannot carry.
+
+    `WF-044`. An opening fact is a **weekly pattern**, so nothing the app stores can say
+    "closed 1 January" — and the pilot spans 31 December and 1 January. Google will not
+    fill that: its snapshot is a weekday timetable.
+
+    **This never becomes a fact.** It is stored as `place_evidence` of kind
+    `venue_notice`, which `actions._optimizer_input` does not read, so an extracted notice
+    cannot remove a place from a plan, narrow a window, or change a single scheduled
+    minute. That is the bar the ticket set, and it is met structurally rather than by
+    care: the optimizer has no code path to this data.
+
+    The reason for that severity is measured. Asking a model for weekly closed days in
+    `WF-046` produced 7 claims of which **2 were invented**. And the one page most worth
+    reading is a trap: Sun Yat-sen Memorial Hall publishes a 休館公告 — literally "closure
+    announcement" — dated 2026-08-06 that is about a **server-room migration affecting its
+    website**, not the hall shutting. An extractor that acted on that would silently
+    delete a landmark.
+
+    So the output is a *quote and a link*, for a person who reads Chinese to judge. Two
+    mechanical guards make that trustworthy:
+
+    - **The quote must appear verbatim in the fetched page.** A model that paraphrases or
+      invents fails a substring check and the notice is discarded. This is the one
+      hallucination test that needs no judgement.
+    - **No page, no answer.** A failed fetch raises; the model is never asked to recall
+      what a site says.
+    """
+
+    name = "venue_notice"
+    operation = "openai:venue_notice"
+    kind = "venue_notice"
+    # Notices are the most perishable thing the app reads -- a holiday announcement
+    # appears weeks before the date. Short on purpose.
+    cache_ttl_days = 14
+    PAGE_LIMIT = 6000
+
+    SYSTEM_PROMPT = (
+        "You are given the visible text of one venue's own web page. Find any notice "
+        "about the venue being CLOSED TO VISITORS on specific dates, or its visitor "
+        "opening hours changing on specific dates. "
+        "Copy the sentence you relied on into `quote`, character for character, from the "
+        "page text you were given -- never paraphrase, translate or shorten it. "
+        "A notice about a website, an online system, a phone line, a single exhibition, "
+        "or building works that do not shut the venue is NOT a closure: set found to "
+        "false. If you are unsure, set found to false. "
+        "Never state regular weekly hours; only dated exceptions to them."
+    )
+    RESPONSE_SCHEMA = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["found", "quote", "summary"],
+        "properties": {
+            "found": {"type": "boolean"},
+            "quote": {"type": ["string", "null"]},
+            "summary": {"type": ["string", "null"]},
+        },
+    }
+
+    def __init__(self) -> None:
+        self.url = os.environ.get(
+            "TOURIST_OPENAI_URL", "https://api.openai.com/v1/responses"
+        )
+        self.model = os.environ.get("TOURIST_OPENAI_MODEL", "gpt-5.6-luna")
+        self.user_agent = os.environ.get(
+            "TOURIST_USER_AGENT", "TouristPlannerPersonalPOC/0.2 (local personal use)"
+        )
+
+    # Named `read_page`, not `fetch`. `web/src/api/client.ts`'s `rpc` calls the browser's
+    # `fetch()`, and extraction conflated the two into an edge claiming TypeScript calls
+    # this method -- clustering dropped it and the endpoint-pair guard then demanded a
+    # false edge survive. Same collision class as the `def rpc` one `AGENTS.md` records.
+    def read_page(self, website: str) -> str:
+        request = Request(
+            website,
+            headers={"User-Agent": self.user_agent, "Accept": "text/html,*/*"},
+        )
+        try:
+            with urlopen(request, timeout=30) as response:  # noqa: S310 - owner's own venue list
+                raw = response.read(2_000_000)
+                charset = response.headers.get_content_charset() or "utf-8"
+        except HTTPError as error:
+            raise ProviderUnavailable(f"Venue page returned HTTP {error.code}") from None
+        except (URLError, TimeoutError, OSError) as error:
+            raise ProviderUnavailable(
+                f"Venue page unreachable: {type(error).__name__}"
+            ) from None
+        return visible_text(raw.decode(charset, errors="replace"), limit=self.PAGE_LIMIT)
+
+    def notice(self, *, name: str, website: str) -> dict[str, Any]:
+        key = os.environ.get("OPENAI_API_KEY", "").strip()
+        if not key:
+            raise ProviderUnavailable("OPENAI_API_KEY is not configured")
+        page = self.read_page(website)
+        if not page:
+            return {"found": False, "reason": "PAGE_HAS_NO_TEXT", "source_url": website}
+
+        body = json.dumps(
+            {
+                "model": self.model,
+                "store": False,
+                "input": [
+                    {"role": "system", "content": self.SYSTEM_PROMPT},
+                    {"role": "user", "content": f"Venue: {name}\n\nPage text:\n{page}"},
+                ],
+                "text": {
+                    "format": {
+                        "type": "json_schema",
+                        "name": "venue_notice",
+                        "strict": True,
+                        "schema": self.RESPONSE_SCHEMA,
+                    }
+                },
+            }
+        ).encode("utf-8")
+        request = Request(
+            self.url,
+            data=body,
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"},
+        )
+        try:
+            with urlopen(request, timeout=60) as response:  # noqa: S310 - fixed API URL
+                raw = json.load(response)
+        except HTTPError as error:
+            raise ProviderUnavailable(f"Model returned HTTP {error.code}") from None
+        except (URLError, TimeoutError, json.JSONDecodeError) as error:
+            raise ProviderUnavailable(f"Model unreachable: {type(error).__name__}") from None
+
+        parsed = OpenAIOpeningWindowProvider._parse(raw)
+        if not parsed.get("found"):
+            return {"found": False, "reason": "NO_NOTICE_ON_PAGE", "source_url": website}
+        quote = str(parsed.get("quote") or "").strip()
+        if not quote or not self.quotes_the_page(quote, page):
+            # The one hallucination test that needs no judgement. A quote that is not on
+            # the page is either invented or paraphrased, and either way the owner cannot
+            # check it against the source -- which is the whole product here.
+            return {"found": False, "reason": "QUOTE_NOT_ON_PAGE", "source_url": website}
+        return {
+            "found": True,
+            "quote": quote,
+            "summary": str(parsed.get("summary") or "").strip() or None,
+            "source_url": website,
+            "model": self.model,
+        }
+
+    @staticmethod
+    def quotes_the_page(quote: str, page: str) -> bool:
+        """Verbatim, allowing only whitespace to differ.
+
+        Whitespace is forgiven because it is an artefact of stripping tags, not of the
+        model's honesty. Nothing else is: no case folding, no punctuation normalising, no
+        prefix matching -- each would let a paraphrase through, and a paraphrase is
+        exactly what cannot be checked against the source.
+        """
+
+        squeeze = lambda value: re.sub(r"\s+", "", value)  # noqa: E731
+        return squeeze(quote) in squeeze(page)
+
+
 class OpenAIOpeningWindowProvider:
     """A better *assumption* about opening hours than a hardcoded constant. `WF-046`.
 

@@ -103,14 +103,16 @@ class DispatchContractTest(unittest.TestCase):
         # 71: WF-038 added refresh_transit_routes, the free Wikidata place summaries
         # added refresh_place_summaries and list_place_summaries, WF-040 added
         # recommend_areas, WF-039 added the four comfort-acceptance methods, WF-046
-        # added refresh_assumed_windows and list_assumed_windows, and WF-045 added
-        # active_plan_drift. The count is asserted so a
+        # added refresh_assumed_windows and list_assumed_windows, WF-045 added
+        # active_plan_drift, and WF-044 added scan_venue_notices and
+        # list_venue_notices. The count is asserted so a
         # method cannot join the allowlist unnoticed -- save_plan_version writes an
         # activated version with no optimizer validation and record_paid_call forges
         # ledger rows, so what is reachable over the socket has to be deliberate.
-        self.assertEqual(71, len(ACTIONS))
+        self.assertEqual(73, len(ACTIONS))
         self.assertIn("refresh_assumed_windows", ACTIONS)
         self.assertIn("active_plan_drift", ACTIONS)
+        self.assertIn("scan_venue_notices", ACTIONS)
         self.assertIn("refresh_transit_routes", ACTIONS)
         self.assertIn("refresh_place_summaries", ACTIONS)
         self.assertIn("recommend_areas", ACTIONS)

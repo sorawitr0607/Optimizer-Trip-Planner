@@ -1,8 +1,8 @@
 {
   "api/__init__.py": {
-    "mtime": 1786100369.5758734,
-    "ast_hash": "44464d190a9ff1e5919e26028263370e",
-    "semantic_hash": "44464d190a9ff1e5919e26028263370e"
+    "mtime": 1786101359.4521458,
+    "ast_hash": "8ccf5368222f7193bea09eb5d7d332f4",
+    "semantic_hash": "8ccf5368222f7193bea09eb5d7d332f4"
   },
   "api/__main__.py": {
     "mtime": 1785767189.3726726,
@@ -10,9 +10,9 @@
     "semantic_hash": "d33425215a1a5b514fe4f1a0bbaa33d3"
   },
   "i18n/copy.json": {
-    "mtime": 1786100369.6295662,
-    "ast_hash": "26663af11d636085c0481db4b91e9d42",
-    "semantic_hash": "26663af11d636085c0481db4b91e9d42"
+    "mtime": 1786101359.4850118,
+    "ast_hash": "73ec946946896437ab5f574b258d86ba",
+    "semantic_hash": "73ec946946896437ab5f574b258d86ba"
   },
   "pyproject.toml": {
     "mtime": 1785834132.5329027,
@@ -75,9 +75,9 @@
     "semantic_hash": "0f0b97bc1702fe704a6233c14f3c26b1"
   },
   "tests/test_api.py": {
-    "mtime": 1786100488.2690978,
-    "ast_hash": "ced84f6dc755e86688e73160da6926df",
-    "semantic_hash": "ced84f6dc755e86688e73160da6926df"
+    "mtime": 1786101631.766794,
+    "ast_hash": "8032166f5fa7e8b687e9a93c96c96e44",
+    "semantic_hash": "8032166f5fa7e8b687e9a93c96c96e44"
   },
   "tests/test_areas.py": {
     "mtime": 1786084040.691155,
@@ -174,6 +174,11 @@
     "ast_hash": "52c6dea620a4e81eeb3dc88d1ab9d672",
     "semantic_hash": "52c6dea620a4e81eeb3dc88d1ab9d672"
   },
+  "tests/test_venue_notices.py": {
+    "mtime": 1786101890.6030688,
+    "ast_hash": "c3e29e44a687f577749124927ceb5c7e",
+    "semantic_hash": "c3e29e44a687f577749124927ceb5c7e"
+  },
   "tests/test_workflow.py": {
     "mtime": 1785832402.4829147,
     "ast_hash": "fc548822fdf7086e84c0b68b8589a479",
@@ -185,9 +190,9 @@
     "semantic_hash": "ef0aefdeae9a5f201e587415c32b8a5b"
   },
   "travel_planner/actions.py": {
-    "mtime": 1786100341.4841676,
-    "ast_hash": "aed55c91729321cd06f8a127e54ac372",
-    "semantic_hash": "aed55c91729321cd06f8a127e54ac372"
+    "mtime": 1786101526.8022957,
+    "ast_hash": "361e16f02d8c81de192ae6915734fe4d",
+    "semantic_hash": "361e16f02d8c81de192ae6915734fe4d"
   },
   "travel_planner/areas.py": {
     "mtime": 1786014566.5037527,
@@ -255,9 +260,9 @@
     "semantic_hash": "de82966718de7aaff97404630282da1c"
   },
   "travel_planner/providers.py": {
-    "mtime": 1786098965.681341,
-    "ast_hash": "a82688a0b60c4a3c9bb9a4caaa86eea0",
-    "semantic_hash": "a82688a0b60c4a3c9bb9a4caaa86eea0"
+    "mtime": 1786101890.57729,
+    "ast_hash": "fd56aa3f261abca96dfe6e952f55ddc0",
+    "semantic_hash": "fd56aa3f261abca96dfe6e952f55ddc0"
   },
   "travel_planner/ranking.py": {
     "mtime": 1785998402.7722473,
@@ -290,9 +295,9 @@
     "semantic_hash": "5dbcd43fc2ca05aace3175f31716672a"
   },
   "travel_planner/usage.py": {
-    "mtime": 1786099918.113721,
-    "ast_hash": "cce1845b5870b003283ceb4d997f83de",
-    "semantic_hash": "cce1845b5870b003283ceb4d997f83de"
+    "mtime": 1786101154.4263628,
+    "ast_hash": "03fb098d938cbf713510a103203c87e6",
+    "semantic_hash": "03fb098d938cbf713510a103203c87e6"
   },
   "web/eslint.config.js": {
     "mtime": 1785764956.464039,
@@ -305,9 +310,9 @@
     "semantic_hash": "39c50ba6ae1dcb8562cfff0bc1bc4135"
   },
   "web/src/api/client.ts": {
-    "mtime": 1786100411.5202687,
-    "ast_hash": "1f7b4d5ab560bada7bbbabe9516e1db4",
-    "semantic_hash": "1f7b4d5ab560bada7bbbabe9516e1db4"
+    "mtime": 1786101598.0741892,
+    "ast_hash": "4ea4c4628aab2bc301d90a9d1a6ac413",
+    "semantic_hash": "4ea4c4628aab2bc301d90a9d1a6ac413"
   },
   "web/src/i18n/LanguageProvider.tsx": {
     "mtime": 1785770892.378143,
@@ -375,9 +380,9 @@
     "semantic_hash": "7b9fddffe05971fec32daf4090bb7418"
   },
   "web/src/stages/EvidencePage.tsx": {
-    "mtime": 1786002791.3742583,
-    "ast_hash": "852e1101ba8fc13cd41f3e7cb506209b",
-    "semantic_hash": "852e1101ba8fc13cd41f3e7cb506209b"
+    "mtime": 1786101598.1047955,
+    "ast_hash": "fe708e2bb107d895a30bd9c06564eb74",
+    "semantic_hash": "fe708e2bb107d895a30bd9c06564eb74"
   },
   "web/src/stages/ItineraryPage.tsx": {
     "mtime": 1786100450.943467,
@@ -790,9 +795,9 @@
     "semantic_hash": "c5115d12c7730cb5efa13b31fba37e53"
   },
   ".wayfinder/tickets/044-decide-whether-a-venue-s-own-site-fills-the-holiday-hours-gap.md": {
-    "mtime": 1786097371.4467857,
-    "ast_hash": "cabd524a2851dddbd09610d1aa700556",
-    "semantic_hash": "cabd524a2851dddbd09610d1aa700556"
+    "mtime": 1786101782.99585,
+    "ast_hash": "c34ded3f9a5e2bddebd05ce5fc27e6a4",
+    "semantic_hash": "c34ded3f9a5e2bddebd05ce5fc27e6a4"
   },
   ".wayfinder/tickets/045-decide-what-happens-to-an-activated-plan-when-evidence-improves.md": {
     "mtime": 1786100541.462074,
@@ -810,9 +815,9 @@
     "semantic_hash": "1eadb8bff2a10ce33d7930a6411d1154"
   },
   "CLAUDE.md": {
-    "mtime": 1786100541.515434,
-    "ast_hash": "6f2f3e34bf4825ad364d5549cc0a61d5",
-    "semantic_hash": "6f2f3e34bf4825ad364d5549cc0a61d5"
+    "mtime": 1786101824.201608,
+    "ast_hash": "83b216a30d05321e8265607951f0af6c",
+    "semantic_hash": "83b216a30d05321e8265607951f0af6c"
   },
   "README.md": {
     "mtime": 1785835418.4719262,

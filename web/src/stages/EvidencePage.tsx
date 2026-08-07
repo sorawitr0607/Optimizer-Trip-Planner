@@ -13,6 +13,7 @@ import {
   type RouteRecord,
   type TimezoneEvidence,
   type Trip,
+  type VenueNotice,
 } from "../api/client";
 import { copy, copyFrom, type Language } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
@@ -175,6 +176,27 @@ export function EvidencePage() {
       if (report.failed) parts.push(`${copy("routes_failed", language)} ${report.failed}`);
       setFlash({ tone: "ok", text: parts.join(" · ") });
       await refresh();
+    },
+    onError: fail,
+  });
+  // `WF-044`. Advisory only: a notice is stored under a kind `_optimizer_input` does not
+  // read, so nothing here can move a scheduled minute. The screen has to say that.
+  const notices = useQuery({
+    queryKey: ["venue_notices", tripId],
+    queryFn: () => rpc<Record<string, VenueNotice>>("list_venue_notices", { trip_id: tripId }),
+  });
+  const scanNotices = useMutation({
+    mutationFn: () =>
+      rpc<{ checked: number; notices_found: number; failed: number; provider_errors: string[] }>(
+        "scan_venue_notices",
+        { trip_id: tripId },
+      ),
+    onSuccess: async (report) => {
+      const parts = [`${copy("venue_notices", language)}: ${report.notices_found} / ${report.checked}`];
+      if (report.failed) parts.push(report.provider_errors.join(" · "));
+      setFlash({ tone: report.failed ? "bad" : "ok", text: parts.join(" · ") });
+      await queryClient.invalidateQueries({ queryKey: ["venue_notices", tripId] });
+      await queryClient.invalidateQueries({ queryKey: ["paid_usage"] });
     },
     onError: fail,
   });
@@ -367,6 +389,38 @@ export function EvidencePage() {
       </div>
 
       {/* Card 4 — routes. Priced at zero on the free tier, so it states no cost. */}
+      <div className="evidence-card">
+        <strong>{copy("venue_notices", language)}</strong>
+        <span className="setup-hint">{copy("venue_notices_hint", language)}</span>
+        <button
+          disabled={scanNotices.isPending}
+          onClick={() => scanNotices.mutate()}
+          type="button"
+        >
+          {copy("scan_venue_notices", language)}
+        </button>
+        {Object.keys(notices.data ?? {}).length === 0 ? (
+          <span className="setup-hint">{copy("venue_notices_none", language)}</span>
+        ) : (
+          <>
+            <p className="setup-hint">{copy("venue_notices_advisory", language)}</p>
+            <ul className="venue-notices">
+              {Object.values(notices.data ?? {}).map((notice) => (
+                <li key={notice.place_id}>
+                  <strong>{notice.name}</strong>
+                  {/* The quote is the product. It is verified to appear verbatim on the
+                      page, so the owner can judge it against the source themselves. */}
+                  <blockquote>{notice.quote}</blockquote>
+                  <a href={notice.source_url} rel="noreferrer" target="_blank">
+                    {copy("venue_notice_quote", language)}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
+
       <div className="evidence-card">
         <strong>
           {verifiedRoutes.length

@@ -50,6 +50,7 @@ from .providers import (
     OpenRouteServiceProvider,
     OsmAreaAmenitiesProvider,
     OsmMetroProvider,
+    VenueNoticeProvider,
     WikidataSummaryProvider,
     OpenStreetMapProvider,
     ProviderBudgetExceeded,
@@ -115,6 +116,7 @@ class PlannerActions:
         transit_provider: Any = None,
         area_amenities_provider: Any = None,
         opening_window_provider: Any = None,
+        venue_notice_provider: Any = None,
         summary_provider: Any = None,
         timezone_provider: Any = None,
         hours_provider: Any = None,
@@ -129,6 +131,7 @@ class PlannerActions:
         self.transit_provider = transit_provider
         self.area_amenities_provider = area_amenities_provider
         self.opening_window_provider = opening_window_provider
+        self.venue_notice_provider = venue_notice_provider
         self.summary_provider = summary_provider
         self.timezone_provider = timezone_provider
         self.hours_provider = hours_provider
@@ -513,6 +516,105 @@ class PlannerActions:
         details["photo_gallery"] = gallery
         details["photo_uri"] = gallery[0]["uri"] if gallery else None
         return details
+
+    def list_venue_notices(self, trip_id: str) -> dict[str, dict[str, Any]]:
+        """Stored venue notices by place id. `WF-044`. A read, and free."""
+
+        return {
+            str(row["place_id"]): dict(row)
+            for row in self.store.list_place_evidence(trip_id, "venue_notice")
+            if row.get("place_id")
+        }
+
+    def scan_venue_notices(self, trip_id: str, *, force: bool = False) -> dict[str, Any]:
+        """Read each chosen place's own site for a dated closure the weekly hours cannot
+        carry. `WF-044`.
+
+        An opening fact is a **weekly pattern**, so nothing the app stores can express
+        "closed 1 January" — and the trip spans 31 December and 1 January. Google will not
+        fill that gap; its snapshot is a weekday timetable.
+
+        **What comes back is a quote and a link, never a fact.** It is stored under a kind
+        `_optimizer_input` does not read, so a notice cannot remove a place, narrow a
+        window or move a single minute. The optimizer has no code path to it. That is
+        deliberate and load-bearing: `WF-046` measured a model inventing 2 of 7 weekly
+        closures, and Sun Yat-sen Memorial Hall's own site carries a 休館公告 about a
+        server-room migration affecting its **website**, which an extractor acting on
+        would turn into a deleted landmark.
+
+        So this produces something for a person to check, and the readiness board already
+        asks them to.
+        """
+
+        trip = self.store.get_trip(trip_id)
+        if trip is None:
+            raise PlannerRefusal("unknown_trip", trip_id=trip_id)
+        provider = self.venue_notice_provider or VenueNoticeProvider()
+        held = self.list_venue_notices(trip_id)
+        now = datetime.now(timezone.utc)
+        candidates = {
+            item["place_id"]: item
+            for item in self.get_latest_discovery(trip_id).candidates.as_dict()["candidates"]
+        }
+
+        checked = found = skipped = failed = 0
+        errors: list[str] = []
+        notices: list[dict[str, Any]] = []
+        for place in self._selected_places(trip_id):
+            website = (candidates.get(place["place_id"]) or {}).get("website")
+            standing = held.get(place["place_id"])
+            if not website:
+                skipped += 1
+                continue
+            if not force and standing and str(standing.get("expires_at") or "") > now.isoformat():
+                skipped += 1
+                continue
+            try:
+                self._spend(
+                    operation=str(provider.operation),
+                    count=1,
+                    trip_id=trip_id,
+                    detail={"place_id": place["place_id"]},
+                )
+                answer = provider.notice(name=str(place["name"]), website=str(website))
+            except ProviderBudgetExceeded:
+                raise
+            except ProviderUnavailable as error:
+                failed += 1
+                message = str(error)[:160]
+                if message not in errors:
+                    errors.append(message)
+                continue
+            checked += 1
+            if not answer.get("found"):
+                continue
+            found += 1
+            value = {
+                "place_id": place["place_id"],
+                "name": place["name"],
+                "quote": answer["quote"],
+                "summary": answer.get("summary"),
+                "source_url": answer["source_url"],
+                "model": answer.get("model"),
+            }
+            self.store.upsert_place_evidence(
+                trip_id=trip_id,
+                place_id=place["place_id"],
+                kind=str(provider.kind),
+                value=value,
+                provider=str(provider.name),
+                retrieved_at=now.isoformat(),
+                expires_at=(now + timedelta(days=int(provider.cache_ttl_days))).isoformat(),
+            )
+            notices.append(value)
+        return {
+            "checked": checked,
+            "notices_found": found,
+            "without_website_or_held": skipped,
+            "failed": failed,
+            "provider_errors": errors,
+            "notices": notices,
+        }
 
     def active_plan_drift(self, trip_id: str) -> dict[str, Any]:
         """Has the evidence under the activated plan moved, and did anything break?

@@ -622,6 +622,18 @@ export interface PlanDrift {
   current_input_sha256: string;
 }
 
+/** `WF-044`. A dated closure notice quoted from a venue's own page. Advisory only: it is
+ *  stored under a kind the optimizer does not read, so it can never remove a place from a
+ *  plan. `quote` is verified to appear verbatim on the fetched page. */
+export interface VenueNotice {
+  place_id: string;
+  name: string;
+  quote: string;
+  summary: string | null;
+  source_url: string;
+  model?: string | null;
+}
+
 export interface AccommodationBase {
   name: string;
   address?: string | null;

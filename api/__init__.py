@@ -98,6 +98,11 @@ ACTIONS = (
     # anything break. It reports and never repairs -- regenerating would rewrite a
     # plan the owner may have printed.
     "active_plan_drift",
+    # WF-044. Reads each venue's own page for a dated closure the weekly hours
+    # cannot carry. Advisory only: stored under a kind _optimizer_input does not
+    # read, so a notice can never remove a place from a plan.
+    "scan_venue_notices",
+    "list_venue_notices",
     "list_routes",
     "paid_usage_status",
     "set_paid_cap",

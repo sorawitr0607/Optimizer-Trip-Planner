@@ -173,6 +173,22 @@ an expired budget legitimately yields 0 visits where greedy's only schedule carr
 because `comfort_violations` outranks `experience_value` in the objective tuple — that ordering is
 `WF-039`'s question.
 
+**A venue's own page is read for dated closures as of 2026-08-07 (`WF-044`) — and it is never a fact.**
+An opening fact is a **weekly pattern**, so nothing stored can say "closed 1 January", and the trip spans
+31 December and 1 January. `providers.VenueNoticeProvider` fetches the landing page and quotes any dated
+visitor closure; `actions.scan_venue_notices` stores it as `place_evidence` of kind `venue_notice`.
+**`_optimizer_input` does not read that kind** — there is no code path from a notice to the optimizer, so
+a false one cannot delete a landmark. That is the bar the ticket set and it is met structurally, because
+`WF-046` measured a model inventing 2 of 7 closures.
+
+Two guards, both load-bearing. **The quote must appear verbatim on the fetched page** — `quotes_the_page`
+forgives only whitespace, never case or punctuation, since a paraphrase is exactly what cannot be checked
+against the source. **No page, no answer**: a failed fetch raises rather than letting the model recall.
+Measured on the pilot: 8 sites read, 1 notice found (Huashan 1914's typhoon hours change, the genuine
+one), 4 skipped for having no website, 1 unreachable — and **Sun Yat-sen reported nothing** although its
+page really does contain `休館公告`, because that notice is about its website, not the hall. This reads
+the landing page only; the three sites whose hours sit two hops into a government CMS are unchanged.
+
 **An activated plan is checked against today's evidence as of 2026-08-07 (`WF-045`).** Every other gate
 guards the **forward** direction — activation refuses on a stale preview, discovery and ranking on a stale
 setup hash — so nothing noticed when evidence *improved* underneath a live plan. One paid opening-hours
@@ -354,8 +370,15 @@ must stay directed. Rebuild only through `python3 scripts/build_project_graph.py
 failure), and only when explicitly asked or after a topology-changing milestone. After any graph
 change, `--check` must pass before committing. See `AGENTS.md`.
 
-**Rebuilt for `WF-045` on 2026-08-07 and `--check` passes**: 1956 nodes, 4825 directed edges, 169
-communities; recorded cumulative cost is US$0.381437 over 36 runs.
+**Rebuilt for `WF-044` on 2026-08-07 and `--check` passes**: 2003 nodes, 4959 directed edges, 170
+communities; recorded cumulative cost is US$0.394865 over 37 runs.
+
+**A second name collision, and the same fix the first one needed.** A provider method called `fetch`
+collided with the browser `fetch()` that `web/src/api/client.ts`'s `rpc` calls: extraction invented an edge
+claiming TypeScript calls Python, clustering rightly dropped it, and the endpoint-pair guard demanded a
+false edge survive. Renamed to `read_page`. **Do not name a Python method after something the TypeScript
+side calls** — `fetch`, `rpc`, `post`. That is now two occurrences, so treat it as a rule rather than a
+curiosity.
 
 A third ticket-authoring trap, and the fix is in `normalize_raw_graph` rather than in how tickets are
 written. Extraction sometimes emits a module **twice** — `tests_test_x` and `tests_test_x_py` — when a
@@ -455,9 +478,8 @@ that declaration is what kept the gate working when the POC went.
 
 ## Phase 2 implementation follows the locked slice order
 
-`WF-MAP-002` is **decision-complete as of 2026-08-03**. Across both maps there are 46 tickets, **45
-closed, 1 open**: `Decide whether a venue's own site fills the holiday-hours gap` (`WF-044`), left open
-with its measurement recorded — schema.org is 0 of 9 and extraction would reliably help one site.
+`WF-MAP-002` is **decision-complete as of 2026-08-03**. Across both maps there are 46 tickets, **46
+closed, 0 open**. Nothing is outstanding.
 
 Two measured facts from those worth carrying. **`verified` means a provider said so, not that it is
 true** — Google returns Mon–Fri 08:30–17:30 with weekends closed for Sun Yat-sen Memorial Hall, which

@@ -1,7 +1,7 @@
 ---
 id: WF-044
 title: Decide whether a venue's own site fills the holiday-hours gap
-status: open
+status: closed
 labels:
   - "wayfinder:decision"
 parent: WF-MAP-002
@@ -127,6 +127,79 @@ reads Chinese and can tell a website outage notice from a building closure.
 Any build should therefore be judged on whether it can be **safely wrong**: an extracted
 closure must be visibly weaker than a verified one, must cite the sentence it came from
 so the owner can judge it, and must never remove a place from a plan on its own.
+
+## Decided and built 2026-08-07: a quote and a link, never a fact
+
+The first option — fetch the venue's page and extract with a model — built to the bar this
+ticket set: *an extracted closure must be visibly weaker than a verified one, must cite
+the sentence it came from, and must never remove a place from a plan on its own.*
+
+**The third condition is met structurally, not by care.** A notice is stored as
+`place_evidence` of kind `venue_notice`, and `actions._optimizer_input` does not read that
+kind. There is no code path from a notice to the optimizer, so a false one cannot delete a
+landmark, narrow a window, or move a single scheduled minute. A test asserts the optimizer
+snapshot is byte-identical before and after a scan.
+
+That severity is what the measurement demanded. `WF-046` caught a model inventing 2 of 7
+weekly closures, and the page most worth reading here is the trap described above.
+
+**The quote must appear verbatim on the fetched page.** `quotes_the_page` squeezes
+whitespace — an artefact of stripping tags, not of the model's honesty — and nothing else:
+no case folding, no punctuation normalising, no prefix matching, each of which would let a
+paraphrase through. A paraphrase is exactly what cannot be checked against the source, and
+the source is the product. A quote that fails is discarded as `QUOTE_NOT_ON_PAGE`.
+
+**No page, no answer.** A failed fetch raises; the model is never asked what a site says.
+
+### Result on the pilot, and the trap held
+
+Eight sites read, one notice found, four places skipped for having no website, one
+unreachable — Beitou Hot Spring Museum, which times out exactly as the measurement above
+recorded. Cost US$0.024.
+
+The one notice is the genuine one:
+
+> 受颱風巴威影響，07/10(五)華山1914文化創意產業園區店家及展覽開放時間異動如下
+> — Huashan 1914, quoted from `huashan1914.com`
+
+A dated, visitor-facing hours change caused by a typhoon: precisely the shape a weekly
+pattern cannot carry, which is why this ticket exists.
+
+**And Sun Yat-sen Memorial Hall reported nothing**, though its page really does contain
+`休館公告` — verified in the same run. The prompt's rule that a notice about a website, an
+online system, a single exhibition or building works is not a closure did its job on the
+one case that would have cost a landmark.
+
+One scan is not proof against future false positives. It is evidence that the guards
+engage on the specific failure that motivated them, and the isolation rule means the cost
+of the next one is a wasted glance rather than a deleted place.
+
+### Surface
+
+A card on `/evidence` that quotes the sentence, links the page, and says plainly that a
+quote is not a fact and may be about a website or an exhibition. The quote is set apart
+typographically so what the venue said cannot be confused with what the app inferred.
+`scan_venue_notices` and `list_venue_notices` are the 72nd and 73rd allowlisted methods.
+
+### Tests
+
+`tests/test_venue_notices.py`, 14 tests. Negative-tested — and the first pass **found a
+hole in the tests rather than in the code**: removing the quote check from `notice()`
+failed nothing, because the action-level tests use a fake provider and the pure
+`quotes_the_page` tests never proved the guard was *called*. `NoticeWiringTest` now
+exercises `notice()` end to end with a stubbed transport, and removing the check fails it.
+Folding case in the comparison fails another; storing under an optimizer-visible kind
+fails two more.
+
+409 tests green, all 12 `check.py` stages pass.
+
+### What is still not solved
+
+The three sites whose hours sit two or more hops into a government CMS are unchanged: this
+reads the landing page only, because that is where notices were measured to appear. And
+temples that publish nothing still publish nothing. The readiness board's 13 manual checks
+remain the real answer for opening hours; this only catches the dated exception a weekly
+pattern cannot express, on a site that announces it on its front page.
 
 ## Related
 

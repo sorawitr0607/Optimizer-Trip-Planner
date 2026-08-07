@@ -1159,6 +1159,25 @@
   margin-left: 8px;
 }
 
+/* WF-044. The quote is the product, so it is set apart from the app's own prose --
+   an owner has to be able to tell what the venue said from what the app inferred. */
+.venue-notices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.venue-notices blockquote {
+  border-left: 2px solid var(--color-accent);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  margin: 4px 0;
+  padding-left: 9px;
+}
+
 /* WF-045. The drift banner reuses the existing warning note, but needs to stack a
    sentence, a violation list and a link rather than sit on one line. */
 .plan-drift {

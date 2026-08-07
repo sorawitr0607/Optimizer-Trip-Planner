@@ -1024,7 +1024,13 @@
       "plan_evidence_moved": "The evidence under this plan has changed",
       "plan_evidence_moved_still_valid": "Nothing in the timetable breaks, but it was built before the latest evidence arrived. Rebuild to use it.",
       "plan_evidence_moved_now_broken": "Checked against the latest evidence, this plan no longer works. Rebuild it before you travel.",
-      "rebuild_the_plan": "Rebuild the plan"
+      "rebuild_the_plan": "Rebuild the plan",
+      "venue_notices": "Notices on the venues' own sites",
+      "venue_notices_hint": "Opening hours are stored as a weekly pattern, so nothing here can say “closed 1 January”. This reads each venue's own page and quotes what it found. It never changes your plan — check it yourself.",
+      "scan_venue_notices": "Read the venue sites",
+      "venue_notice_quote": "Quoted from the page",
+      "venue_notices_none": "No dated closure notice was found on any site.",
+      "venue_notices_advisory": "A quote is not a fact. It may be about the website, an exhibition or building work rather than the venue closing."
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -1676,7 +1682,13 @@
       "plan_evidence_moved": "หลักฐานที่ใช้วางแผนนี้เปลี่ยนไปแล้ว",
       "plan_evidence_moved_still_valid": "ตารางเวลายังใช้ได้ แต่สร้างขึ้นก่อนได้หลักฐานล่าสุด สร้างใหม่เพื่อใช้ข้อมูลนั้น",
       "plan_evidence_moved_now_broken": "เมื่อตรวจกับหลักฐานล่าสุด แผนนี้ใช้ไม่ได้แล้ว กรุณาสร้างใหม่ก่อนเดินทาง",
-      "rebuild_the_plan": "สร้างแผนใหม่"
+      "rebuild_the_plan": "สร้างแผนใหม่",
+      "venue_notices": "ประกาศจากเว็บไซต์ของสถานที่",
+      "venue_notices_hint": "เวลาเปิดถูกเก็บเป็นรูปแบบรายสัปดาห์ จึงไม่สามารถระบุว่า “ปิด 1 มกราคม” ได้ ส่วนนี้อ่านหน้าเว็บของสถานที่แล้วยกข้อความมาให้ดู ไม่เปลี่ยนแผนของคุณ กรุณาตรวจสอบเอง",
+      "scan_venue_notices": "อ่านเว็บไซต์สถานที่",
+      "venue_notice_quote": "ข้อความจากหน้าเว็บ",
+      "venue_notices_none": "ไม่พบประกาศปิดตามวันที่ในเว็บไซต์ใด",
+      "venue_notices_advisory": "ข้อความที่ยกมาไม่ใช่ข้อเท็จจริง อาจเป็นเรื่องเว็บไซต์ นิทรรศการ หรือการก่อสร้าง ไม่ใช่การปิดสถานที่"
     }
   }
 }

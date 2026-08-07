@@ -64,6 +64,10 @@ PRICES_USD = {
     # set just under twice the measured worst case: enough margin for reasoning variance,
     # close enough that the cap stays meaningful. Re-measure if the model changes.
     "openai:opening_window": 0.0005,
+    # WF-044. One call per venue with up to 6000 characters of its own page, so the
+    # input dominates: ~1800 tokens at US$0.20/M is US$0.00036, plus reasoning
+    # output. Priced well above that -- the page size is capped but not fixed.
+    "openai:venue_notice": 0.0030,
     # Not measured end to end -- the GenAI revision surface is deferred past the pilot --
     # but sized from the real payload: ~531 input tokens including the schema, which at
     # 1200 output tokens is US$0.0015. Priced above that, and above `opening_window`
