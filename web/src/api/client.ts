@@ -608,6 +608,20 @@ export interface PlanVersionRecord {
   created_at: string;
 }
 
+/** `WF-045`. Whether the evidence under the activated plan has moved, and whether that
+ *  broke anything. `claimed_valid` is what the plan said when it was built and
+ *  `still_valid` is what today's evidence says — they are reported together so they can
+ *  be seen to disagree. */
+export interface PlanDrift {
+  version_id: string;
+  moved: boolean;
+  claimed_valid: boolean;
+  still_valid: boolean;
+  violations: { code: string; subject_id: string | null }[];
+  stored_input_sha256: string;
+  current_input_sha256: string;
+}
+
 export interface AccommodationBase {
   name: string;
   address?: string | null;

@@ -1020,7 +1020,11 @@
       "comfort_agreed_but_stale": "You agreed to {value} min, but the plan is now {measured} min — agree again or change the plan",
       "accept_this_amount": "Agree to {measured} min",
       "withdraw_agreement": "Withdraw",
-      "comfort_needs_a_plan": "Build a plan first — there is nothing measured to agree to yet."
+      "comfort_needs_a_plan": "Build a plan first — there is nothing measured to agree to yet.",
+      "plan_evidence_moved": "The evidence under this plan has changed",
+      "plan_evidence_moved_still_valid": "Nothing in the timetable breaks, but it was built before the latest evidence arrived. Rebuild to use it.",
+      "plan_evidence_moved_now_broken": "Checked against the latest evidence, this plan no longer works. Rebuild it before you travel.",
+      "rebuild_the_plan": "Rebuild the plan"
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -1668,7 +1672,11 @@
       "comfort_agreed_but_stale": "คุณยอมรับไว้ที่ {value} นาที แต่แผนตอนนี้ {measured} นาที ยอมรับใหม่หรือแก้แผน",
       "accept_this_amount": "ยอมรับ {measured} นาที",
       "withdraw_agreement": "ถอนการยอมรับ",
-      "comfort_needs_a_plan": "สร้างแผนก่อน ยังไม่มีค่าที่วัดได้ให้ยอมรับ"
+      "comfort_needs_a_plan": "สร้างแผนก่อน ยังไม่มีค่าที่วัดได้ให้ยอมรับ",
+      "plan_evidence_moved": "หลักฐานที่ใช้วางแผนนี้เปลี่ยนไปแล้ว",
+      "plan_evidence_moved_still_valid": "ตารางเวลายังใช้ได้ แต่สร้างขึ้นก่อนได้หลักฐานล่าสุด สร้างใหม่เพื่อใช้ข้อมูลนั้น",
+      "plan_evidence_moved_now_broken": "เมื่อตรวจกับหลักฐานล่าสุด แผนนี้ใช้ไม่ได้แล้ว กรุณาสร้างใหม่ก่อนเดินทาง",
+      "rebuild_the_plan": "สร้างแผนใหม่"
     }
   }
 }

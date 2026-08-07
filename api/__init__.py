@@ -94,6 +94,10 @@ ACTIONS = (
     # owner-triggered like every other refresh.
     "refresh_assumed_windows",
     "list_assumed_windows",
+    # WF-045. A read: has the evidence under the activated plan moved, and did
+    # anything break. It reports and never repairs -- regenerating would rewrite a
+    # plan the owner may have printed.
+    "active_plan_drift",
     "list_routes",
     "paid_usage_status",
     "set_paid_cap",

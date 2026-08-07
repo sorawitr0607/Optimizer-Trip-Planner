@@ -36,6 +36,7 @@ from .optimizer import (
     DEPARTURE_LOGISTICS_MINUTES,
     date_range,
     optimize_trip,
+    validate_variant,
 )
 from .providers import (
     CARD_PHOTO_LIMIT,
@@ -512,6 +513,59 @@ class PlannerActions:
         details["photo_gallery"] = gallery
         details["photo_uri"] = gallery[0]["uri"] if gallery else None
         return details
+
+    def active_plan_drift(self, trip_id: str) -> dict[str, Any]:
+        """Has the evidence under the activated plan moved, and did anything break?
+
+        `WF-045`. Every existing gate guards the **forward** direction — activation
+        refuses on a stale preview, discovery and ranking refuse on a stale setup hash.
+        Nothing looked backwards, so buying one opening-hours lookup left a visit
+        scheduled 17:17–19:32 against real hours ending 17:30 while the stored variant
+        still reported `validation.valid: true`. That flag was computed when the plan was
+        built and nothing recomputes it.
+
+        Two steps, in that order, because each answers a different question cheaply:
+
+        1. **Has anything moved?** The activated version stores its own `optimizer_input`,
+           so re-freezing it and comparing hashes is the same check `activate_plan_preview`
+           already makes, run the other way round. No optimizer work.
+        2. **Did it matter?** Only when the hash moved, re-run `validate_variant` against
+           today's snapshot. That distinguishes "the evidence moved and the plan still
+           holds" from "these visits no longer work" — which is what stops this reporting
+           churn for every hash change with no scheduling consequence.
+
+        It reports and never repairs. Regenerating would rewrite a plan the owner may have
+        printed or shared, so the offer belongs on the screen, not in this method.
+        """
+
+        active = self.get_active_plan(trip_id)
+        if active is None:
+            raise PlannerRefusal("no_active_plan")
+        stored = active.snapshot.as_dict()
+        stored_input = stored.get("optimizer_input") or {}
+        variant = stored.get("variant") or {}
+        current = self._optimizer_input(trip_id)
+        stored_hash = freeze_snapshot(stored_input).sha256
+        current_hash = freeze_snapshot(current).sha256
+
+        moved = stored_hash != current_hash
+        violations: list[dict[str, Any]] = []
+        still_valid = True
+        if moved:
+            validation = validate_variant(current, variant)
+            still_valid = bool(validation["valid"])
+            violations = list(validation["hard_violations"])
+        return {
+            "version_id": active.version_id,
+            "moved": moved,
+            # What the plan claimed when it was built. Reported beside `still_valid` so
+            # the two can be seen to disagree rather than one quietly overwriting it.
+            "claimed_valid": bool((variant.get("validation") or {}).get("valid")),
+            "still_valid": still_valid,
+            "violations": violations,
+            "stored_input_sha256": stored_hash,
+            "current_input_sha256": current_hash,
+        }
 
     def list_assumed_windows(self, trip_id: str) -> dict[str, dict[str, Any]]:
         """Stored model-recalled windows by place id. `WF-046`. Never fetches."""

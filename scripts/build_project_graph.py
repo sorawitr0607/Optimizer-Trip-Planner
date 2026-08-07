@@ -257,10 +257,33 @@ def normalize_raw_graph() -> set[tuple[str, str, str]]:
             candidates.setdefault(match.group(1), []).append(node_id)
     aliases = {short: ids[0] for short, ids in candidates.items() if len(ids) == 1}
 
+    # Extraction sometimes emits a module twice, once as `tests_test_x` and once as
+    # `tests_test_x_py`, when a document cites the file by path. Both land in `node_ids`,
+    # so the pair guard treats an edge to the `_py` twin as real -- then clustering
+    # correctly collapses the duplicate and the build fails claiming data was lost.
+    # Measured 2026-08-07 on `wayfinder_tickets_046... -> tests_test_assumed_windows_py`,
+    # while `WF-039` cited `tests/test_comfort.py` in the identical style and extracted
+    # cleanly, so this is extraction variance and not a citation style to correct.
+    #
+    # Folding the twin into the real node is the same normalisation `aliases` above
+    # already performs, not a relaxation of the guard: the edge is preserved, pointed at
+    # the node that survives.
+    suffixed = {
+        node_id: node_id[: -len("_py")]
+        for node_id in node_ids
+        if node_id.endswith("_py") and node_id[: -len("_py")] in node_ids
+    }
+    if suffixed:
+        nodes = [node for node in nodes if node["id"] not in suffixed]
+        data["nodes"] = nodes
+        node_ids -= set(suffixed)
+
     for edge in edges:
         for endpoint in ("source", "target"):
             value = edge.get(endpoint)
-            if value not in node_ids and value in aliases:
+            if value in suffixed:
+                edge[endpoint] = suffixed[value]
+            elif value not in node_ids and value in aliases:
                 edge[endpoint] = aliases[value]
 
     edge_keys = {

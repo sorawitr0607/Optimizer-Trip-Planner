@@ -74,6 +74,38 @@ class TicketNodeResolutionTest(unittest.TestCase):
         )
 
 
+class DuplicateModuleNodeTest(unittest.TestCase):
+    """Extraction emits a module twice when a document cites it by path."""
+
+    def test_a_py_suffixed_twin_folds_into_the_real_node(self) -> None:
+        """`tests_test_x_py` and `tests_test_x` are the same file. Both land in the raw
+        node set, so the pair guard treats an edge to the twin as real -- then clustering
+        collapses the duplicate and the build fails claiming data was lost. Measured on
+        `wayfinder_tickets_046... -> tests_test_assumed_windows_py`, 2026-08-07."""
+
+        node_ids = {"tests_test_x", "tests_test_x_py", "travel_planner_areas"}
+        suffixed = {
+            node_id: node_id[: -len("_py")]
+            for node_id in node_ids
+            if node_id.endswith("_py") and node_id[: -len("_py")] in node_ids
+        }
+
+        self.assertEqual({"tests_test_x_py": "tests_test_x"}, suffixed)
+
+    def test_a_lone_py_node_is_left_alone(self) -> None:
+        """Only a *twin* is folded. A node that exists solely under the suffixed name is
+        the real node, and rewriting it would point edges at nothing."""
+
+        node_ids = {"tests_only_here_py", "travel_planner_areas"}
+        suffixed = {
+            node_id: node_id[: -len("_py")]
+            for node_id in node_ids
+            if node_id.endswith("_py") and node_id[: -len("_py")] in node_ids
+        }
+
+        self.assertEqual({}, suffixed)
+
+
 class GraphBuilderEdgeValidationTest(unittest.TestCase):
     def test_cluster_reads_a_staged_raw_graph_and_writes_a_fresh_output(self) -> None:
         with TemporaryDirectory() as directory:

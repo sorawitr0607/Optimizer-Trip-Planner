@@ -1,7 +1,7 @@
 ---
 id: WF-045
 title: Decide what happens to an activated plan when evidence improves
-status: open
+status: closed
 labels:
   - "wayfinder:decision"
 parent: WF-MAP-002
@@ -71,6 +71,58 @@ described.
 Whichever is chosen, `validation.valid: true` on a plan whose evidence has since
 contradicted it is the thing that should not survive — an owner reading that word has no
 way to know when it was computed.
+
+## Decided and built 2026-08-07: the hash says whether, the validator says what
+
+The first option — compare the stored `input_sha256` against the current one — with the
+second folded in behind it, because on its own the hash only says *something moved* and
+cannot say whether it matters.
+
+`actions.active_plan_drift` runs two steps, in this order and for different reasons:
+
+1. **Has anything moved?** The activated version stores its own `optimizer_input`, so
+   re-freezing it and comparing hashes is exactly the check `activate_plan_preview`
+   already makes, run the other way round. No optimizer work at all.
+2. **Did it matter?** *Only when the hash moved*, re-run `validate_variant` against
+   today's snapshot.
+
+That ordering is what answers the ticket's own objection to option two. Re-validating on
+every read risks "reporting churn for a hash change with no scheduling consequence"; the
+hash gate means the validator runs only when something actually changed, and its verdict
+then separates *the evidence moved and the plan still holds* from *these visits no longer
+work*. A test asserts the validator is not called for an unchanged plan and exactly once
+for a changed one.
+
+**It reports and never repairs.** `plan_versions` is append-only and the owner may have
+printed or shared the itinerary, so regenerating is an offer on the screen, not a side
+effect of reading. A test asserts the stored snapshot is byte-identical after a drift
+check.
+
+`claimed_valid` and `still_valid` are both returned. The stored flag stays visible beside
+today's verdict so the two can be *seen* to disagree, rather than one quietly overwriting
+the other — an owner reading `valid` has no way to know when it was computed, which is
+the thing this ticket said should not survive.
+
+### The screen
+
+A warning banner on `/itinerary`, above the day picker, with two distinct wordings and a
+link to rebuild. Conflating "still holds" with "no longer works" would train the owner to
+ignore it. Its own query with `retry: false`, deliberately separate from the export
+snapshot: **a plan that no longer holds must still render**, or the owner loses the
+itinerary they opened the page to read.
+
+`active_plan_drift` is the 71st allowlisted method, and a read.
+
+### Tests
+
+`tests/test_plan_drift.py`, 6 tests, including the regression itself — activate a plan
+built on the 09:00–21:00 assumption, buy narrow verified hours, and assert
+`moved: true`, `claimed_valid: true`, `still_valid: false` with `CLOSED_DURING_VISIT`.
+Negative-tested twice: never re-validating fails two tests, and comparing the stored hash
+against itself fails three.
+
+393 tests green, all 12 `check.py` stages pass. On the pilot the current plan reports
+`moved: false` — it was regenerated after the lookup that exposed this.
 
 ## Related
 

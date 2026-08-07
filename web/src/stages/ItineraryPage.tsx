@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { useParams } from "react-router";
+import { Link, useParams } from "react-router";
 
 import {
   ApiError,
@@ -12,6 +12,7 @@ import {
   type ExportSnapshot,
   type ExportStop,
   type Frozen,
+  type PlanDrift,
 } from "../api/client";
 import { copy, copyFrom, type Language } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
@@ -223,6 +224,14 @@ export function ItineraryPage() {
     queryKey: ["export_snapshot", tripId, language],
     queryFn: () => rpc<Frozen<ExportSnapshot>>("build_export_snapshot", { trip_id: tripId, language }),
   });
+  // `WF-045`. The stored plan cannot notice that its own evidence moved, so the screen
+  // asks. Its own query rather than part of the snapshot: a plan that no longer holds
+  // must still render, or the owner loses the itinerary they came to read.
+  const drift = useQuery({
+    queryKey: ["plan_drift", tripId],
+    queryFn: () => rpc<PlanDrift>("active_plan_drift", { trip_id: tripId }),
+    retry: false,
+  });
 
   if (snapshot.isPending) return <p>{copy("loading", language)}</p>;
   if (snapshot.isError) {
@@ -251,6 +260,30 @@ export function ItineraryPage() {
         <span>{copy("active_plan", language)} <code>{versionTag}</code> · {copy("exported_at", language)} {plan.stamp.exported_at.slice(0, 16)} · {plan.stamp.base_currency} · {plan.stamp.language.toUpperCase()}</span>
       </div>
       {!plan.stamp.is_active_plan ? <p className="money-note money-note-warn"><b aria-hidden="true">⚠</b>{copy("superseded_plan", language)}</p> : null}
+      {drift.data?.moved ? (
+        <div className="money-note money-note-warn plan-drift">
+          <b aria-hidden="true">⚠</b>
+          <span>
+            <strong>{copy("plan_evidence_moved", language)}</strong>{" "}
+            {/* Two different situations, and conflating them would train the owner to
+                ignore the banner: the timetable still holds, or it does not. */}
+            {copy(
+              drift.data.still_valid
+                ? "plan_evidence_moved_still_valid"
+                : "plan_evidence_moved_now_broken",
+              language,
+            )}
+            {drift.data.violations.length ? (
+              <ul>
+                {drift.data.violations.map((item) => (
+                  <li key={`${item.code}:${item.subject_id ?? ""}`}>{codeText(item.code, language)}</li>
+                ))}
+              </ul>
+            ) : null}
+            <Link to={`/trips/${tripId}/optimize`}>{copy("rebuild_the_plan", language)}</Link>
+          </span>
+        </div>
+      ) : null}
       {plan.readiness.capability_gaps.length ? <details className="optimize-warnings"><summary>{copy("capability_gaps", language)}</summary><ul>{plan.readiness.capability_gaps.map((gap) => <li key={gap}>{codeText(gap, language)}</li>)}</ul></details> : null}
 
       <label className="optimize-variant">

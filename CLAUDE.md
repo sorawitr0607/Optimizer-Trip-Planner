@@ -173,6 +173,18 @@ an expired budget legitimately yields 0 visits where greedy's only schedule carr
 because `comfort_violations` outranks `experience_value` in the objective tuple — that ordering is
 `WF-039`'s question.
 
+**An activated plan is checked against today's evidence as of 2026-08-07 (`WF-045`).** Every other gate
+guards the **forward** direction — activation refuses on a stale preview, discovery and ranking on a stale
+setup hash — so nothing noticed when evidence *improved* underneath a live plan. One paid opening-hours
+lookup left a visit at 17:17–19:32 against real hours ending 17:30 while the stored variant still said
+`validation.valid: true`, because that flag was computed at build time and never recomputed.
+`actions.active_plan_drift` compares the activated version's own stored `optimizer_input` hash against the
+current one, and **re-runs `validate_variant` only when it moved** — the hash says *whether*, the validator
+says *what*, and gating the second on the first is what keeps this off the churn path. It **reports and
+never repairs**: `plan_versions` is append-only and the owner may have printed the itinerary, so
+regenerating is an offer on `/itinerary`, not a side effect of reading. `claimed_valid` and `still_valid`
+are both returned so they can be seen to disagree.
+
 **A model may supply the assumed opening window as of 2026-08-07 (`WF-046`) — and nothing more.** The app
 always guessed when a place had no verified hours: `_optimizer_input` emitted a flat **09:00–21:00** for
 every place on earth. So the question was never evidence versus a guess, it was *which* guess, and the
@@ -342,8 +354,17 @@ must stay directed. Rebuild only through `python3 scripts/build_project_graph.py
 failure), and only when explicitly asked or after a topology-changing milestone. After any graph
 change, `--check` must pass before committing. See `AGENTS.md`.
 
-**Rebuilt for the `gpt-5.6-luna` switch on 2026-08-07 and `--check` passes**: 1927 nodes, 4760 directed
-edges, 159 communities; recorded cumulative cost is US$0.367515 over 35 runs. The `WF-039` rebuild the same day
+**Rebuilt for `WF-045` on 2026-08-07 and `--check` passes**: 1956 nodes, 4825 directed edges, 169
+communities; recorded cumulative cost is US$0.381437 over 36 runs.
+
+A third ticket-authoring trap, and the fix is in `normalize_raw_graph` rather than in how tickets are
+written. Extraction sometimes emits a module **twice** — `tests_test_x` and `tests_test_x_py` — when a
+document cites the file by path. Both land in the raw node set, so the endpoint-pair guard treats an edge
+to the `_py` twin as real, clustering then correctly collapses the duplicate, and the build fails claiming
+data was lost. `WF-039` cited `tests/test_comfort.py` in the identical style and extracted cleanly, so it
+is extraction variance, not a citation style to correct. The twin is now folded into the real node before
+`expected` is computed — the same normalisation the `wayfinder_tickets_NNN` aliases already perform, and
+**not** a relaxation of the guard: the edge survives, pointed at the node that does. The `WF-039` rebuild the same day
 gave 1868 nodes, 4589 edges and 150 communities. The `WF-040` rebuild the day before
 gave 1818 nodes, 4492 edges and 153 communities for US$0.0121.
 
@@ -434,10 +455,9 @@ that declaration is what kept the gate working when the POC went.
 
 ## Phase 2 implementation follows the locked slice order
 
-`WF-MAP-002` is **decision-complete as of 2026-08-03**. Across both maps there are 46 tickets, **44
-closed, 2 open**, both opened 2026-08-07 while measuring the pilot's opening hours and neither blocking
-it: `Decide whether a venue's own site fills the holiday-hours gap` (`WF-044`) and `Decide what happens
-to an activated plan when evidence improves` (`WF-045`).
+`WF-MAP-002` is **decision-complete as of 2026-08-03**. Across both maps there are 46 tickets, **45
+closed, 1 open**: `Decide whether a venue's own site fills the holiday-hours gap` (`WF-044`), left open
+with its measurement recorded — schema.org is 0 of 9 and extraction would reliably help one site.
 
 Two measured facts from those worth carrying. **`verified` means a provider said so, not that it is
 true** — Google returns Mon–Fri 08:30–17:30 with weekends closed for Sun Yat-sen Memorial Hall, which

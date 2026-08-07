@@ -1159,6 +1159,22 @@
   margin-left: 8px;
 }
 
+/* WF-045. The drift banner reuses the existing warning note, but needs to stack a
+   sentence, a violation list and a link rather than sit on one line. */
+.plan-drift {
+  align-items: flex-start;
+}
+
+.plan-drift ul {
+  margin: 6px 0;
+  padding-left: 18px;
+}
+
+.plan-drift a {
+  display: inline-block;
+  margin-top: 4px;
+}
+
 /* WF-039. Same card treatment as the panels around it on /optimize. */
 .comfort-tradeoffs {
   background: var(--bg-card);
