@@ -69,3 +69,38 @@ the tolerance. Changing the viewport invalidates all 36.
 Chrome needs two macOS workarounds, both in `capture()`: it writes the
 screenshot and then never exits, so the return code is not a usable signal and
 the file itself is judged; and `--headless=old` returns rc=1 without writing.
+
+## The capture renders live app state, so look before approving
+
+These are screenshots of the running app against the real database, not of
+static markup. Whatever the app is honestly showing at capture time is what
+gets frozen — including a failure.
+
+Measured 2026-08-07. A capture taken that morning baked a provider-error banner
+into `/places`: *"The provider could not return a current catalog."* It was not
+a capture bug and not a rendering glitch. The discovery cache had passed its
+7-day TTL on 2026-08-06 05:20, the refresh attempted minutes later hit Overpass
+`HTTP 504` because its two concurrent slots were spent, and the run fell back to
+the expired cache with `status: "stale"`. The app was right to say so; approving
+that image would have made "the catalogue is stale" the baseline for `/places`
+and hidden the banner's later disappearance.
+
+Re-running discovery cleared it — `verified`, 849 candidates, 51s — and the
+`/places` diff dropped back inside tolerance on its own. So:
+
+- **Open the changed images before `--approve`.** A diff that is large and
+  unexplained is usually state, not styling.
+- **Check `get_latest_discovery(...).status` is `verified` first.** A `stale`
+  run means the banner is on screen.
+- Data changes legitimately move these images. Confirming the accommodation base
+  alone moved `/evidence` by 13.9%, and a new plan version moves `/itinerary` by
+  0.2% through the version id and snapshot timestamp in its header.
+
+## What the 1440×900 viewport cannot see
+
+Anything below the fold. `/places` grew a stay-area ranking (`WF-040`) under the
+swipe deck and `/optimize` grew a comfort-acceptance control (`WF-039`), and
+**neither appears in any baseline** — the deck card and the plan summary fill the
+viewport above them. The gate is not evidence about those sections in either
+direction. Recorded rather than worked around, because changing the viewport
+invalidates all 36 and is `WF-025`'s decision to revisit, not a capture setting.
