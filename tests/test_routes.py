@@ -710,6 +710,50 @@ class PlaceSummaryTest(unittest.TestCase):
 
         self.assertEqual({"en": "Some Temple"}, provider.summary("Q1")["names"])
 
+    def test_a_summary_can_be_dropped_without_touching_the_paid_evidence(self) -> None:
+        """Deselecting a place leaves its evidence behind, which is deliberate for the
+        paid half: an `opening_hours` row cost US$0.025 and is the reason this cache
+        outlives a change of mind. Measured on the pilot on 2026-08-07 — 14 orphaned
+        rows, 1 free summary and 13 paid hours worth US$0.325.
+
+        So `kind` is required and a summary cleanup cannot reach the hours.
+        """
+
+        self.actions.refresh_place_summaries(self.trip.trip_id)
+        place_id = self.candidates[0]["place_id"]
+        self.actions.store.upsert_place_evidence(
+            trip_id=self.trip.trip_id,
+            place_id=place_id,
+            kind="opening_hours",
+            value={"place_id": place_id, "weekly": []},
+            provider="google_places",
+            retrieved_at="2030-01-01T00:00:00+00:00",
+            expires_at="2030-12-31T00:00:00+00:00",
+        )
+
+        removed = self.actions.store.delete_place_evidence(
+            self.trip.trip_id, place_id, "place_summary"
+        )
+
+        self.assertEqual(1, removed)
+        self.assertNotIn(place_id, self.actions.list_place_summaries(self.trip.trip_id))
+        self.assertEqual(
+            [place_id],
+            [
+                item["place_id"]
+                for item in self.actions.store.list_place_evidence(
+                    self.trip.trip_id, "opening_hours"
+                )
+            ],
+        )
+        # Removing something already gone is not an error, so a tidy-up is idempotent.
+        self.assertEqual(
+            0,
+            self.actions.store.delete_place_evidence(
+                self.trip.trip_id, place_id, "place_summary"
+            ),
+        )
+
     def test_a_summary_is_stored_per_place_in_both_languages(self) -> None:
         report = self.actions.refresh_place_summaries(self.trip.trip_id)
         self.assertEqual(0, report["failed"], report.get("provider_errors"))

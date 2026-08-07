@@ -1042,6 +1042,25 @@ class SQLiteStore:
             )
         return value
 
+    def delete_place_evidence(self, trip_id: str, place_id: str, kind: str) -> int:
+        """Drop one cached evidence row. Returns how many rows went.
+
+        `place_evidence` carries no append-only trigger because it is a cache, not
+        history — but it is a cache of two very different things. A `place_summary` is
+        free to fetch again from Wikidata; an `opening_hours` row cost US$0.025 at
+        `google_places:search_text` and is the reason the table outlives a change of
+        mind. So `kind` is **required**: there is no call that removes everything held
+        for a place, and a tidy-up cannot reach the paid rows by accident.
+        """
+
+        with self.connect() as connection:
+            cursor = connection.execute(
+                "DELETE FROM place_evidence"
+                " WHERE trip_id = ? AND place_id = ? AND kind = ?",
+                (trip_id, place_id, kind),
+            )
+            return int(cursor.rowcount)
+
     def list_place_evidence(self, trip_id: str, kind: str) -> list[dict[str, Any]]:
         with self.connect() as connection:
             rows = connection.execute(
