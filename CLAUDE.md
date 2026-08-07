@@ -312,6 +312,21 @@ saturating at 30 gave every station a flat 15 of 15 when Taipei really returns 1
 `TransitGraph.journey` returns `None` when nothing needs riding, so travel time takes the **better of
 riding and walking** — otherwise a station across the road from a place scores as unreachable.
 
+**A trip can be deleted from the webapp as of 2026-08-08 (`WF-048`), and `delete_trip` was broken.**
+The method has been on the allowlist since S1 with no control anywhere, so a trip made by mistake
+stayed in the switcher for good. Building the control found the method itself unusable: `split_rows`,
+`split_settled_markers` (S2) and `comfort_acceptances` (`WF-039`) all arrived after
+`store.delete_trip`'s ordered table list was written and none was added, so deleting any trip that had
+settled a bill or accepted a comfort tradeoff raised `FOREIGN KEY constraint failed`. Its own comment
+predicted exactly this — "a future trip-scoped table fails this transaction safely until added here" —
+and nothing was checking it. `test_delete_trip_removes_planning_data_but_keeps_paid_usage` already
+enumerated every trip-scoped table and asserted zero rows survived, but the victim had no rows in the
+three, so it counted zero of zero and passed. It now populates them, and negative-tested against the
+old `store.py` it fails with the real error. **Paid usage is deliberately kept** — the charge really
+happened, so it stays on the monthly total. The confirmation is type-the-name, which is the POC's own
+design: `delete_trip_confirm` was already in the catalogue, the deletion is irreversible, and a button
+you can hit twice by reflex is not a confirmation.
+
 **Category variety reverses the learned bonus as of 2026-08-08 (`WF-048`).**
 `ranking._learned_category_weights` only ever argued for *more* of what was already chosen: pick three
 temples and temples rose, so the fourth and fifth led every lane and the deck offered "the same thing

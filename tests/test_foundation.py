@@ -122,6 +122,51 @@ class FoundationTest(unittest.TestCase):
                     "2026-07-30T00:00:00+00:00",
                 ),
             )
+            # The three tables that arrived after `delete_trip`'s list was written and
+            # were never added to it: `split_rows` and `split_settled_markers` at S2,
+            # `comfort_acceptances` at `WF-039`. The enumeration below has always been
+            # here, but with no rows in these tables it counted zero of zero and passed
+            # while deleting any real trip that had settled a bill or accepted a
+            # tradeoff raised FOREIGN KEY constraint failed. Populating them is what
+            # makes that assertion bite.
+            split = freeze_snapshot({"label": "Dinner", "mode": "equal_all"})
+            connection.execute(
+                """
+                INSERT INTO split_rows
+                    (id, trip_id, snapshot_json, snapshot_sha256, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "split_delete_test",
+                    victim.trip_id,
+                    split.canonical_json,
+                    split.sha256,
+                    "2026-08-08T00:00:00+00:00",
+                    "2026-08-08T00:00:00+00:00",
+                ),
+            )
+            connection.execute(
+                """
+                INSERT INTO split_settled_markers
+                    (trip_id, traveller_id, settled_net_thb, updated_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (victim.trip_id, "owner", 0.0, "2026-08-08T00:00:00+00:00"),
+            )
+            connection.execute(
+                """
+                INSERT INTO comfort_acceptances
+                    (trip_id, code, accepted_value, threshold_value, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    victim.trip_id,
+                    "PLAIN_WALK_THRESHOLD",
+                    27.0,
+                    25.0,
+                    "2026-08-08T00:00:00+00:00",
+                ),
+            )
             connection.commit()
             with self.assertRaisesRegex(sqlite3.IntegrityError, "immutable"):
                 connection.execute(

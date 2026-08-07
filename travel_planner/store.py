@@ -452,8 +452,18 @@ class SQLiteStore:
                 "INSERT INTO trip_deletions (trip_id) VALUES (?)", (trip_id,)
             )
             # Children with cross-table foreign keys come first. A future
-            # trip-scoped table fails this transaction safely until added here.
+            # trip-scoped table fails this transaction safely until added here --
+            # and three of them did. `split_rows`, `split_settled_markers` (S2) and
+            # `comfort_acceptances` (`WF-039`) all arrived after this list was written
+            # and none was added, so deleting any trip that had settled a bill or
+            # accepted a comfort tradeoff raised FOREIGN KEY constraint failed. The
+            # prediction in this comment was right; nothing was checking it. A test
+            # now enumerates every table with a foreign key to `trips` and fails when
+            # one is missing here, so the next addition cannot repeat it.
             for table in (
+                "split_settled_markers",
+                "split_rows",
+                "comfort_acceptances",
                 "active_plans",
                 "candidate_choices",
                 "optimization_previews",

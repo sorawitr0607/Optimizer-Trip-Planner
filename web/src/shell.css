@@ -2771,3 +2771,84 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Deleting a trip. `delete_trip` has been on the allowlist since S1 with no control
+   anywhere, so a trip made by mistake stayed in the switcher for good. */
+.trip-slot {
+  display: grid;
+  gap: 6px;
+}
+
+.trip-slot-open {
+  align-items: center;
+  align-self: start;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: var(--text-xs);
+  gap: 5px;
+  justify-self: end;
+  padding: 3px 8px;
+}
+
+/* Quiet until wanted: it sits beside a link pressed far more often. */
+.trip-slot-open:hover {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+.trip-slot-confirm {
+  background: var(--color-danger-light);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.trip-slot-confirm p {
+  margin: 0;
+}
+
+.trip-slot-confirm label {
+  display: grid;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-secondary);
+  gap: 4px;
+}
+
+.trip-slot-confirm input {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  padding: 7px 9px;
+}
+
+.trip-slot-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.trip-slot-actions button {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-weight: var(--weight-secondary);
+  padding: 6px 12px;
+}
+
+.trip-slot-actions .trip-slot-delete {
+  background: var(--color-danger);
+  color: var(--color-on-accent);
+}
+
+.trip-slot-actions .trip-slot-delete:disabled {
+  cursor: not-allowed;
+  opacity: var(--opacity-disabled);
+}

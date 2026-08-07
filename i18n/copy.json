@@ -1139,7 +1139,11 @@
       "balanced": "Balanced",
       "catalog_empty_title": "No places came back",
       "catalog_empty_help": "This is almost always the map service being briefly unavailable, not the city having nothing in it. Wait a minute, then press Discover attractions again — it is free, and nothing you have entered is lost.",
-      "catalog_empty_reason": "What the map service said"
+      "catalog_empty_reason": "What the map service said",
+      "delete_trip": "Delete",
+      "cancel": "Cancel",
+      "delete_trip_done": "Trip deleted.",
+      "deleting": "Deleting…"
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -1904,7 +1908,11 @@
       "balanced": "สมดุล",
       "catalog_empty_title": "ไม่ได้รับข้อมูลสถานที่",
       "catalog_empty_help": "ส่วนใหญ่เกิดจากบริการแผนที่ขัดข้องชั่วคราว ไม่ใช่เพราะเมืองนั้นไม่มีสถานที่ รอสักครู่แล้วกดค้นหาสถานที่อีกครั้ง ใช้ฟรี และข้อมูลที่กรอกไว้ไม่หายไปไหน",
-      "catalog_empty_reason": "บริการแผนที่แจ้งว่า"
+      "catalog_empty_reason": "บริการแผนที่แจ้งว่า",
+      "delete_trip": "ลบ",
+      "cancel": "ยกเลิก",
+      "delete_trip_done": "ลบทริปแล้ว",
+      "deleting": "กำลังลบ…"
     }
   }
 }
