@@ -212,7 +212,8 @@
       "comfort_value_not_a_number": "Enter the number of minutes you are agreeing to",
       "no_comfort_threshold_set": "You have set no limit for this, so there is nothing to agree to",
       "comfort_value_within_threshold": "That is already inside your limit — nothing needs agreeing",
-      "assumptions_not_used_by_this_trip": "This trip plans against verified evidence only, so an assumed window would not be used"
+      "assumptions_not_used_by_this_trip": "This trip plans against verified evidence only, so an assumed window would not be used",
+      "discovery_required_for_climate": "Find places first — the weather guide reads the area your places were found in."
     },
     "th": {
       "ACCESS_UNVERIFIED": "ยังไม่ยืนยันทางเข้าและกฎการเข้าถึง",
@@ -304,7 +305,8 @@
       "comfort_value_not_a_number": "กรอกจำนวนนาทีที่คุณยอมรับ",
       "no_comfort_threshold_set": "คุณยังไม่ได้ตั้งขีดจำกัดสำหรับเรื่องนี้ จึงไม่มีอะไรให้ยอมรับ",
       "comfort_value_within_threshold": "ค่านี้อยู่ในขีดจำกัดของคุณอยู่แล้ว ไม่ต้องยอมรับอะไร",
-      "assumptions_not_used_by_this_trip": "ทริปนี้วางแผนจากหลักฐานที่ยืนยันแล้วเท่านั้น ช่วงเวลาที่คาดการณ์จึงไม่ถูกนำไปใช้"
+      "assumptions_not_used_by_this_trip": "ทริปนี้วางแผนจากหลักฐานที่ยืนยันแล้วเท่านั้น ช่วงเวลาที่คาดการณ์จึงไม่ถูกนำไปใช้",
+      "discovery_required_for_climate": "ค้นหาสถานที่ก่อน — คำแนะนำสภาพอากาศอ่านจากพื้นที่ที่พบสถานที่ของคุณ"
     }
   },
   "REJECTION_TEXT": {
@@ -1147,7 +1149,33 @@
       "shortlist_map": "Where your shortlist is",
       "change_choice": "Change this choice",
       "relink_places": "Re-link places to this setup",
-      "relinking": "Re-linking…"
+      "relinking": "Re-linking…",
+      "month_comfortable": "Comfortable {high}°C days",
+      "month_too_cold": "Cold — {high}°C by day",
+      "month_too_hot": "Hot — {high}°C by day",
+      "month_wet": "Rain on {wet}% of days",
+      "month_dry": "Rain on only {wet}% of days",
+      "month_crowding_unknown": "No public-holiday data for this country, so local crowding is unknown",
+      "band_best": "Best",
+      "band_fair": "Fair",
+      "band_avoid": "Hardest",
+      "month_guide_title": "When is best to go?",
+      "month_guide_help": "Ranked from {years} of recorded weather at your destination, plus its public holidays. Every month stays selectable — this is what the numbers say, not a rule.",
+      "month_guide_source": "Weather: Open-Meteo archive, {from} to {to}. Holidays: Nager.Date, {year}.",
+      "month_guide_no_holidays": "Public-holiday data is not published for {country}, so local crowding is not part of these rankings.",
+      "load_month_guide": "Show the best months",
+      "month_guide_free": "Free — recorded weather and published holidays, no key and no charge.",
+      "month_crowded": "{days}-day national holiday ({names}) — locals travel, so transport and hotels fill",
+      "month_festival": "{names} happens this month and in no other",
+      "month_festival_days": "{days} public holiday(s) to catch: {names}",
+      "month_quiet": "No national holiday, so it stays quiet",
+      "month_advice_heat": "Plan indoor places for the afternoon, start early, and keep a rest stop each hour.",
+      "month_advice_cold": "Keep outdoor stretches short and put a warm indoor stop between them.",
+      "month_advice_rain": "Keep an indoor alternative beside each outdoor plan.",
+      "month_advice_crowds": "Book transport and rooms early, and expect the well-known places to be full.",
+      "month_pros": "Good",
+      "month_cons": "Hard",
+      "month_advice": "How to handle it"
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -1920,7 +1948,33 @@
       "shortlist_map": "สถานที่ที่เลือกอยู่ตรงไหน",
       "change_choice": "เปลี่ยนการตัดสินใจนี้",
       "relink_places": "เชื่อมสถานที่กับการตั้งค่านี้ใหม่",
-      "relinking": "กำลังเชื่อมใหม่…"
+      "relinking": "กำลังเชื่อมใหม่…",
+      "month_comfortable": "อากาศสบาย กลางวัน {high}°C",
+      "month_too_cold": "หนาว — กลางวัน {high}°C",
+      "month_too_hot": "ร้อน — กลางวัน {high}°C",
+      "month_wet": "ฝนตก {wet}% ของวัน",
+      "month_dry": "ฝนตกเพียง {wet}% ของวัน",
+      "month_crowding_unknown": "ไม่มีข้อมูลวันหยุดราชการของประเทศนี้ จึงไม่ทราบความหนาแน่นของคนท้องถิ่น",
+      "band_best": "ดีที่สุด",
+      "band_fair": "พอใช้",
+      "band_avoid": "ยากที่สุด",
+      "month_guide_title": "ช่วงไหนเหมาะจะไปที่สุด",
+      "month_guide_help": "จัดอันดับจากสภาพอากาศที่บันทึกไว้ {years} ที่จุดหมายของคุณ ร่วมกับวันหยุดราชการ ทุกเดือนยังเลือกได้ นี่คือสิ่งที่ตัวเลขบอก ไม่ใช่กฎ",
+      "month_guide_source": "สภาพอากาศ: คลัง Open-Meteo, {from} ถึง {to} · วันหยุด: Nager.Date, {year}",
+      "month_guide_no_holidays": "ไม่มีข้อมูลวันหยุดราชการของ{country} การจัดอันดับนี้จึงไม่รวมความหนาแน่นของคนท้องถิ่น",
+      "load_month_guide": "ดูเดือนที่ดีที่สุด",
+      "month_guide_free": "ฟรี — ข้อมูลอากาศที่บันทึกไว้และวันหยุดที่ประกาศแล้ว ไม่ต้องใช้คีย์และไม่มีค่าใช้จ่าย",
+      "month_crowded": "วันหยุดยาว {days} วัน ({names}) — คนท้องถิ่นเดินทาง รถและที่พักจะเต็ม",
+      "month_festival": "{names} มีเฉพาะเดือนนี้เท่านั้น",
+      "month_festival_days": "มีวันหยุด {days} วันให้ได้เจอ: {names}",
+      "month_quiet": "ไม่มีวันหยุดประจำชาติ จึงไม่แออัด",
+      "month_advice_heat": "จัดที่ในร่มไว้ช่วงบ่าย เริ่มเช้า และเผื่อจุดพักทุกชั่วโมง",
+      "month_advice_cold": "อย่าอยู่กลางแจ้งนาน และแทรกจุดแวะในร่มที่อบอุ่นระหว่างทาง",
+      "month_advice_rain": "เตรียมตัวเลือกในร่มไว้คู่กับแผนกลางแจ้งทุกจุด",
+      "month_advice_crowds": "จองรถและที่พักล่วงหน้า และเผื่อใจว่าที่ดัง ๆ จะแน่น",
+      "month_pros": "ข้อดี",
+      "month_cons": "ข้อเสีย",
+      "month_advice": "รับมืออย่างไร"
     }
   }
 }

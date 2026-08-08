@@ -1088,6 +1088,119 @@ class OpenRouteServiceProvider:
         }
 
 
+class OpenMeteoClimateProvider:
+    """Monthly weather normals and local public holidays, both free and keyless.
+
+    The owner asked for a recommended month to travel "with the reason". A model would
+    answer instantly and unverifiably, which is the failure `WF-046` measured — so this
+    answers from observations instead: Open-Meteo's archive is real recorded weather,
+    and Nager.Date is published public holidays.
+
+    **Holiday coverage is partial and that is surfaced, not smoothed over.** Nager lists
+    204 countries and 25 of this app's 32 match by name; Taiwan, Thailand, Malaysia,
+    India, the UAE and Turkey are genuinely absent — including the pilot destination. A
+    silent zero would read as "no local holidays", so `holidays()` returns `None` for an
+    uncovered country and the screen says the crowd factor is unknown.
+    """
+
+    name = "openmeteo"
+    operation = "openmeteo:climate"
+    holiday_operation = "nager:holidays"
+    kind = "travel_months"
+    cache_version = "climate-v1"
+    # Normals move over decades, not weeks, and holidays are published a year ahead.
+    cache_ttl_days = 120
+    # Five whole years: enough to average out one freak season, few enough to keep the
+    # response near 1,800 days rather than tens of thousands.
+    archive_years = 5
+    # Nager's own spelling where it differs from `destinations.py`. Only real aliases —
+    # a country genuinely absent stays absent rather than being mapped to a neighbour.
+    country_aliases = {"Czech Republic": "Czechia"}
+
+    def __init__(self) -> None:
+        self.archive_url = os.environ.get(
+            "TOURIST_CLIMATE_URL", "https://archive-api.open-meteo.com/v1/archive"
+        )
+        self.holiday_url = os.environ.get(
+            "TOURIST_HOLIDAY_URL", "https://date.nager.at/api/v3"
+        )
+        self.user_agent = os.environ.get(
+            "TOURIST_USER_AGENT", "TouristPlannerPersonalPOC/0.2 (local personal use)"
+        )
+
+    def cache_descriptor(self, destination: str) -> dict[str, Any]:
+        return {
+            "provider": self.name,
+            "operation": self.operation,
+            "version": self.cache_version,
+            "destination": destination.casefold(),
+        }
+
+    def _json(self, url: str) -> Any:
+        return _request_json_shared(
+            Request(url, headers={"Accept": "application/json", "User-Agent": self.user_agent})
+        )
+
+    def daily_archive(self, latitude: float, longitude: float, *, end_year: int) -> dict[str, Any]:
+        """Five years of daily highs, lows and precipitation for one point."""
+
+        start = f"{end_year - self.archive_years + 1}-01-01"
+        end = f"{end_year}-12-31"
+        query = urlencode(
+            {
+                "latitude": f"{latitude:.4f}",
+                "longitude": f"{longitude:.4f}",
+                "start_date": start,
+                "end_date": end,
+                "daily": "temperature_2m_max,temperature_2m_min,precipitation_sum",
+                "timezone": "auto",
+            }
+        )
+        payload = self._json(f"{self.archive_url}?{query}")
+        daily = payload.get("daily") if isinstance(payload, dict) else None
+        if not isinstance(daily, dict) or not daily.get("time"):
+            raise ProviderUnavailable("Open-Meteo returned no daily series")
+        return {"daily": daily, "from": start, "to": end}
+
+    def holidays(self, country: str, year: int) -> list[dict[str, Any]] | None:
+        """Public holidays for a country, or `None` where the source does not cover it.
+
+        `None` and `[]` mean different things here and the caller depends on it: no
+        data versus a country with no public holidays.
+        """
+
+        wanted = self.country_aliases.get(country, country)
+        try:
+            available = self._json(f"{self.holiday_url}/AvailableCountries")
+        except ProviderUnavailable:
+            return None
+        code = next(
+            (
+                str(item.get("countryCode"))
+                for item in available or []
+                if str(item.get("name") or "").casefold() == wanted.casefold()
+            ),
+            None,
+        )
+        if not code:
+            return None
+        try:
+            found = self._json(f"{self.holiday_url}/PublicHolidays/{year}/{code}")
+        except ProviderUnavailable:
+            return None
+        if not isinstance(found, list):
+            return None
+        return [
+            {
+                "date": str(item.get("date") or ""),
+                "name": str(item.get("name") or ""),
+                "local_name": str(item.get("localName") or ""),
+            }
+            for item in found
+            if item.get("date")
+        ]
+
+
 class WikidataSummaryProvider:
     """A description and a photo per place, in both languages, for nothing.
 

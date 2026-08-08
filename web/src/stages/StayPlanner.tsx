@@ -1,7 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { ApiError, rpc, type PlanProposal, type SetupDraft } from "../api/client";
+import {
+  ApiError,
+  rpc,
+  type MonthGuide,
+  type PlanProposal,
+  type SetupDraft,
+} from "../api/client";
 import { copy, copyFormat, type Language } from "../i18n/copy";
 
 /**
@@ -95,8 +101,17 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
     queryKey: ["setup", tripId],
     queryFn: () => rpc<SetupDraft | null>("get_setup", { trip_id: tripId }),
   });
+  // Owner-triggered, like every other network read on this app: free, but it is two
+  // requests to public services and this screen is reached by anyone with no dates.
+  const guide = useQuery({
+    queryKey: ["month_guide", tripId],
+    queryFn: () => rpc<MonthGuide>("travel_month_guide", { trip_id: tripId }),
+    enabled: false,
+    staleTime: Infinity,
+  });
 
   const chosen = options.find((item) => item.id === pace) ?? options[0];
+  const chosenMonth = guide.data?.months.find((item) => item.month === month);
   const start = firstOfMonth(month, today);
   const end = chosen ? addDays(start, Math.max(chosen.days - 1, 0)) : start;
 
@@ -162,19 +177,96 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
       </div>
 
       <h3 className="money-eyebrow">{copy("pick_month", language)}</h3>
-      <div className="stay-months" role="group" aria-label={copy("pick_month", language)}>
-        {Array.from({ length: MONTH_COUNT }, (_, index) => index + 1).map((value) => (
+      {/* Banded from recorded weather and published holidays, never from recall — a
+          model will happily invent a season for a city it has never checked, which is
+          the failure `WF-046` measured. Every month stays pressable: this reports what
+          the numbers say and the owner may be travelling on dates a school decides. */}
+      {guide.data ? (
+        <p className="setup-hint">
+          {copyFormat("month_guide_help", language, { years: `${guide.data.observed_from.slice(0, 4)}–${guide.data.observed_to.slice(0, 4)}` })}
+        </p>
+      ) : (
+        <div className="optimize-actions">
           <button
-            aria-pressed={value === month}
-            className={`stay-month${value === month ? " active" : ""}`}
-            key={value}
-            onClick={() => { setMonth(value); setSaved(false); }}
+            disabled={guide.isFetching}
+            onClick={() => guide.refetch()}
             type="button"
           >
-            {copy(`month_${value}`, language)}
+            {guide.isFetching ? copy("loading", language) : copy("load_month_guide", language)}
           </button>
-        ))}
+          <span className="setup-hint">{copy("month_guide_free", language)}</span>
+        </div>
+      )}
+      <div className="stay-months" role="group" aria-label={copy("pick_month", language)}>
+        {Array.from({ length: MONTH_COUNT }, (_, index) => index + 1).map((value) => {
+          const rated = guide.data?.months.find((item) => item.month === value);
+          return (
+            <button
+              aria-pressed={value === month}
+              className={`stay-month${value === month ? " active" : ""}${rated ? ` band-${rated.band}` : ""}`}
+              key={value}
+              onClick={() => { setMonth(value); setSaved(false); }}
+              type="button"
+            >
+              {copy(`month_${value}`, language)}
+              {rated ? <small>{copy(`band_${rated.band}`, language)}</small> : null}
+            </button>
+          );
+        })}
       </div>
+      {chosenMonth ? (
+        <div className={`month-verdict band-${chosenMonth.band}`}>
+          <p className="month-verdict-head">
+            <strong>{copy(`month_${chosenMonth.month}`, language)}</strong>
+            <span>{copy(`band_${chosenMonth.band}`, language)}</span>
+          </p>
+          {chosenMonth.pros.length ? (
+            <div className="month-column">
+              <h4>{copy("month_pros", language)}</h4>
+              <ul>
+                {chosenMonth.pros.map((item) => (
+                  <li key={item.code}>{copyFormat(item.code, language, item.args)}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {chosenMonth.cons.length ? (
+            <div className="month-column">
+              <h4>{copy("month_cons", language)}</h4>
+              <ul>
+                {chosenMonth.cons.map((item) => (
+                  <li key={item.code}>{copyFormat(item.code, language, item.args)}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {chosenMonth.advice.length ? (
+            <div className="month-column">
+              <h4>{copy("month_advice", language)}</h4>
+              <ul>
+                {chosenMonth.advice.map((item) => (
+                  <li key={item.code}>{copyFormat(item.code, language, item.args)}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      {guide.data ? (
+        <p className="setup-hint">
+          {copyFormat("month_guide_source", language, {
+            from: guide.data.observed_from,
+            to: guide.data.observed_to,
+            year: guide.data.holiday_year,
+          })}
+          {guide.data.holiday_source ? null : (
+            <>
+              {" "}
+              {copyFormat("month_guide_no_holidays", language, { country: guide.data.country })}
+            </>
+          )}
+        </p>
+      ) : null}
       <p className="setup-hint">{copy("pick_month_help", language)}</p>
 
       <p className="stay-dates">

@@ -3017,3 +3017,93 @@
   0%, 100% { opacity: 1; }
   50% { opacity: var(--opacity-dim); }
 }
+
+/* Month bands. Colour is never the only carrier: each button also names its band and
+   the verdict below spells out both columns. */
+.stay-month {
+  display: inline-grid;
+  justify-items: center;
+  line-height: 1.25;
+}
+
+.stay-month small {
+  font-size: var(--text-2xs);
+  opacity: var(--opacity-dim);
+}
+
+.stay-month.band-best {
+  border-color: var(--color-success);
+}
+
+.stay-month.band-avoid {
+  border-color: var(--color-danger);
+}
+
+.stay-month.band-best small {
+  color: var(--color-success);
+}
+
+.stay-month.band-avoid small {
+  color: var(--color-danger);
+}
+
+.stay-month.active small {
+  color: var(--color-on-accent);
+  opacity: 1;
+}
+
+/* Pros and cons together: a month is a trade, not a verdict. August is hot and hard on
+   an open-air day, and it is also when the festival is. */
+.month-verdict {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-left-width: var(--blocked-stripe-width);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  padding: 12px 14px;
+}
+
+.month-verdict.band-best {
+  border-left-color: var(--color-success);
+}
+
+.month-verdict.band-fair {
+  border-left-color: var(--color-warning);
+}
+
+.month-verdict.band-avoid {
+  border-left-color: var(--color-danger);
+}
+
+.month-verdict-head {
+  align-items: baseline;
+  display: flex;
+  gap: 8px;
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.month-verdict-head span {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  text-transform: uppercase;
+}
+
+.month-column h4 {
+  color: var(--text-muted);
+  font-size: var(--text-2xs);
+  letter-spacing: 0.08em;
+  margin: 0 0 4px;
+  text-transform: uppercase;
+}
+
+.month-column ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.month-column li {
+  margin-bottom: 3px;
+}

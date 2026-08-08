@@ -515,6 +515,35 @@ export interface ExportSnapshot {
   };
 }
 
+/** `WF-048`. When to go, from Open-Meteo's recorded weather and published holidays.
+ *  Every month is returned and stays selectable: this reports, it does not choose. */
+export interface MonthGuideEntry {
+  month: number;
+  band: "best" | "fair" | "avoid";
+  score: number;
+  mean_high_c: number;
+  mean_low_c: number | null;
+  wet_day_percent: number;
+  holiday_days: number;
+  holiday_names: string[];
+  /** Code plus the numbers behind it. The core emits codes; the view renders them. */
+  pros: { code: string; args: Record<string, string | number> }[];
+  cons: { code: string; args: Record<string, string | number> }[];
+  advice: { code: string; args: Record<string, string | number> }[];
+}
+
+export interface MonthGuide {
+  months: MonthGuideEntry[];
+  observed_from: string;
+  observed_to: string;
+  country: string;
+  holiday_year: number;
+  /** Null where the holiday source does not cover the country — Taiwan and Thailand
+   *  both included — so the screen says crowding is unknown rather than implying quiet. */
+  holiday_source: string | null;
+  sources: string[];
+}
+
 export interface ChecklistVocabulary {
   categories: string[];
   requirement_levels: string[];

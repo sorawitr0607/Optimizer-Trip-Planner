@@ -28,7 +28,7 @@ from .core import (
     new_setup_draft,
     new_trip,
 )
-from . import areas, checklist, costs, destinations, exports, interpret, opening, revision, split, usage
+from . import areas, checklist, climate, costs, destinations, exports, interpret, opening, revision, split, usage
 from . import setup as setup_module
 from .discovery import build_candidate_catalog
 from .optimizer import (
@@ -44,6 +44,7 @@ from .providers import (
     GooglePlacesOpeningHoursProvider,
     OpenAIOpeningWindowProvider,
     OpenAIRevisionInterpreter,
+    OpenMeteoClimateProvider,
     RevisionInterpretationUnavailable,
     GoogleTimeZoneProvider,
     GtfsTransitProvider,
@@ -118,6 +119,7 @@ class PlannerActions:
         opening_window_provider: Any = None,
         venue_notice_provider: Any = None,
         summary_provider: Any = None,
+        climate_provider: Any = None,
         timezone_provider: Any = None,
         hours_provider: Any = None,
         card_provider: Any = None,
@@ -133,6 +135,7 @@ class PlannerActions:
         self.opening_window_provider = opening_window_provider
         self.venue_notice_provider = venue_notice_provider
         self.summary_provider = summary_provider
+        self.climate_provider = climate_provider
         self.timezone_provider = timezone_provider
         self.hours_provider = hours_provider
         self.card_provider = card_provider
@@ -1929,6 +1932,86 @@ class PlannerActions:
                 "longitude": points[0]["longitude"],
             }
         raise PlannerRefusal("discovery_missing")
+
+    def travel_month_guide(self, trip_id: str, *, force: bool = False) -> dict[str, Any]:
+        """Which months suit this destination, from measured weather and local holidays.
+
+        Free on both sides and cached for `cache_ttl_days`: normals move over decades
+        and holidays are published a year ahead, so this is one request pair per
+        destination rather than one per visit.
+
+        The coordinates come from the discovery run's own geocoded window, so this
+        needs no new geocoder call and describes the box the places were found in.
+        Without a discovery there is nothing to centre on, and it refuses rather than
+        guessing a city from its name.
+        """
+
+        trip = self.store.get_trip(trip_id)
+        if trip is None:
+            raise PlannerRefusal("unknown_trip", trip_id=trip_id)
+        discovery = self.get_latest_discovery(trip_id)
+        # `query_boundary` is the clamped window discovery actually searched, stored as
+        # (south, west, north, east). Its centre is the city as this trip found it, so
+        # the weather described is the weather over the places on the shortlist.
+        box = (discovery.report.as_dict() if discovery else {}).get("query_boundary")
+        if not (isinstance(box, list) and len(box) == 4):
+            raise PlannerRefusal("discovery_required_for_climate", trip_id=trip_id)
+        latitude = (float(box[0]) + float(box[2])) / 2
+        longitude = (float(box[1]) + float(box[3])) / 2
+
+        provider = self.climate_provider or OpenMeteoClimateProvider()
+        now = datetime.now(timezone.utc)
+        held = self.store.get_trip_evidence(trip_id, provider.kind)
+        if not force and held and held.get("expires_at", "") > now.isoformat():
+            return dict(held["value"])
+
+        year = now.year - 1  # the last whole year the archive certainly holds
+        self._spend(
+            operation=provider.operation,
+            count=1,
+            trip_id=trip_id,
+            detail={"latitude": round(latitude, 3), "longitude": round(longitude, 3)},
+        )
+        archive = provider.daily_archive(latitude, longitude, end_year=year)
+        months = climate.monthly_normals(archive["daily"])
+
+        country = (trip.destination.split(",")[-1]).strip()
+        self._spend(
+            operation=provider.holiday_operation, count=1, trip_id=trip_id,
+            detail={"country": country, "year": year + 1},
+        )
+        published = provider.holidays(country, year + 1)
+        grouped = climate.holiday_months(published) if published is not None else {}
+        ranked = climate.rank_months(
+            months,
+            holidays=grouped,
+            holiday_source="nager.date" if published is not None else None,
+        )
+        value = {
+            "months": ranked,
+            "latitude": round(latitude, 4),
+            "longitude": round(longitude, 4),
+            "observed_from": archive["from"],
+            "observed_to": archive["to"],
+            "country": country,
+            "holiday_year": year + 1,
+            # Named so the screen can say the crowd factor is unknown rather than
+            # letting an absent holiday list read as a quiet month.
+            "holiday_source": "nager.date" if published is not None else None,
+            "sources": [
+                "Open-Meteo archive (CC BY 4.0)",
+                "Nager.Date public holidays",
+            ],
+        }
+        self.store.upsert_trip_evidence(
+            trip_id=trip_id,
+            kind=provider.kind,
+            value=value,
+            provider=str(provider.name),
+            retrieved_at=now.isoformat(),
+            expires_at=(now + timedelta(days=int(provider.cache_ttl_days))).isoformat(),
+        )
+        return value
 
     def refresh_place_summaries(
         self,

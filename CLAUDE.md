@@ -312,6 +312,30 @@ saturating at 30 gave every station a flat 15 of 15 when Taipei really returns 1
 `TransitGraph.journey` returns `None` when nothing needs riding, so travel time takes the **better of
 riding and walking** — otherwise a station across the road from a place scores as unreachable.
 
+**Which months suit a destination is measured, not recalled, as of 2026-08-08 (`WF-048`).**
+`travel_planner/climate.py` is a new pure module and `actions.travel_month_guide` the coordinator, the
+**75th** allowlisted method and a read. A model asked "when should I go to Seoul" answers instantly and
+unverifiably — the failure `WF-046` measured — so this answers from Open-Meteo's archive (five whole
+years of recorded daily highs, lows and precipitation, keyless, free) and Nager.Date's published public
+holidays. Both are priced at **US$0.00** and recorded anyway, so call counts stay reconcilable.
+
+Four things that are decisions rather than implementation. **Bands are relative to the destination**:
+Taipei's coolest month is warmer than Seoul's warmest, so a global comfort threshold would call one city
+uniformly bad and answer a question nobody asked — three best, three worst, six fair, per city.
+**Every month is returned and stays selectable**, because a recommendation that removes the choice
+decides for an owner who may be travelling on dates a school year sets. **A long national holiday is a
+`con` and a `pro` at once** — it fills the trains *and* it is the only month the festival happens — and
+neither is netted into the other, the same "report, do not decide" shape as `WF-047`'s cost options and
+`WF-045`'s drift. Every verdict carries the numbers behind it, and the core emits codes with args while
+the view renders them.
+
+**Holiday coverage is partial, and that is on screen.** Nager lists 204 countries; 25 of the 32 in
+`destinations.py` match by name, and **Taiwan, Thailand, Malaysia, India, the UAE and Turkey are absent**
+— the pilot destination included. A silent zero would read as "no local holidays", so an uncovered
+country yields `holiday_source: null` and a `month_crowding_unknown` con. Verified on Seoul: best April,
+October, May; hardest January, February, July — and it caught **Seollal** and **Chuseok**, the two
+holidays that actually make Korean travel miserable for a visitor.
+
 **Changing setup does not cost a re-search as of 2026-08-08 (`WF-048`).** Discovery stores the setup
 hash it ran against, so adding dates made the found places stale — and a stale trip cannot even record
 a choice, the server refuses with 409. The advice was "discover again", which on a dense city is a

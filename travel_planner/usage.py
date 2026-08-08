@@ -39,6 +39,11 @@ PRICES_USD = {
     # Wikidata and Wikipedia. Free, no key, and it replaces what
     # google_places:card_details charged US$0.04 a place for.
     "wikidata:summary": 0.0,
+    # Open-Meteo's archive and Nager.Date are both keyless and free. Priced rather than
+    # omitted, because an unpriced operation raises -- and recorded at zero so the call
+    # counts stay reconcilable against the paid ones.
+    "openmeteo:climate": 0.0,
+    "nager:holidays": 0.0,
     "google_places:details": 0.017,
     # Current Text Search Enterprise + Atmosphere and Place Photo list prices,
     # conservatively tracked even when the account is still inside its free cap.

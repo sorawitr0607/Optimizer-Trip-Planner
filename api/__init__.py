@@ -36,6 +36,7 @@ ACTIONS = (
     "create_trip",
     "list_trips",
     "delete_trip",
+    "travel_month_guide",
     "save_setup",
     "get_setup",
     "setup_vocabulary",
