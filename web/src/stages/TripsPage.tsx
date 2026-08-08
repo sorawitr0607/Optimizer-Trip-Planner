@@ -50,10 +50,33 @@ const BULLETS = [
 /** Where the four numbered stops sit on the drawn route. They are the four stages, so
  *  the picture and the "how it works" list below it describe the same journey. */
 const STOPS = [
-  { x: 80, y: 246, label: "setup" },
-  { x: 430, y: 186, label: "places" },
-  { x: 760, y: 192, label: "optimize" },
-  { x: 1120, y: 158, label: "itinerary" },
+  { x: 70, y: 348, label: "setup" },
+  { x: 440, y: 288, label: "places" },
+  { x: 790, y: 292, label: "optimize" },
+  { x: 1140, y: 258, label: "itinerary" },
+] as const;
+
+/** Where each stage's sticker sits, and how far it leans. Tilts are deliberately
+ *  uneven — a row of cards at identical angles reads as a grid, not as pinned. */
+const STICKERS = [
+  { left: 3, top: 62, tilt: -5, depth: 1.1 },
+  { left: 5, top: 30, tilt: 4, depth: 0.9 },
+  { left: 82, top: 66, tilt: -3, depth: 1.0 },
+  { left: 84, top: 26, tilt: 6, depth: 0.8 },
+] as const;
+
+const CLOUDS = [
+  { key: "a", left: 4, top: 12, width: 190, depth: 0.3, seconds: 68 },
+  { key: "b", left: 38, top: 6, width: 250, depth: 0.45, seconds: 84 },
+  { key: "c", left: 66, top: 17, width: 160, depth: 0.25, seconds: 58 },
+  { key: "d", left: 86, top: 9, width: 210, depth: 0.4, seconds: 76 },
+] as const;
+
+const SPARKS = [
+  { key: "s1", left: 15, top: 48, delay: 0.2 },
+  { key: "s2", left: 22, top: 20, delay: 1.1 },
+  { key: "s3", left: 78, top: 46, delay: 0.7 },
+  { key: "s4", left: 93, top: 22, delay: 1.6 },
 ] as const;
 
 const STEPS = [
@@ -115,66 +138,116 @@ export function TripsPage() {
 
   return (
     <main className="landing">
-      {/* derives-from: element 5 .hero-content as .landing-hero. The donor's dark hero
-          is the one element in the catalogue whose job is explaining a product before
-          asking for input, which is exactly what was missing here.
+      {/* derives-from: element 5 .hero-content as .landing-hero.
 
-          The scene is drawn, not photographed: `WF-034` keeps this app working offline
-          with no remote assets, so a stock landscape was never available. Drawing it
-          also lets the hero be *about the product* — the dotted route with numbered
-          stops is the thing the planner makes, and the four stops are the four stages,
-          so the picture and the "how it works" list are the same object. */}
-      <section className="landing-hero">
-        <div aria-hidden="true" className="hero-scene">
-          <svg preserveAspectRatio="none" viewBox="0 0 1200 300">
-            <g className="hero-layer hero-layer-far">
-              <path d="M0 150 L140 86 L268 142 L392 68 L520 136 L640 80 L764 146 L900 90 L1030 150 L1200 96 L1200 300 L0 300 Z" />
-            </g>
-            <g className="hero-layer hero-layer-mid">
-              <path d="M0 196 L150 148 L300 192 L470 136 L640 188 L820 144 L980 194 L1200 152 L1200 300 L0 300 Z" />
-            </g>
-            <g className="hero-layer hero-layer-near">
-              <path d="M0 244 L200 218 L420 242 L640 214 L880 240 L1080 216 L1200 236 L1200 300 L0 300 Z" />
-            </g>
-            {/* The route the planner builds, drawing itself left to right. */}
-            <path
-              className="hero-route"
-              d="M80 246 C 240 196, 300 172, 430 186 S 640 246, 760 192 S 980 128, 1120 158"
-              fill="none"
+          Built to the reference the owner named: a layered scene with drifting clouds,
+          mountains at two depths, a ground plane, sticker cards pinned around a winding
+          dotted path, sparkles, and a glowing pill call to action, all moving on
+          parallax as the pointer travels.
+
+          **Drawn, not photographed, and that is not a shortcut.** The reference builds
+          its hero from 1124 commissioned `.webp` illustrations and animates them with
+          framer-motion. Neither is available here: the artwork is someone else's, and
+          `WF-034` keeps this app working offline with no remote assets while `WF-026`
+          fixes the web runtime at six dependencies. So the *vocabulary* and the
+          *motion* are matched in SVG and CSS — including the reference's own
+          `glowPulse`, 1.7s ease-in-out infinite, which is the one timing its stylesheet
+          states outright.
+
+          The stickers are the four stages, pinned along the route in order, so the
+          scene is a picture of the thing this app makes rather than decoration. */}
+      <section
+        className="landing-hero"
+        onPointerMove={(event) => {
+          // Parallax without a dependency: one handler writes two custom properties and
+          // every layer reads them at its own depth.
+          const box = event.currentTarget.getBoundingClientRect();
+          const x = (event.clientX - box.left) / box.width - 0.5;
+          const y = (event.clientY - box.top) / box.height - 0.5;
+          event.currentTarget.style.setProperty("--drift-x", x.toFixed(3));
+          event.currentTarget.style.setProperty("--drift-y", y.toFixed(3));
+        }}
+      >
+        <div aria-hidden="true" className="hero-sky">
+          {CLOUDS.map((cloud) => (
+            <span
+              className="hero-cloud"
+              key={cloud.key}
+              style={{
+                left: `${cloud.left}%`,
+                top: `${cloud.top}%`,
+                ["--depth" as string]: cloud.depth,
+                ["--drift-seconds" as string]: `${cloud.seconds}s`,
+                width: `${cloud.width}px`,
+              }}
             />
-            {STOPS.map((stop, index) => (
-              <g
-                className="hero-stop"
-                key={stop.label}
-                style={{ animationDelay: `${1.1 + index * 0.28}s` }}
-                transform={`translate(${stop.x} ${stop.y})`}
-              >
-                <circle className="hero-stop-ring" r="19" />
-                <circle className="hero-stop-dot" r="14" />
-                <text dy="5" textAnchor="middle">{index + 1}</text>
-              </g>
-            ))}
+          ))}
+        </div>
+
+        <div aria-hidden="true" className="hero-scene">
+          <svg preserveAspectRatio="none" viewBox="0 0 1200 420">
+            <g className="hero-layer hero-layer-far" style={{ ["--depth" as string]: 0.25 }}>
+              <path d="M0 214 L150 120 L262 196 L392 96 L520 186 L648 110 L780 198 L906 118 L1040 200 L1200 128 L1200 420 L0 420 Z" />
+            </g>
+            <g className="hero-layer hero-layer-mid" style={{ ["--depth" as string]: 0.55 }}>
+              <path d="M0 268 L160 196 L318 262 L470 178 L640 258 L818 190 L980 264 L1200 200 L1200 420 L0 420 Z" />
+            </g>
+            <g className="hero-layer hero-layer-near" style={{ ["--depth" as string]: 1 }}>
+              <path d="M0 330 L200 300 L420 326 L640 292 L880 324 L1080 296 L1200 320 L1200 420 L0 420 Z" />
+              <path className="hero-route" d="M70 348 C 250 300, 320 274, 440 288 S 660 344, 790 292 S 1010 232, 1140 258" fill="none" />
+              {STOPS.map((stop, index) => (
+                <g className="hero-stop" key={stop.label} style={{ animationDelay: `${1.5 + index * 0.22}s` }} transform={`translate(${stop.x} ${stop.y})`}>
+                  <circle className="hero-stop-ring" r="17" />
+                  <circle className="hero-stop-dot" r="12" />
+                  <text dy="4" textAnchor="middle">{index + 1}</text>
+                </g>
+              ))}
+            </g>
           </svg>
+        </div>
+
+        {/* The stickers: one per stage, pinned along the route, tilted and floating. */}
+        <div aria-hidden="true" className="hero-stickers">
+          {STEPS.map(([Icon, title], index) => (
+            <span
+              className="hero-sticker"
+              key={title}
+              style={{
+                ["--tilt" as string]: `${STICKERS[index].tilt}deg`,
+                ["--depth" as string]: STICKERS[index].depth,
+                animationDelay: `${1.7 + index * 0.22}s`,
+                left: `${STICKERS[index].left}%`,
+                top: `${STICKERS[index].top}%`,
+              }}
+            >
+              <Icon aria-hidden="true" size={17} />
+              {copy(title, language)}
+            </span>
+          ))}
+          {SPARKS.map((spark) => (
+            <span
+              className="hero-spark"
+              key={spark.key}
+              style={{ animationDelay: `${spark.delay}s`, left: `${spark.left}%`, top: `${spark.top}%` }}
+            />
+          ))}
         </div>
 
         <div className="hero-copy">
           <p className="landing-badge">
             <Compass aria-hidden="true" size={15} /> Optimizer Trip Planner
           </p>
-          {/* Word by word, so the sentence arrives at reading speed rather than all at
-              once. Reduced motion turns this into plain text; nothing depends on it. */}
           <h1>
             {copy("landing_headline", language).split(" ").map((word, index) => (
-              <span
-                className="hero-word"
-                key={`${word}-${index}`}
-                style={{ animationDelay: `${0.08 * index}s` }}
-              >
+              <span className="hero-word" key={`${word}-${index}`} style={{ animationDelay: `${0.09 * index}s` }}>
                 {word}{" "}
               </span>
             ))}
           </h1>
           <p className="landing-lead">{copy("landing_subtext", language)}</p>
+          <a className="hero-cta" href="#start">
+            {copy("start_planning", language)} <ArrowRight aria-hidden="true" size={17} />
+          </a>
           <ul className="landing-bullets">
             {BULLETS.map(([Icon, code]) => (
               <li key={code}>

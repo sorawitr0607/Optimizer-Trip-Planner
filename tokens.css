@@ -273,4 +273,6 @@ button:disabled {
      token. Dark enough to push the screen back, sheer enough to keep it recognisable —
      the tour describes that screen, so hiding it entirely defeats the explanation. */
   --landing-scrim: rgb(9 27 32 / 76%);
+  /* The call-to-action glow. Alpha again, so it can only live here. */
+  --landing-glow: rgb(212 131 47 / 45%);
 }

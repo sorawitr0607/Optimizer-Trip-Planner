@@ -686,6 +686,18 @@ numbered stops *is* the thing the planner makes, and those stops are the four st
 the "how it works" list describe one journey. Every animation sits behind
 `prefers-reduced-motion: no-preference`.
 
+**The hero is drawn, and it has to be.** The owner asked for it to match hackthenorth.com exactly. That
+site builds its hero from **1124 commissioned `.webp` illustrations** and animates them with
+**framer-motion** — its own stylesheet states only two timings outright, `vinylSpin` and
+`glowPulse 1.7s ease-in-out infinite`. Neither is available here: the artwork is someone else's, `WF-034`
+keeps this app working offline with no remote assets, and `WF-026` fixes the web runtime at six
+dependencies. So the *vocabulary* and the *motion* are matched in SVG and CSS — drifting clouds,
+mountains at three depths, a winding dotted route, tilted sticker cards, sparkles, a glowing pill, and
+pointer parallax driven by two custom properties one handler writes, with `glowPulse`'s 1.7s reproduced
+exactly. Matching a look is fair; reproducing an illustrator's work is not, and the distinction is the
+reason this is drawn rather than copied. Every animation sits behind `prefers-reduced-motion`, and the
+36 stage baselines pass **unchanged**, which is the proof that "only the first page" held.
+
 **A capture must observe the app, never operate it.** Two things broke that and both showed up as
 double-digit baseline drift on screens nobody had edited. The `/places` first-visit tour is suppressed
 by `document.documentElement.dataset.capture`, because a fresh Chrome profile is always a first visit
