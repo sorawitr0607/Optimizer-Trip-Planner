@@ -329,12 +329,25 @@ neither is netted into the other, the same "report, do not decide" shape as `WF-
 `WF-045`'s drift. Every verdict carries the numbers behind it, and the core emits codes with args while
 the view renders them.
 
-**Holiday coverage is partial, and that is on screen.** Nager lists 204 countries; 25 of the 32 in
-`destinations.py` match by name, and **Taiwan, Thailand, Malaysia, India, the UAE and Turkey are absent**
-— the pilot destination included. A silent zero would read as "no local holidays", so an uncovered
-country yields `holiday_source: null` and a `month_crowding_unknown` con. Verified on Seoul: best April,
-October, May; hardest January, February, July — and it caught **Seollal** and **Chuseok**, the two
-holidays that actually make Korean travel miserable for a visitor.
+**Holidays come from two sources, because one was not enough.** Nager.Date's own coverage page puts
+**Asia at 38%** (19 of 50) and says it depends on community contributions, so Taiwan, Thailand, Malaysia,
+India and the UAE were all missing — the pilot destination among them. Google's public holiday calendars
+are free, keyless, published as iCalendar and cover every one, so `_google_holidays` is the fallback and
+`holiday_source` records which answered. **Turkey was never missing**: Nager has it as `Türkiye`, and
+matching on the `destinations.py` spelling reported a covered country as uncovered — a wrong answer from
+a name, now aliased alongside `Czechia`.
+
+Two things about the Google feed that are load-bearing. **Observances are excluded**: it carries both
+kinds and Taiwan's has 213 public holidays against 117 observances, so counting International Women's Day
+would invent a crowd out of a day nobody takes off — the filter is on the feed's own `DESCRIPTION`, not
+on the name. And **the calendar ids follow no derivable rule** — `en.taiwan`, `en.th`, `en.indian` and
+`en.turkish` are all real while `en.tw`, `en.thailand` and `en.india` all 500 — so it is a looked-up
+table, and a country in neither source stays honestly uncovered with a `month_crowding_unknown` con.
+
+Verified on both. Seoul: best April, October, May; hardest January, February, July, catching **Seollal**
+and **Chuseok**. Taipei: best January, March, November; hardest June, July, August, and February drops to
+fair on a **9-day Lunar New Year run** — the single most important travel fact about Taiwan, and the one
+that was invisible before.
 
 **Changing setup does not cost a re-search as of 2026-08-08 (`WF-048`).** Discovery stores the setup
 hash it ran against, so adding dates made the found places stale — and a stale trip cannot even record

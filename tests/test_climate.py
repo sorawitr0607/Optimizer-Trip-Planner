@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 
 from travel_planner import climate
+from travel_planner.providers import _google_public_holidays
 
 
 def series(highs_by_month: dict[int, float], *, wet_days: dict[int, int] | None = None):
@@ -156,6 +157,52 @@ class HolidayRunTest(unittest.TestCase):
 
         self.assertEqual(1, grouped[5]["longest_run"])
         self.assertLess(grouped[5]["longest_run"], climate.LONG_HOLIDAY_DAYS)
+
+
+class GoogleCalendarHolidayTest(unittest.TestCase):
+    """Nager\'s own coverage page puts Asia at 38% and depends on community
+    contributions, so Taiwan, Thailand, Malaysia, India and the UAE were all missing --
+    the pilot destination among them. Google\'s holiday calendars are free, keyless and
+    cover every one of them."""
+
+    ICS = (
+        "BEGIN:VCALENDAR\r\n"
+        "BEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20260217\r\n"
+        "SUMMARY:Lunar New Year\'s Day\r\nDESCRIPTION:Public holiday\r\nEND:VEVENT\r\n"
+        "BEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20260308\r\n"
+        "SUMMARY:International Women\'s Day\r\n"
+        "DESCRIPTION:Observance\\nTo hide observances\r\nEND:VEVENT\r\n"
+        "BEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20250217\r\n"
+        "SUMMARY:Last year\r\nDESCRIPTION:Public holiday\r\nEND:VEVENT\r\n"
+        "END:VCALENDAR\r\n"
+    )
+
+    def test_an_observance_is_not_a_public_holiday(self) -> None:
+        # The feed carries both -- Taiwan\'s has 213 public holidays and 117 observances.
+        # Counting International Women\'s Day as a reason the trains are full would
+        # invent a crowd out of a day nobody takes off.
+        found = _google_public_holidays(self.ICS, 2026)
+
+        self.assertEqual(["2026-02-17"], [item["date"] for item in found])
+        self.assertEqual("Lunar New Year\'s Day", found[0]["name"])
+
+    def test_only_the_asked_year_is_returned(self) -> None:
+        # One feed carries several years; counting them all would multiply every month.
+        self.assertEqual([], [x for x in _google_public_holidays(self.ICS, 2024)])
+        self.assertEqual(1, len(_google_public_holidays(self.ICS, 2025)))
+
+    def test_a_folded_line_is_rejoined_before_it_is_read(self) -> None:
+        # RFC 5545 splits a long line with a leading space. Unread, the continuation
+        # looks like a new property and the event loses its name.
+        ics = (
+            "BEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20260401\r\n"
+            "SUMMARY:Children\'s Day and Tomb Sweep\r\n ing Day\r\n"
+            "DESCRIPTION:Public holiday\r\nEND:VEVENT\r\n"
+        )
+
+        found = _google_public_holidays(ics, 2026)
+
+        self.assertEqual("Children\'s Day and Tomb Sweeping Day", found[0]["name"])
 
 
 if __name__ == "__main__":

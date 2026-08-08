@@ -258,6 +258,7 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
             from: guide.data.observed_from,
             to: guide.data.observed_to,
             year: guide.data.holiday_year,
+            source: guide.data.holiday_source ?? "—",
           })}
           {guide.data.holiday_source ? null : (
             <>

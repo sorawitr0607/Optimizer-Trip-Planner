@@ -1981,11 +1981,18 @@ class PlannerActions:
             detail={"country": country, "year": year + 1},
         )
         published = provider.holidays(country, year + 1)
+        # Which source answered, so the screen can attribute it and a future gap is
+        # traceable to the right place rather than to "holidays".
+        holiday_source = (
+            None
+            if published is None
+            else ("google.calendar" if country in provider.google_calendars else "nager.date")
+        )
         grouped = climate.holiday_months(published) if published is not None else {}
         ranked = climate.rank_months(
             months,
             holidays=grouped,
-            holiday_source="nager.date" if published is not None else None,
+            holiday_source=holiday_source,
         )
         value = {
             "months": ranked,
@@ -1997,7 +2004,7 @@ class PlannerActions:
             "holiday_year": year + 1,
             # Named so the screen can say the crowd factor is unknown rather than
             # letting an absent holiday list read as a quiet month.
-            "holiday_source": "nager.date" if published is not None else None,
+            "holiday_source": holiday_source,
             "sources": [
                 "Open-Meteo archive (CC BY 4.0)",
                 "Nager.Date public holidays",

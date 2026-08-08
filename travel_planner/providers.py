@@ -1113,9 +1113,32 @@ class OpenMeteoClimateProvider:
     # Five whole years: enough to average out one freak season, few enough to keep the
     # response near 1,800 days rather than tens of thousands.
     archive_years = 5
-    # Nager's own spelling where it differs from `destinations.py`. Only real aliases —
+    # Nager's own spelling where it differs from `destinations.py`. Only real aliases --
     # a country genuinely absent stays absent rather than being mapped to a neighbour.
-    country_aliases = {"Czech Republic": "Czechia"}
+    # `Türkiye` cost a wrong answer: matching on "Turkey" reported the country
+    # uncovered when Nager has had it all along under its current name.
+    country_aliases = {"Czech Republic": "Czechia", "Turkey": "Türkiye"}
+    # Where Nager has no data, Google's public holiday calendars do -- they are free,
+    # keyless, and published as iCalendar. Nager's own coverage page puts Asia at 38%
+    # (19 of 50) and says it depends on community contributions, so the gap is not a
+    # bug to wait out: Taiwan, Thailand, Malaysia, India and the UAE were all missing,
+    # the pilot destination among them.
+    #
+    # The calendar ids follow no derivable rule -- `en.taiwan`, `en.th`, `en.indian`,
+    # `en.turkish` are all real and `en.tw`, `en.thailand`, `en.india` all 500 -- so
+    # this is a looked-up table rather than a slug function, and a country absent from
+    # it stays honestly uncovered.
+    google_calendars = {
+        "Taiwan": "en.taiwan",
+        "Thailand": "en.th",
+        "Malaysia": "en.malaysia",
+        "India": "en.indian",
+        "United Arab Emirates": "en.ae",
+    }
+    google_ics_url = (
+        "https://calendar.google.com/calendar/ical/"
+        "{calendar}%23holiday%40group.v.calendar.google.com/public/basic.ics"
+    )
 
     def __init__(self) -> None:
         self.archive_url = os.environ.get(
@@ -1183,11 +1206,11 @@ class OpenMeteoClimateProvider:
             None,
         )
         if not code:
-            return None
+            return self._google_holidays(country, year)
         try:
             found = self._json(f"{self.holiday_url}/PublicHolidays/{year}/{code}")
         except ProviderUnavailable:
-            return None
+            return self._google_holidays(country, year)
         if not isinstance(found, list):
             return None
         return [
@@ -1199,6 +1222,54 @@ class OpenMeteoClimateProvider:
             for item in found
             if item.get("date")
         ]
+
+    def _google_holidays(self, country: str, year: int) -> list[dict[str, Any]] | None:
+        """Google's holiday calendar for a country Nager does not cover, or `None`."""
+
+        calendar = self.google_calendars.get(country)
+        if not calendar:
+            return None
+        url = self.google_ics_url.format(calendar=calendar)
+        try:
+            with urlopen(  # noqa: S310 - fixed, configured calendar host
+                Request(url, headers={"User-Agent": self.user_agent}), timeout=30
+            ) as response:
+                ics = response.read().decode("utf-8", "replace")
+        except (HTTPError, URLError, TimeoutError, OSError):
+            return None
+        return _google_public_holidays(ics, year) or None
+
+
+
+def _google_public_holidays(ics: str, year: int) -> list[dict[str, Any]]:
+    """Public holidays for one year out of a Google holiday iCalendar.
+
+    **Observances are excluded, and that distinction is the whole point.** The feed
+    carries both: Taiwan's has 213 public holidays and 117 observances, and counting
+    International Women's Day as a reason the trains are full would invent a crowd. The
+    feed says which is which in `DESCRIPTION`, so this filters on it rather than on the
+    event name.
+    """
+
+    # Unfold RFC 5545 continuation lines before anything else: a long SUMMARY is split
+    # across lines with a leading space and would otherwise be read as a new property.
+    text = ics.replace("\r\n", "\n").replace("\n ", "").replace("\n\t", "")
+    found: list[dict[str, Any]] = []
+    for block in text.split("BEGIN:VEVENT")[1:]:
+        if "public holiday" not in block.lower():
+            continue
+        start = re.search(r"DTSTART;VALUE=DATE:(\d{4})(\d{2})(\d{2})", block)
+        summary = re.search(r"SUMMARY:(.*)", block)
+        if not start or start.group(1) != str(year):
+            continue
+        found.append(
+            {
+                "date": f"{start.group(1)}-{start.group(2)}-{start.group(3)}",
+                "name": (summary.group(1).strip() if summary else ""),
+                "local_name": "",
+            }
+        )
+    return found
 
 
 class WikidataSummaryProvider:
