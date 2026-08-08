@@ -1,3 +1,4 @@
+import { HelpCircle } from "lucide-react";
 import { useState } from "react";
 
 import { copy, type Language } from "../i18n/copy";
@@ -9,12 +10,14 @@ import { copy, type Language } from "../i18n/copy";
  * picker, a detail panel, a drawer — and every one of those was learned by the owner
  * reporting that it did not work. A first-time visitor has no such channel.
  *
- * Three rules it follows. It **shows once**: the dismissal is remembered, and a tour
- * that reappears is an obstacle rather than help. It is **reopenable** from the screen,
- * because "once" is wrong for anyone who comes back a month later. And it **never
- * appears in a capture**: a fresh Chrome profile is always a first visit, so without
- * the seam every screen baseline would photograph this overlay instead of the screen
- * it is supposed to be watching.
+ * Three rules it follows. It **shows once per trip**: remembered, because a tour that
+ * reappears every visit is an obstacle — but keyed to the trip rather than the browser,
+ * because it was reported as "didn't auto show" by an owner who had simply dismissed it
+ * on a different trip weeks earlier, and a new trip is a new context. It is
+ * **reopenable** from the screen, and that control is a labelled button rather than the
+ * grey whisper it started as. And it **never appears in a capture**: a fresh Chrome
+ * profile is always a first visit, so without the seam every screen baseline would
+ * photograph this overlay instead of the screen it is watching.
  */
 
 const SEEN_KEY = "tourist.places_tour_seen";
@@ -28,20 +31,20 @@ const STEPS = [
 
 /** Remembered per browser. `localStorage` can throw in a locked-down profile, and a
  *  tour is not worth a blank screen, so every access is guarded. */
-function alreadySeen(): boolean {
+function alreadySeen(tripId: string): boolean {
   if (typeof document !== "undefined" && document.documentElement.dataset.capture) {
     return true;
   }
   try {
-    return window.localStorage.getItem(SEEN_KEY) === "1";
+    return window.localStorage.getItem(`${SEEN_KEY}.${tripId}`) === "1";
   } catch {
     return true;
   }
 }
 
-function remember(): void {
+function remember(tripId: string): void {
   try {
-    window.localStorage.setItem(SEEN_KEY, "1");
+    window.localStorage.setItem(`${SEEN_KEY}.${tripId}`, "1");
   } catch {
     /* A profile that refuses storage simply sees the tour again. */
   }
@@ -49,14 +52,15 @@ function remember(): void {
 
 export interface PlacesTourProps {
   language: Language;
+  tripId: string;
 }
 
-export function PlacesTour({ language }: PlacesTourProps) {
-  const [open, setOpen] = useState(() => !alreadySeen());
+export function PlacesTour({ language, tripId }: PlacesTourProps) {
+  const [open, setOpen] = useState(() => !alreadySeen(tripId));
   const [step, setStep] = useState(0);
 
   function close() {
-    remember();
+    remember(tripId);
     setOpen(false);
     setStep(0);
   }
@@ -64,7 +68,7 @@ export function PlacesTour({ language }: PlacesTourProps) {
   if (!open) {
     return (
       <button className="tour-reopen" onClick={() => setOpen(true)} type="button">
-        {copy("tour_reopen", language)}
+        <HelpCircle aria-hidden="true" size={14} /> {copy("tour_reopen", language)}
       </button>
     );
   }

@@ -304,6 +304,10 @@ export function PlacesPage() {
   const nameFor = (found: (typeof catalog)[number]) =>
     placeName(mergeNames(found, summaries.data?.[found.place_id]?.names), language, found.name);
   const shortlistPlaces = mapPlaces(selectedChoices, catalog, nameFor);
+  // The shortlist plus the card in front, so the focused pin always has one.
+  const cardMapPlaces = shortlistPlaces.some((place) => place.place_id === selectedId)
+    ? shortlistPlaces
+    : [...shortlistPlaces, ...mapPlaces([{ place_id: selectedId }], catalog, nameFor)];
   const paidAllowed = Boolean(detailsCost.data?.allowed && photosCost.data?.allowed);
   const paidEstimate = (detailsCost.data?.estimate_usd ?? 0) + (photosCost.data?.estimate_usd ?? 0);
   const paidCaption = copy("live_details_cost", language)
@@ -314,7 +318,7 @@ export function PlacesPage() {
 
   return (
     <section className="stage-card places-screen">
-      <PlacesTour language={language} />
+      <PlacesTour language={language} tripId={tripId} />
       <header className="money-head">
         <h1>{copy("discover_title", language)}</h1>
         <p>{copy("discover_help", language)}</p>
@@ -632,17 +636,17 @@ export function PlacesPage() {
               })()}
               {/* Where *this* card is. Drawn against the rest of the shortlist, dimmed,
                   because a lone pin on an empty box has nowhere to be. */}
-              {shortlistPlaces.length ? (
-                <PlaceMap
-                  focusId={selectedId}
-                  language={language}
-                  places={shortlistPlaces.some((place) => place.place_id === selectedId)
-                    ? shortlistPlaces
-                    : [...shortlistPlaces, ...mapPlaces([{ place_id: selectedId }], catalog, nameFor)]}
-                  title={copy("card_map", language)}
-                  withKey={false}
-                />
-              ) : null}
+              {/* Gated on the shortlist before, so the very first card — when nothing
+                  is kept yet — had no map at all, and one appeared only from the second
+                  choice onward. The card's own place is enough to draw. */}
+              <PlaceMap
+                context={catalog}
+                focusId={selectedId}
+                language={language}
+                places={cardMapPlaces}
+                title={copy("card_map", language)}
+                withKey={false}
+              />
               <div className="place-card-facts">
                 <span><b>{copy("duration", language)}:</b> {card.duration_estimate.minimum_minutes}–{card.duration_estimate.maximum_minutes} {copy("minutes", language)}</span>
                 <span><b>{copy("feasibility", language)}:</b> {copy(card.feasibility.state, language)}</span>
@@ -795,6 +799,7 @@ export function PlacesPage() {
                 copies of a number is how the screen and the workbook start
                 disagreeing. */}
             <PlaceMap
+              context={catalog}
               language={language}
               places={shortlistPlaces}
               title={copy("shortlist_map", language)}

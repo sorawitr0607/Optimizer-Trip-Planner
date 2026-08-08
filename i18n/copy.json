@@ -1190,7 +1190,8 @@
       "tour_skip": "Skip",
       "tour_next": "Next",
       "tour_reopen": "How this works",
-      "card_map": "Where this one is"
+      "card_map": "Where this one is",
+      "map_span": "About {km} km across · every discovered place shown faintly"
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -2004,7 +2005,8 @@
       "tour_skip": "ข้าม",
       "tour_next": "ถัดไป",
       "tour_reopen": "วิธีใช้งาน",
-      "card_map": "ที่นี่อยู่ตรงไหน"
+      "card_map": "ที่นี่อยู่ตรงไหน",
+      "map_span": "กว้างประมาณ {km} กม. · จุดจาง ๆ คือสถานที่ทั้งหมดที่ค้นพบ"
     }
   }
 }

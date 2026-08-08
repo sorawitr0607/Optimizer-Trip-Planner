@@ -41,6 +41,10 @@ export interface PlottedPoint extends CoordinatePoint {
  *  Two projections would be two pictures of the same coordinates that could disagree. */
 export function plotCoordinates<T extends { latitude: number; longitude: number }>(
   points: T[],
+  /** The frame to fit into. The itinerary's strip is wide and short; `/places` draws a
+   *  whole city and needs height, or a roughly square town is squashed into a band and
+   *  its pins pile up in the middle. */
+  frame: { width: number; height: number } = { width: MAP_WIDTH, height: MAP_HEIGHT },
 ): (T & { x: number; y: number })[] {
   if (!points.length) return [];
   const latitude = points.reduce((total, point) => total + point.latitude, 0) / points.length;
@@ -61,8 +65,8 @@ export function plotCoordinates<T extends { latitude: number; longitude: number 
   const maxY = Math.max(...ys);
   const spanX = maxX - minX;
   const spanY = maxY - minY;
-  const availableWidth = MAP_WIDTH - MAP_PAD * 2;
-  const availableHeight = MAP_HEIGHT - MAP_PAD * 2;
+  const availableWidth = frame.width - MAP_PAD * 2;
+  const availableHeight = frame.height - MAP_PAD * 2;
   const scale = Math.min(
     spanX ? availableWidth / spanX : Number.POSITIVE_INFINITY,
     spanY ? availableHeight / spanY : Number.POSITIVE_INFINITY,

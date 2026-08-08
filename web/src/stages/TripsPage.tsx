@@ -136,6 +136,18 @@ export function TripsPage() {
   const errorCode =
     createTrip.error instanceof ApiError ? createTrip.error.code : createTrip.error?.message;
 
+  function startPlanning() {
+    const form = document.getElementById("start-a-trip");
+    if (!form) return;
+    form.scrollIntoView({ behavior: "smooth", block: "center" });
+    form.classList.remove("is-called");
+    // Reading `offsetWidth` restarts the animation; without it a second press does
+    // nothing because the class never left.
+    void form.offsetWidth;
+    form.classList.add("is-called");
+    form.querySelector("select")?.focus({ preventScroll: true });
+  }
+
   return (
     <main className="landing">
       {/* derives-from: element 5 .hero-content as .landing-hero.
@@ -245,9 +257,13 @@ export function TripsPage() {
             ))}
           </h1>
           <p className="landing-lead">{copy("landing_subtext", language)}</p>
-          <a className="hero-cta" href="#start">
+          {/* It was an anchor to `#start` and no element carried that id, so the one
+              call to action on the page did nothing at all. It scrolls to the form and
+              flashes it now, because arriving at a long page with no idea which of its
+              controls you were sent to is barely better than not moving. */}
+          <button className="hero-cta" onClick={startPlanning} type="button">
             {copy("start_planning", language)} <ArrowRight aria-hidden="true" size={17} />
-          </a>
+          </button>
           <ul className="landing-bullets">
             {BULLETS.map(([Icon, code]) => (
               <li key={code}>
@@ -302,7 +318,7 @@ export function TripsPage() {
         </div>
 
         {/* derives-from: element 6 .setup-card as .trip-form */}
-        <form className="stage-card trip-form" onSubmit={submit}>
+        <form className="stage-card trip-form" id="start-a-trip" onSubmit={submit}>
           <h2>{copy("new_trip", language)}</h2>
           <p className="setup-hint">{copy("destination_help", language)}</p>
 

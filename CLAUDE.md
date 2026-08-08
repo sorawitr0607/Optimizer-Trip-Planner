@@ -686,6 +686,21 @@ numbered stops *is* the thing the planner makes, and those stops are the four st
 the "how it works" list describe one journey. Every animation sits behind
 `prefers-reduced-motion: no-preference`.
 
+**The map draws the city from the catalogue as of 2026-08-09 (`WF-048`).** Six pins on empty grey told
+an owner nothing — no coastline, no districts, no sense of which end of town anything was, reported as
+"I still don't know where is it". Every discovered candidate already carries coordinates and is already
+in memory, so plotting all of them as faint dots draws the city's real footprint for **no request and no
+tiles**: density does the basemap's work, and Taipei's core, southern sprawl and Beitou are all legible.
+Pins and city share **one projection** — projecting them separately would scale each to its own bounds
+and put the pins where the city is not. `plotCoordinates` now takes a frame, because the itinerary's
+420×120 strip squashes a roughly square town into a band and piles every pin in the middle; `/places`
+uses 420×260. A north arrow and a "≈ N km across" note make it readable rather than only lookable-at,
+and `WF-034`'s no-tile-map rule is untouched.
+
+**The places tour is remembered per trip, not per browser.** Keyed globally it was reported as never
+appearing, by an owner who had simply dismissed it on another trip — a new trip is a new context. The
+reopen control is a labelled button now rather than the grey whisper it started as.
+
 **The hero is drawn, and it has to be.** The owner asked for it to match hackthenorth.com exactly. That
 site builds its hero from **1124 commissioned `.webp` illustrations** and animates them with
 **framer-motion** — its own stylesheet states only two timings outright, `vinylSpin` and
