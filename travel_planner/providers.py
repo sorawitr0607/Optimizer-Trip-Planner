@@ -1113,7 +1113,11 @@ class WikidataSummaryProvider:
     name = "wikidata"
     operation = "wikidata:summary"
     kind = "place_summary"
-    cache_version = "wikidata-summary-v1"
+    # v2 adds Commons geosearch. A stored summary carries the version it was written
+    # under, so bumping this refetches every place once and no further -- without it a
+    # place cached before geosearch existed keeps its empty gallery for the 60-day TTL,
+    # which is what left cards blank after the source was added.
+    cache_version = "wikidata-summary-v2"
     # An encyclopedia article changes slowly and a description is not a fact the
     # planner schedules against, so this can sit for a long time.
     cache_ttl_days = 60

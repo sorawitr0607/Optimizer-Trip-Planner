@@ -6,6 +6,7 @@ import { NavLink, Outlet, useNavigate, useParams } from "react-router";
 import { rpc, type Journey, type Trip } from "../api/client";
 import { copy } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
+import { DeleteTrip } from "./DeleteTrip";
 
 const sections = [
   { key: "section_build", stages: ["setup", "places", "evidence", "optimize"] },
@@ -110,6 +111,13 @@ export function AppShell() {
           <NavLink className="trip-new" onClick={() => setNavOpen(false)} to="/trips">
             <Plus aria-hidden="true" size={15} /> {copy("new_trip_slot", language)}
           </NavLink>
+          {/* The active slot, deletable from wherever you are. It first landed only on
+              the landing page and the report was that the slot in front of you all day
+              still could not be removed. Deleting the trip being looked at cannot
+              re-render this page, so it leaves for the slot list. */}
+          {trip ? (
+            <DeleteTrip compact onDeleted={() => navigate("/trips")} trip={trip} />
+          ) : null}
         </div>
 
         <div className="sidebar-controls">

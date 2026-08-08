@@ -21,6 +21,7 @@ import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
 import { mergeNames, placeAltName, placeName } from "../shared/names";
 import { galleryFor } from "../shared/photos";
+import { plotCoordinates } from "./ItineraryPage";
 
 const LANES = ["main_queue", "city_icons", "worth_it_if", "local_alternatives", "browse_all"] as const;
 const CHOICES = ["must_do", "interested", "maybe"] as const;
@@ -198,7 +199,8 @@ export function PlacesPage() {
     },
   });
   const clearChoice = useMutation({
-    mutationFn: () => rpc<null>("clear_candidate_choice", { trip_id: tripId, place_id: selectedId }),
+    mutationFn: (placeId?: string) =>
+      rpc<null>("clear_candidate_choice", { trip_id: tripId, place_id: placeId ?? selectedId }),
     onSuccess: async () => {
       setFlash("choice_cleared");
       await refreshReads();
@@ -266,8 +268,33 @@ export function PlacesPage() {
   );
   const shortestHours = Math.round(keptMinutes.min / 6) / 10;
   const longestHours = Math.round(keptMinutes.max / 6) / 10;
+  // "Everything loaded", not "the request returned": discovery is followed by ranking,
+  // and showing the deck between the two rearranged the screen twice.
+  const busy = discover.isPending || (catalog.length > 0 && ranking.isPending);
   const basics = setup.data?.snapshot.data.trip_basics;
   const tripDays = daysBetween(basics?.start_date, basics?.end_date);
+  // Numbered in the order they were kept, so the map's label and the list's label are
+  // the same string and neither has to be read to understand the other. A place with no
+  // coordinates simply has no pin — it is still on the shortlist.
+  const shortlistPoints = plotCoordinates(
+    selectedChoices
+      .map((item, index) => {
+        const found = catalog.find((value) => value.place_id === item.place_id);
+        if (!found || found.latitude === null || found.longitude === null) return null;
+        return {
+          id: item.place_id,
+          label: String(index + 1),
+          name: placeName(
+            mergeNames(found, summaries.data?.[item.place_id]?.names),
+            language,
+            found.name,
+          ),
+          latitude: found.latitude,
+          longitude: found.longitude,
+        };
+      })
+      .filter((point): point is NonNullable<typeof point> => point !== null),
+  );
   const paidAllowed = Boolean(detailsCost.data?.allowed && photosCost.data?.allowed);
   const paidEstimate = (detailsCost.data?.estimate_usd ?? 0) + (photosCost.data?.estimate_usd ?? 0);
   const paidCaption = copy("live_details_cost", language)
@@ -301,7 +328,27 @@ export function PlacesPage() {
       {discovery.data && report ? (
         <>
           {setup.data && discovery.data.setup_sha256 !== setup.data.snapshot.sha256 ? (
-            <p className="money-note money-note-warn"><b aria-hidden="true">⚠</b>{copy("stale_setup", language)}</p>
+            // A dead end until now: the warning said "discover again" and the only
+            // button for it is labelled as a fresh search, which on a dense city is a
+            // minute of Overpass and reads as losing your work. Nothing needs
+            // re-searching — the provider cache is keyed on the destination alone, so
+            // this rebuilds the run from disk in milliseconds and every `place_id`,
+            // being a hash of name, coordinates and category, still matches the choices
+            // already made. Without it a stale trip cannot even record a choice: the
+            // server refuses with 409.
+            <div className="money-note money-note-warn stale-setup">
+              <b aria-hidden="true">⚠</b>
+              <div>
+                <p>{copy("stale_setup", language)}</p>
+                <button
+                  disabled={discover.isPending}
+                  onClick={() => discover.mutate(false)}
+                  type="button"
+                >
+                  {discover.isPending ? copy("relinking", language) : copy("relink_places", language)}
+                </button>
+              </div>
+            </div>
           ) : null}
           {new Set(["unavailable", "error", "stale"]).has(discovery.data.status) ? (
             <p className="money-note money-note-warn"><b aria-hidden="true">⚠</b>{copy("provider_gap", language)}</p>
@@ -428,12 +475,35 @@ export function PlacesPage() {
             ) : null}
           </div>
 
+          {/* A skeleton while anything is still arriving, rather than a half-built
+              screen. Discovery is ~30-90s and ranking follows it, so the page used to
+              sit with a stale deck under a spinning button and then rearrange itself
+              twice as each query landed. It waits for both. */}
+          {busy ? (
+            <div className="places-workspace" aria-busy="true">
+              <div className="skeleton-card">
+                <span className="skeleton skeleton-photo" />
+                <span className="skeleton skeleton-line wide" />
+                <span className="skeleton skeleton-line" />
+                <span className="skeleton skeleton-line" />
+                <span className="skeleton skeleton-line short" />
+              </div>
+              <div className="skeleton-card">
+                <span className="skeleton skeleton-line wide" />
+                <span className="skeleton skeleton-line" />
+                <span className="skeleton skeleton-line" />
+                <span className="skeleton skeleton-photo short" />
+                <span className="skeleton skeleton-line" />
+              </div>
+            </div>
+          ) : null}
+
           {/* Deck left, detail right. The detail used to be a whole other mode reached
               from a button at the top, so reading about the card in front of you meant
               leaving the deck and finding it again. It follows the deck's own card now
               and owns no decision buttons — the deck is where deciding happens, and two
               sets of them under one card was the duplication reported earlier. */}
-          <div className={mode === "deck" ? "places-workspace" : undefined}>
+          <div className={mode === "deck" ? "places-workspace" : undefined} hidden={busy}>
           {mode === "deck" ? (
             <>
               <p className="setup-hint">{copy("deck_help", language)}</p>
@@ -548,6 +618,37 @@ export function PlacesPage() {
                   </div>
                 );
               })()}
+              {/* derives-from: A1 numbered map; no tiles or network, and the list under it
+                  repeats every number so the picture is never the only carrier. The deck
+                  gave up its description to make room: the same paragraph was on screen
+                  twice, and where the places *are* was nowhere. */}
+              {shortlistPoints.length ? (
+                <section className="places-map">
+                  <h4>{copy("shortlist_map", language)}</h4>
+                  <svg
+                    aria-label={copy("shortlist_map", language)}
+                    role="img"
+                    viewBox="0 0 420 120"
+                  >
+                    {shortlistPoints.map((point) => (
+                      <g
+                        className={`plan-map-point${point.id === selectedId ? " current" : ""}`}
+                        key={point.id}
+                      >
+                        <circle cx={point.x} cy={point.y} r={point.id === selectedId ? 10 : 8} />
+                        <text textAnchor="middle" x={point.x} y={point.y + 3}>{point.label}</text>
+                      </g>
+                    ))}
+                  </svg>
+                  <ol className="places-map-key">
+                    {shortlistPoints.map((point) => (
+                      <li className={point.id === selectedId ? "current" : undefined} key={point.id}>
+                        <b>{point.label}</b> {point.name}
+                      </li>
+                    ))}
+                  </ol>
+                </section>
+              ) : null}
               <div className="place-card-facts">
                 <span><b>{copy("duration", language)}:</b> {card.duration_estimate.minimum_minutes}–{card.duration_estimate.maximum_minutes} {copy("minutes", language)}</span>
                 <span><b>{copy("feasibility", language)}:</b> {copy(card.feasibility.state, language)}</span>
@@ -579,7 +680,7 @@ export function PlacesPage() {
               <div className="place-choice-actions" hidden={mode === "deck"}>
                 {CHOICES.map((action) => <button className={`choice-${action}`} key={action} onClick={() => saveChoice.mutate({ action })} type="button">{copy(action, language)}</button>)}
                 <details><summary>{copy("not_for_trip", language)}</summary><label>{copy("rejection_reason", language)}<select value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)}>{REJECTION_REASONS.map((reason) => <option key={reason} value={reason}>{copyFrom("REJECTION_TEXT", reason, language)}</option>)}</select></label><button onClick={() => saveChoice.mutate({ action: "not_for_trip", reason: rejectionReason === "null" ? null : rejectionReason })} type="button">{copy("not_for_trip", language)}</button></details>
-                {choice ? <button onClick={() => clearChoice.mutate()} type="button">{copy("clear_choice", language)}</button> : null}
+                {choice ? <button onClick={() => clearChoice.mutate(undefined)} type="button">{copy("clear_choice", language)}</button> : null}
               </div>
 
               <details className="place-explanations">
@@ -650,13 +751,43 @@ export function PlacesPage() {
                       const found = catalog.find((value) => value.place_id === item.place_id);
                       return (
                         <li key={item.place_id}>
-                          {found
-                            ? placeName(
-                                mergeNames(found, summaries.data?.[item.place_id]?.names),
-                                language,
-                                found.name,
-                              )
-                            : item.place_id}
+                          <span>
+                            {found
+                              ? placeName(
+                                  mergeNames(found, summaries.data?.[item.place_id]?.names),
+                                  language,
+                                  found.name,
+                                )
+                              : item.place_id}
+                          </span>
+                          {/* Changing your mind was impossible: the list was read-only,
+                              and the only way to move a place was to find its card
+                              again in a lane of hundreds. */}
+                          <span className="shortlist-edit">
+                            <select
+                              aria-label={copy("change_choice", language)}
+                              onChange={(event) =>
+                                saveChoice.mutate({
+                                  action: event.target.value,
+                                  placeId: item.place_id,
+                                })
+                              }
+                              value={item.action}
+                            >
+                              {CHOICES.map((value) => (
+                                <option key={value} value={value}>
+                                  {copy(value, language)}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              onClick={() => clearChoice.mutate(item.place_id)}
+                              title={copy("clear_choice", language)}
+                              type="button"
+                            >
+                              ×
+                            </button>
+                          </span>
                         </li>
                       );
                     })}

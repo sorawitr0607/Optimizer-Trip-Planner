@@ -108,7 +108,10 @@ describe("PlaceDeck", () => {
     // string is what the signage and a taxi driver use.
     expect(html).toContain("台北101");
     expect(html).toContain("71.5");
-    expect(html).toContain("A landmark tower");
+    // The description is deliberately NOT here. The panel beside the deck renders the
+    // same paragraph from the same summary, so the card printed text already on screen
+    // — and the card is for deciding, not for reading.
+    expect(html).not.toContain("A landmark tower");
     expect(html).toContain("Visit estimate");
     expect(html).toContain("45–90");
     expect(html).toContain("Effort and access");

@@ -8,15 +8,15 @@ import {
   MapPinned,
   Route,
   Sparkles,
-  Trash2,
   Wallet,
 } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router";
 
 import { ApiError, rpc, type Journey, type SetupVocabulary, type Trip } from "../api/client";
-import { copy, copyFormat } from "../i18n/copy";
+import { copy } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
+import { DeleteTrip } from "../shared/DeleteTrip";
 
 /**
  * The first screen anyone sees, and until now the weakest: a bare heading, two
@@ -268,42 +268,15 @@ export function TripsPage() {
   );
 }
 
-/**
- * A saved trip resumes at the stage needing attention, not always at setup — and can
- * be deleted, which until now it could not be from anywhere in the webapp.
- *
- * `delete_trip` has existed on the allowlist since S1 and had no control anywhere, so a
- * trip made by mistake stayed in the switcher for good. The confirmation is
- * type-the-name, which is the POC's own design for this action (`delete_trip_confirm`
- * was already in the catalogue): the deletion is genuinely irreversible, and a button
- * you can hit twice by reflex is not a confirmation.
- */
+/** A saved trip resumes at the stage needing attention, not always at setup, and can
+ *  be deleted — see `shared/DeleteTrip.tsx` for why the confirmation is type-the-name. */
 function TripSlot({ trip }: { trip: Trip }) {
   const { language } = useLanguage();
-  const queryClient = useQueryClient();
-  const [confirming, setConfirming] = useState(false);
-  const [typed, setTyped] = useState("");
-
   const journey = useQuery({
     queryKey: ["journey", trip.trip_id],
     queryFn: () => rpc<Journey>("journey", { trip_id: trip.trip_id }),
   });
   const stage = journey.data?.next ?? "setup";
-
-  const remove = useMutation({
-    mutationFn: () => rpc<null>("delete_trip", { trip_id: trip.trip_id }),
-    onSuccess: async () => {
-      // The row is about to disappear, so the switcher and every per-trip read of it
-      // have to go with it.
-      await queryClient.invalidateQueries({ queryKey: ["trips"] });
-      queryClient.removeQueries({ queryKey: ["journey", trip.trip_id] });
-    },
-  });
-
-  // Whitespace only, because a name is typed by a person: "Family Trip " must count.
-  const matches = typed.trim() === trip.name.trim() && trip.name.trim() !== "";
-  const errorCode = remove.error instanceof ApiError ? remove.error.code : remove.error?.message;
-
   return (
     <div className="trip-slot">
       <Link to={`/trips/${trip.trip_id}/${stage}`}>
@@ -315,42 +288,7 @@ function TripSlot({ trip }: { trip: Trip }) {
           {copy(`stage_${stage}`, language)} → {copy("continue_trip", language)}
         </span>
       </Link>
-      {confirming ? (
-        <div className="trip-slot-confirm">
-          <p>
-            {copyFormat("delete_trip_warning", language, {
-              name: trip.name,
-              destination: trip.destination,
-            })}
-          </p>
-          <label>
-            {copyFormat("delete_trip_confirm", language, { name: trip.name })}
-            <input
-              autoFocus
-              onChange={(event) => setTyped(event.target.value)}
-              value={typed}
-            />
-          </label>
-          {errorCode ? <p className="field-error">⚠ {errorCode}</p> : null}
-          <div className="trip-slot-actions">
-            <button
-              className="trip-slot-delete"
-              disabled={!matches || remove.isPending}
-              onClick={() => remove.mutate()}
-              type="button"
-            >
-              {remove.isPending ? copy("deleting", language) : copy("delete_trip", language)}
-            </button>
-            <button onClick={() => { setConfirming(false); setTyped(""); }} type="button">
-              {copy("cancel", language)}
-            </button>
-          </div>
-        </div>
-      ) : (
-        <button className="trip-slot-open" onClick={() => setConfirming(true)} type="button">
-          <Trash2 aria-hidden="true" size={14} /> {copy("delete_trip", language)}
-        </button>
-      )}
+      <DeleteTrip trip={trip} />
     </div>
   );
 }

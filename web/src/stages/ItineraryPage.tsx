@@ -34,13 +34,22 @@ export interface PlottedPoint extends CoordinatePoint {
   y: number;
 }
 
-/** Preserve relative distance on both axes instead of stretching a bounding box to fit. */
-export function plotCoordinates(points: CoordinatePoint[]): PlottedPoint[] {
+/** Preserve relative distance on both axes instead of stretching a bounding box to fit.
+ *
+ *  Generic over whatever else a caller carries, because `/places` now plots the
+ *  shortlist through the same projection and its points have a name and no status.
+ *  Two projections would be two pictures of the same coordinates that could disagree. */
+export function plotCoordinates<T extends { latitude: number; longitude: number }>(
+  points: T[],
+): (T & { x: number; y: number })[] {
   if (!points.length) return [];
   const latitude = points.reduce((total, point) => total + point.latitude, 0) / points.length;
   const longitudeScale = Math.cos((latitude * Math.PI) / 180);
+  // The point is kept whole beside its projection rather than spread into it: spreading
+  // and then omitting the two extras loses the generic's identity, so a caller carrying
+  // its own fields got them back as `Omit<...>` instead of its own type.
   const raw = points.map((point) => ({
-    ...point,
+    point,
     rawX: point.longitude * longitudeScale,
     rawY: -point.latitude,
   }));
@@ -61,7 +70,7 @@ export function plotCoordinates(points: CoordinatePoint[]): PlottedPoint[] {
   const finiteScale = Number.isFinite(scale) ? scale : 1;
   const usedWidth = spanX * finiteScale;
   const usedHeight = spanY * finiteScale;
-  return raw.map(({ rawX, rawY, ...point }) => ({
+  return raw.map(({ point, rawX, rawY }) => ({
     ...point,
     x: MAP_PAD + (availableWidth - usedWidth) / 2 + (rawX - minX) * finiteScale,
     y: MAP_PAD + (availableHeight - usedHeight) / 2 + (rawY - minY) * finiteScale,

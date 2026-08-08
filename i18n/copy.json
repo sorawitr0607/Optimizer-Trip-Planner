@@ -912,7 +912,7 @@
       "stage_revise": "Revise",
       "stage_setup": "Trip and setup",
       "stage_split": "Split actual bills",
-      "stale_setup": "This result belongs to an older setup. It remains visible, but confirm and discover again before ranking.",
+      "stale_setup": "Your setup changed after these places were found, so choosing and planning are blocked until they are re-linked to it. No new search is needed — the places are cached.",
       "start": "Start",
       "start_date": "Start date",
       "state_confirmed": "✅ Confirmed",
@@ -1122,7 +1122,7 @@
       "pick_month": "When, roughly?",
       "pick_month_help": "Any month works — this only sets a starting point. The exact dates are yours to edit in setup afterwards.",
       "use_these_dates": "Use these dates",
-      "provisional_dates_set": "Provisional dates saved. Places were found for the old setup, so discovery has to run again before the planner will schedule them.",
+      "provisional_dates_set": "Dates saved, and the places you already chose were re-linked to them — nothing to redo. Generate the plan below.",
       "month_1": "January",
       "month_2": "February",
       "month_3": "March",
@@ -1143,7 +1143,11 @@
       "delete_trip": "Delete",
       "cancel": "Cancel",
       "delete_trip_done": "Trip deleted.",
-      "deleting": "Deleting…"
+      "deleting": "Deleting…",
+      "shortlist_map": "Where your shortlist is",
+      "change_choice": "Change this choice",
+      "relink_places": "Re-link places to this setup",
+      "relinking": "Re-linking…"
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -1681,7 +1685,7 @@
       "stage_revise": "แก้ไขแผน",
       "stage_setup": "ทริปและการตั้งค่า",
       "stage_split": "หารค่าใช้จ่ายจริง",
-      "stale_setup": "ผลนี้มาจากการตั้งค่าเก่า ยังดูได้ แต่ควรยืนยันและค้นหาใหม่ก่อนจัดอันดับ",
+      "stale_setup": "การตั้งค่าเปลี่ยนไปหลังจากค้นสถานที่เหล่านี้ การเลือกและการวางแผนจึงถูกระงับไว้จนกว่าจะเชื่อมโยงใหม่ ไม่ต้องค้นหาใหม่ เพราะข้อมูลสถานที่ถูกแคชไว้แล้ว",
       "start": "เริ่ม",
       "start_date": "วันเริ่มต้น",
       "state_confirmed": "✅ ยืนยันแล้ว",
@@ -1891,7 +1895,7 @@
       "pick_month": "ประมาณช่วงไหน",
       "pick_month_help": "เลือกเดือนไหนก็ได้ นี่เป็นเพียงจุดเริ่มต้น วันที่จริงคุณแก้เองได้ในหน้าตั้งค่า",
       "use_these_dates": "ใช้วันที่นี้",
-      "provisional_dates_set": "บันทึกวันที่ชั่วคราวแล้ว เนื่องจากค้นหาสถานที่ไว้ด้วยการตั้งค่าเดิม ต้องค้นหาใหม่อีกครั้งก่อนระบบจะจัดตารางให้",
+      "provisional_dates_set": "บันทึกวันที่แล้ว และเชื่อมสถานที่ที่คุณเลือกไว้เข้ากับวันที่ใหม่ให้เรียบร้อย ไม่ต้องทำอะไรซ้ำ กดสร้างแผนด้านล่างได้เลย",
       "month_1": "มกราคม",
       "month_2": "กุมภาพันธ์",
       "month_3": "มีนาคม",
@@ -1912,7 +1916,11 @@
       "delete_trip": "ลบ",
       "cancel": "ยกเลิก",
       "delete_trip_done": "ลบทริปแล้ว",
-      "deleting": "กำลังลบ…"
+      "deleting": "กำลังลบ…",
+      "shortlist_map": "สถานที่ที่เลือกอยู่ตรงไหน",
+      "change_choice": "เปลี่ยนการตัดสินใจนี้",
+      "relink_places": "เชื่อมสถานที่กับการตั้งค่านี้ใหม่",
+      "relinking": "กำลังเชื่อมใหม่…"
     }
   }
 }

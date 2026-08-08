@@ -1977,7 +1977,16 @@ class PlannerActions:
         for place in wanted:
             qid = (place.get("signals") or {}).get("wikidata")
             held = existing.get(place["place_id"])
-            if not force and held and held["expires_at"] > now.isoformat():
+            # The stored value carries the provider version it was written under, so a
+            # capability added later (Commons geosearch, v2) refetches each place once
+            # rather than waiting out the 60-day TTL with an empty gallery.
+            current_version = str(getattr(provider, "cache_version", ""))
+            fresh_enough = (
+                held
+                and held["expires_at"] > now.isoformat()
+                and str(held.get("cache_version") or "") == current_version
+            )
+            if not force and fresh_enough:
                 cached += 1
                 continue
             if not qid:
@@ -1996,6 +2005,7 @@ class PlannerActions:
                     provider=provider,
                     now=now,
                     value={
+                        "cache_version": current_version,
                         "qid": None,
                         "names": {},
                         "text": {},
@@ -2040,7 +2050,7 @@ class PlannerActions:
                 place_id=place["place_id"],
                 provider=provider,
                 now=now,
-                value=value,
+                value={**value, "cache_version": current_version},
             )
             fetched += 1
         return {

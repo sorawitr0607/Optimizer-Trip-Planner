@@ -312,6 +312,22 @@ saturating at 30 gave every station a flat 15 of 15 when Taipei really returns 1
 `TransitGraph.journey` returns `None` when nothing needs riding, so travel time takes the **better of
 riding and walking** — otherwise a station across the road from a place scores as unreachable.
 
+**Changing setup does not cost a re-search as of 2026-08-08 (`WF-048`).** Discovery stores the setup
+hash it ran against, so adding dates made the found places stale — and a stale trip cannot even record
+a choice, the server refuses with 409. The advice was "discover again", which on a dense city is a
+minute of Overpass and reads as losing the work. Nothing needs re-searching: `discover_places` keys the
+provider cache on the **destination alone**, so with a fresh entry it rebuilds the run from disk with
+**no network call** — measured at 0.05 s on a 715-place Seoul catalogue — and `place_id` is a hash of
+name, coordinates and category, so every existing choice still points at the same place. `StayPlanner`
+does it automatically after writing dates, and the stale-setup warning on `/places` carries a button
+that does the same. Never `force_refresh` for this: that goes back to Overpass and undoes the point.
+
+**A summary carries the provider version it was written under as of 2026-08-08 (`WF-048`).**
+`cache_version` existed on every provider and `refresh_place_summaries` never consulted it, so a place
+cached before Commons geosearch was added kept its empty gallery for the full 60-day TTL — cards stayed
+blank after the source that would have filled them landed. The version is stored inside the value and
+compared on read, so bumping it (`wikidata-summary-v2`) refetches each place once and no further.
+
 **A trip can be deleted from the webapp as of 2026-08-08 (`WF-048`), and `delete_trip` was broken.**
 The method has been on the allowlist since S1 with no control anywhere, so a trip made by mistake
 stayed in the switcher for good. Building the control found the method itself unusable: `split_rows`,

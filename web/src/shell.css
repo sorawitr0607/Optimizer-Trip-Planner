@@ -2852,3 +2852,168 @@
   cursor: not-allowed;
   opacity: var(--opacity-disabled);
 }
+
+/* The sidebar is 260px, so the confirm stacks rather than sitting in a row. */
+.trip-context .trip-slot-confirm {
+  font-size: var(--text-xs);
+  padding: 9px;
+}
+
+.trip-slot-actions.compact {
+  display: grid;
+  gap: 6px;
+}
+
+.trip-context .trip-slot-open {
+  justify-self: start;
+  padding-left: 0;
+}
+
+/* The shortlist's own map, in the detail panel. Same projection as the itinerary's,
+   so the two pictures of the same coordinates cannot disagree. */
+.places-map {
+  border-top: 1px dashed var(--bg-card-border);
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+}
+
+.places-map h4 {
+  margin: 0;
+}
+
+.places-map svg {
+  background: var(--bg-secondary);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius);
+  width: 100%;
+}
+
+.places-map .plan-map-point.current circle {
+  fill: var(--color-accent);
+}
+
+.places-map-key {
+  columns: 2;
+  font-size: var(--text-sm);
+  margin: 0;
+  padding-left: 18px;
+}
+
+.places-map-key li.current {
+  font-weight: var(--weight-selected);
+}
+
+/* The shortlist row, now editable: name left, choice and remove right. */
+.shortlist-group li {
+  align-items: center;
+  break-inside: avoid;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.shortlist-edit {
+  align-items: center;
+  display: flex;
+  flex: none;
+  gap: 4px;
+}
+
+.shortlist-edit select {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-size: var(--text-2xs);
+  padding: 1px 4px;
+}
+
+.shortlist-edit button {
+  background: none;
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius);
+  color: var(--color-danger);
+  cursor: pointer;
+  line-height: 1;
+  padding: 2px 7px;
+}
+
+/* The stale-setup warning carries its own fix, so it stacks rather than sitting on
+   one line. */
+.stale-setup {
+  align-items: flex-start;
+}
+
+.stale-setup > div {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.stale-setup p {
+  margin: 0;
+}
+
+.stale-setup button {
+  background: var(--color-warning);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius);
+  color: var(--color-on-accent);
+  cursor: pointer;
+  font-weight: var(--weight-secondary);
+  padding: 6px 12px;
+}
+
+/* Skeletons for the discover wait. Discovery is 30-90s and ranking follows it, so the
+   screen used to sit on a stale deck under a spinning button and then rearrange itself
+   twice as each query landed. */
+.skeleton-card {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.skeleton {
+  background: var(--bg-secondary);
+  border-radius: var(--radius);
+  display: block;
+}
+
+.skeleton-photo {
+  height: 200px;
+}
+
+.skeleton-photo.short {
+  height: 110px;
+}
+
+.skeleton-line {
+  height: 14px;
+  width: 70%;
+}
+
+.skeleton-line.wide {
+  height: 20px;
+  width: 90%;
+}
+
+.skeleton-line.short {
+  width: 40%;
+}
+
+/* Motion is the only thing separating "loading" from "empty and broken". */
+@media (prefers-reduced-motion: no-preference) {
+  .skeleton {
+    animation: skeleton-pulse 1.4s var(--ease-standard) infinite;
+  }
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: var(--opacity-dim); }
+}

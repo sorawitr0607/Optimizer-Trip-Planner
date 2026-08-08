@@ -369,11 +369,13 @@ export function PlaceDeck({
           <p className="setup-hint">{copy("deck_exploration_note", language)}</p>
         ) : null}
 
-        {about?.text?.[language] || about?.text?.en ? (
-          <>
-            <p>{about.text[language] ?? about.text.en}</p>
-            <p className="setup-hint">{copy("wikipedia_credit", language)}</p>
-          </>
+        {/* No description here. The panel beside the deck shows the same paragraph from
+            the same summary, so printing it twice filled the card with text that was
+            already on screen — and the card is for deciding, not for reading.
+            The credit stays: the card still shows the photograph, and these are CC BY-SA.
+            Attribution follows the image, not the prose it arrived with. */}
+        {gallery.length ? (
+          <p className="setup-hint">{copy("wikipedia_credit", language)}</p>
         ) : null}
 
         {/* `WF-005`'s minimum card content, one labelled topic per line so each is
