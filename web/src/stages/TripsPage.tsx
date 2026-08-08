@@ -47,6 +47,15 @@ const BULLETS = [
   [FileSpreadsheet, "landing_bullet_export"],
 ] as const;
 
+/** Where the four numbered stops sit on the drawn route. They are the four stages, so
+ *  the picture and the "how it works" list below it describe the same journey. */
+const STOPS = [
+  { x: 80, y: 246, label: "setup" },
+  { x: 430, y: 186, label: "places" },
+  { x: 760, y: 192, label: "optimize" },
+  { x: 1120, y: 158, label: "itinerary" },
+] as const;
+
 const STEPS = [
   [Sparkles, "stage_setup", "landing_how_setup"],
   [MapPinned, "stage_places", "landing_how_places"],
@@ -108,26 +117,77 @@ export function TripsPage() {
     <main className="landing">
       {/* derives-from: element 5 .hero-content as .landing-hero. The donor's dark hero
           is the one element in the catalogue whose job is explaining a product before
-          asking for input, which is exactly what was missing here. */}
+          asking for input, which is exactly what was missing here.
+
+          The scene is drawn, not photographed: `WF-034` keeps this app working offline
+          with no remote assets, so a stock landscape was never available. Drawing it
+          also lets the hero be *about the product* — the dotted route with numbered
+          stops is the thing the planner makes, and the four stops are the four stages,
+          so the picture and the "how it works" list are the same object. */}
       <section className="landing-hero">
-        <p className="landing-badge">
-          <Compass aria-hidden="true" size={15} /> Optimizer Trip Planner
-        </p>
-        <h1>{copy("landing_headline", language)}</h1>
-        <p className="landing-lead">{copy("landing_subtext", language)}</p>
-        {/* derives-from: element 5 .feature-bullets-list as .landing-bullets */}
-        <ul className="landing-bullets">
-          {BULLETS.map(([Icon, code]) => (
-            <li key={code}>
-              <span className="landing-bullet-icon">
-                <Icon aria-hidden="true" size={17} />
+        <div aria-hidden="true" className="hero-scene">
+          <svg preserveAspectRatio="none" viewBox="0 0 1200 300">
+            <g className="hero-layer hero-layer-far">
+              <path d="M0 150 L140 86 L268 142 L392 68 L520 136 L640 80 L764 146 L900 90 L1030 150 L1200 96 L1200 300 L0 300 Z" />
+            </g>
+            <g className="hero-layer hero-layer-mid">
+              <path d="M0 196 L150 148 L300 192 L470 136 L640 188 L820 144 L980 194 L1200 152 L1200 300 L0 300 Z" />
+            </g>
+            <g className="hero-layer hero-layer-near">
+              <path d="M0 244 L200 218 L420 242 L640 214 L880 240 L1080 216 L1200 236 L1200 300 L0 300 Z" />
+            </g>
+            {/* The route the planner builds, drawing itself left to right. */}
+            <path
+              className="hero-route"
+              d="M80 246 C 240 196, 300 172, 430 186 S 640 246, 760 192 S 980 128, 1120 158"
+              fill="none"
+            />
+            {STOPS.map((stop, index) => (
+              <g
+                className="hero-stop"
+                key={stop.label}
+                style={{ animationDelay: `${1.1 + index * 0.28}s` }}
+                transform={`translate(${stop.x} ${stop.y})`}
+              >
+                <circle className="hero-stop-ring" r="19" />
+                <circle className="hero-stop-dot" r="14" />
+                <text dy="5" textAnchor="middle">{index + 1}</text>
+              </g>
+            ))}
+          </svg>
+        </div>
+
+        <div className="hero-copy">
+          <p className="landing-badge">
+            <Compass aria-hidden="true" size={15} /> Optimizer Trip Planner
+          </p>
+          {/* Word by word, so the sentence arrives at reading speed rather than all at
+              once. Reduced motion turns this into plain text; nothing depends on it. */}
+          <h1>
+            {copy("landing_headline", language).split(" ").map((word, index) => (
+              <span
+                className="hero-word"
+                key={`${word}-${index}`}
+                style={{ animationDelay: `${0.08 * index}s` }}
+              >
+                {word}{" "}
               </span>
-              {copy(code, language)}
-            </li>
-          ))}
-        </ul>
-        <p className="landing-note">{copy("landing_local_note", language)}</p>
-        <p className="landing-note">{copy("landing_free_note", language)}</p>
+            ))}
+          </h1>
+          <p className="landing-lead">{copy("landing_subtext", language)}</p>
+          <ul className="landing-bullets">
+            {BULLETS.map(([Icon, code]) => (
+              <li key={code}>
+                <span className="landing-bullet-icon">
+                  <Icon aria-hidden="true" size={17} />
+                </span>
+                {copy(code, language)}
+              </li>
+            ))}
+          </ul>
+          <p className="landing-note">{copy("landing_local_note", language)}</p>
+          <p className="landing-note">{copy("landing_free_note", language)}</p>
+        </div>
       </section>
 
       <div className="landing-columns">

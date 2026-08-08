@@ -1176,7 +1176,20 @@
       "month_pros": "Good",
       "month_cons": "Hard",
       "month_advice": "How to handle it",
-      "photo_is_nearby": "Photographed near here, not necessarily of this place"
+      "photo_is_nearby": "Photographed near here, not necessarily of this place",
+      "tour_title": "How this screen works",
+      "tour_step_discover": "First, find places",
+      "tour_step_discover_body": "Press Discover attractions once. It searches OpenStreetMap for the city you chose — free, and it takes up to a minute.",
+      "tour_step_swipe": "Then decide, one card at a time",
+      "tour_step_swipe_body": "Drag the card, or use the buttons — they do the same thing. Right keeps it, left drops it, up is maybe, down skips for now.",
+      "tour_step_lanes": "Change which places you are shown",
+      "tour_step_lanes_body": "The row of buttons picks the lane. City Icons is the famous ones; Browse All is everything found.",
+      "tour_step_shortlist": "Your shortlist is always one click away",
+      "tour_step_shortlist_body": "The tab on the right opens what you have kept. You can change your mind there at any time.",
+      "tour_start": "Got it",
+      "tour_skip": "Skip",
+      "tour_next": "Next",
+      "tour_reopen": "How this works"
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -1976,7 +1989,20 @@
       "month_pros": "ข้อดี",
       "month_cons": "ข้อเสีย",
       "month_advice": "รับมืออย่างไร",
-      "photo_is_nearby": "ถ่ายบริเวณใกล้เคียง อาจไม่ใช่ภาพของสถานที่นี้โดยตรง"
+      "photo_is_nearby": "ถ่ายบริเวณใกล้เคียง อาจไม่ใช่ภาพของสถานที่นี้โดยตรง",
+      "tour_title": "หน้านี้ใช้งานอย่างไร",
+      "tour_step_discover": "เริ่มจากค้นหาสถานที่",
+      "tour_step_discover_body": "กดค้นหาสถานที่หนึ่งครั้ง ระบบจะค้นจาก OpenStreetMap ตามเมืองที่เลือก ใช้ฟรี และใช้เวลาไม่เกินหนึ่งนาที",
+      "tour_step_swipe": "แล้วตัดสินใจทีละใบ",
+      "tour_step_swipe_body": "ลากการ์ด หรือใช้ปุ่มก็ได้ ทั้งสองทำงานเหมือนกัน ขวาคือเก็บ ซ้ายคือไม่เอา ขึ้นคืออาจจะ ลงคือข้ามไว้ก่อน",
+      "tour_step_lanes": "เปลี่ยนกลุ่มสถานที่ที่แสดง",
+      "tour_step_lanes_body": "แถวปุ่มด้านบนใช้เลือกกลุ่ม แลนด์มาร์กสำคัญคือที่ดัง ๆ ส่วนดูทั้งหมดคือทุกที่ที่ค้นเจอ",
+      "tour_step_shortlist": "รายการที่เลือกอยู่ห่างแค่คลิกเดียว",
+      "tour_step_shortlist_body": "แท็บด้านขวาเปิดดูสิ่งที่คุณเก็บไว้ เปลี่ยนใจเมื่อไรก็ได้",
+      "tour_start": "เข้าใจแล้ว",
+      "tour_skip": "ข้าม",
+      "tour_next": "ถัดไป",
+      "tour_reopen": "วิธีใช้งาน"
     }
   }
 }

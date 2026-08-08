@@ -244,3 +244,33 @@ button:disabled {
   outline: 2.5px solid var(--color-purple);
   outline-offset: 2.5px;
 }
+
+/* ---------------------------------------------------------------------------
+   Landing page only. `WF-048`.
+
+   The owner asked for the first page to take its palette and vibe from a travel
+   site and its motion from an illustrated one, and for every other screen to
+   stay exactly as it is. So these are scoped: nothing outside `.landing` reads
+   them, the nine stage routes are untouched, and the destination-accent system
+   (D6) and its house-red fallback (D3) keep working unchanged behind them.
+
+   Sampled from the references rather than guessed: the deep teal-ink and the
+   amber are Vita Travels' own section background and golden-hour ground, the
+   cream is Hack the North's sand. Literals live here because tokens.css is the
+   single colour source and the only file the gate permits them in.
+   --------------------------------------------------------------------------- */
+:root {
+  --landing-ink: #091b20;
+  --landing-ink-soft: #12303a;
+  --landing-haze: #8d9fab;
+  --landing-sand: #fbe3cf;
+  --landing-amber: #d4832f;
+  --landing-amber-soft: #a05919;
+  --landing-cream: #fdf6ee;
+  --landing-on-ink: #f4ece2;
+  /* The tour scrim. Alpha has to live here: `rgba(` is a colour literal and the gate
+     permits none outside this file, so a translucent overlay is only expressible as a
+     token. Dark enough to push the screen back, sheer enough to keep it recognisable —
+     the tour describes that screen, so hiding it entirely defeats the explanation. */
+  --landing-scrim: rgb(9 27 32 / 76%);
+}

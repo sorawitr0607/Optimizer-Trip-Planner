@@ -674,6 +674,26 @@ picker now drives both modes**, defaulting to City Icons, and decided places are
 because only `main_queue` excludes them server-side. `main_queue` is one select away, so `WF-005`'s
 4:1 queue is still reachable — it is just no longer the only dealable lane.
 
+**The landing page has its own palette as of 2026-08-08 (`WF-048`), and only it.** The owner asked for
+the first page to take its vibe from two named sites and for every other screen to stay as it is, so
+`tokens.css` gained a `--landing-*` block that nothing outside `.landing` reads — the destination-accent
+system (D6) and the house-red fallback (D3) keep working untouched behind it. The colours are **sampled
+from the references**, not guessed: the deep teal-ink and amber are Vita Travels' own section background
+and golden-hour ground, the cream is Hack the North's sand, and all five clear AA on the ink background
+(4.5:1 or better). The hero scene is **drawn in SVG, not photographed** — `WF-034` keeps this app working
+offline with no remote assets — which also lets it be about the product: the dotted route with four
+numbered stops *is* the thing the planner makes, and those stops are the four stages, so the picture and
+the "how it works" list describe one journey. Every animation sits behind
+`prefers-reduced-motion: no-preference`.
+
+**A capture must observe the app, never operate it.** Two things broke that and both showed up as
+double-digit baseline drift on screens nobody had edited. The `/places` first-visit tour is suppressed
+by `document.documentElement.dataset.capture`, because a fresh Chrome profile is always a first visit
+and every capture would otherwise photograph the overlay. And the **summaries prefetch writes** — it
+stores a record per place — so photographing `/places` changed what the next photograph would show, and
+the gate reported 13% drift that no code caused. Both now check the capture flag. If a screen ever
+drifts without a code change again, ask first what that screen *does* on load.
+
 **The self-drifting baselines are fixed as of 2026-08-08 (`WF-048`).** Capture mode already froze CSS
 transitions because a screenshot caught mid-fade differs for no code reason; the same argument covers
 three values that move on their own. `/itinerary` prints the export timestamp, `/evidence` the running

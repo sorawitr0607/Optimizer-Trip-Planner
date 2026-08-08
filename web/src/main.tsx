@@ -27,6 +27,10 @@ const parameters = new URLSearchParams(window.location.search);
 const theme = parameters.get("baseline_theme");
 if (theme === "dark" || theme === "light") {
   document.documentElement.dataset.theme = theme;
+  // Marks capture mode for anything that must not appear in a baseline. The places
+  // tour is first-visit-only and a fresh Chrome profile is always a first visit, so
+  // without this every capture would photograph the overlay instead of the screen.
+  document.documentElement.dataset.capture = "1";
   // Capture mode also freezes transitions. The body fades background and colour
   // over 300ms, and a screenshot taken part-way through that fade differs from
   // one taken after it by a few shades across the whole viewport — which reads

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 
 import { PlaceDeck } from "./PlaceDeck";
+import { PlacesTour } from "./PlacesTour";
 import { StayAreas } from "./StayAreas";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 
@@ -235,6 +236,11 @@ export function PlacesPage() {
       .map((item) => item.place_id),
   ];
   useEffect(() => {
+    // Never during a capture. The prefetch *writes* — it stores a summary per place —
+    // so photographing this screen changed what the next photograph would show, and the
+    // baseline gate reported 13% drift on a page nobody had edited. A capture has to
+    // observe the app, not operate it.
+    if (typeof document !== "undefined" && document.documentElement.dataset.capture) return;
     if (!summaries.data || fetchSummary.isPending) return;
     const wanted = upcoming.filter(
       (placeId) => !(placeId in summaries.data) && !asked.current.has(placeId),
@@ -305,6 +311,7 @@ export function PlacesPage() {
 
   return (
     <section className="stage-card places-screen">
+      <PlacesTour language={language} />
       <header className="money-head">
         <h1>{copy("discover_title", language)}</h1>
         <p>{copy("discover_help", language)}</p>
