@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import unittest
 
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
 from travel_planner import climate
+from travel_planner.actions import PlannerActions, PlannerRefusal
 from travel_planner.providers import _google_public_holidays
 
 
@@ -203,6 +207,152 @@ class GoogleCalendarHolidayTest(unittest.TestCase):
         found = _google_public_holidays(ics, 2026)
 
         self.assertEqual("Children\'s Day and Tomb Sweeping Day", found[0]["name"])
+
+
+class FakeClimateProvider:
+    """Records what it was asked, so the coordinator's own decisions are visible."""
+
+    name = "openmeteo"
+    operation = "openmeteo:climate"
+    holiday_operation = "nager:holidays"
+    kind = "travel_months"
+    cache_version = "climate-test"
+    cache_ttl_days = 120
+    google_calendars = {"Taiwan": "en.taiwan"}
+
+    def __init__(self, holidays=None):
+        self.archive_calls: list[tuple[float, float]] = []
+        self.holiday_calls: list[tuple[str, int]] = []
+        self._holidays = holidays
+
+    def daily_archive(self, latitude, longitude, *, end_year):
+        self.archive_calls.append((round(latitude, 3), round(longitude, 3)))
+        return {
+            "daily": series({month: 15.0 + month for month in range(1, 13)}),
+            "from": f"{end_year - 4}-01-01",
+            "to": f"{end_year}-12-31",
+        }
+
+    def holidays(self, country, year):
+        self.holiday_calls.append((country, year))
+        return self._holidays
+
+
+class MonthGuideActionsTest(unittest.TestCase):
+    """The coordinator, which the pure-module tests do not reach: where the
+    coordinates come from, what is cached, and which source gets the credit."""
+
+    def _trip(self, directory, destination="Taipei, Taiwan"):
+        actions = PlannerActions(Path(directory) / "guide.sqlite3", climate_provider=self.provider)
+        trip = actions.create_trip(name="T", destination=destination)
+        return actions, trip
+
+    def setUp(self) -> None:
+        self.provider = FakeClimateProvider(holidays=[{"date": "2027-02-17", "name": "Lunar New Year"}])
+
+    def test_it_refuses_before_discovery_rather_than_guessing_a_city(self) -> None:
+        # The coordinates come from the discovery run's own searched window. Without
+        # one there is nothing to centre on, and geocoding a name again here would be a
+        # second opinion about where the trip is.
+        with TemporaryDirectory() as directory:
+            actions, trip = self._trip(directory)
+
+            with self.assertRaises(PlannerRefusal) as raised:
+                actions.travel_month_guide(trip.trip_id)
+
+            self.assertEqual("discovery_required_for_climate", str(raised.exception))
+            self.assertEqual([], self.provider.archive_calls)
+
+    def _with_discovery(self, actions, trip, boundary):
+        actions.save_setup(trip_id=trip.trip_id, main_style=["culture"], confirmed=True)
+        from travel_planner.core import new_discovery_run
+        setup = actions.get_setup(trip.trip_id)
+        actions.store.add_discovery_run(
+            new_discovery_run(
+                trip_id=trip.trip_id,
+                setup_sha256=setup.snapshot.sha256,
+                provider="test",
+                status="verified",
+                candidates={"candidates": []},
+                report={"query_boundary": boundary},
+            )
+        )
+
+    def test_the_centre_of_the_searched_window_is_what_gets_asked_about(self) -> None:
+        with TemporaryDirectory() as directory:
+            actions, trip = self._trip(directory)
+            self._with_discovery(actions, trip, [24.9, 121.4, 25.2, 121.7])
+
+            actions.travel_month_guide(trip.trip_id)
+
+            # Midpoint of (south, west, north, east), not a corner.
+            self.assertEqual([(25.05, 121.55)], self.provider.archive_calls)
+
+    def test_a_second_read_is_served_from_cache_and_asks_nothing(self) -> None:
+        # Normals move over decades and holidays are published a year ahead, so this
+        # must not be a request per visit to a screen anyone with no dates reaches.
+        with TemporaryDirectory() as directory:
+            actions, trip = self._trip(directory)
+            self._with_discovery(actions, trip, [24.9, 121.4, 25.2, 121.7])
+
+            first = actions.travel_month_guide(trip.trip_id)
+            second = actions.travel_month_guide(trip.trip_id)
+
+            self.assertEqual(first["months"], second["months"])
+            self.assertEqual(1, len(self.provider.archive_calls))
+            self.assertEqual(1, len(self.provider.holiday_calls))
+
+    def test_a_city_only_destination_still_resolves_its_country(self) -> None:
+        # Every trip made before the country/city picker holds a bare city, and passing
+        # "Taipei" on as a country found nothing -- reporting a covered country as
+        # having no published holidays.
+        with TemporaryDirectory() as directory:
+            actions, trip = self._trip(directory, destination="Taipei")
+            self._with_discovery(actions, trip, [24.9, 121.4, 25.2, 121.7])
+
+            guide = actions.travel_month_guide(trip.trip_id)
+
+            self.assertEqual("Taiwan", guide["country"])
+            self.assertEqual("Taiwan", self.provider.holiday_calls[0][0])
+
+    def test_the_source_named_is_the_one_that_answered(self) -> None:
+        # Taiwan comes from Google's calendar, not Nager. Crediting the wrong one makes
+        # a future gap untraceable.
+        with TemporaryDirectory() as directory:
+            actions, trip = self._trip(directory)
+            self._with_discovery(actions, trip, [24.9, 121.4, 25.2, 121.7])
+
+            guide = actions.travel_month_guide(trip.trip_id)
+
+            self.assertEqual("google.calendar", guide["holiday_source"])
+
+    def test_an_uncovered_country_reports_no_source_at_all(self) -> None:
+        with TemporaryDirectory() as directory:
+            self.provider = FakeClimateProvider(holidays=None)
+            actions, trip = self._trip(directory, destination="Nowhere City")
+            self._with_discovery(actions, trip, [24.9, 121.4, 25.2, 121.7])
+
+            guide = actions.travel_month_guide(trip.trip_id)
+
+            self.assertIsNone(guide["holiday_source"])
+            crowding = [
+                item["code"] for row in guide["months"] for item in row["cons"]
+            ]
+            self.assertIn("month_crowding_unknown", crowding)
+
+    def test_both_free_calls_are_recorded_at_zero(self) -> None:
+        # Every provider call routes through `_spend`; an unpriced one raises. Recorded
+        # at zero so call counts stay reconcilable against the paid operations.
+        with TemporaryDirectory() as directory:
+            actions, trip = self._trip(directory)
+            self._with_discovery(actions, trip, [24.9, 121.4, 25.2, 121.7])
+
+            actions.travel_month_guide(trip.trip_id)
+
+            usage = actions.paid_usage_status()
+            self.assertEqual(0.0, usage["estimated_usd"])
+            self.assertEqual(1, usage["by_operation"]["openmeteo:climate"]["requests"])
+            self.assertEqual(1, usage["by_operation"]["nager:holidays"]["requests"])
 
 
 if __name__ == "__main__":

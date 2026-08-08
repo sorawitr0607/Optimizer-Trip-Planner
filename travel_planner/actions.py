@@ -1963,24 +1963,36 @@ class PlannerActions:
         now = datetime.now(timezone.utc)
         held = self.store.get_trip_evidence(trip_id, provider.kind)
         if not force and held and held.get("expires_at", "") > now.isoformat():
-            return dict(held["value"])
+            # `get_trip_evidence` spreads the stored value at the top level and adds its
+            # own two timestamps -- there is no "value" key to reach into, and reaching
+            # for one raised KeyError on every cache hit. Every read here passed
+            # `force=True` while it was being built, so nothing ever took this branch.
+            return {
+                key: value
+                for key, value in held.items()
+                if key not in {"retrieved_at", "expires_at"}
+            }
 
-        year = now.year - 1  # the last whole year the archive certainly holds
+        # The last whole year the archive certainly holds, and the current year for
+        # holidays -- their dates move, so a published set is only true for its own year
+        # and the screen prints which one it used.
+        archive_end_year = now.year - 1
+        holiday_year = now.year
         self._spend(
             operation=provider.operation,
             count=1,
             trip_id=trip_id,
             detail={"latitude": round(latitude, 3), "longitude": round(longitude, 3)},
         )
-        archive = provider.daily_archive(latitude, longitude, end_year=year)
+        archive = provider.daily_archive(latitude, longitude, end_year=archive_end_year)
         months = climate.monthly_normals(archive["daily"])
 
-        country = (trip.destination.split(",")[-1]).strip()
+        country = destinations.country_for(trip.destination) or ""
         self._spend(
             operation=provider.holiday_operation, count=1, trip_id=trip_id,
-            detail={"country": country, "year": year + 1},
+            detail={"country": country, "year": holiday_year},
         )
-        published = provider.holidays(country, year + 1)
+        published = provider.holidays(country, holiday_year)
         # Which source answered, so the screen can attribute it and a future gap is
         # traceable to the right place rather than to "holidays".
         holiday_source = (
@@ -2001,7 +2013,7 @@ class PlannerActions:
             "observed_from": archive["from"],
             "observed_to": archive["to"],
             "country": country,
-            "holiday_year": year + 1,
+            "holiday_year": holiday_year,
             # Named so the screen can say the crowd factor is unknown rather than
             # letting an absent holiday list read as a quiet month.
             "holiday_source": holiday_source,
@@ -2086,9 +2098,12 @@ class PlannerActions:
                 # photographed here" rather than "photographs of this place" -- stored
                 # flagged as nearby so the screen says which it is showing.
                 photos = self._nearby_photos(provider, place)
-                if not photos:
-                    skipped += 1
-                    continue
+                # Stored even when empty. Without a record the answer is not cached, so
+                # every page load asked Commons again for the same place and got the
+                # same nothing -- against a public service this app's own notice
+                # promises to use at low volume. The empty record is also what the
+                # screen reads to say "no encyclopedia entry" instead of offering a
+                # fetch button that cannot work.
                 self._store_summary(
                     trip_id=trip_id,
                     place_id=place["place_id"],
@@ -2099,14 +2114,17 @@ class PlannerActions:
                         "qid": None,
                         "names": {},
                         "text": {},
-                        "image_url": photos[0],
+                        "image_url": photos[0] if photos else None,
                         "image_urls": photos,
-                        "photos_are_nearby": True,
+                        "photos_are_nearby": bool(photos),
                         "licence": "CC BY-SA or compatible, Wikimedia Commons",
                         "source_urls": {},
                     },
                 )
-                fetched += 1
+                if photos:
+                    fetched += 1
+                else:
+                    skipped += 1
                 continue
             try:
                 self._spend(

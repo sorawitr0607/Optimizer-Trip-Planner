@@ -604,7 +604,9 @@ export function PlacesPage() {
                       {prose ? <p>{prose}</p> : null}
                       {onlyEnglish ? <p className="setup-hint">{copy("description_thai_missing", language)}</p> : null}
                       <p className="setup-hint">
-                        {copy("wikipedia_credit", language)}
+                        {about?.photos_are_nearby
+                          ? copy("photo_is_nearby", language)
+                          : copy("wikipedia_credit", language)}
                         {about?.source_urls?.[language] || about?.source_urls?.en ? (
                           <>
                             {" · "}

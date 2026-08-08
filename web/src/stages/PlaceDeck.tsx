@@ -375,7 +375,11 @@ export function PlaceDeck({
             The credit stays: the card still shows the photograph, and these are CC BY-SA.
             Attribution follows the image, not the prose it arrived with. */}
         {gallery.length ? (
-          <p className="setup-hint">{copy("wikipedia_credit", language)}</p>
+          <p className="setup-hint">
+            {about?.photos_are_nearby
+              ? copy("photo_is_nearby", language)
+              : copy("wikipedia_credit", language)}
+          </p>
         ) : null}
 
         {/* `WF-005`'s minimum card content, one labelled topic per line so each is

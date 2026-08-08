@@ -152,3 +152,32 @@ def destination_text(country: str, city: str) -> str:
         # Prefer the table's casing over whatever the owner typed.
         return clean_country
     return f"{clean_city}, {clean_country}"
+
+
+def country_for(destination: str) -> str | None:
+    """The country a destination string names, or `None`.
+
+    `"Taipei, Taiwan"` gives Taiwan from its own last segment. `"Taipei"` -- which is
+    what every trip created before the country/city picker holds, and what 49 of the
+    fixtures use -- gives Taiwan by looking the city up. Without this the city name was
+    passed on as a country, which found nothing and reported the whole country as having
+    no published holidays.
+
+    Falls back to the last segment so a country absent from this table still reaches the
+    holiday sources, which between them cover far more countries than this picker does.
+    """
+
+    text = (destination or "").strip()
+    if not text:
+        return None
+    tail = text.split(",")[-1].strip()
+    for candidate in (tail, text):
+        for country in COUNTRIES:
+            if candidate.casefold() == country.casefold():
+                return country
+    for candidate in (tail, text):
+        for country, entry in COUNTRIES.items():
+            cities = entry.get("cities") or ()
+            if any(candidate.casefold() == str(city).casefold() for city in cities):
+                return country
+    return tail or None

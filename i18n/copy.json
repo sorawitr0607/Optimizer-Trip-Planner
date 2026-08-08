@@ -1175,7 +1175,8 @@
       "month_advice_crowds": "Book transport and rooms early, and expect the well-known places to be full.",
       "month_pros": "Good",
       "month_cons": "Hard",
-      "month_advice": "How to handle it"
+      "month_advice": "How to handle it",
+      "photo_is_nearby": "Photographed near here, not necessarily of this place"
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -1974,7 +1975,8 @@
       "month_advice_crowds": "จองรถและที่พักล่วงหน้า และเผื่อใจว่าที่ดัง ๆ จะแน่น",
       "month_pros": "ข้อดี",
       "month_cons": "ข้อเสีย",
-      "month_advice": "รับมืออย่างไร"
+      "month_advice": "รับมืออย่างไร",
+      "photo_is_nearby": "ถ่ายบริเวณใกล้เคียง อาจไม่ใช่ภาพของสถานที่นี้โดยตรง"
     }
   }
 }

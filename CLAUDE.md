@@ -349,6 +349,23 @@ and **Chuseok**. Taipei: best January, March, November; hardest June, July, Augu
 fair on a **9-day Lunar New Year run** — the single most important travel fact about Taiwan, and the one
 that was invisible before.
 
+**Two things a self-review caught that testing had not, 2026-08-08.** `travel_month_guide`'s cache-hit
+branch read `held["value"]`, but `store.get_trip_evidence` **spreads the stored value at the top level**
+and adds only `retrieved_at` / `expires_at` — so every cache hit raised `KeyError`. It shipped because
+every read written while building it passed `force=True`, which skips the branch. Measured after the
+fix: 9.08 s cold, **0.017 s warm**. And `photos_are_nearby` was written by `refresh_place_summaries` and
+**read by nothing** — the flag existed, the comment claimed the screen used it, and a Commons geosearch
+photograph of the next street was shown exactly like a photograph of the place. Both the deck and the
+detail panel now print `photo_is_nearby` instead of the Wikipedia credit when the flag is set. The
+lesson is the general one: a flag nothing renders is not a disclosure, and a branch no test enters is
+not code that works.
+
+**A city-only destination resolves its country as of 2026-08-08.** `destination.split(",")[-1]` gave
+`"Taipei"` as a country for every trip made before the country/city picker — and for 49 of the fixtures
+— which matched no holiday source and reported a covered country as having none.
+`destinations.country_for()` looks the city up, falling back to the last segment so a country outside
+the picker still reaches the holiday sources, which cover far more than it does.
+
 **Changing setup does not cost a re-search as of 2026-08-08 (`WF-048`).** Discovery stores the setup
 hash it ran against, so adding dates made the found places stale — and a stale trip cannot even record
 a choice, the server refuses with 409. The advice was "discover again", which on a dense city is a

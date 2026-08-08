@@ -24,6 +24,10 @@ export interface PlaceSummary {
   image_url: string | null;
   /** The curated image first, then article photographs. Free, capped at six. */
   image_urls?: string[];
+  /** True when the gallery came from Commons geosearch — photographs taken *near* the
+   *  coordinates rather than of the place. The screen must say so: a picture of the
+   *  next street shown as the place is the kind of quiet claim this app does not make. */
+  photos_are_nearby?: boolean;
   licence: string;
   source_urls: Partial<Record<Language, string>>;
 }
