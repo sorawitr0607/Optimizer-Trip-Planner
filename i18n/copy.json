@@ -1189,7 +1189,8 @@
       "tour_start": "Got it",
       "tour_skip": "Skip",
       "tour_next": "Next",
-      "tour_reopen": "How this works"
+      "tour_reopen": "How this works",
+      "card_map": "Where this one is"
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -2002,7 +2003,8 @@
       "tour_start": "เข้าใจแล้ว",
       "tour_skip": "ข้าม",
       "tour_next": "ถัดไป",
-      "tour_reopen": "วิธีใช้งาน"
+      "tour_reopen": "วิธีใช้งาน",
+      "card_map": "ที่นี่อยู่ตรงไหน"
     }
   }
 }

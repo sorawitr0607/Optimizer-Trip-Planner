@@ -22,7 +22,8 @@ import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
 import { mergeNames, placeAltName, placeName } from "../shared/names";
 import { galleryFor } from "../shared/photos";
-import { plotCoordinates } from "./ItineraryPage";
+import { mapPlaces } from "../shared/map";
+import { PlaceMap } from "./PlaceMap";
 
 const LANES = ["main_queue", "city_icons", "worth_it_if", "local_alternatives", "browse_all"] as const;
 const CHOICES = ["must_do", "interested", "maybe"] as const;
@@ -90,6 +91,15 @@ export function PlacesPage() {
   // places back into the deck — and so the two views are separately linkable.
   const [params, setParams] = useSearchParams();
   const mode: "deck" | "list" = params.get("view") === "list" ? "list" : "deck";
+  // In the URL like the view mode, for the same reason: a reload should not close the
+  // drawer an owner was reading, and it makes the open state reachable without a click.
+  const shortlistOpen = params.get("shortlist") === "open";
+  const setShortlistOpen = (open: boolean) => {
+    const updated = new URLSearchParams(params);
+    if (open) updated.set("shortlist", "open");
+    else updated.delete("shortlist");
+    setParams(updated, { replace: true });
+  };
   const setMode = (next: "deck" | "list") => {
     const updated = new URLSearchParams(params);
     if (next === "list") updated.set("view", "list");
@@ -116,7 +126,7 @@ export function PlacesPage() {
   const [rejectionReason, setRejectionReason] = useState("null");
   const [flash, setFlash] = useState<string | null>(null);
   const [insights, setInsights] = useState<Record<string, PlaceInsight>>({});
-  const [shortlistOpen, setShortlistOpen] = useState(false);
+
   const [photoIndexes, setPhotoIndexes] = useState<Record<string, number>>({});
 
   const setup = useQuery({
@@ -276,31 +286,24 @@ export function PlacesPage() {
   const longestHours = Math.round(keptMinutes.max / 6) / 10;
   // "Everything loaded", not "the request returned": discovery is followed by ranking,
   // and showing the deck between the two rearranged the screen twice.
-  const busy = discover.isPending || (catalog.length > 0 && ranking.isPending);
+  // Everything, not just the request that was pressed. Discovery is followed by
+  // ranking and then by the free descriptions the cards are made of, and revealing the
+  // screen between those stages showed a deck with no photographs that then rearranged
+  // itself twice. The skeleton stood inside the `ranking.data` branch, so on a first
+  // Discover -- no ranking yet -- it never rendered at all, which is exactly when it
+  // was wanted.
+  const busy =
+    discover.isPending
+    || (catalog.length > 0 && (ranking.isPending || summaries.isPending))
+    || fetchSummary.isPending;
   const basics = setup.data?.snapshot.data.trip_basics;
   const tripDays = daysBetween(basics?.start_date, basics?.end_date);
   // Numbered in the order they were kept, so the map's label and the list's label are
   // the same string and neither has to be read to understand the other. A place with no
   // coordinates simply has no pin — it is still on the shortlist.
-  const shortlistPoints = plotCoordinates(
-    selectedChoices
-      .map((item, index) => {
-        const found = catalog.find((value) => value.place_id === item.place_id);
-        if (!found || found.latitude === null || found.longitude === null) return null;
-        return {
-          id: item.place_id,
-          label: String(index + 1),
-          name: placeName(
-            mergeNames(found, summaries.data?.[item.place_id]?.names),
-            language,
-            found.name,
-          ),
-          latitude: found.latitude,
-          longitude: found.longitude,
-        };
-      })
-      .filter((point): point is NonNullable<typeof point> => point !== null),
-  );
+  const nameFor = (found: (typeof catalog)[number]) =>
+    placeName(mergeNames(found, summaries.data?.[found.place_id]?.names), language, found.name);
+  const shortlistPlaces = mapPlaces(selectedChoices, catalog, nameFor);
   const paidAllowed = Boolean(detailsCost.data?.allowed && photosCost.data?.allowed);
   const paidEstimate = (detailsCost.data?.estimate_usd ?? 0) + (photosCost.data?.estimate_usd ?? 0);
   const paidCaption = copy("live_details_cost", language)
@@ -435,6 +438,25 @@ export function PlacesPage() {
         </>
       ) : null}
 
+      {busy ? (
+            <div className="places-workspace" aria-busy="true">
+              <div className="skeleton-card">
+                <span className="skeleton skeleton-photo" />
+                <span className="skeleton skeleton-line wide" />
+                <span className="skeleton skeleton-line" />
+                <span className="skeleton skeleton-line" />
+                <span className="skeleton skeleton-line short" />
+              </div>
+              <div className="skeleton-card">
+                <span className="skeleton skeleton-line wide" />
+                <span className="skeleton skeleton-line" />
+                <span className="skeleton skeleton-line" />
+                <span className="skeleton skeleton-photo short" />
+                <span className="skeleton skeleton-line" />
+              </div>
+            </div>
+          ) : null}
+
       <h2 className="money-eyebrow">{copy("ranking_title", language)}</h2>
       <p className="setup-hint">{copy("ranking_help", language)}</p>
       <p className="setup-hint">{copy("formula_note", language)}</p>
@@ -486,25 +508,6 @@ export function PlacesPage() {
               screen. Discovery is ~30-90s and ranking follows it, so the page used to
               sit with a stale deck under a spinning button and then rearrange itself
               twice as each query landed. It waits for both. */}
-          {busy ? (
-            <div className="places-workspace" aria-busy="true">
-              <div className="skeleton-card">
-                <span className="skeleton skeleton-photo" />
-                <span className="skeleton skeleton-line wide" />
-                <span className="skeleton skeleton-line" />
-                <span className="skeleton skeleton-line" />
-                <span className="skeleton skeleton-line short" />
-              </div>
-              <div className="skeleton-card">
-                <span className="skeleton skeleton-line wide" />
-                <span className="skeleton skeleton-line" />
-                <span className="skeleton skeleton-line" />
-                <span className="skeleton skeleton-photo short" />
-                <span className="skeleton skeleton-line" />
-              </div>
-            </div>
-          ) : null}
-
           {/* Deck left, detail right. The detail used to be a whole other mode reached
               from a button at the top, so reading about the card in front of you meant
               leaving the deck and finding it again. It follows the deck's own card now
@@ -627,36 +630,18 @@ export function PlacesPage() {
                   </div>
                 );
               })()}
-              {/* derives-from: A1 numbered map; no tiles or network, and the list under it
-                  repeats every number so the picture is never the only carrier. The deck
-                  gave up its description to make room: the same paragraph was on screen
-                  twice, and where the places *are* was nowhere. */}
-              {shortlistPoints.length ? (
-                <section className="places-map">
-                  <h4>{copy("shortlist_map", language)}</h4>
-                  <svg
-                    aria-label={copy("shortlist_map", language)}
-                    role="img"
-                    viewBox="0 0 420 120"
-                  >
-                    {shortlistPoints.map((point) => (
-                      <g
-                        className={`plan-map-point${point.id === selectedId ? " current" : ""}`}
-                        key={point.id}
-                      >
-                        <circle cx={point.x} cy={point.y} r={point.id === selectedId ? 10 : 8} />
-                        <text textAnchor="middle" x={point.x} y={point.y + 3}>{point.label}</text>
-                      </g>
-                    ))}
-                  </svg>
-                  <ol className="places-map-key">
-                    {shortlistPoints.map((point) => (
-                      <li className={point.id === selectedId ? "current" : undefined} key={point.id}>
-                        <b>{point.label}</b> {point.name}
-                      </li>
-                    ))}
-                  </ol>
-                </section>
+              {/* Where *this* card is. Drawn against the rest of the shortlist, dimmed,
+                  because a lone pin on an empty box has nowhere to be. */}
+              {shortlistPlaces.length ? (
+                <PlaceMap
+                  focusId={selectedId}
+                  language={language}
+                  places={shortlistPlaces.some((place) => place.place_id === selectedId)
+                    ? shortlistPlaces
+                    : [...shortlistPlaces, ...mapPlaces([{ place_id: selectedId }], catalog, nameFor)]}
+                  title={copy("card_map", language)}
+                  withKey={false}
+                />
               ) : null}
               <div className="place-card-facts">
                 <span><b>{copy("duration", language)}:</b> {card.duration_estimate.minimum_minutes}–{card.duration_estimate.maximum_minutes} {copy("minutes", language)}</span>
@@ -727,7 +712,7 @@ export function PlacesPage() {
         aria-controls="shortlist-pane"
         aria-expanded={shortlistOpen}
         className="shortlist-handle"
-        onClick={() => setShortlistOpen((open) => !open)}
+        onClick={() => setShortlistOpen(!shortlistOpen)}
         type="button"
       >
         {copy("your_shortlist", language)}
@@ -809,6 +794,11 @@ export function PlacesPage() {
                 mean holding a copy of the optimizer's pacing constants here, and two
                 copies of a number is how the screen and the workbook start
                 disagreeing. */}
+            <PlaceMap
+              language={language}
+              places={shortlistPlaces}
+              title={copy("shortlist_map", language)}
+            />
             <h3>{copy("draft_shape", language)}</h3>
             <div className="money-tiles">
               <div className="money-tile">
