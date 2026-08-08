@@ -257,8 +257,14 @@ export function EvidencePage() {
         >
           <b aria-hidden="true">◇</b>
           <span>
-            {copy("paid_usage", language)}: US${spend.estimated_usd.toFixed(4)} / US$
-            {spend.cap_usd.toFixed(2)} {copy("paid_cap", language)} · {spend.requests}{" "}
+            {copy("paid_usage", language)}:{" "}
+            {/* Moves with the ledger, not the code: any paid call anywhere changes both
+                numbers, so this screen drifted past the gate's tolerance on its own. */}
+            <span data-volatile="ledger">
+              US${spend.estimated_usd.toFixed(4)} / US${spend.cap_usd.toFixed(2)}
+            </span>{" "}
+            {copy("paid_cap", language)} ·{" "}
+            <span data-volatile="ledger">{spend.requests}</span>{" "}
             {copy("paid_requests", language)}
             {spend.state === "stopped" ? ` — ${copy("paid_stopped", language)}` : ""}
             {spend.state === "warning" ? ` — ${copy("paid_warning", language)}` : ""}

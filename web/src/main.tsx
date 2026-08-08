@@ -32,8 +32,23 @@ if (theme === "dark" || theme === "light") {
   // one taken after it by a few shades across the whole viewport — which reads
   // as a 49% pixel change and fails the baseline gate for no real reason.
   const frozen = document.createElement("style");
+  // And freezes the values that move on their own. `/itinerary` prints the export
+  // timestamp and `/evidence` the running paid-usage ledger, so re-photographing an
+  // unchanged app produced eight differing images -- a gate that fails without a code
+  // change teaches everyone to ignore it. `font-size: 0` collapses the real value to
+  // no width and `::after` supplies a fixed-width stand-in, so the layout around it is
+  // still compared exactly; only the digits are held. Nothing outside capture mode is
+  // affected, and every other pixel on both screens is still diffed.
   frozen.textContent =
-    "*,*::before,*::after{transition:none!important;animation:none!important}";
+    "*,*::before,*::after{transition:none!important;animation:none!important}" +
+    "[data-volatile]{font-size:0!important}" +
+    "[data-volatile]::after{content:'\\2014\\2014';font-size:1rem;font-family:var(--font-mono)}" +
+    // A remote photograph is third-party pixels over a network: Wikimedia re-encodes a
+    // thumbnail and the same image comes back subtly different, which failed the gate
+    // at peak 28 with nothing in this repo changed. `opacity: 0` blanks the pixels and
+    // keeps the element laid out at its real size, so a layout change still fails —
+    // which is the part of a photograph this gate can meaningfully own.
+    ".place-deck-photo img,.place-about-photo,.place-insight img{opacity:0!important}";
   document.head.append(frozen);
 }
 const requested = parameters.get("baseline_language");

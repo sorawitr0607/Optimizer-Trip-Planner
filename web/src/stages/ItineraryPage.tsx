@@ -266,7 +266,11 @@ export function ItineraryPage() {
       </header>
       <div className="plan-stamp">
         <strong>{copy(plan.stamp.variant_id, language)} · {copy("readiness", language)}: {copy(plan.readiness.state, language)}</strong>
-        <span>{copy("active_plan", language)} <code>{versionTag}</code> · {copy("exported_at", language)} {plan.stamp.exported_at.slice(0, 16)} · {plan.stamp.base_currency} · {plan.stamp.language.toUpperCase()}</span>
+        <span>{copy("active_plan", language)} <code>{versionTag}</code> · {copy("exported_at", language)}{" "}
+          {/* Moves with the clock, not the code: re-exporting the same plan a minute
+              later changed this and failed the screen gate. Marked so capture mode can
+              hold it still -- the same reason it freezes transitions. */}
+          <span data-volatile="clock">{plan.stamp.exported_at.slice(0, 16)}</span> · {plan.stamp.base_currency} · {plan.stamp.language.toUpperCase()}</span>
       </div>
       {!plan.stamp.is_active_plan ? <p className="money-note money-note-warn"><b aria-hidden="true">⚠</b>{copy("superseded_plan", language)}</p> : null}
       {drift.data?.moved ? (

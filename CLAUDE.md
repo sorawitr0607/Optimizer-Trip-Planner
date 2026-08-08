@@ -674,7 +674,22 @@ picker now drives both modes**, defaulting to City Icons, and decided places are
 because only `main_queue` excludes them server-side. `main_queue` is one select away, so `WF-005`'s
 4:1 queue is still reachable — it is just no longer the only dealable lane.
 
-**Eight of the 36 screen baselines drift on their own**, found while re-approving for `WF-048`:
+**The self-drifting baselines are fixed as of 2026-08-08 (`WF-048`).** Capture mode already froze CSS
+transitions because a screenshot caught mid-fade differs for no code reason; the same argument covers
+three values that move on their own. `/itinerary` prints the export timestamp, `/evidence` the running
+paid-usage ledger, and both deck and detail render a **remote photograph** — Wikimedia re-encodes a
+thumbnail and the identical image returns subtly different, measured at peak 28 with nothing changed.
+The two texts carry `data-volatile` and capture mode collapses them to a fixed-width stand-in
+(`font-size: 0` plus a `::after`), so the layout around them is still compared exactly and only the
+digits are held. Photographs get `opacity: 0`, which keeps the element laid out at its real size — a
+layout change still fails, which is the part of a third-party image this gate can meaningfully own.
+Verified by recording a paid call between an approve and a compare: the ledger moved
+US$2.3255 → US$2.3505 and the gate stayed green. **Nothing was excluded from the comparison and the
+tolerance was not widened.**
+
+The superseded note, kept because the reasoning still applies to any value added later:
+
+**Eight of the 36 screen baselines used to drift on their own**, found while re-approving for `WF-048`:
 `/evidence` renders the running paid-usage counter and `/itinerary` the export timestamp, so those
 images move with the ledger and the clock rather than with the code. `/evidence` crosses the 0.1%
 tolerance unaided; `/itinerary` stays under it. Excluding a region from a baseline is a `WF-025`

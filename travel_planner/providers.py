@@ -42,6 +42,20 @@ class OpenStreetMapProvider:
     # 60-90s budget the query itself declares, and a retry would only spend it twice.
     FAST_FAILURE_SECONDS = 20
     RETRY_PAUSE_SECONDS = 6
+    # The two blocks get different windows, because they cost different amounts.
+    #
+    # The indexed landmark block searches the full clamped window: it is cheap -- Tokyo
+    # returned 3082 referenced places in about ten seconds over the whole 0.60 degrees --
+    # and referenced landmarks are sparse, so a wide net is what finds them.
+    #
+    # The unindexed baseline block gets the middle 0.40 degrees instead, and that number
+    # is measured rather than chosen. On Tokyo at 0.60 it ran 53.5s once and **timed out
+    # at 67s** the next time, straddling its own 60s budget; at 0.40 it completed in
+    # 39.0s with real headroom. Shrinking it costs nothing in volume either: both sizes
+    # returned exactly `result_limit` records, so the box never decided *how many* came
+    # back, only *which* -- and `out center qt` truncates in quadtile order, so a wider
+    # box spends the same 500 slots spread thinner over ground a city trip never reaches.
+    baseline_span_degrees = 0.40
     # The ceiling for one discovery, retries included, under `client.ts`'s 120s abort.
     # A pair that outlives the page waiting for it fails the same way it would have
     # anyway, having spent the time.
@@ -108,8 +122,15 @@ class OpenStreetMapProvider:
             bbox, geocoded_name=str(coverage.get("geocoded_name") or destination)
         )
 
-    def _overpass_elements(self, query: str) -> list[Any]:
-        """One Overpass request. Raises rather than returning a truncated answer."""
+    def _overpass_elements(self, query: str, timeout: float | None = None) -> list[Any]:
+        """One Overpass request. Raises rather than returning a truncated answer.
+
+        `timeout` is what is left of the discovery budget. Without it the deadline only
+        decided whether a *retry* was allowed to start, while a request already in
+        flight ran to the 105s socket limit — so a pair could reach 117s against the
+        webapp's 120s abort, measured on Tokyo. Bounding each request by the remaining
+        budget is what makes `DISCOVERY_BUDGET_SECONDS` a ceiling rather than a wish.
+        """
 
         payload = self._request_json(
             Request(
@@ -121,7 +142,8 @@ class OpenStreetMapProvider:
                     "User-Agent": self.user_agent,
                 },
                 method="POST",
-            )
+            ),
+            timeout=timeout,
         )
         elements = payload.get("elements") if isinstance(payload, dict) else None
         if not isinstance(elements, list):
@@ -149,14 +171,14 @@ class OpenStreetMapProvider:
 
         started = monotonic()
         try:
-            return self._overpass_elements(query)
+            return self._overpass_elements(query, timeout=max(1.0, deadline - started))
         except ProviderUnavailable as error:
             elapsed = monotonic() - started
             retryable = "HTTP 5" in str(error) and elapsed <= self.FAST_FAILURE_SECONDS
             if not retryable or monotonic() + self.RETRY_PAUSE_SECONDS >= deadline:
                 raise
         sleep(self.RETRY_PAUSE_SECONDS)
-        return self._overpass_elements(query)
+        return self._overpass_elements(query, timeout=max(1.0, deadline - monotonic()))
 
     def _discover_bbox(self, bbox: list[float], *, geocoded_name: str) -> dict[str, Any]:
         # Two requests, sequential, each best-effort.
@@ -297,6 +319,21 @@ class OpenStreetMapProvider:
         )
         return f"[out:json][timeout:90];\n(\n{lines}\n);\nout center qt;"
 
+    @staticmethod
+    def _core_bbox(bbox: list[float], span: float) -> list[float]:
+        """The middle `span` degrees of a window, or the window if it is already smaller."""
+
+        south, west, north, east = (float(value) for value in bbox)
+        centre_lat, centre_lon = (south + north) / 2, (west + east) / 2
+        lat_span = min(north - south, span)
+        lon_span = min(east - west, span)
+        return [
+            round(centre_lat - lat_span / 2, 6),
+            round(centre_lon - lon_span / 2, 6),
+            round(centre_lat + lat_span / 2, 6),
+            round(centre_lon + lon_span / 2, 6),
+        ]
+
     def _baseline_query(self, bbox: list[float]) -> str:
         """The balanced family baseline. Unindexed, and the half that times out on a
         dense city — Tokyo exceeded 90s here while the landmark block returned fine.
@@ -310,7 +347,7 @@ class OpenStreetMapProvider:
         and Taipei's whole two-block query takes ~34s, so nothing there comes near 60.
         """
 
-        bounds = ",".join(map(str, bbox))
+        bounds = ",".join(map(str, self._core_bbox(bbox, self.baseline_span_degrees)))
         lines = "\n".join(
             f'nwr["name"]{selector}({bounds});' for selector in self.FAMILY_SELECTORS
         )
@@ -376,11 +413,14 @@ class OpenStreetMapProvider:
         }
 
     @staticmethod
-    def _request_json(request: Request) -> Any:
+    def _request_json(request: Request, timeout: float | None = None) -> Any:
         try:
             # Above the 90s the Overpass query itself declares, or the socket would
-            # abort a query the server is still willing to finish.
-            with urlopen(request, timeout=105) as response:  # noqa: S310 - fixed/configured API URLs
+            # abort a query the server is still willing to finish. A caller with a
+            # budget may pass a tighter bound.
+            with urlopen(  # noqa: S310 - fixed/configured API URLs
+                request, timeout=min(105.0, timeout) if timeout else 105
+            ) as response:
                 return json.load(response)
         except HTTPError as error:
             raise ProviderUnavailable(f"Provider HTTP {error.code}") from error

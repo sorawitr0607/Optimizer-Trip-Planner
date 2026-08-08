@@ -352,6 +352,34 @@ class ConcreteProviderTest(unittest.TestCase):
             self.assertIn(selector, landmarks)
             self.assertIn(selector, baseline)
 
+    def test_the_expensive_block_searches_a_smaller_window_than_the_cheap_one(self) -> None:
+        """Measured on Tokyo: the unindexed baseline ran 53.5s over the full 0.60-degree
+        window once and timed out at 67s the next time, straddling its own 60s budget;
+        at 0.40 it finished in 39.0s. Both sizes returned exactly `result_limit`, so the
+        window never decided how many records came back, only which -- and `out center
+        qt` truncates in quadtile order, spreading the same 500 thinner over ground a
+        city trip never reaches."""
+
+        provider = OpenStreetMapProvider()
+        wide = [35.376, 139.463, 35.976, 140.063]  # a full 0.60-degree window
+
+        landmarks = provider._landmark_query(wide)
+        baseline = provider._baseline_query(wide)
+
+        # The indexed half keeps the wide net: referenced landmarks are sparse.
+        self.assertIn("35.376,139.463,35.976,140.063", landmarks)
+        self.assertNotIn("35.376,139.463,35.976,140.063", baseline)
+        self.assertIn("35.476,139.563,35.876,139.963", baseline)
+
+    def test_a_small_city_window_is_not_shrunk_at_all(self) -> None:
+        """The cap only binds in a dense city. A town whose whole window is already
+        under the span must not be searched in an even smaller box."""
+
+        provider = OpenStreetMapProvider()
+        narrow = [24.95, 121.45, 25.10, 121.60]
+
+        self.assertIn("24.95,121.45,25.1,121.6", provider._baseline_query(narrow))
+
     def test_a_timed_out_baseline_keeps_the_landmarks_it_did_get(self) -> None:
         """The whole point of splitting: a dense city keeps its landmarks."""
 
@@ -384,7 +412,7 @@ class ConcreteProviderTest(unittest.TestCase):
                 },
             ]
         )
-        provider._request_json = lambda request: next(responses)
+        provider._request_json = lambda request, timeout=None: next(responses)
 
         result = provider.discover("Tokyo, Japan")
 
@@ -406,7 +434,7 @@ class ConcreteProviderTest(unittest.TestCase):
         provider.RETRY_PAUSE_SECONDS = 0
         calls: list[str] = []
 
-        def fake_overpass(query: str) -> list[dict]:
+        def fake_overpass(query: str, timeout=None) -> list[dict]:
             calls.append(query)
             if len(calls) == 1:
                 raise ProviderUnavailable("Provider HTTP 504")
@@ -431,7 +459,7 @@ class ConcreteProviderTest(unittest.TestCase):
         provider = OpenStreetMapProvider()
         calls: list[str] = []
 
-        def slow_failure(query: str) -> list[dict]:
+        def slow_failure(query: str, timeout=None) -> list[dict]:
             calls.append(query)
             # Push the clock past the fast-failure window without actually waiting.
             provider.FAST_FAILURE_SECONDS = -1
@@ -450,7 +478,7 @@ class ConcreteProviderTest(unittest.TestCase):
         provider.RETRY_PAUSE_SECONDS = 0
         calls: list[str] = []
 
-        def timed_out(query: str) -> list[dict]:
+        def timed_out(query: str, timeout=None) -> list[dict]:
             calls.append(query)
             raise ProviderUnavailable("OpenStreetMap query incomplete: runtime error")
 
@@ -467,7 +495,7 @@ class ConcreteProviderTest(unittest.TestCase):
         provider = OpenStreetMapProvider()
         calls: list[str] = []
 
-        def failing(query: str) -> list[dict]:
+        def failing(query: str, timeout=None) -> list[dict]:
             calls.append(query)
             raise ProviderUnavailable("Provider HTTP 504")
 
@@ -495,7 +523,7 @@ class ConcreteProviderTest(unittest.TestCase):
                 {"elements": [], "remark": "runtime error: Query timed out"},
             ]
         )
-        provider._request_json = lambda request: next(responses)
+        provider._request_json = lambda request, timeout=None: next(responses)
 
         with self.assertRaisesRegex(ProviderUnavailable, "timed out"):
             provider.discover("Tokyo, Japan")
@@ -537,7 +565,7 @@ class ConcreteProviderTest(unittest.TestCase):
         )
         requests = []
 
-        def fake_request_json(request):
+        def fake_request_json(request, timeout=None):
             requests.append(request)
             return next(responses)
 
@@ -575,7 +603,7 @@ class ConcreteProviderTest(unittest.TestCase):
                 {"elements": []},
             ]
         )
-        provider._request_json = lambda request: next(responses)
+        provider._request_json = lambda request, timeout=None: next(responses)
 
         with self.assertRaisesRegex(ProviderUnavailable, "empty baseline"):
             provider.discover("Taipei")
@@ -588,7 +616,7 @@ class ConcreteProviderTest(unittest.TestCase):
             "center": {"lat": 25.033, "lon": 121.565},
             "tags": {"name": "Taipei 101", "tourism": "attraction"},
         }
-        provider._request_json = lambda request: {"elements": [landmark, landmark.copy()]}
+        provider._request_json = lambda request, timeout=None: {"elements": [landmark, landmark.copy()]}
 
         result = provider._discover_bbox(
             [24.9, 121.4, 25.2, 121.7], geocoded_name="Taipei"
@@ -601,7 +629,7 @@ class ConcreteProviderTest(unittest.TestCase):
         provider = OpenStreetMapProvider()
         requests = []
 
-        def fake_request_json(request):
+        def fake_request_json(request, timeout=None):
             requests.append(request)
             return {
                 "elements": [
