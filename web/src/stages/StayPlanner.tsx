@@ -96,6 +96,11 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
   // zero-based, so +2 on it is already "two months ahead" once the +1 makes it a number.
   const [month, setMonth] = useState<number>(((today.getMonth() + 2) % MONTH_COUNT) + 1);
   const [saved, setSaved] = useState(false);
+  // The recommended range, once accepted. Held rather than applied immediately so the
+  // dates below stay the single thing that gets saved.
+  const [windowChosen, setWindowChosen] = useState<{ start: string; end: string } | null>(null);
+
+  const chosen = options.find((item) => item.id === pace) ?? options[0];
 
   const stored = useQuery({
     queryKey: ["setup", tripId],
@@ -104,16 +109,17 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
   // Owner-triggered, like every other network read on this app: free, but it is two
   // requests to public services and this screen is reached by anyone with no dates.
   const guide = useQuery({
-    queryKey: ["month_guide", tripId],
-    queryFn: () => rpc<MonthGuide>("travel_month_guide", { trip_id: tripId }),
+    queryKey: ["month_guide", tripId, chosen?.days ?? 0],
+    queryFn: () =>
+      rpc<MonthGuide>("travel_month_guide", { trip_id: tripId, days: chosen?.days ?? null }),
     enabled: false,
     staleTime: Infinity,
   });
 
-  const chosen = options.find((item) => item.id === pace) ?? options[0];
   const chosenMonth = guide.data?.months.find((item) => item.month === month);
-  const start = firstOfMonth(month, today);
-  const end = chosen ? addDays(start, Math.max(chosen.days - 1, 0)) : start;
+  const defaultStart = firstOfMonth(month, today);
+  const start = windowChosen?.start ?? defaultStart;
+  const end = windowChosen?.end ?? (chosen ? addDays(start, Math.max(chosen.days - 1, 0)) : start);
 
   const save = useMutation({
     mutationFn: async () => {
@@ -162,7 +168,7 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
             aria-pressed={item.id === chosen?.id}
             className={`stay-pace${item.id === chosen?.id ? " active" : ""}`}
             key={item.id}
-            onClick={() => { setPace(item.id); setSaved(false); }}
+            onClick={() => { setPace(item.id); setSaved(false); setWindowChosen(null); }}
             type="button"
           >
             <strong>{copy(item.id, language)}</strong>
@@ -205,7 +211,7 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
               aria-pressed={value === month}
               className={`stay-month${value === month ? " active" : ""}${rated ? ` band-${rated.band}` : ""}`}
               key={value}
-              onClick={() => { setMonth(value); setSaved(false); }}
+              onClick={() => { setMonth(value); setSaved(false); setWindowChosen(null); }}
               type="button"
             >
               {copy(`month_${value}`, language)}
@@ -270,6 +276,30 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
       ) : null}
       <p className="setup-hint">{copy("pick_month_help", language)}</p>
 
+      {/* The month says roughly when; this says which days. Same holiday data, no
+          further request — the quietest run that fits, weekends counted at half a
+          holiday because both fill the same trains. */}
+      {chosenMonth?.best_window ? (
+        <div className="stay-window">
+          <h4>{copy("best_dates", language)}</h4>
+          <p className="stay-window-dates">
+            <strong>{chosenMonth.best_window.start}</strong> →{" "}
+            <strong>{chosenMonth.best_window.end}</strong>
+          </p>
+          <ul>
+            {chosenMonth.best_window.reasons.map((item) => (
+              <li key={item.code}>{copyFormat(item.code, language, item.args)}</li>
+            ))}
+          </ul>
+          <button
+            className="stay-window-use"
+            onClick={() => setWindowChosen(chosenMonth.best_window ?? null)}
+            type="button"
+          >
+            {copy("use_best_dates", language)}
+          </button>
+        </div>
+      ) : null}
       <p className="stay-dates">
         <strong>{start}</strong> → <strong>{end}</strong>
       </p>

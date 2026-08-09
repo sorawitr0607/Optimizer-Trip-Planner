@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 
 import { PlaceDeck } from "./PlaceDeck";
+import { Thinking } from "../shared/Thinking";
 import { PlacesTour } from "./PlacesTour";
 import { StayAreas } from "./StayAreas";
 import { useNavigate, useParams, useSearchParams } from "react-router";
@@ -443,6 +444,11 @@ export function PlacesPage() {
       ) : null}
 
       {busy ? (
+            <>
+            <Thinking
+              language={language}
+              lines={["think_reading_setup", "think_searching", "think_dedup", "think_scoring", "think_lanes", "think_photos", "think_almost"]}
+            />
             <div className="places-workspace" aria-busy="true">
               <div className="skeleton-card">
                 <span className="skeleton skeleton-photo" />
@@ -459,6 +465,7 @@ export function PlacesPage() {
                 <span className="skeleton skeleton-line" />
               </div>
             </div>
+            </>
           ) : null}
 
       <h2 className="money-eyebrow">{copy("ranking_title", language)}</h2>

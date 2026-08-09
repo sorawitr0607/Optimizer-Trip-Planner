@@ -1933,7 +1933,9 @@ class PlannerActions:
             }
         raise PlannerRefusal("discovery_missing")
 
-    def travel_month_guide(self, trip_id: str, *, force: bool = False) -> dict[str, Any]:
+    def travel_month_guide(
+        self, trip_id: str, *, days: int | None = None, force: bool = False
+    ) -> dict[str, Any]:
         """Which months suit this destination, from measured weather and local holidays.
 
         Free on both sides and cached for `cache_ttl_days`: normals move over decades
@@ -1963,15 +1965,12 @@ class PlannerActions:
         now = datetime.now(timezone.utc)
         held = self.store.get_trip_evidence(trip_id, provider.kind)
         if not force and held and held.get("expires_at", "") > now.isoformat():
-            # `get_trip_evidence` spreads the stored value at the top level and adds its
-            # own two timestamps -- there is no "value" key to reach into, and reaching
-            # for one raised KeyError on every cache hit. Every read here passed
-            # `force=True` while it was being built, so nothing ever took this branch.
-            return {
+            cached = {
                 key: value
                 for key, value in held.items()
                 if key not in {"retrieved_at", "expires_at"}
             }
+            return self._with_windows(cached, days)
 
         # The last whole year the archive certainly holds, and the current year for
         # holidays -- their dates move, so a published set is only true for its own year
@@ -2017,6 +2016,11 @@ class PlannerActions:
             # Named so the screen can say the crowd factor is unknown rather than
             # letting an absent holiday list read as a quiet month.
             "holiday_source": holiday_source,
+            # The dates themselves, so the best window inside a month can be recomputed
+            # for any trip length without asking the holiday source again.
+            "holiday_dates": sorted(
+                {str(item.get("date")) for item in (published or []) if item.get("date")}
+            ),
             "sources": [
                 "Open-Meteo archive (CC BY 4.0)",
                 "Nager.Date public holidays",
@@ -2030,7 +2034,29 @@ class PlannerActions:
             retrieved_at=now.isoformat(),
             expires_at=(now + timedelta(days=int(provider.cache_ttl_days))).isoformat(),
         )
-        return value
+        return self._with_windows(value, days)
+
+    @staticmethod
+    def _with_windows(guide: dict[str, Any], days: int | None) -> dict[str, Any]:
+        """Add the quietest date range inside each month, for a trip of `days`.
+
+        Computed on read rather than stored, because the answer depends on how long the
+        trip is and that is a choice the owner is still making — asking the holiday
+        source again for every pace they try would be absurd, so the dates are kept and
+        the arithmetic is repeated instead.
+        """
+
+        if not days or days < 1:
+            return guide
+        holidays = [{"date": date} for date in guide.get("holiday_dates") or []]
+        year = int(guide.get("holiday_year") or 0)
+        if not year:
+            return guide
+        months = [
+            {**row, "best_window": climate.best_window(year, int(row["month"]), days, holidays=holidays)}
+            for row in guide.get("months") or []
+        ]
+        return {**guide, "months": months, "window_days": days}
 
     def refresh_place_summaries(
         self,

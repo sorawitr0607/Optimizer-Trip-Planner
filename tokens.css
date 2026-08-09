@@ -275,4 +275,10 @@ button:disabled {
   --landing-scrim: rgb(9 27 32 / 76%);
   /* The call-to-action glow. Alpha again, so it can only live here. */
   --landing-glow: rgb(212 131 47 / 45%);
+  /* The swipe deck's own tint and its two directional edges. A card that can be thrown
+     has to look different from a card that cannot, and the edges say which way means
+     what before the first drag. Alpha, so they can only live here. */
+  --deck-tint: rgb(212 131 47 / 7%);
+  --deck-keep-edge: rgb(0 102 68 / 26%);
+  --deck-drop-edge: rgb(209 26 42 / 26%);
 }

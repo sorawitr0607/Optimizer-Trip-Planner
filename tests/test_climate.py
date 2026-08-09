@@ -163,6 +163,47 @@ class HolidayRunTest(unittest.TestCase):
         self.assertLess(grouped[5]["longest_run"], climate.LONG_HOLIDAY_DAYS)
 
 
+class BestWindowTest(unittest.TestCase):
+    """The month says roughly when; this says which days. Same holiday data, no further
+    request — a public holiday costs a full point and a weekend day half of one, because
+    both fill the same trains and a national holiday empties the offices too."""
+
+    LNY = [{"date": f"2027-02-{day:02d}"} for day in range(15, 22)]
+
+    def test_it_steps_around_a_long_holiday_entirely(self) -> None:
+        window = climate.best_window(2027, 2, 5, holidays=self.LNY)
+
+        self.assertEqual(0, window["holiday_days"])
+        self.assertNotIn(window["start"][:10], [h["date"] for h in self.LNY])
+
+    def test_weekends_are_avoided_where_holidays_allow(self) -> None:
+        # April 2027 has no public holidays in this fixture, so the only thing left to
+        # optimise is the weekend, and a weekday-only run exists.
+        window = climate.best_window(2027, 4, 5, holidays=[])
+
+        self.assertEqual(0, window["weekend_days"])
+
+    def test_a_trip_longer_than_the_month_gets_no_answer(self) -> None:
+        # A window spilling into the next month would be scored against holidays this
+        # function was never given, so `None` beats a confident wrong range.
+        self.assertIsNone(climate.best_window(2027, 2, 31, holidays=[]))
+
+    def test_ties_resolve_to_the_earliest_window(self) -> None:
+        # Stability matters more than which equal answer wins: re-opening the screen
+        # must not show different dates.
+        first = climate.best_window(2027, 4, 3, holidays=[])
+        again = climate.best_window(2027, 4, 3, holidays=[])
+
+        self.assertEqual(first["start"], again["start"])
+
+    def test_the_reasons_say_which_it_avoided(self) -> None:
+        clear = climate.best_window(2027, 2, 5, holidays=self.LNY)
+        codes = [item["code"] for item in clear["reasons"]]
+
+        self.assertIn("window_clear_of_holidays", codes)
+        self.assertIn("window_weekend_days", codes)
+
+
 class GoogleCalendarHolidayTest(unittest.TestCase):
     """Nager\'s own coverage page puts Asia at 38% and depends on community
     contributions, so Taiwan, Thailand, Malaysia, India and the UAE were all missing --

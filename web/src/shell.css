@@ -1074,15 +1074,39 @@
   padding: 10px;
 }
 
+/* A card that can be thrown has to look unlike a card that cannot.
+   Reported as "I didn't know this thing can swipe": it was styled exactly like every
+   other panel on the page, so nothing about it invited a hand. It is tinted, lifted on
+   a hard shadow, and carries a grip bar and two coloured edges that say which way means
+   what before the first drag. */
 .place-deck {
-  background: var(--bg-card);
+  background:
+    linear-gradient(90deg, var(--deck-drop-edge) 0%, transparent 14%, transparent 86%, var(--deck-keep-edge) 100%),
+    var(--deck-tint),
+    var(--bg-card);
   border: 1px solid var(--bg-card-border);
   border-radius: var(--radius-house);
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--shadow-hard-md);
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 12px;
+}
+
+/* The grip: the one piece of furniture whose only job is to say "hold me". */
+.place-deck-drag::before {
+  background: var(--bg-card-border);
+  border-radius: var(--radius-pill);
+  content: "";
+  display: block;
+  height: 4px;
+  margin: 0 auto 6px;
+  opacity: var(--opacity-dim);
+  width: 46px;
+}
+
+.place-deck-drag.dragging::before {
+  opacity: 1;
 }
 
 .place-deck-head {
@@ -3605,4 +3629,155 @@
 @keyframes form-called {
   0%, 100% { box-shadow: var(--shadow-md); }
   30% { box-shadow: 0 0 0 5px var(--landing-glow); }
+}
+
+/* What the app is doing, while it does it. */
+.thinking {
+  align-items: center;
+  color: var(--text-secondary);
+  display: flex;
+  font-size: var(--text-md);
+  gap: 9px;
+  margin: 0;
+  min-height: 24px;
+}
+
+.thinking-dot {
+  background: var(--color-accent);
+  border-radius: var(--radius-pill);
+  flex: none;
+  height: 9px;
+  width: 9px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .thinking-dot { animation: thinking-pulse 1.2s ease-in-out infinite; }
+  .thinking span:last-child { animation: thinking-in 0.45s var(--ease-out); }
+}
+
+@keyframes thinking-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: var(--opacity-dim); transform: scale(0.6); }
+}
+
+@keyframes thinking-in {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: none; }
+}
+
+.optimize-working {
+  display: grid;
+  gap: 10px;
+}
+
+/* Zoom and pan. The viewBox moves, not a transform, so pins and dots keep their size
+   as the map magnifies. */
+.places-map {
+  position: relative;
+}
+
+.places-map-svg {
+  cursor: grab;
+  touch-action: none;
+}
+
+.places-map-svg.dragging {
+  cursor: grabbing;
+}
+
+.places-map-rose {
+  color: var(--text-muted);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-selected);
+  pointer-events: none;
+  position: absolute;
+  right: 8px;
+  top: 30px;
+}
+
+.places-map-reset {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: var(--text-2xs);
+  left: 8px;
+  padding: 2px 8px;
+  position: absolute;
+  top: 30px;
+}
+
+/* The recommended range inside the chosen month. */
+.stay-window {
+  background: var(--color-success-light);
+  border: 1px solid var(--color-success);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+  padding: 12px 14px;
+}
+
+.stay-window h4 {
+  margin: 0;
+}
+
+.stay-window-dates {
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+  margin: 0;
+}
+
+.stay-window ul {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  margin: 0;
+  padding-left: 18px;
+}
+
+.stay-window-use {
+  background: var(--color-success);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius);
+  color: var(--color-on-accent);
+  cursor: pointer;
+  font-weight: var(--weight-secondary);
+  padding: 6px 12px;
+}
+
+/* The evidence screen's own question, answered before its controls. */
+.evidence-verdict {
+  background: var(--color-accent-light);
+  border: 1px solid var(--color-accent);
+  border-left-width: var(--blocked-stripe-width);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 14px 16px;
+}
+
+.evidence-verdict.settled {
+  background: var(--color-success-light);
+  border-color: var(--color-success);
+}
+
+.evidence-verdict h2 {
+  font-size: var(--text-md);
+  margin: 0;
+}
+
+.evidence-verdict-answer {
+  margin: 0;
+  max-width: 76ch;
+}
+
+.evidence-verdict-options {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.evidence-verdict-options li {
+  margin-bottom: 4px;
 }

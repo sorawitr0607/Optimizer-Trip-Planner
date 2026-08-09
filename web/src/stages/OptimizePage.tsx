@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 
+import { Thinking } from "../shared/Thinking";
 import { ComfortTradeoffs } from "./ComfortTradeoffs";
 import { StayPlanner } from "./StayPlanner";
 
@@ -168,11 +169,23 @@ export function OptimizePage() {
       {considered.length === 0 ? (
         <p className="setup-hint">{copy("choose_before_plan", language)}</p>
       ) : null}
+      {/* This screen showed a disabled button and nothing else for the ~52s a full
+          optimize takes, and was reported as "I still can't build a plan" — the work
+          was succeeding every time and the screen never said so. */}
       {generate.isPending ? (
-        <p className="money-note money-note-info" aria-live="polite">
-          <b aria-hidden="true">ⓘ</b>
-          <span>{copy("optimizing_note", language)}</span>
-        </p>
+        <div className="optimize-working" aria-busy="true">
+          <Thinking
+            language={language}
+            lines={["think_windows", "think_routes", "think_packing", "think_variants", "think_checking", "think_almost"]}
+          />
+          <p className="setup-hint">{copy("optimizing_note", language)}</p>
+          <div className="skeleton-card">
+            <span className="skeleton skeleton-line wide" />
+            <span className="skeleton skeleton-line" />
+            <span className="skeleton skeleton-photo short" />
+            <span className="skeleton skeleton-line" />
+          </div>
+        </div>
       ) : null}
 
       {!proposal ? (

@@ -531,6 +531,15 @@ export interface MonthGuideEntry {
   holiday_days: number;
   holiday_names: string[];
   /** Code plus the numbers behind it. The core emits codes; the view renders them. */
+  /** The quietest run of `window_days` inside this month, when a length was asked for.
+   *  Null where the trip is longer than the month, which is not a window at all. */
+  best_window?: {
+    start: string;
+    end: string;
+    holiday_days: number;
+    weekend_days: number;
+    reasons: { code: string; args: Record<string, string | number> }[];
+  } | null;
   pros: { code: string; args: Record<string, string | number> }[];
   cons: { code: string; args: Record<string, string | number> }[];
   advice: { code: string; args: Record<string, string | number> }[];
@@ -545,7 +554,24 @@ export interface MonthGuide {
   /** Null where the holiday source does not cover the country — Taiwan and Thailand
    *  both included — so the screen says crowding is unknown rather than implying quiet. */
   holiday_source: string | null;
+  window_days?: number;
   sources: string[];
+}
+
+/** `WF-047`. Both ways to fill missing opening hours, priced, with the cheap one's
+ *  measured error rate beside its price — and whether this trip would read it at all. */
+export interface OpeningEvidenceOptions {
+  places: number;
+  with_verified_hours: number;
+  needing_hours: number;
+  already_assumed: number;
+  verified: { calls: number; estimate_usd: number };
+  assumed: {
+    calls: number;
+    estimate_usd: number;
+    measured?: { of: number; exact_both_ends: number; worst_overshoot_minutes: number };
+  };
+  assumed_is_usable: boolean;
 }
 
 export interface ChecklistVocabulary {

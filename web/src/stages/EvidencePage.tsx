@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useNavigate, useParams } from "react-router";
 
 import {
+  type OpeningEvidenceOptions,
   ApiError,
   rpc,
   type AccommodationBase,
@@ -15,7 +16,7 @@ import {
   type Trip,
   type VenueNotice,
 } from "../api/client";
-import { copy, copyFrom, type Language } from "../i18n/copy";
+import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
 import { placeNameFrom } from "../shared/names";
 
@@ -88,6 +89,14 @@ export function EvidencePage() {
   const zone = useQuery({
     queryKey: ["timezone_evidence", tripId],
     queryFn: () => rpc<TimezoneEvidence | null>("get_timezone_evidence", { trip_id: tripId }),
+  });
+  // The screen's own question, answered before any of its controls are shown. It was
+  // reported as confusing -- "am I need to fetch it or not" -- and the data to answer
+  // it already existed: `opening_evidence_options` prices both paths and knows whether
+  // this trip would even read the cheap one.
+  const options = useQuery({
+    queryKey: ["opening_options", tripId],
+    queryFn: () => rpc<OpeningEvidenceOptions>("opening_evidence_options", { trip_id: tripId }),
   });
   const usage = useQuery({
     queryKey: ["paid_usage"],
@@ -236,6 +245,59 @@ export function EvidencePage() {
         <h1>{copy("stage_evidence", language)}</h1>
         <p>{copy("evidence_help", language)}</p>
       </header>
+
+      {/* derives-from: element 36 .currency-info-box as .evidence-verdict */}
+      {options.data ? (
+        <section className={`evidence-verdict${options.data.needing_hours ? "" : " settled"}`}>
+          <h2>{copy("need_anything_title", language)}</h2>
+          <p className="evidence-verdict-answer">
+            {options.data.needing_hours === 0
+              ? copyFormat("need_all_covered", language, { places: options.data.places })
+              : copyFormat(
+                  options.data.assumed_is_usable ? "need_nothing" : "need_evidence",
+                  language,
+                  {
+                    places: options.data.places,
+                    verified: options.data.with_verified_hours,
+                    needing: options.data.needing_hours,
+                  },
+                )}
+          </p>
+          {options.data.needing_hours ? (
+            <ul className="evidence-verdict-options">
+              <li>
+                <strong>
+                  {copyFormat("option_buy_hours", language, {
+                    calls: options.data.verified.calls,
+                    cost: options.data.verified.estimate_usd.toFixed(3),
+                  })}
+                </strong>
+              </li>
+              <li>
+                <strong>
+                  {copyFormat("option_guess_hours", language, {
+                    cost: options.data.assumed.estimate_usd.toFixed(4),
+                  })}
+                </strong>
+                {options.data.assumed_is_usable ? (
+                  options.data.assumed.measured ? (
+                    <span className="setup-hint">
+                      {" "}
+                      {copyFormat("option_guess_measured", language, {
+                        exact: options.data.assumed.measured.exact_both_ends,
+                        of: options.data.assumed.measured.of,
+                        worst: options.data.assumed.measured.worst_overshoot_minutes,
+                      })}
+                    </span>
+                  ) : null
+                ) : (
+                  <span className="setup-hint"> {copy("option_guess_unusable", language)}</span>
+                )}
+              </li>
+            </ul>
+          ) : null}
+        </section>
+      ) : null}
 
       {flash ? (
         <p className={flash.tone === "ok" ? "setup-flash" : "field-error"} aria-live="polite">

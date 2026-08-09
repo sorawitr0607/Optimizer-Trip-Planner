@@ -267,3 +267,69 @@ def rank_months(
         else:
             item["band"] = "fair"
     return sorted(scored, key=lambda item: item["month"])
+
+
+# Picking a window inside a month. The month says roughly when; this says which days.
+#
+# A public holiday costs a full point and a weekend day half of one, because both fill
+# the same trains and the same rooms but a national holiday empties the offices too. The
+# earliest window wins ties, so the answer is stable rather than drifting between equal
+# choices — an owner who re-opens the screen should not see a different date.
+HOLIDAY_DAY_COST = 1.0
+WEEKEND_DAY_COST = 0.5
+
+
+def best_window(
+    year: int,
+    month: int,
+    days: int,
+    *,
+    holidays: Iterable[Mapping[str, Any]] = (),
+) -> dict[str, Any] | None:
+    """The quietest `days`-long run that fits inside one month.
+
+    Returns `None` for a trip longer than the month, which is a real case and not worth
+    a wrong answer: a window that spilled into the next month would be scored against
+    holidays this function was never given.
+    """
+
+    from calendar import monthrange
+    from datetime import date, timedelta
+
+    length = monthrange(year, month)[1]
+    if days < 1 or days > length:
+        return None
+    dated = {
+        str(item.get("date") or "")
+        for item in holidays
+        if str(item.get("date") or "").startswith(f"{year}-{month:02d}")
+    }
+
+    best: dict[str, Any] | None = None
+    for first in range(1, length - days + 2):
+        start = date(year, month, first)
+        holiday_days = weekend_days = 0
+        for offset in range(days):
+            day = start + timedelta(days=offset)
+            if day.isoformat() in dated:
+                holiday_days += 1
+            if day.weekday() >= 5:
+                weekend_days += 1
+        cost = holiday_days * HOLIDAY_DAY_COST + weekend_days * WEEKEND_DAY_COST
+        if best is None or cost < best["cost"]:
+            best = {
+                "start": start.isoformat(),
+                "end": (start + timedelta(days=days - 1)).isoformat(),
+                "cost": cost,
+                "holiday_days": holiday_days,
+                "weekend_days": weekend_days,
+            }
+    if best is None:
+        return None
+    reasons: list[dict[str, Any]] = []
+    if best["holiday_days"] == 0:
+        reasons.append({"code": "window_clear_of_holidays", "args": {}})
+    else:
+        reasons.append({"code": "window_holiday_days", "args": {"days": best["holiday_days"]}})
+    reasons.append({"code": "window_weekend_days", "args": {"days": best["weekend_days"]}})
+    return {**best, "reasons": reasons}

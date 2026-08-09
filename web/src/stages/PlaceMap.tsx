@@ -1,3 +1,5 @@
+import { useRef, useState } from "react";
+
 import type { DiscoveryCandidate } from "../api/client";
 import { copy, copyFormat, type Language } from "../i18n/copy";
 import type { MapPlace } from "../shared/map";
@@ -25,6 +27,10 @@ import { plotCoordinates } from "./ItineraryPage";
 /** Taller than the itinerary's strip: this draws a whole city, and a square town in a
  *  wide band piles every pin into the middle. */
 const FRAME = { width: 420, height: 260 } as const;
+/** Far enough in to read a single street's worth of dots, far enough out to see the
+ *  whole catalogue. Bounded both ways so the view can always be recovered by dragging. */
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 8;
 
 /** Bounding span of a set of points, in kilometres, for the scale note. */
 function spanKm(points: { latitude: number; longitude: number }[]): number {
@@ -57,6 +63,15 @@ export function PlaceMap({
   focusId,
   withKey = true,
 }: PlaceMapProps) {
+  // Zoom and pan, because at city scale several hundred dots and a dozen pins overlap
+  // and no amount of styling separates them — the answer to "where is it" is sometimes
+  // "closer". Held as a viewBox rather than a CSS transform so stroke widths and pin
+  // radii stay put: zooming a transform would fatten every dot as it magnified.
+  const [view, setView] = useState({ x: 0, y: 0, zoom: 1 });
+  // The ref carries the grab origin; the boolean is what the class reads, because a ref
+  // read during render cannot re-render and React rightly refuses it.
+  const [dragging, setDragging] = useState(false);
+  const drag = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
   if (!places.length) return null;
 
   // One projection over pins *and* city, so both sit in the same frame. Projecting them
@@ -81,7 +96,51 @@ export function PlaceMap({
     // derives-from: A1 numbered map; no tiles or network, and the list repeats every pin.
     <section className="places-map">
       <h4>{title}</h4>
-      <svg aria-label={title} role="img" viewBox={`0 0 ${FRAME.width} ${FRAME.height}`}>
+      <svg
+        aria-label={title}
+        className={`places-map-svg${dragging ? " dragging" : ""}`}
+        onPointerDown={(event) => {
+          event.currentTarget.setPointerCapture(event.pointerId);
+          drag.current = { x: event.clientX, y: event.clientY, ox: view.x, oy: view.y };
+          setDragging(true);
+        }}
+        onPointerMove={(event) => {
+          const held = drag.current;
+          if (!held) return;
+          const box = event.currentTarget.getBoundingClientRect();
+          // Pixels to viewBox units, so a drag moves the map exactly as far as the hand.
+          const scale = FRAME.width / view.zoom / box.width;
+          setView((current) => ({
+            ...current,
+            x: held.ox - (event.clientX - held.x) * scale,
+            y: held.oy - (event.clientY - held.y) * scale,
+          }));
+        }}
+        onPointerUp={() => { drag.current = null; setDragging(false); }}
+        onPointerCancel={() => { drag.current = null; setDragging(false); }}
+        onWheel={(event) => {
+          const box = event.currentTarget.getBoundingClientRect();
+          const factor = event.deltaY < 0 ? 1.2 : 1 / 1.2;
+          setView((current) => {
+            const zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, current.zoom * factor));
+            if (zoom === current.zoom) return current;
+            // Keep the point under the cursor under the cursor.
+            const px = (event.clientX - box.left) / box.width;
+            const py = (event.clientY - box.top) / box.height;
+            const beforeW = FRAME.width / current.zoom;
+            const beforeH = FRAME.height / current.zoom;
+            const afterW = FRAME.width / zoom;
+            const afterH = FRAME.height / zoom;
+            return {
+              zoom,
+              x: current.x + (beforeW - afterW) * px,
+              y: current.y + (beforeH - afterH) * py,
+            };
+          });
+        }}
+        role="img"
+        viewBox={`${view.x} ${view.y} ${FRAME.width / view.zoom} ${FRAME.height / view.zoom}`}
+      >
         {cityPoints.map((point) => (
           <circle className="places-map-city" cx={point.x} cy={point.y} key={point.place_id} r="1.4" />
         ))}
@@ -97,14 +156,18 @@ export function PlaceMap({
             </g>
           );
         })}
-        {/* North and a scale, so the drawing can be read rather than only looked at. */}
-        <g className="places-map-rose">
-          <text textAnchor="middle" x="404" y="18">N</text>
-          <path d="M404 22 L400 32 L404 29 L408 32 Z" />
-        </g>
       </svg>
+      {/* Outside the svg, so panning does not carry the compass off the edge. */}
+      <span aria-hidden="true" className="places-map-rose">N ↑</span>
+      {view.zoom > 1 ? (
+        <button className="places-map-reset" onClick={() => setView({ x: 0, y: 0, zoom: 1 })} type="button">
+          {copy("map_reset", language)}
+        </button>
+      ) : null}
       <p className="places-map-scale">
-        {across > 0 ? copyFormat("map_span", language, { km: across }) : null}
+        {across > 0
+          ? copyFormat("map_span", language, { km: Math.max(1, Math.round(across / view.zoom)) })
+          : null}
         {focused ? ` · ${focused.label} · ${focused.name}` : null}
       </p>
       {withKey ? (

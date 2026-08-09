@@ -686,6 +686,31 @@ numbered stops *is* the thing the planner makes, and those stops are the four st
 the "how it works" list describe one journey. Every animation sits behind
 `prefers-reduced-motion: no-preference`.
 
+**A long wait says what it is doing as of 2026-08-09 (`WF-048`).** Discovery runs 30-90 s and a full
+optimize about 52 s, and `/optimize` showed a disabled button and nothing else for all of it — reported
+three times as "I still can't build a plan" when the work had succeeded every time. Diagnosed by running
+the real pipeline against the owner's own databases: `generate_plan_preview` returned `dated_plan` and
+all three variants came back **activatable**. Nothing was broken except the silence. `shared/Thinking.tsx`
+cycles the real stages in the real order — `think_searching`, `think_routes`, `think_packing` — on a
+timer rather than on progress events, which is honest about what it is, since the server reports no
+milestones and this claims none.
+
+**The deck looks throwable.** It was styled exactly like every other panel, so nothing invited a hand;
+it now carries a tint, a hard shadow, a grip bar and two coloured edges that say which way means what
+before the first drag.
+
+**The evidence screen answers its own question first.** "Am I need to fetch it or not" was the report,
+and `opening_evidence_options` had priced both paths and known `assumed_is_usable` since `WF-047` —
+the page simply never asked. A verdict panel now states the answer in a sentence with the numbers in
+it, and only then shows the controls.
+
+**A month recommends its quietest dates.** `climate.best_window` slides a trip-length window across the
+month and scores it: a public holiday costs a full point and a weekend day half of one, because both
+fill the same trains and a national holiday empties the offices too. Ties resolve to the earliest window
+so re-opening the screen cannot show different dates. It returns `None` for a trip longer than the
+month rather than a range scored against holidays it was never given. Computed on read from the stored
+holiday dates, so trying a different pace costs no request.
+
 **The map draws the city from the catalogue as of 2026-08-09 (`WF-048`).** Six pins on empty grey told
 an owner nothing — no coastline, no districts, no sense of which end of town anything was, reported as
 "I still don't know where is it". Every discovered candidate already carries coordinates and is already
