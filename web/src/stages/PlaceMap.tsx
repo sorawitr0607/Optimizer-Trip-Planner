@@ -40,8 +40,24 @@ const MAX_ZOOM = 24;
  *  building-scale view of Taipei is a regional view of somewhere compact. Matches
  *  `OpenStreetMapProvider.buildings_max_span`, which refuses anything wider. */
 const BUILDINGS_MAX_SPAN = 0.06;
-/** How long the view must hold still before its buildings are worth fetching. */
-const SETTLE_MS = 500;
+/** How long the view must hold still before its buildings are worth fetching. Long
+ *  enough that swiping through the deck costs nothing — a card glanced at and thrown
+ *  never asks — and short enough to feel immediate on the one being read. */
+const SETTLE_MS = 900;
+/** How much ground a focused map opens on, in kilometres across. A neighbourhood: near
+ *  enough that streets and footprints are legible and the place can be recognised, wide
+ *  enough to see what it sits next to. */
+const FOCUS_KM = 1.6;
+/**
+ * Snapping the window onto a shared grid was tried, so that neighbouring places would
+ * ask for one window and the second would be a cache hit. **It made the map worse and
+ * was reverted.** `buildings_limit` is a budget, and snapping spent it on ground that is
+ * not on screen: measured in central Taipei, the snapped 4.4 km tile holds **15253**
+ * buildings so the 1200 returned were 8% of it, against **3546** in the 2.2 km window
+ * actually being looked at. A scattered half of a neighbourhood reads as a city; a
+ * twelfth of a district reads as a rash. The request rate is held down by `SETTLE_MS`
+ * instead, which costs coverage nothing.
+ */
 
 /** Bounding span of a set of points, in kilometres, for the scale note. */
 function spanKm(points: { latitude: number; longitude: number }[]): number {
@@ -140,8 +156,18 @@ export function PlaceMap({
             .join(" "),
         )
       : [];
+    // One kilometre, measured through this projection, so a view can be sized in real
+    // distance instead of in whatever the catalogue happened to span.
+    const anchor = pins[0] ?? city[0];
+    let unitsPerKm = 0;
+    if (projection && anchor) {
+      const here = projection.toXY(anchor.latitude, anchor.longitude);
+      const north = projection.toXY(anchor.latitude + 1 / 111, anchor.longitude);
+      unitsPerKm = Math.hypot(north.x - here.x, north.y - here.y);
+    }
     return {
       projection,
+      unitsPerKm,
       lines,
       linePoints,
       buildingRings,
@@ -152,6 +178,58 @@ export function PlaceMap({
   }, [basemap, context, places, footprints]);
   const { lines, linePoints, buildingRings, cityPoints, pinPoints, across } = geometry;
   const focused = pinPoints.find((point) => point.place_id === focusId);
+
+  // The view the map opens on, and the one Reset returns to.
+  //
+  // Fitting the projection meant every map opened on the whole region — so the card's
+  // "where is this one" was a picture of all of Taipei with one pin somewhere in it,
+  // which is the complaint this screen kept getting. A map with a focus now opens at
+  // street scale **on its subject**; one without fits the pins it was given. As a
+  // consequence the card map's window is small enough to be worth footprints, so the
+  // detail arrives without anyone having to know to zoom.
+  const home = useMemo(() => {
+    const { projection, unitsPerKm } = geometry;
+    if (!projection || !pinPoints.length || !unitsPerKm) return { x: 0, y: 0, zoom: 1 };
+    const subject = focusId ? pinPoints.filter((point) => point.place_id === focusId) : [];
+    const points = subject.length ? subject : pinPoints;
+    const xs = points.map((point) => point.x);
+    const ys = points.map((point) => point.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    // A single pin has no extent of its own, so it is given a neighbourhood rather than
+    // an infinite zoom.
+    const least = FOCUS_KM * unitsPerKm;
+    const width = Math.max(maxX - minX, least);
+    const height = Math.max(maxY - minY, (least * FRAME.height) / FRAME.width);
+    const zoom = Math.min(
+      MAX_ZOOM,
+      Math.max(MIN_ZOOM, Math.min(FRAME.width / (width * 1.3), FRAME.height / (height * 1.3))),
+    );
+    return {
+      zoom,
+      x: (minX + maxX) / 2 - FRAME.width / zoom / 2,
+      y: (minY + maxY) / 2 - FRAME.height / zoom / 2,
+    };
+  }, [geometry, focusId, pinPoints]);
+
+  // Adjusted during render rather than in an effect — React's own pattern for resetting
+  // state when a prop changes, and it avoids the extra committed frame at the old view
+  // that an effect would paint. Compared as a *value*, not by object identity:
+  // `geometry` is rebuilt when footprints arrive, and reacting to that would snap the
+  // map home and undo the very pan that asked for them.
+  const homeKey = `${home.x.toFixed(1)},${home.y.toFixed(1)},${home.zoom.toFixed(3)}`;
+  // Starts as `null`, not as the first `homeKey`: seeded with the key, a map whose
+  // geometry was already cached on its first render counted as settled and kept the
+  // initial view instead of its own. That is exactly what happened to the shortlist
+  // map, which sat at the whole-projection zoom while the card map — whose data arrives
+  // a beat later — fitted correctly.
+  const [settledHome, setSettledHome] = useState<string | null>(null);
+  if (settledHome !== homeKey) {
+    setSettledHome(homeKey);
+    setView(home);
+  }
 
   // Buildings, only once the map is close enough for them to be bigger than a pixel,
   // and only for the window actually on screen. The inverse of the same projection is
@@ -205,6 +283,11 @@ export function PlaceMap({
   // once they are spent, so the burst reads as an outage it caused itself. The delay
   // means a gesture costs one request, taken once the hand stops.
   useEffect(() => {
+    // Never during a capture. `refresh_buildings` *writes* — it stores the window in
+    // `provider_cache` — so photographing this screen would change what the next
+    // photograph shows, which is the drift the summaries prefetch already caused once.
+    // A capture observes the app; it does not operate it.
+    if (typeof document !== "undefined" && document.documentElement.dataset.capture) return;
     if (!tripId || !windowKey) return;
     if (asked.current === windowKey) return;
     const timer = window.setTimeout(() => {
@@ -297,11 +380,11 @@ export function PlaceMap({
       </svg>
       {/* Outside the svg, so panning does not carry the compass off the edge. */}
       <span aria-hidden="true" className="places-map-rose">N ↑</span>
-      {view.zoom > 1 ? (
-        <button className="places-map-reset" onClick={() => setView({ x: 0, y: 0, zoom: 1 })} type="button">
+      {homeKey === `${view.x.toFixed(1)},${view.y.toFixed(1)},${view.zoom.toFixed(3)}` ? null : (
+        <button className="places-map-reset" onClick={() => setView(home)} type="button">
           {copy("map_reset", language)}
         </button>
-      ) : null}
+      )}
       <p className="places-map-scale">
         {across > 0
           ? copyFormat("map_span", language, { km: Math.max(1, Math.round(across / view.zoom)) })

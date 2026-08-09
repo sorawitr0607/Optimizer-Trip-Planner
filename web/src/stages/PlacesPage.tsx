@@ -307,10 +307,18 @@ export function PlacesPage() {
   // itself twice. The skeleton stood inside the `ranking.data` branch, so on a first
   // Discover -- no ranking yet -- it never rendered at all, which is exactly when it
   // was wanted.
+  //
+  // **It blanks only when there is nothing to show, and `fetchSummary` is not part of
+  // it.** That prefetch fetches photographs for cards *further down the deck*; every
+  // swipe invalidates the ranking, the new order changes which cards are coming up, and
+  // so every swipe started one. Gating on it emptied the whole workspace -- deck, detail
+  // panel and lane picker -- after each card, for work on places the owner had not
+  // reached. Reported as the deck being broken, and it may as well have been: nobody can
+  // work through 300 cards on a screen that clears itself between them. A photograph
+  // arriving late lands in a fixed-size box and moves nothing, which is why it can be
+  // allowed to arrive late.
   const busy =
-    discover.isPending
-    || (catalog.length > 0 && (ranking.isPending || summaries.isPending))
-    || fetchSummary.isPending;
+    discover.isPending || (catalog.length > 0 && (!ranking.data || summaries.isPending));
   const basics = setup.data?.snapshot.data.trip_basics;
   const tripDays = daysBetween(basics?.start_date, basics?.end_date);
   // Numbered in the order they were kept, so the map's label and the list's label are

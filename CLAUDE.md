@@ -695,6 +695,16 @@ cycles the real stages in the real order — `think_searching`, `think_routes`, 
 timer rather than on progress events, which is honest about what it is, since the server reports no
 milestones and this claims none.
 
+**A background prefetch must not take the card off the screen, fixed 2026-08-09 (`WF-048`).** The
+`/places` skeleton gated on `fetchSummary.isPending` — the prefetch that fetches photographs for cards
+*further down the deck*. Every swipe invalidates the ranking, the new order changes which cards are
+coming up, and so every swipe started one: the whole workspace, deck, detail panel and lane picker
+included, emptied itself after each card, for work on places the owner had not reached. Reported simply
+as the deck being broken, and it may as well have been — nobody can work through 300 cards on a screen
+that clears itself between them. It now blanks only when there is genuinely nothing to show
+(`!ranking.data || summaries.isPending`). A photograph arriving late lands in a fixed-size box and moves
+nothing, which is what makes it safe to arrive late.
+
 **The deck looks throwable.** It was styled exactly like every other panel, so nothing invited a hand;
 it now carries a tint, a hard shadow, a grip bar and two coloured edges that say which way means what
 before the first drag.
@@ -751,6 +761,30 @@ geometry is memoized on its inputs, so dragging no longer reprojects the city.
 **Wheel zoom is bound by hand, not through `onWheel`.** React registers its wheel listener **passively**,
 where `preventDefault` is ignored — so zooming the map scrolled the page out from under it at the same
 time. The listener is added with `{ passive: false }` against a ref.
+
+The buildings fetch is **skipped under the capture flag**, like the summaries prefetch and
+`refresh_basemap` before it: it writes a `provider_cache` row, and a screen that changes what it holds
+when photographed is the 13%-drift bug again.
+
+**Every map opens on its own subject as of 2026-08-09 (`WF-048`).** Fitting the projection meant the
+card's "where is this one" drew the whole 31 km region with one pin somewhere in it — the "I still don't
+know where is it" report, which survived both the catalogue dots and the basemap because neither changed
+the *scale*. A map with a `focusId` now opens at `FOCUS_KM` on its subject and a map without one fits the
+pins it was given: measured on the pilot, the card map went 31 km → **1 km** and the shortlist map 31 km →
+**18 km**. As a consequence the card map's window is small enough to be worth footprints, so the detail
+arrives without anyone having to know to zoom. Two traps. The home view is compared **by value, not by
+object identity** — `geometry` is rebuilt when footprints land, and reacting to that snapped the map home
+and undid the pan that asked for them. And the "already settled" marker starts as **`null`, not as the
+first key**: seeded with the key, a map whose data was already cached on its first render counted as
+settled and kept the initial view, which is why the shortlist map alone stayed at the wrong zoom while
+the card map — whose data arrives a beat later — was correct.
+
+**Window snapping was tried and reverted, and the measurement is why.** Snapping the requested window
+onto a shared grid would let neighbouring places reuse one cached fetch, but `buildings_limit` is a
+budget and snapping spends it off-screen: central Taipei holds **15253** buildings in the snapped 4.4 km
+tile against **3546** in the 2.2 km window actually being looked at, so the 1200 returned fell from a
+third of the view to 8% of it. A scattered half of a neighbourhood reads as a city; a twelfth of a
+district reads as a rash. `SETTLE_MS` holds the request rate down instead, which costs coverage nothing.
 
 The 36 screen baselines pass **unchanged**, which is the proof the default view is untouched: at zoom 1
 the window is far too wide to ask, so nothing is fetched and nothing is drawn.

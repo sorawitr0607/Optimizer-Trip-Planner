@@ -3794,8 +3794,8 @@
   fill: none;
   stroke: var(--text-muted);
   stroke-linecap: round;
-  stroke-opacity: 0.5;
-  stroke-width: 0.9;
+  stroke-opacity: 0.75;
+  stroke-width: 1.1;
   vector-effect: non-scaling-stroke;
 }
 
@@ -3803,7 +3803,7 @@
   fill: none;
   stroke: var(--color-accent);
   stroke-linejoin: round;
-  stroke-opacity: 0.55;
+  stroke-opacity: 0.7;
   stroke-width: 1.8;
   vector-effect: non-scaling-stroke;
 }
@@ -3821,9 +3821,9 @@
    competing with them. */
 .places-map-building {
   fill: var(--text-muted);
-  fill-opacity: 0.18;
+  fill-opacity: 0.34;
   stroke: var(--text-muted);
-  stroke-opacity: 0.25;
+  stroke-opacity: 0.55;
   stroke-width: 0.3;
   vector-effect: non-scaling-stroke;
 }
