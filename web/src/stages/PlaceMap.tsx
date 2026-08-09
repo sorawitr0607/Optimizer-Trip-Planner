@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 
-import type { DiscoveryCandidate } from "../api/client";
+import type { Basemap, DiscoveryCandidate } from "../api/client";
 import { copy, copyFormat, type Language } from "../i18n/copy";
 import type { MapPlace } from "../shared/map";
 import { plotCoordinates } from "./ItineraryPage";
@@ -49,6 +49,9 @@ export interface PlaceMapProps {
   title: string;
   /** The whole discovered catalogue, drawn faintly so the city has a shape. */
   context?: DiscoveryCandidate[];
+  /** Streets, water and parks. Without it this is dots on grey; with it the city is
+   *  recognisable and a pin has somewhere to be. */
+  basemap?: Basemap | null;
   /** Drawn large and filled; everything else is context. Omit to weight them equally. */
   focusId?: string;
   /** The numbered list under the map. Off in the card, where one name is enough. */
@@ -60,6 +63,7 @@ export function PlaceMap({
   language,
   title,
   context = [],
+  basemap = null,
   focusId,
   withKey = true,
 }: PlaceMapProps) {
@@ -86,9 +90,25 @@ export function PlaceMap({
       longitude: item.longitude as number,
     }));
   const pins = places.map((place) => ({ ...place, kind: "pin" as const }));
-  const projected = plotCoordinates([...city, ...pins], FRAME);
-  const cityPoints = projected.filter((point) => point.kind === "city");
-  const pinPoints = projected.filter((point) => point.kind === "pin");
+  // Basemap vertices go through the *same* projection as the pins, in one pass. A
+  // second projection would fit the streets to their own bounds and lay the city
+  // somewhere the pins are not — the two have to be scaled by one transform or they
+  // describe different places.
+  const lines: { layer: keyof Basemap & ("roads" | "water" | "green"); from: number; count: number }[] = [];
+  const vertices: { kind: "line"; latitude: number; longitude: number }[] = [];
+  for (const layer of ["water", "green", "roads"] as const) {
+    for (const line of basemap?.[layer] ?? []) {
+      lines.push({ layer, from: vertices.length, count: line.length });
+      for (const [latitude, longitude] of line) {
+        vertices.push({ kind: "line", latitude, longitude });
+      }
+    }
+  }
+  const projected = plotCoordinates([...vertices, ...city, ...pins], FRAME);
+  const linePoints = projected.slice(0, vertices.length);
+  const rest = projected.slice(vertices.length);
+  const cityPoints = rest.filter((point) => point.kind === "city");
+  const pinPoints = rest.filter((point) => point.kind === "pin");
   const focused = pinPoints.find((point) => point.place_id === focusId);
   const across = Math.round(spanKm(city.length ? city : places));
 
@@ -141,6 +161,17 @@ export function PlaceMap({
         role="img"
         viewBox={`${view.x} ${view.y} ${FRAME.width / view.zoom} ${FRAME.height / view.zoom}`}
       >
+        {/* Water, then parks, then roads: painted in the order a map is read. */}
+        {lines.map((line, index) => (
+          <polyline
+            className={`places-map-${line.layer}`}
+            key={`${line.layer}-${index}`}
+            points={linePoints
+              .slice(line.from, line.from + line.count)
+              .map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`)
+              .join(" ")}
+          />
+        ))}
         {cityPoints.map((point) => (
           <circle className="places-map-city" cx={point.x} cy={point.y} key={point.place_id} r="1.4" />
         ))}

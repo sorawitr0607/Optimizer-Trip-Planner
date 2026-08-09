@@ -699,6 +699,12 @@ milestones and this claims none.
 it now carries a tint, a hard shadow, a grip bar and two coloured edges that say which way means what
 before the first drag.
 
+**The opening-hours decision moved to where it matters.** It lived only on `/evidence`, so building a
+plan meant leaving `/optimize`, reading a wall of controls, deciding and coming back — reported as
+"back and forth". `/optimize` now asks the one question that affects the button next to it, in a
+sentence with the numbers in it, and offers both answers inline. `/evidence` keeps the detail and stops
+being a required stop.
+
 **The evidence screen answers its own question first.** "Am I need to fetch it or not" was the report,
 and `opening_evidence_options` had priced both paths and known `assumed_is_usable` since `WF-047` —
 the page simply never asked. A verdict panel now states the answer in a sentence with the numbers in
@@ -710,6 +716,20 @@ fill the same trains and a national holiday empties the offices too. Ties resolv
 so re-opening the screen cannot show different dates. It returns `None` for a trip longer than the
 month rather than a range scored against holidays it was never given. Computed on read from the stored
 holiday dates, so trying a different pace costs no request.
+
+**The map has a real basemap as of 2026-08-09 (`WF-048`).** Faint catalogue dots were still
+unreadable — "I can't see anything" — so `OpenStreetMapProvider.basemap()` fetches major roads,
+water and parks for the window discovery already searched: **809 roads, 46 water bodies and 45 parks
+for Taipei in 5.6 s**, one free Overpass request, stored for 30 days because coastlines do not move.
+Tags are dropped and coordinates rounded to ~1 m on the way in, which takes the response from
+**1151 KB to 235 KB**. `WF-034` still holds: no tiles, and nothing fetched at view time.
+
+**Buildings are deliberately absent** — at a 30 km window a footprint is well under a pixel, so asking
+would return six figures of geometry to draw nothing. A city's shape at this scale is its roads, its
+water and its green. Basemap vertices go through the **same projection pass** as the pins: a second
+projection would fit the streets to their own bounds and lay the city where the pins are not. The
+`refresh_basemap` call is skipped under the capture flag in favour of the read-only `get_basemap`,
+because it writes.
 
 **The map draws the city from the catalogue as of 2026-08-09 (`WF-048`).** Six pins on empty grey told
 an owner nothing — no coastline, no districts, no sense of which end of town anything was, reported as

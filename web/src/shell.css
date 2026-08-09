@@ -3781,3 +3781,28 @@
 .evidence-verdict-options li {
   margin-bottom: 4px;
 }
+
+/* The drawn basemap. Quiet enough to be ground, present enough to place a pin on. */
+.places-map-roads {
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-linecap: round;
+  stroke-opacity: 0.5;
+  stroke-width: 0.9;
+}
+
+.places-map-water {
+  fill: none;
+  stroke: var(--color-accent);
+  stroke-linejoin: round;
+  stroke-opacity: 0.55;
+  stroke-width: 1.8;
+}
+
+.places-map-green {
+  fill: var(--color-success);
+  fill-opacity: 0.16;
+  stroke: var(--color-success);
+  stroke-opacity: 0.4;
+  stroke-width: 0.6;
+}

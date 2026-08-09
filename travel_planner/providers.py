@@ -265,6 +265,74 @@ class OpenStreetMapProvider:
             "license_url": "https://www.openstreetmap.org/copyright",
         }
 
+    # The basemap. Major roads, water and parks -- enough for a city to be recognisable
+    # without a tile server, which `WF-034` forbids and which would need the network on
+    # every pan besides.
+    #
+    # Buildings are deliberately absent. At a 30km window a footprint is well under a
+    # pixel, and asking for them would return six figures of geometry to draw nothing;
+    # the shape of a city at this scale is its roads, its water and its green.
+    BASEMAP_ROADS = "^(motorway|trunk|primary|secondary)$"
+    basemap_limit = 900
+    # ~1m. Beyond this is precision no 420-unit-wide drawing can show.
+    basemap_precision = 5
+
+    def basemap_query(self, bbox: list[float]) -> str:
+        bounds = ",".join(map(str, bbox))
+        return (
+            "[out:json][timeout:45];\n(\n"
+            f'  way["highway"~"{self.BASEMAP_ROADS}"]({bounds});\n'
+            f'  way["natural"="coastline"]({bounds});\n'
+            f'  way["waterway"="river"]({bounds});\n'
+            f'  way["natural"="water"]({bounds});\n'
+            f'  way["leisure"="park"]({bounds});\n'
+            f");\nout geom {self.basemap_limit};"
+        )
+
+    def basemap(self, bbox: list[float]) -> dict[str, Any]:
+        """Road, water and park geometry for one window, as rounded coordinate lists.
+
+        Tags are dropped and coordinates rounded on the way in: the raw response for
+        Taipei is 1.1MB and almost all of it is detail this cannot draw. What is stored
+        is three lists of polylines and nothing else.
+        """
+
+        elements = self._overpass_elements(self.basemap_query(bbox), timeout=60)
+        layers: dict[str, list[list[list[float]]]] = {"roads": [], "water": [], "green": []}
+        for element in elements:
+            geometry = element.get("geometry") or []
+            if len(geometry) < 2:
+                continue
+            tags = element.get("tags") or {}
+            if tags.get("highway"):
+                layer = "roads"
+            elif tags.get("leisure") == "park":
+                layer = "green"
+            elif tags.get("waterway") or tags.get("natural") in {"water", "coastline"}:
+                layer = "water"
+            else:
+                continue
+            line: list[list[float]] = []
+            for point in geometry:
+                try:
+                    spot = [
+                        round(float(point["lat"]), self.basemap_precision),
+                        round(float(point["lon"]), self.basemap_precision),
+                    ]
+                except (KeyError, TypeError, ValueError):
+                    continue
+                # Rounding can collapse neighbours onto each other.
+                if not line or line[-1] != spot:
+                    line.append(spot)
+            if len(line) >= 2:
+                layers[layer].append(line)
+        return {
+            "bbox": bbox,
+            **layers,
+            "attribution": "© OpenStreetMap contributors",
+            "license": "ODbL",
+        }
+
     def _find_destination(self, destination: str) -> dict[str, Any]:
         query = urlencode({"q": destination, "format": "jsonv2", "limit": 1})
         payload = self._request_json(

@@ -1217,7 +1217,14 @@
       "option_buy_hours": "Buy confirmed hours · {calls} places · US${cost}",
       "option_guess_hours": "Let a model guess, one call · US${cost}",
       "option_guess_measured": "Measured against real hours: {exact} of {of} exact, worst overshoot {worst} min.",
-      "option_guess_unusable": "Not offered: this trip schedules for real, so an assumed window would be bought and then ignored."
+      "option_guess_unusable": "Not offered: this trip schedules for real, so an assumed window would be bought and then ignored.",
+      "before_you_build": "Before you build",
+      "before_hours_gap": "{needing} of {places} places have no confirmed opening hours. Decide here — you do not need to leave this screen.",
+      "before_use_assumptions": "Assume them and build now — free",
+      "before_buy_hours": "Buy confirmed hours first · US${cost}",
+      "before_buying": "Buying hours…",
+      "before_all_covered": "Every chosen place has confirmed opening hours. Nothing to decide.",
+      "open_evidence_detail": "More evidence controls"
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -2058,7 +2065,14 @@
       "option_buy_hours": "ซื้อเวลาที่ยืนยันแล้ว · {calls} แห่ง · US${cost}",
       "option_guess_hours": "ให้โมเดลเดา เรียกครั้งเดียว · US${cost}",
       "option_guess_measured": "วัดกับเวลาจริง: ตรง {exact} จาก {of} เกินมากสุด {worst} นาที",
-      "option_guess_unusable": "ไม่แสดงตัวเลือกนี้: ทริปนี้จัดตารางจริง ซื้อช่วงเวลาที่สมมติมาก็จะไม่ถูกใช้"
+      "option_guess_unusable": "ไม่แสดงตัวเลือกนี้: ทริปนี้จัดตารางจริง ซื้อช่วงเวลาที่สมมติมาก็จะไม่ถูกใช้",
+      "before_you_build": "ก่อนสร้างแผน",
+      "before_hours_gap": "{needing} จาก {places} แห่งยังไม่มีเวลาเปิด-ปิดที่ยืนยัน ตัดสินใจตรงนี้ได้เลย ไม่ต้องออกจากหน้านี้",
+      "before_use_assumptions": "ให้ระบบสมมติแล้วสร้างเลย — ฟรี",
+      "before_buy_hours": "ซื้อเวลาที่ยืนยันก่อน · US${cost}",
+      "before_buying": "กำลังซื้อเวลาเปิด-ปิด…",
+      "before_all_covered": "ทุกสถานที่ที่เลือกมีเวลาเปิด-ปิดที่ยืนยันแล้ว ไม่ต้องตัดสินใจอะไร",
+      "open_evidence_detail": "ตัวเลือกหลักฐานเพิ่มเติม"
     }
   }
 }

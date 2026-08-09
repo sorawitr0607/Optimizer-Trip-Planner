@@ -1933,6 +1933,57 @@ class PlannerActions:
             }
         raise PlannerRefusal("discovery_missing")
 
+    def get_basemap(self, trip_id: str) -> dict[str, Any] | None:
+        """The stored street/water/park geometry for this trip's window, or None."""
+
+        held = self.store.get_trip_evidence(trip_id, "basemap")
+        if not held:
+            return None
+        return {
+            key: value for key, value in held.items()
+            if key not in {"retrieved_at", "expires_at"}
+        }
+
+    def refresh_basemap(self, trip_id: str, *, force: bool = False) -> dict[str, Any]:
+        """Fetch the drawn basemap for the window discovery searched.
+
+        Free, one Overpass request, and cached for a long time -- roads and coastlines
+        do not move. Without it the map was several hundred dots on empty grey, which
+        the owner could not read; with it a city has streets, water and parks and a pin
+        has somewhere recognisable to sit. Still no tiles and still nothing at view
+        time, so `WF-034`'s offline rule holds.
+        """
+
+        trip = self.store.get_trip(trip_id)
+        if trip is None:
+            raise PlannerRefusal("unknown_trip", trip_id=trip_id)
+        now = datetime.now(timezone.utc)
+        held = self.store.get_trip_evidence(trip_id, "basemap")
+        if not force and held and held.get("expires_at", "") > now.isoformat():
+            return self.get_basemap(trip_id) or {}
+
+        discovery = self.get_latest_discovery(trip_id)
+        box = (discovery.report.as_dict() if discovery else {}).get("query_boundary")
+        if not (isinstance(box, list) and len(box) == 4):
+            raise PlannerRefusal("discovery_required_for_climate", trip_id=trip_id)
+
+        provider = self.place_provider or OpenStreetMapProvider()
+        self._spend(
+            operation="openstreetmap:basemap", count=1, trip_id=trip_id,
+            detail={"bbox": [round(float(value), 4) for value in box]},
+        )
+        value = provider.basemap([float(value) for value in box])
+        self.store.upsert_trip_evidence(
+            trip_id=trip_id,
+            kind="basemap",
+            value=value,
+            provider=str(provider.name),
+            retrieved_at=now.isoformat(),
+            # Roads and coastlines do not move; a month is already conservative.
+            expires_at=(now + timedelta(days=30)).isoformat(),
+        )
+        return value
+
     def travel_month_guide(
         self, trip_id: str, *, days: int | None = None, force: bool = False
     ) -> dict[str, Any]:

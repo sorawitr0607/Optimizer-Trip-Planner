@@ -37,6 +37,8 @@ ACTIONS = (
     "list_trips",
     "delete_trip",
     "travel_month_guide",
+    "get_basemap",
+    "refresh_basemap",
     "save_setup",
     "get_setup",
     "setup_vocabulary",

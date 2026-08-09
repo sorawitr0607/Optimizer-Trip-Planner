@@ -574,6 +574,16 @@ export interface OpeningEvidenceOptions {
   assumed_is_usable: boolean;
 }
 
+/** `WF-048`. Drawn street/water/park geometry for the window discovery searched, as
+ *  rounded [lat, lon] polylines. No tiles: fetched once, stored, drawn locally. */
+export interface Basemap {
+  roads: [number, number][][];
+  water: [number, number][][];
+  green: [number, number][][];
+  attribution: string;
+  license: string;
+}
+
 export interface ChecklistVocabulary {
   categories: string[];
   requirement_levels: string[];

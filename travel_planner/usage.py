@@ -36,6 +36,8 @@ PRICES_USD = {
     # Overpass amenity counts around candidate stay-areas (`WF-040`). One request for
     # every area at once; free, and priced for the same reason as the two above.
     "openstreetmap:areas": 0.0,
+    # The drawn basemap: same free endpoint discovery already uses.
+    "openstreetmap:basemap": 0.0,
     # Wikidata and Wikipedia. Free, no key, and it replaces what
     # google_places:card_details charged US$0.04 a place for.
     "wikidata:summary": 0.0,

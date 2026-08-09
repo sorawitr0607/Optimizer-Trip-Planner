@@ -10,6 +10,7 @@ import {
   ApiError,
   rpc,
   type CandidateChoice,
+  type OpeningEvidenceOptions,
   type PlanPreview,
   type PlanProposal,
   type PlanVariant,
@@ -91,6 +92,26 @@ export function OptimizePage() {
     queryFn: () => rpc<PlanVersionRecord | null>("get_active_plan", { trip_id: tripId }),
   });
 
+  // The evidence decision, brought to the moment it matters.
+  //
+  // It lived only on `/evidence`, so building a plan meant leaving this screen, reading
+  // a wall of controls, deciding, and coming back — reported as "back and forth". The
+  // only question that screen asks about opening hours is answerable here, in a
+  // sentence, beside the button it affects; `/evidence` keeps the detail for anyone who
+  // wants it and stops being a required stop.
+  const evidence = useQuery({
+    queryKey: ["opening_options", tripId],
+    queryFn: () => rpc<OpeningEvidenceOptions>("opening_evidence_options", { trip_id: tripId }),
+  });
+  const buyHours = useMutation({
+    mutationFn: () => rpc<unknown>("refresh_opening_hours", { trip_id: tripId }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["opening_options", tripId] });
+      await queryClient.invalidateQueries({ queryKey: ["paid_usage"] });
+    },
+    onError: (error) => setRefusal(error instanceof ApiError ? error.code : String(error)),
+  });
+
   const generate = useMutation({
     mutationFn: () => rpc<PlanPreview>("generate_plan_preview", { trip_id: tripId }),
     onSuccess: async () => {
@@ -153,6 +174,45 @@ export function OptimizePage() {
         <p className="field-error" aria-live="polite">
           ⚠ {copyFrom("OPTIMIZER_CODE_TEXT", refusal, language)}
         </p>
+      ) : null}
+
+      {evidence.data && considered.length ? (
+        <section className={`evidence-verdict${evidence.data.needing_hours ? "" : " settled"}`}>
+          <h2>{copy("before_you_build", language)}</h2>
+          <p className="evidence-verdict-answer">
+            {evidence.data.needing_hours
+              ? copyFormat("before_hours_gap", language, {
+                  needing: evidence.data.needing_hours,
+                  places: evidence.data.places,
+                })
+              : copy("before_all_covered", language)}
+          </p>
+          {evidence.data.needing_hours ? (
+            <div className="optimize-actions">
+              <button
+                disabled={generate.isPending || buyHours.isPending}
+                onClick={() => generate.mutate()}
+                type="button"
+              >
+                {copy("before_use_assumptions", language)}
+              </button>
+              <button
+                disabled={buyHours.isPending || generate.isPending}
+                onClick={() => buyHours.mutate()}
+                type="button"
+              >
+                {buyHours.isPending
+                  ? copy("before_buying", language)
+                  : copyFormat("before_buy_hours", language, {
+                      cost: evidence.data.verified.estimate_usd.toFixed(3),
+                    })}
+              </button>
+              <Link className="primary-link" to={`/trips/${tripId}/evidence`}>
+                {copy("open_evidence_detail", language)}
+              </Link>
+            </div>
+          ) : null}
+        </section>
       ) : null}
 
       <div className="optimize-actions">

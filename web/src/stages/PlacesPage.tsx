@@ -10,6 +10,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router";
 import {
   ApiError,
   rpc,
+  type Basemap,
   type CandidateChoice,
   type DiscoveryRun,
   type PaidCallCheck,
@@ -130,6 +131,19 @@ export function PlacesPage() {
 
   const [photoIndexes, setPhotoIndexes] = useState<Record<string, number>>({});
 
+  // Fetched once per trip and stored for a month: roads and coastlines do not move.
+  // Never during a capture — it writes, and a capture must observe the app, not
+  // operate it, which is the lesson the summaries prefetch taught the hard way.
+  const basemap = useQuery({
+    queryKey: ["basemap", tripId],
+    queryFn: () =>
+      typeof document !== "undefined" && document.documentElement.dataset.capture
+        ? rpc<Basemap | null>("get_basemap", { trip_id: tripId })
+        : rpc<Basemap | null>("refresh_basemap", { trip_id: tripId }),
+    enabled: Boolean(tripId),
+    staleTime: Infinity,
+    retry: false,
+  });
   const setup = useQuery({
     queryKey: ["setup", tripId],
     queryFn: () => rpc<SetupDraft | null>("get_setup", { trip_id: tripId }),
@@ -647,6 +661,7 @@ export function PlacesPage() {
                   is kept yet — had no map at all, and one appeared only from the second
                   choice onward. The card's own place is enough to draw. */}
               <PlaceMap
+                basemap={basemap.data ?? null}
                 context={catalog}
                 focusId={selectedId}
                 language={language}
@@ -806,6 +821,7 @@ export function PlacesPage() {
                 copies of a number is how the screen and the workbook start
                 disagreeing. */}
             <PlaceMap
+              basemap={basemap.data ?? null}
               context={catalog}
               language={language}
               places={shortlistPlaces}
