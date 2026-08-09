@@ -664,6 +664,7 @@ export function PlacesPage() {
                 basemap={basemap.data ?? null}
                 context={catalog}
                 focusId={selectedId}
+                tripId={tripId}
                 language={language}
                 places={cardMapPlaces}
                 title={copy("card_map", language)}
@@ -825,6 +826,7 @@ export function PlacesPage() {
               context={catalog}
               language={language}
               places={shortlistPlaces}
+              tripId={tripId}
               title={copy("shortlist_map", language)}
             />
             <h3>{copy("draft_shape", language)}</h3>

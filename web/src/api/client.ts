@@ -584,6 +584,14 @@ export interface Basemap {
   license: string;
 }
 
+/** `WF-048`. Footprints for one zoomed-in window. Empty with `too_wide` when the
+ *  caller asked for more ground than a footprint can be drawn on. */
+export interface Buildings {
+  bbox: number[];
+  buildings: [number, number][][];
+  too_wide: boolean;
+}
+
 export interface ChecklistVocabulary {
   categories: string[];
   requirement_levels: string[];

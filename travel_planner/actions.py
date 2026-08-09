@@ -1984,6 +1984,48 @@ class PlannerActions:
         )
         return value
 
+    def refresh_buildings(self, trip_id: str, *, bbox: list[float]) -> dict[str, Any]:
+        """Building footprints for one zoomed-in window, cached per window.
+
+        Free, and asked for only when the map is zoomed far enough that a footprint is
+        bigger than a pixel -- at the full city window there would be six figures of
+        them drawing nothing, which is why they are not part of the basemap.
+
+        Cached in `provider_cache` keyed on the rounded window, so panning back over
+        ground already fetched costs nothing.
+        """
+
+        if self.store.get_trip(trip_id) is None:
+            raise PlannerRefusal("unknown_trip", trip_id=trip_id)
+        if not (isinstance(bbox, list) and len(bbox) == 4):
+            raise PlannerRefusal("bad_map_window", trip_id=trip_id)
+        provider = self.place_provider or OpenStreetMapProvider()
+        # Rounded to ~100m so small pans reuse the same tile of work rather than
+        # asking again for a window one pixel over.
+        window = [round(float(value), 3) for value in bbox]
+        request = {"provider": provider.name, "operation": "buildings", "bbox": window}
+        fingerprint = freeze_snapshot(request).sha256
+        now = datetime.now(timezone.utc)
+        cache = self.store.get_provider_cache(provider.name, fingerprint)
+        if cache and cache.expires_at > now.isoformat():
+            return cache.snapshot.as_dict()
+
+        self._spend(
+            operation="openstreetmap:buildings", count=1, trip_id=trip_id,
+            detail={"bbox": window},
+        )
+        value = provider.buildings(window)
+        self.store.put_provider_cache(
+            ProviderCacheEntry(
+                provider=provider.name,
+                request_fingerprint=fingerprint,
+                snapshot=freeze_snapshot(value),
+                retrieved_at=now.isoformat(),
+                expires_at=(now + timedelta(days=30)).isoformat(),
+            )
+        )
+        return value
+
     def travel_month_guide(
         self, trip_id: str, *, days: int | None = None, force: bool = False
     ) -> dict[str, Any]:

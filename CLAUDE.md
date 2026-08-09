@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm --prefix web install                                             # first web run only
 uv run --locked python -m api                                        # production shell on 127.0.0.1:8765
 uv run --locked python scripts/check.py                              # every free Python + web gate
-uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 386 tests, ~9s
+uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 467 tests, ~9s
 uv run --locked python -m unittest tests.test_optimizer.OptimizerCoreTest.test_safe_route_and_weather_fallback_are_selected  # one test
 python3 scripts/validate_regression_fixtures.py                      # fixture catalog structure
 uv run --locked python scripts/run_optimizer_regressions.py          # 27 historic cases through the real optimizer
@@ -724,9 +724,38 @@ for Taipei in 5.6 s**, one free Overpass request, stored for 30 days because coa
 Tags are dropped and coordinates rounded to ~1 m on the way in, which takes the response from
 **1151 KB to 235 KB**. `WF-034` still holds: no tiles, and nothing fetched at view time.
 
-**Buildings are deliberately absent** — at a 30 km window a footprint is well under a pixel, so asking
-would return six figures of geometry to draw nothing. A city's shape at this scale is its roads, its
-water and its green. Basemap vertices go through the **same projection pass** as the pins: a second
+**Buildings arrive on zoom as of 2026-08-09 (`WF-048`) — and only on zoom.** At the full city window a
+footprint is well under a pixel, so `basemap()` still carries none: a city's shape at that scale is its
+roads, its water and its green. `OpenStreetMapProvider.buildings()` fetches footprints for the window
+actually on screen — measured **1200 rings and 11023 points in 5.5 s** for a 2 km box in Taipei — capped
+at `buildings_limit` and refused outright above `buildings_max_span = 0.06` degrees, cached 30 days per
+rounded window so panning back over fetched ground is free.
+
+Four things that make it work, all of which were wrong first and found by driving a real browser rather
+than by reasoning. **The gate is the window's measured span in degrees, not the zoom factor**: zoom is a
+ratio of the *catalogue's* own span, so the same factor is a different real distance in every city — at
+the first cut Taipei's 0.56-degree catalogue meant even `MAX_ZOOM` left a 0.07-degree window and the
+request was refused at **every zoom the map could reach**, so buildings could never appear at all.
+`MAX_ZOOM` went 8 → 24 for the same reason. **The fetch is debounced** (`SETTLE_MS`): one continuous
+zoom crosses many distinct windows and asking for each measured **five Overpass requests from a single
+gesture**, against the endpoint that grants two slots and answers 504 once they are spent — the burst
+CLAUDE.md already warns about, self-inflicted. **Footprints are projected *through* the pins' projection,
+never into it**: they cover only the current window, so letting them into the bounds moved the whole map
+every time a window loaded. `projectionOf` therefore returns `toXY` as well as `toLatLon` and
+`plotCoordinates` is now one call to it — two copies of that maths was one copy too many. And **a viewBox
+scales its contents**, so pin radii, dot radii and label type are divided by the zoom (the label through
+`calc(var(--text-2xs) / var(--map-zoom))`, so the token stays the source) and strokes carry
+`vector-effect: non-scaling-stroke`; at 5x the pins had grown to cover the streets they mark. The
+geometry is memoized on its inputs, so dragging no longer reprojects the city.
+
+**Wheel zoom is bound by hand, not through `onWheel`.** React registers its wheel listener **passively**,
+where `preventDefault` is ignored — so zooming the map scrolled the page out from under it at the same
+time. The listener is added with `{ passive: false }` against a ref.
+
+The 36 screen baselines pass **unchanged**, which is the proof the default view is untouched: at zoom 1
+the window is far too wide to ask, so nothing is fetched and nothing is drawn.
+
+Basemap vertices go through the **same projection pass** as the pins: a second
 projection would fit the streets to their own bounds and lay the city where the pins are not. The
 `refresh_basemap` call is skipped under the capture flag in favour of the read-only `get_basemap`,
 because it writes.

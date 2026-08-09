@@ -1617,6 +1617,7 @@
   fill: var(--color-accent);
   stroke: var(--bg-card-border);
   stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
 }
 
 .plan-map-point.locked circle {
@@ -3676,6 +3677,12 @@
   position: relative;
 }
 
+/* Counter-scales the pin label against the viewBox zoom, so the number stays readable
+   at 24x instead of filling the frame — through the token rather than a literal. */
+.places-map .plan-map-point text {
+  font-size: calc(var(--text-2xs) / var(--map-zoom, 1));
+}
+
 .places-map-svg {
   cursor: grab;
   touch-action: none;
@@ -3789,6 +3796,7 @@
   stroke-linecap: round;
   stroke-opacity: 0.5;
   stroke-width: 0.9;
+  vector-effect: non-scaling-stroke;
 }
 
 .places-map-water {
@@ -3797,6 +3805,7 @@
   stroke-linejoin: round;
   stroke-opacity: 0.55;
   stroke-width: 1.8;
+  vector-effect: non-scaling-stroke;
 }
 
 .places-map-green {
@@ -3805,4 +3814,16 @@
   stroke: var(--color-success);
   stroke-opacity: 0.4;
   stroke-width: 0.6;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Building footprints, drawn only once zoomed in. Texture under the streets, never
+   competing with them. */
+.places-map-building {
+  fill: var(--text-muted);
+  fill-opacity: 0.18;
+  stroke: var(--text-muted);
+  stroke-opacity: 0.25;
+  stroke-width: 0.3;
+  vector-effect: non-scaling-stroke;
 }

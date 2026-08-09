@@ -213,7 +213,8 @@
       "no_comfort_threshold_set": "You have set no limit for this, so there is nothing to agree to",
       "comfort_value_within_threshold": "That is already inside your limit — nothing needs agreeing",
       "assumptions_not_used_by_this_trip": "This trip plans against verified evidence only, so an assumed window would not be used",
-      "discovery_required_for_climate": "Find places first — the weather guide reads the area your places were found in."
+      "discovery_required_for_climate": "Find places first — the weather guide reads the area your places were found in.",
+      "bad_map_window": "The map window was not a usable area, so no buildings were requested."
     },
     "th": {
       "ACCESS_UNVERIFIED": "ยังไม่ยืนยันทางเข้าและกฎการเข้าถึง",
@@ -306,7 +307,8 @@
       "no_comfort_threshold_set": "คุณยังไม่ได้ตั้งขีดจำกัดสำหรับเรื่องนี้ จึงไม่มีอะไรให้ยอมรับ",
       "comfort_value_within_threshold": "ค่านี้อยู่ในขีดจำกัดของคุณอยู่แล้ว ไม่ต้องยอมรับอะไร",
       "assumptions_not_used_by_this_trip": "ทริปนี้วางแผนจากหลักฐานที่ยืนยันแล้วเท่านั้น ช่วงเวลาที่คาดการณ์จึงไม่ถูกนำไปใช้",
-      "discovery_required_for_climate": "ค้นหาสถานที่ก่อน — คำแนะนำสภาพอากาศอ่านจากพื้นที่ที่พบสถานที่ของคุณ"
+      "discovery_required_for_climate": "ค้นหาสถานที่ก่อน — คำแนะนำสภาพอากาศอ่านจากพื้นที่ที่พบสถานที่ของคุณ",
+      "bad_map_window": "ขอบเขตแผนที่ไม่ถูกต้อง จึงไม่ได้ร้องขอข้อมูลอาคาร"
     }
   },
   "REJECTION_TEXT": {

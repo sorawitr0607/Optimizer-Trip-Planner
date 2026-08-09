@@ -39,32 +39,27 @@ export interface PlottedPoint extends CoordinatePoint {
  *  Generic over whatever else a caller carries, because `/places` now plots the
  *  shortlist through the same projection and its points have a name and no status.
  *  Two projections would be two pictures of the same coordinates that could disagree. */
-export function plotCoordinates<T extends { latitude: number; longitude: number }>(
-  points: T[],
-  /** The frame to fit into. The itinerary's strip is wide and short; `/places` draws a
-   *  whole city and needs height, or a roughly square town is squashed into a band and
-   *  its pins pile up in the middle. */
+/** The transform `plotCoordinates` applies, and its inverse.
+ *
+ *  Exposed because `/places` can be zoomed, and knowing *which* piece of the world is
+ *  on screen is what lets it ask for that window's buildings and nothing else. Derived
+ *  from the same numbers rather than re-fitted, so the two directions cannot disagree. */
+export function projectionOf(
+  points: { latitude: number; longitude: number }[],
   frame: { width: number; height: number } = { width: MAP_WIDTH, height: MAP_HEIGHT },
-): (T & { x: number; y: number })[] {
-  if (!points.length) return [];
+): {
+  toXY: (latitude: number, longitude: number) => { x: number; y: number };
+  toLatLon: (x: number, y: number) => { latitude: number; longitude: number };
+} | null {
+  if (!points.length) return null;
   const latitude = points.reduce((total, point) => total + point.latitude, 0) / points.length;
   const longitudeScale = Math.cos((latitude * Math.PI) / 180);
-  // The point is kept whole beside its projection rather than spread into it: spreading
-  // and then omitting the two extras loses the generic's identity, so a caller carrying
-  // its own fields got them back as `Omit<...>` instead of its own type.
-  const raw = points.map((point) => ({
-    point,
-    rawX: point.longitude * longitudeScale,
-    rawY: -point.latitude,
-  }));
-  const xs = raw.map((point) => point.rawX);
-  const ys = raw.map((point) => point.rawY);
+  const xs = points.map((point) => point.longitude * longitudeScale);
+  const ys = points.map((point) => -point.latitude);
   const minX = Math.min(...xs);
-  const maxX = Math.max(...xs);
   const minY = Math.min(...ys);
-  const maxY = Math.max(...ys);
-  const spanX = maxX - minX;
-  const spanY = maxY - minY;
+  const spanX = Math.max(...xs) - minX;
+  const spanY = Math.max(...ys) - minY;
   const availableWidth = frame.width - MAP_PAD * 2;
   const availableHeight = frame.height - MAP_PAD * 2;
   const scale = Math.min(
@@ -72,13 +67,38 @@ export function plotCoordinates<T extends { latitude: number; longitude: number 
     spanY ? availableHeight / spanY : Number.POSITIVE_INFINITY,
   );
   const finiteScale = Number.isFinite(scale) ? scale : 1;
-  const usedWidth = spanX * finiteScale;
-  const usedHeight = spanY * finiteScale;
-  return raw.map(({ point, rawX, rawY }) => ({
-    ...point,
-    x: MAP_PAD + (availableWidth - usedWidth) / 2 + (rawX - minX) * finiteScale,
-    y: MAP_PAD + (availableHeight - usedHeight) / 2 + (rawY - minY) * finiteScale,
-  }));
+  const offsetX = MAP_PAD + (availableWidth - spanX * finiteScale) / 2;
+  const offsetY = MAP_PAD + (availableHeight - spanY * finiteScale) / 2;
+  return {
+    toXY: (pointLatitude, pointLongitude) => ({
+      x: offsetX + (pointLongitude * longitudeScale - minX) * finiteScale,
+      y: offsetY + (-pointLatitude - minY) * finiteScale,
+    }),
+    toLatLon: (x, y) => ({
+      longitude: ((x - offsetX) / finiteScale + minX) / longitudeScale,
+      latitude: -((y - offsetY) / finiteScale + minY),
+    }),
+  };
+}
+
+/**
+ * The same projection, applied. One implementation of the maths with two directions:
+ * these were two copies until footprints needed to be projected *through* the pins'
+ * projection rather than joining the bounds it is computed from.
+ */
+export function plotCoordinates<T extends { latitude: number; longitude: number }>(
+  points: T[],
+  /** The frame to fit into. The itinerary's strip is wide and short; `/places` draws a
+   *  whole city and needs height, or a roughly square town is squashed into a band and
+   *  its pins pile up in the middle. */
+  frame: { width: number; height: number } = { width: MAP_WIDTH, height: MAP_HEIGHT },
+): (T & { x: number; y: number })[] {
+  const projection = projectionOf(points, frame);
+  if (!projection) return [];
+  // The point is kept whole beside its projection rather than spread into it: spreading
+  // and then omitting the two extras loses the generic's identity, so a caller carrying
+  // its own fields got them back as `Omit<...>` instead of its own type.
+  return points.map((point) => ({ ...point, ...projection.toXY(point.latitude, point.longitude) }));
 }
 
 function halfDay(start: string): "morning" | "afternoon" {

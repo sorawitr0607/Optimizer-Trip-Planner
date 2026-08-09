@@ -333,6 +333,48 @@ class OpenStreetMapProvider:
             "license": "ODbL",
         }
 
+    # Buildings, for a zoomed-in window only. Measured: about 1200 footprints and
+    # 11k points for a 2km box in 5.5s. At the full city window they are sub-pixel and
+    # there would be six figures of them, which is why they are not part of `basemap`.
+    buildings_limit = 1200
+    # Beyond this a window is too big for footprints to mean anything and too big to
+    # fetch; the caller is expected to be zoomed in before asking.
+    buildings_max_span = 0.06
+
+    def buildings_query(self, bbox: list[float]) -> str:
+        bounds = ",".join(f"{value:.5f}" for value in bbox)
+        return (
+            f"[out:json][timeout:30];\n"
+            f'way["building"]({bounds});\n'
+            f"out geom {self.buildings_limit};"
+        )
+
+    def buildings(self, bbox: list[float]) -> dict[str, Any]:
+        """Building footprints for one small window, as rounded coordinate rings."""
+
+        south, west, north, east = (float(value) for value in bbox)
+        if max(north - south, east - west) > self.buildings_max_span:
+            return {"bbox": bbox, "buildings": [], "too_wide": True}
+        rings: list[list[list[float]]] = []
+        for element in self._overpass_elements(self.buildings_query(bbox), timeout=45):
+            geometry = element.get("geometry") or []
+            if len(geometry) < 3:
+                continue
+            ring: list[list[float]] = []
+            for point in geometry:
+                try:
+                    spot = [
+                        round(float(point["lat"]), self.basemap_precision),
+                        round(float(point["lon"]), self.basemap_precision),
+                    ]
+                except (KeyError, TypeError, ValueError):
+                    continue
+                if not ring or ring[-1] != spot:
+                    ring.append(spot)
+            if len(ring) >= 3:
+                rings.append(ring)
+        return {"bbox": bbox, "buildings": rings, "too_wide": False}
+
     def _find_destination(self, destination: str) -> dict[str, Any]:
         query = urlencode({"q": destination, "format": "jsonv2", "limit": 1})
         payload = self._request_json(
