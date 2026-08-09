@@ -2291,14 +2291,21 @@ class PlannerActions:
 
     @staticmethod
     def _nearby_photos(provider: Any, place: dict[str, Any]) -> list[str]:
-        """Commons photographs near a place, or nothing. Free, and never fatal."""
+        """Commons photographs *of* a place, or nothing. Free, and never fatal.
+
+        Every spelling the catalogue holds is offered to the match, because the one that
+        appears in a Commons file name is not predictable: the English name carries
+        `Daan Forest Park` and the local one `大安森林公園`, and files exist under both.
+        """
 
         latitude, longitude = place.get("latitude"), place.get("longitude")
         finder = getattr(provider, "nearby_photos", None)
         if latitude is None or longitude is None or finder is None:
             return []
+        names = [str(place.get("name") or "")]
+        names.extend(str(value or "") for value in (place.get("names") or {}).values())
         try:
-            return list(finder(float(latitude), float(longitude)))
+            return list(finder(float(latitude), float(longitude), names))
         except (ProviderUnavailable, TypeError, ValueError):
             return []
 

@@ -13,6 +13,8 @@ from travel_planner.providers import (
     OpenRouteServiceProvider,
     ProviderBudgetExceeded,
     ProviderUnavailable,
+    WikidataSummaryProvider,
+    photo_depicts_place,
 )
 
 
@@ -814,6 +816,97 @@ class PlaceSummaryTest(unittest.TestCase):
         for value in stored.values():
             self.assertEqual({}, value["text"])
             self.assertIsNone(value["image_url"])
+
+
+class NearbyPhotoMatchTest(unittest.TestCase):
+    """A geosearch photograph is only used when its own file name names the place.
+
+    Every case here was returned by Wikimedia Commons for the real coordinates of the
+    real Taipei place beside it, sampled on 2026-08-09. They are kept verbatim because
+    the rule is a judgement about real data and a paraphrase would not hold it.
+    """
+
+    #: (Commons file title, names the catalogue holds, should it be shown)
+    MEASURED = (
+        # The case that started this: a city bus, returned for a hill. The catalogue's
+        # own name for the hill is `Yuanshan`, which the bus station's name contains --
+        # so containment alone passes it and only the coverage test rejects it.
+        ("File:KKMT_470-FY_right_side_at_Yuanshan_Bus_Station_(Yumen)_20250822.jpg",
+         ["Yuanshan", "圓山"], False),
+        ("File:Yuanshan Bus Station platform.jpg", ["Yuanshan", "圓山"], False),
+        ("File:Daan Forest Park 大安森林公園 - panoramio (6).jpg", ["Da-an Forest Park"], True),
+        ("File:介壽公園 Jieshou Park - panoramio.jpg", ["Jieshou Park"], True),
+        # Same place, a different photograph a hundred metres away.
+        ("File:Dongmen by night 20230508 185948.jpg", ["Jieshou Park"], False),
+        ("File:永和保福宮正面照.jpg", ["(原新生市場）家家土雞阿定海魚"], False),
+        ("File:陽明山美國在臺協會（原美援會）宿舍 5193.jpg", ["Floriculture Experiment Center"], False),
+        ("File:20200929163337-隱藏在樹叢中的中和瑞穗配水池牆面.jpg", ["Mantoushan"], False),
+        ("File:Lotus, Taipei, Taiwan (8468946883).jpg", ["Central Art Park"], False),
+        # The local spelling matches where the English one would not.
+        ("File:大安森林公園夜景.jpg", ["Da-an Forest Park", "大安森林公園"], True),
+    )
+
+    def test_the_measured_cases_are_judged_as_they_were_judged_by_hand(self) -> None:
+        for title, names, expected in self.MEASURED:
+            with self.subTest(title=title):
+                self.assertEqual(expected, photo_depicts_place(title, names))
+
+    def test_a_real_photograph_is_lost_where_only_part_of_the_name_is_in_the_file(self) -> None:
+        """The documented cost of requiring the whole name, pinned so it stays a
+        decision rather than becoming a surprise. This photograph really is of the
+        place; matching single words instead would accept any `Taipei` street scene for
+        the majority of the catalogue, which begins with the city's name."""
+
+        self.assertFalse(
+            photo_depicts_place("File:Herbarium 植物園蠟業館 - panoramio.jpg",
+                                ["Herbarium of Taipei Botanical Garden"])
+        )
+
+    def test_a_verbose_file_name_loses_its_place(self) -> None:
+        """The cost of the coverage rule, pinned like the cost of the whole-name rule.
+        This photograph is of Jieshou Park, but the name recites the country, city and
+        district first, so the park accounts for a seventh of it. Such places generally
+        carry a plainer file as well, which is why this is affordable."""
+
+        self.assertFalse(
+            photo_depicts_place(
+                "File:TW 台灣 Taiwan TPE 台北市 Taipei 中正區 Zhongzheng tour 中山南路 "
+                "Zhongshan South Road 1442pm 介壽公園 Jieshou Park.jpg",
+                ["Jieshou Park"],
+            )
+        )
+
+    def test_a_name_too_short_to_be_distinctive_matches_nothing(self) -> None:
+        # 圓山 is a substring of 圓山站, 圓山公園 and 圓山大飯店 alike.
+        self.assertFalse(photo_depicts_place("File:圓山大飯店.jpg", ["圓山"]))
+        self.assertFalse(photo_depicts_place("File:Park bench.jpg", ["Ark"]))
+
+    def test_geosearch_returns_only_the_files_that_name_the_place(self) -> None:
+        provider = WikidataSummaryProvider()
+        provider._json = lambda url: {  # type: ignore[method-assign]
+            "query": {
+                "pages": {
+                    "1": {"title": "File:Daan Forest Park at dusk.jpg",
+                          "imageinfo": [{"thumburl": "https://example.invalid/right.jpg"}]},
+                    "2": {"title": "File:Bus 470-FY at the station.jpg",
+                          "imageinfo": [{"thumburl": "https://example.invalid/wrong.jpg"}]},
+                }
+            }
+        }
+
+        found = provider.nearby_photos(25.03, 121.54, ["Daan Forest Park"])
+
+        self.assertEqual(["https://example.invalid/right.jpg"], found)
+
+    def test_a_place_with_no_name_gets_no_photograph_rather_than_a_guess(self) -> None:
+        provider = WikidataSummaryProvider()
+        called: list[str] = []
+        provider._json = lambda url: called.append(url) or {}  # type: ignore[method-assign]
+
+        self.assertEqual([], provider.nearby_photos(25.03, 121.54, []))
+        self.assertEqual([], provider.nearby_photos(25.03, 121.54, [""]))
+        # Nothing can match, so nothing is asked -- Commons is a public service.
+        self.assertEqual([], called)
 
 
 class TimeZoneTest(unittest.TestCase):

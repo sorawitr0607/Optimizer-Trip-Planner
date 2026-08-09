@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm --prefix web install                                             # first web run only
 uv run --locked python -m api                                        # production shell on 127.0.0.1:8765
 uv run --locked python scripts/check.py                              # every free Python + web gate
-uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 467 tests, ~9s
+uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 473 tests, ~11s
 uv run --locked python -m unittest tests.test_optimizer.OptimizerCoreTest.test_safe_route_and_weather_fallback_are_selected  # one test
 python3 scripts/validate_regression_fixtures.py                      # fixture catalog structure
 uv run --locked python scripts/run_optimizer_regressions.py          # 27 historic cases through the real optimizer
@@ -427,6 +427,36 @@ true` so the screen can say which it is showing. It returns direct thumbnail URL
 `Special:FilePath` redirects, so these load in one round trip instead of two. `web/src/shared/photos.ts`
 is the one place a gallery is assembled, and it also reads OpenStreetMap's own `wikimedia_commons` /
 `image` tag, stored as `photo_reference` since discovery was written and never read until now.
+
+**A geosearch photograph must name the place as of 2026-08-09 (`WF-048`), or it is not shown.** Saying
+which kind of picture it was turned out not to be enough: the pilot offered a city bus as the picture of
+a hill, from `KKMT_470-FY_right_side_at_Yuanshan_Bus_Station`, and a caption does not undo a wrong
+photograph on a card whose picture is what the swipe decision is made on. `providers.photo_depicts_place`
+filters on the file's own name, which is the only evidence available about its subject and turns out to
+be a good one.
+
+**Containment alone fails, and the pilot's own case is why.** The catalogue calls that hill `Yuanshan`,
+which `Yuanshan Bus Station` contains — so the name must also account for at least
+`PHOTO_NAME_MIN_COVERAGE` of the file name, digits and the `File:`/extension wrapper removed. Measured:
+the two bus photographs score **0.20 and 0.31** against **0.46, 0.48 and 0.75** for correct ones, which
+is a gap rather than a boundary. Strip the wrapper or the rule inverts — counting `File:` and `.jpg` puts
+`Daan Forest Park` at 0.39 of its own photograph.
+
+Three costs, all measured and all accepted. **The whole name must appear, not one of its words**:
+`Herbarium 植物園蠟業館` really is the Herbarium of Taipei Botanical Garden and is rejected, because
+matching single words instead would accept any `Taipei` street scene for the majority of a catalogue
+whose names begin with the city. **A verbose file name loses its place** — a title reciting country,
+city and district before naming the park scores 0.14 — though such places generally carry a plainer file
+too. And **a name under `PHOTO_NAME_MIN_CHARACTERS` matches nothing**: 圓山 is two characters and a
+substring of 圓山站, 圓山公園 and 圓山大飯店, three different places. Verified against the live API on
+the pilot: Da-an Forest Park and Jieshou Park keep correct photographs and the correct one now *leads*
+where `Dongmen by night` used to, while Yuanshan, Yuanshan Park, Mantoushan, Central Art Park and the
+Floriculture Experiment Center show **no photograph rather than a wrong one** — 19 of 22 summaries carry
+a picture against 19 before, so the whole cost was one correct photograph and four wrong ones.
+
+`cache_version` is bumped to `wikidata-summary-v3`, which is what makes a stored bus heal itself rather
+than sit out the 60-day TTL. The screen's caption changes with it: the picture is no longer "not
+necessarily of this place".
 
 **Ranking divides by category breadth as of 2026-08-06 (`WF-037`).** `group_preference_fit` divided the
 owner's matched styles by how many they *named*, which a category with more tags wins for free: `peak`

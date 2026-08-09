@@ -9,6 +9,7 @@ import re
 from math import asin, ceil, cos, radians, sin, sqrt
 import os
 from pathlib import Path
+from collections.abc import Iterable
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
@@ -1422,6 +1423,80 @@ def _google_public_holidays(ics: str, year: int) -> list[dict[str, Any]]:
     return found
 
 
+PHOTO_NAME_MIN_CHARACTERS = 4
+#: How much of a file name the place's name must account for. Containment alone is not
+#: enough: `Yuanshan` is contained in `Yuanshan Bus Station`, and the bus is not the hill.
+PHOTO_NAME_MIN_COVERAGE = 0.4
+
+
+def photo_key(text: str, *, keep_digits: bool = False) -> str:
+    """Casefolded, punctuation-free form for comparing a file name with a place name.
+
+    Digits are dropped from the file name before it is measured: Commons names carry
+    dates, sequence numbers and plate numbers (`470-FY`, `20250822`) that lengthen a
+    title without saying anything about its subject.
+    """
+
+    return "".join(
+        character
+        for character in text.casefold()
+        if character.isalnum() and (keep_digits or not character.isdigit())
+    )
+
+
+def photo_depicts_place(title: str, names: Iterable[str]) -> bool:
+    """Does this Commons file's own name claim to be about this place?
+
+    Geosearch answers "what is photographed at this spot", which is not the same
+    question as "what does this photograph show" -- the pilot's clearest case was a city
+    bus returned for a hill, from `KKMT_470-FY_right_side_at_Yuanshan_Bus_Station`. The
+    filename is the only evidence available about the subject, and sampled across the
+    Taipei catalogue it is a good one. It accepted `Daan Forest Park 大安森林公園` for
+    Da-an Forest Park and `介壽公園 Jieshou Park` for Jieshou Park, while rejecting a
+    Yonghe temple offered for a market stall, a Yangmingshan dormitory offered for the
+    Floriculture Experiment Center, a Zhonghe reservoir wall offered for Mantoushan, and
+    `Dongmen by night` offered for Jieshou Park. **No wrong photograph survived it.**
+
+    **Containment alone is not enough**, and the pilot's own case proves it: the
+    catalogue calls that hill `Yuanshan`, which is a substring of `Yuanshan Bus Station`,
+    so the bus passed a containment test. The name must also account for at least
+    `PHOTO_NAME_MIN_COVERAGE` of the file name once digits are dropped -- measured, the
+    two bus photographs score 0.20 and 0.31 while the correct ones score 0.46, 0.48 and
+    0.75, which is a gap rather than a boundary. That also costs a real photograph: a
+    title reciting the whole administrative hierarchy before naming the place scores
+    0.14 and is rejected, though such places generally have a plainer file as well.
+
+    The whole name must appear, not one of its words, and that is the deliberate cost.
+    It loses real photographs: `Herbarium 植物園蠟業館` is genuinely the Herbarium of
+    Taipei Botanical Garden and is rejected, because only the first word of the name is
+    in the file. Matching single words instead would accept any photograph of any
+    `Taipei` street for every place whose name begins with the city -- which is most of
+    them -- so the loose rule fails exactly where the catalogue is densest.
+
+    A name must also be at least `PHOTO_NAME_MIN_CHARACTERS` long, which is blunt about
+    short Chinese names: 圓山 is two characters and a substring of 圓山站, 圓山公園 and
+    圓山大飯店, three different places. Such a place keeps no photograph rather than an
+    unverifiable one -- the same choice `WF-044` makes for an unquotable notice and
+    `WF-046` for a degenerate opening window.
+    """
+
+    # `File:` and the extension are structure, not description, and counting them
+    # shrinks every name's share of a short title: with them, `Daan Forest Park` covers
+    # 0.39 of its own photograph's name and would be thrown away.
+    subject = re.sub(r"^file:", "", title.strip(), flags=re.IGNORECASE)
+    subject = re.sub(r"\.(jpe?g|png)$", "", subject, flags=re.IGNORECASE)
+    haystack = photo_key(subject)
+    if not haystack:
+        return False
+    for name in names:
+        key = photo_key(name or "")
+        if len(key) < PHOTO_NAME_MIN_CHARACTERS or key not in haystack:
+            continue
+        if len(key) / len(haystack) >= PHOTO_NAME_MIN_COVERAGE:
+            return True
+    return False
+
+
 class WikidataSummaryProvider:
     """A description and a photo per place, in both languages, for nothing.
 
@@ -1451,7 +1526,7 @@ class WikidataSummaryProvider:
     # under, so bumping this refetches every place once and no further -- without it a
     # place cached before geosearch existed keeps its empty gallery for the 60-day TTL,
     # which is what left cards blank after the source was added.
-    cache_version = "wikidata-summary-v2"
+    cache_version = "wikidata-summary-v3"
     # An encyclopedia article changes slowly and a description is not a fact the
     # planner schedules against, so this can sit for a long time.
     cache_ttl_days = 60
@@ -1550,16 +1625,26 @@ class WikidataSummaryProvider:
                 return found
         return []
 
-    def nearby_photos(self, latitude: float, longitude: float) -> list[str]:
-        """Commons files photographed within `nearby_radius_metres` of a point.
+    def nearby_photos(
+        self, latitude: float, longitude: float, names: Iterable[str] = ()
+    ) -> list[str]:
+        """Commons files photographed near a point **and named after this place**.
 
         Returns direct thumbnail URLs, which are the file itself rather than the
         `Special:FilePath` redirect the other two sources use — so these load in one
         round trip instead of two.
 
+        The name filter is the whole difference between a picture of the place and a
+        picture of whatever else stands near it -- see `photo_depicts_place`. Without a
+        name to match, nothing is returned, because there is then no way to tell.
+
         Never raises: this is a fallback for a place that already has no picture, and
         failing to find one is the state it was already in.
         """
+
+        wanted = [name for name in names if name]
+        if not wanted:
+            return []
 
         query = urlencode(
             {
@@ -1585,6 +1670,8 @@ class WikidataSummaryProvider:
         for page in pages.values() if isinstance(pages, dict) else []:
             title = str(page.get("title") or "")
             if not title.lower().endswith(self.photo_suffixes):
+                continue
+            if not photo_depicts_place(title, wanted):
                 continue
             info = (page.get("imageinfo") or [{}])[0]
             url = str(info.get("thumburl") or info.get("url") or "")
