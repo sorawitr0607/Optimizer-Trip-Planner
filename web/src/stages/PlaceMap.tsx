@@ -120,6 +120,46 @@ const AREA_TONES: Record<string, string> = {
  * back is a prop and a `map`, not a rebuild.
  */
 
+/**
+ * What is drawn at what scale, in **kilometres across the view**.
+ *
+ * Everything the detailed fetch returns used to be drawn the moment it arrived, which is
+ * right at 1 km and wrong at 6: 244 service alleys and 994 footprints over a whole
+ * district is a grey felt, and the trunk roads that tell you where you are disappear into
+ * it. A map answers a different question at every scale, so it draws a different amount.
+ *
+ * Measured in kilometres rather than in zoom factor for the reason the fetch gate is:
+ * zoom is a ratio of the catalogue's own span, so the same factor is a different real
+ * distance in every city.
+ */
+const SHOW_COUNTRY_KM = 40;
+const SHOW_MAJOR_KM = 12;
+const SHOW_MINOR_KM = 6;
+const SHOW_BUILDINGS_KM = 3;
+const SHOW_LABELS_KM = 2.5;
+// Station entrances have to survive the view a card opens on, which is about 2.2 km
+// wide: "which exit do I come out of" is the question the map is being asked there.
+const SHOW_MARKERS_KM = 3;
+const SHOW_SERVICE_KM = 1.5;
+
+/** Which road classes survive at a given width of view. Majors carry the shape of a city
+ *  and stay longest; alleys are the last thing added and the first thing dropped. */
+function roadsAtScale(viewKm: number): Set<string> {
+  const kept = new Set<string>();
+  if (viewKm <= SHOW_MAJOR_KM) {
+    for (const cls of ["motorway", "motorway_link", "trunk", "trunk_link", "primary",
+      "primary_link", "secondary", "secondary_link"]) kept.add(cls);
+  }
+  if (viewKm <= SHOW_MINOR_KM) {
+    for (const cls of ["tertiary", "tertiary_link", "residential", "unclassified",
+      "living_street", "pedestrian"]) kept.add(cls);
+  }
+  if (viewKm <= SHOW_SERVICE_KM) {
+    for (const cls of ["service", "cycleway"]) kept.add(cls);
+  }
+  return kept;
+}
+
 /** A street name is only worth printing if the street is long enough **on screen** to
  *  hold it, and only once however many segments OpenStreetMap splits it into. Expressed
  *  as a share of the visible width rather than in projection units: those are a share of
@@ -147,19 +187,23 @@ function textWidth(text: string, size: number): number {
   }
   return total;
 }
-/** Below this the detailed layers are drawn but not labelled: at a whole-district view
- *  the names collide into a grey mat before any of them can be read. */
-const LABEL_FROM_ZOOM = 6;
 
-/** Bounding span of a set of points, in kilometres, for the scale note. */
-function spanKm(points: { latitude: number; longitude: number }[]): number {
-  if (points.length < 2) return 0;
-  const lats = points.map((p) => p.latitude);
-  const lons = points.map((p) => p.longitude);
-  const midLat = (Math.min(...lats) + Math.max(...lats)) / 2;
-  const north = (Math.max(...lats) - Math.min(...lats)) * 111;
-  const east = (Math.max(...lons) - Math.min(...lons)) * 111 * Math.cos((midLat * Math.PI) / 180);
-  return Math.max(north, east);
+/**
+ * How much ground is on screen, in kilometres, from the window itself.
+ *
+ * Derived from the latitude and longitude actually visible rather than from the
+ * projection's scale, because those disagreed: the projection is fitted on whichever of
+ * width or height is limiting, so its units-per-kilometre described one axis while the
+ * scale note described the other. The result was a map reading "1 km across" while the
+ * layer ladder thought it was looking at three, and the transit markers never appeared at
+ * any zoom. One number now answers both.
+ */
+function windowKm(box: number[]): number {
+  const midLat = (box[0] + box[2]) / 2;
+  return Math.max(
+    (box[2] - box[0]) * 111,
+    (box[3] - box[1]) * 111 * Math.cos((midLat * Math.PI) / 180),
+  );
 }
 
 export interface PlaceMapProps {
@@ -319,11 +363,10 @@ export function PlaceMap({
       rails,
       markers,
       pinPoints: pins.map((pin) => ({ ...pin, ...at(pin.latitude, pin.longitude) })),
-      across: Math.round(spanKm(vertices.length ? vertices : places)),
     };
   }, [basemap, outline, places, detail]);
   const { lines, linePoints, areas, buildings, roads, rails, markers } = geometry;
-  const { land, landBox, pinPoints, across } = geometry;
+  const { land, landBox, pinPoints } = geometry;
   // How far out the map may be zoomed: far enough to hold the whole country, which is
   // what "where is this in the country" actually asks for. Without an outline there is
   // nothing out there to look at, so it stays at the fitted city.
@@ -404,6 +447,8 @@ export function PlaceMap({
       ? windowBox
       : null;
   const windowKey = visible ? visible.join(",") : "";
+  // The one measure of scale: what the note says and what the layer ladder reads.
+  const viewKm = windowBox ? windowKm(windowBox) : Number.POSITIVE_INFINITY;
   // **Does the detail still cover what is on screen?** It is one window's worth, so
   // zooming out past it left the map blank except for that patch — the city underneath
   // had been switched off the moment the detail arrived and never came back. The
@@ -483,8 +528,13 @@ export function PlaceMap({
   const acrossView = FRAME.width / view.zoom;
   const leastLength = acrossView * LABEL_MIN_SHARE;
   const labelSize = 7 / view.zoom;
+  const shownRoads = detailCovers ? roadsAtScale(viewKm) : new Set<string>();
+  const showBuildings = detailCovers && viewKm <= SHOW_BUILDINGS_KM;
+  const showMarkers = detailCovers && viewKm <= SHOW_MARKERS_KM;
+  const showFlow = detailCovers && viewKm <= SHOW_SERVICE_KM;
+  const showLabels = detailCovers && viewKm <= SHOW_LABELS_KM;
   const longestByName = new Map<string, (typeof roads)[number]>();
-  if (detailCovers && view.zoom >= LABEL_FROM_ZOOM) {
+  if (showLabels) {
     for (const road of roads) {
       if (!road.name || road.length < leastLength) continue;
       const held = longestByName.get(road.name);
@@ -559,9 +609,14 @@ export function PlaceMap({
 
         {/* The country first of all: it is the ground everything else sits on, and at
             the far end of the zoom it is the only thing left. */}
-        {land.map((points, index) => (
-          <polygon className="places-map-country" key={`n-${index}`} points={points} />
-        ))}
+        {/* Only once there is enough view to hold a country. It is hundreds of times
+            the size of the frame at street scale, and a polygon that far outside its
+            viewport is geometry the browser has to rasterise for nothing. */}
+        {viewKm >= SHOW_COUNTRY_KM
+          ? land.map((points, index) => (
+              <polygon className="places-map-country" key={`n-${index}`} points={points} />
+            ))
+          : null}
         {/* Then the order a map is read: ground, water and green, what is built on it,
             what runs over it, and what is written on it. */}
         {detailCovers
@@ -569,7 +624,7 @@ export function PlaceMap({
               <polygon className={`places-map-area ${area.tone}`} key={`a-${index}`} points={area.points} />
             ))
           : null}
-        {detailCovers
+        {showBuildings
           ? buildings.map((points, index) => (
               <polygon className="places-map-building" key={`b-${index}`} points={points} />
             ))
@@ -592,7 +647,7 @@ export function PlaceMap({
 
         {/* Casings for every road first, then every fill: done class by class the casing
             of the next road would cut a notch out of the fill of the last. */}
-        {(detailCovers ? ROAD_ORDER : []).map((cls) =>
+        {ROAD_ORDER.filter((cls) => shownRoads.has(cls)).map((cls) =>
           roads.filter((road) => road.cls === cls && ROAD_STYLES[cls].casing).map((road, index) => (
             <polyline
               className={`places-map-road-casing ${ROAD_STYLES[cls].tone}`}
@@ -602,7 +657,7 @@ export function PlaceMap({
             />
           )),
         )}
-        {(detailCovers ? ROAD_ORDER : []).map((cls) =>
+        {ROAD_ORDER.filter((cls) => shownRoads.has(cls)).map((cls) =>
           roads.filter((road) => road.cls === cls).map((road, index) => (
             <polyline
               className={`places-map-road ${ROAD_STYLES[cls].tone}`}
@@ -620,7 +675,7 @@ export function PlaceMap({
         ))}
 
         {/* Which way the traffic goes, on the roads big enough to care about. */}
-        {detailCovers && view.zoom >= LABEL_FROM_ZOOM
+        {showFlow
           ? roads
               .filter((road) => road.oneway && road.length >= leastLength && ROAD_STYLES[road.cls].casing >= 5)
               .slice(0, 60)
@@ -643,7 +698,7 @@ export function PlaceMap({
 
         {/* Transit and service markers from OpenStreetMap: a station exit is the single
             most useful thing on a city map you are navigating on foot. */}
-        {(detailCovers ? markers : []).map((marker, index) => (
+        {(showMarkers ? markers : []).map((marker, index) => (
           <circle
             className={`places-map-marker ${marker.kind}`}
             cx={marker.x}
@@ -693,8 +748,8 @@ export function PlaceMap({
         </button>
       )}
       <p className="places-map-scale">
-        {across > 0
-          ? copyFormat("map_span", language, { km: Math.max(1, Math.round(across / view.zoom)) })
+        {Number.isFinite(viewKm)
+          ? copyFormat("map_span", language, { km: Math.max(1, Math.round(viewKm)) })
           : null}
         {focused ? ` · ${focused.label} · ${focused.name}` : null}
       </p>

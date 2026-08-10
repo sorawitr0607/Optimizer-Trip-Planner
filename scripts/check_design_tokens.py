@@ -395,6 +395,41 @@ def main() -> int:
             f"complete: {', '.join(row[0] for row in outstanding)}. S6 closes when this is zero"
         )
 
+    # Sizes inside the map's viewBox are multiplied by the zoom, so anything drawn there
+    # has to opt out of that scaling or it grows with the magnification. Neither the unit
+    # tests nor the screen baselines can see this: the markup and the tokens are
+    # unchanged, and the baselines photograph the default view, which is the one zoom
+    # where it looks right. It has broken twice -- once as a ~100px label halo, once as a
+    # ~440px pin number that covered the whole map -- so it is checked here, where the
+    # stylesheet is already being read.
+    stylesheet = "\n".join(path.read_text(encoding="utf-8") for path in WEB_CSS)
+    counter_scaled = re.search(
+        r"\.places-map \.plan-map-point text \{[^}]*\}", stylesheet
+    )
+    if not counter_scaled or "--map-zoom" not in counter_scaled.group(0):
+        failures.append(
+            "the pin's number must divide by var(--map-zoom): inside the map's viewBox a "
+            "fixed size grows with the zoom"
+        )
+    for selector in (
+        ".places-map-road-casing,\n.places-map-road",
+        ".places-map-rail",
+        ".places-map-building",
+        ".places-map-country",
+        ".places-map-marker",
+        ".places-map-area",
+    ):
+        block = re.search(re.escape(selector) + r" \{[^}]*\}", stylesheet)
+        if not block:
+            failures.append(f"{selector.splitlines()[0]} has no rule to check")
+        elif "non-scaling-stroke" not in block.group(0):
+            failures.append(
+                f"{selector.splitlines()[0]} needs vector-effect: non-scaling-stroke, or "
+                "its stroke is measured in map units and thickens as the map is zoomed"
+            )
+    if not failures:
+        print("PASS: every map layer is measured in screen units, not map units", flush=True)
+
     for note in notes:
         print(f"NOTE: {note}", flush=True)
     if failures:

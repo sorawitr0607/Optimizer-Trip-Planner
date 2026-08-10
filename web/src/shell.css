@@ -3598,6 +3598,15 @@
   opacity: var(--opacity-tint-40);
 }
 
+/* Counter-scales the pin's number against the viewBox zoom, so it stays a number on a
+   pin instead of growing with the magnification — at 24x, unscaled, each digit was about
+   440px of white and covered the map. Through the token rather than a literal.
+   `web/src/shell.test.ts` asserts this rule exists: it was deleted once by an edit that
+   was removing the block next to it, and nothing failed until the screen was looked at. */
+.places-map .plan-map-point text {
+  font-size: calc(var(--text-2xs) / var(--map-zoom, 1));
+}
+
 /* The country the destination is in: the ground at the far end of the zoom, and the
    answer to "where is this place in the country". */
 .places-map-country {

@@ -810,6 +810,32 @@ aside, and the moment the view reaches past its edge the basemap comes back. The
 whether or not it is small enough to fetch, because the fetch gate and the coverage test are different
 questions about the same rectangle.
 
+**The map draws a different amount at every scale as of 2026-08-10 (`WF-048`).** Everything the detailed
+fetch returned used to be drawn the moment it arrived, which is right at 1 km and wrong at 6: 244 service
+alleys and 994 footprints over a district is grey felt, and the trunk roads that tell you where you are
+disappear into it. The ladder is `SHOW_COUNTRY_KM` 40 → `SHOW_MAJOR_KM` 12 → `SHOW_MINOR_KM` 6 →
+`SHOW_BUILDINGS_KM` 3 / `SHOW_MARKERS_KM` 3 → `SHOW_LABELS_KM` 2.5 → `SHOW_SERVICE_KM` 1.5, all in
+**kilometres across the view**, for the same reason the fetch gate is: zoom is a ratio of the catalogue's
+own span, so the same factor is a different real distance in every city. Markers sit at 3 rather than 2
+deliberately — a card opens on about 2.2 km, and "which exit do I come out of" is the question the map is
+asked there.
+
+**One number now measures scale.** The note under the map read the projection's own span and the ladder
+read its units-per-kilometre, and those describe *different axes*: the projection is fitted on whichever
+of width or height is limiting. A map saying "1 km across" was being drawn as though it were three, which
+is why the transit markers never appeared at any zoom. Both now come from `windowKm(windowBox)` — the
+latitude and longitude actually on screen.
+
+**A size inside the `viewBox` is multiplied by the zoom, and that has now broken three times.** A ~100px
+label halo, ~170px one-way arrows, and a pin number rendered at ~440px of white that covered the entire
+map — the last from an edit that deleted the neighbouring CSS block and took
+`.places-map .plan-map-point text` with it. Nothing failed: the markup was unchanged, the tokens were
+unchanged, and the screen baselines photograph the default view. `check_design_tokens.py` now asserts that
+the pin's number divides by `--map-zoom` and that every stroked map layer carries
+`vector-effect: non-scaling-stroke`, and it is negative-tested. **The country outline is only drawn above
+`SHOW_COUNTRY_KM`** for the same family of reason: at street scale it is hundreds of times the frame, which
+is geometry the browser rasterises for nothing.
+
 **Zooming out goes to the country as of 2026-08-10 (`WF-048`).** The projection is fitted to the city, so
 the city was also as far out as the map could go — and "where is this place *in the country*" is the
 question that decides whether somewhere is worth a day of a trip. `OpenStreetMapProvider.country_outline`
