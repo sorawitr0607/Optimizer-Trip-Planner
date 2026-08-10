@@ -557,9 +557,22 @@ must stay directed. Rebuild only through `python3 scripts/build_project_graph.py
 failure), and only when explicitly asked or after a topology-changing milestone. After any graph
 change, `--check` must pass before committing. See `AGENTS.md`.
 
-**Rebuilt for `WF-048` on 2026-08-07 and `--check` passes**: 2043 nodes, 5032 directed edges, 167
-communities; recorded cumulative cost is US$0.420408 over 39 runs. The `WF-047` rebuild earlier the
-same day gave 2026 nodes, 5002 edges and 165 communities for US$0.4057 cumulative.
+**Rebuilt on 2026-08-10 and `--check` passes**: **2337 nodes, 5683 directed edges, 177 communities**;
+recorded cumulative cost is US$0.426294 over 40 runs. That is +294 nodes and +651 edges over the previous
+build, which is the map work — `web/src/shared/tiles.ts`, `tests/test_map_layers.py`, the rebuilt
+`PlaceMap`, and the forecast, country-outline and route-shape providers.
+
+**Extraction is not deterministic, and the per-ticket guard will catch that.** The first run failed with
+`Extraction produced no node for WF-048` after being billed US$0.0262 — every ticket from 001 to 047
+produced a node and 048 produced none. Nothing was wrong with the ticket: **the immediate retry produced
+one and the build passed**, for US$0.0059 on a warm cache. So treat a single `Extraction produced no node
+for …` as a coin-flip before treating it as a defect: retry first, and only then go looking at the ticket.
+The failed run's US$0.0262 is **not** in `cost.json` — the ledger records a run when it completes, so a
+failed rebuild costs money the recorded total does not show. The under-report is small and in the honest
+direction, but it is there.
+
+The earlier `WF-048` rebuild on 2026-08-07 gave 2043 nodes, 5032 edges and 167 communities at
+US$0.420408 cumulative; the `WF-047` one before it gave 2026 nodes, 5002 edges and 165 communities.
 
 **A duplicate node twin can be spelled without a separator, and that cost a paid run.** The
 `WF-048` rebuild failed after being billed: extraction emitted `travel_planner_destinationspy` and
