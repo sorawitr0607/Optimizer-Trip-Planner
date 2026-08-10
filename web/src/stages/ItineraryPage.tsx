@@ -15,6 +15,7 @@ import {
   type ExportStop,
   type Frozen,
   type PlanDrift,
+  type RouteShapes,
   type TripForecast,
 } from "../api/client";
 import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
@@ -218,6 +219,7 @@ export function CoordinateMap({
   tripId,
   basemap = null,
   outline = null,
+  shapes = [],
 }: {
   anchor: ExportSnapshot["accommodation"]["anchor"];
   stops: ExportStop[];
@@ -228,6 +230,7 @@ export function CoordinateMap({
   tripId?: string;
   basemap?: Basemap | null;
   outline?: CountryOutline | null;
+  shapes?: RouteShapes["shapes"];
 }) {
   // The same map `/places` draws, on the screen that is actually carried.
   //
@@ -263,6 +266,32 @@ export function CoordinateMap({
       });
     }
   }
+  // Only the legs this day actually walks, in the order it walks them — the trip holds a
+  // shape for every pair the router was asked about, most of which belong to other days.
+  const walked: { points: [number, number][]; exact: boolean }[] = [];
+  for (let at = 1; at < points.length; at += 1) {
+    const from = points[at - 1];
+    const to = points[at];
+    const leg = shapes.find(
+      (shape) =>
+        (shape.origin_id === from.place_id && shape.destination_id === to.place_id)
+        || (shape.origin_id === to.place_id && shape.destination_id === from.place_id),
+    );
+    // Every leg is drawn, whether or not a path is held: a day with one routed leg and
+    // one unrouted one used to show a single line and no hint that anything was missing.
+    walked.push(
+      leg
+        ? { points: leg.points, exact: true }
+        : {
+            points: [
+              [from.latitude, from.longitude],
+              [to.latitude, to.longitude],
+            ],
+            exact: false,
+          },
+    );
+  }
+
   return (
     // derives-from: A1 numbered map; the list below repeats every pin and every colour.
     <section className="plan-map">
@@ -272,6 +301,7 @@ export function CoordinateMap({
           basemap={basemap}
           language={language}
           outline={outline}
+          paths={walked}
           places={points}
           route
           title={copy("tab_map", language)}
@@ -334,6 +364,15 @@ export function ItineraryPage() {
     queryKey: ["trip_forecast", tripId],
     queryFn: () => rpc<TripForecast>("trip_forecast", { trip_id: tripId }),
     enabled: Boolean(tripId),
+    retry: false,
+  });
+  // The walking paths, so the day's line follows the streets rather than cutting across
+  // the river. Free: the shape arrived in the routing response the trip already paid for.
+  const shapes = useQuery({
+    queryKey: ["route_shapes", tripId],
+    queryFn: () => rpc<RouteShapes>("route_shapes", { trip_id: tripId }),
+    enabled: Boolean(tripId),
+    staleTime: Infinity,
     retry: false,
   });
   const outline = useQuery({
@@ -512,6 +551,7 @@ export function ItineraryPage() {
           basemap={basemap.data ?? null}
           language={language}
           outline={outline.data ?? null}
+          shapes={shapes.data?.shapes ?? []}
           stops={day.stops}
           tripId={tripId}
         />

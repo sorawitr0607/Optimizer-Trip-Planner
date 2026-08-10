@@ -610,6 +610,17 @@ export interface TripForecast {
   horizon_end: string | null;
 }
 
+/** `WF-048`. The walking paths held for a trip — the picture of a route, as opposed to
+ *  `list_routes`, which is the optimizer's view of one: a duration and a distance. */
+export interface RouteShapes {
+  shapes: {
+    origin_id: string;
+    destination_id: string;
+    mode: string;
+    points: [number, number][];
+  }[];
+}
+
 export interface MapDetail {
   bbox: number[];
   /** Building footprints, as closed rings of `[latitude, longitude]`. */

@@ -1296,8 +1296,13 @@ class PlannerActions:
         usable_route_statuses = (
             {"verified", "estimated"} if allow_provisional_assumptions else {"verified"}
         )
+        # `geometry` is dropped here and nowhere else. It is stored with the route
+        # because it arrived in the same response, but the optimizer input is **hashed**
+        # — so letting a few hundred coordinates per leg into it would change every
+        # existing plan's signature, report drift on plans nothing had touched, and push
+        # the shape through the solver and the frozen fixtures for a picture.
         routes = [
-            route
+            {key: value for key, value in route.items() if key != "geometry"}
             for route in self.list_routes(trip_id)
             if route.get("status") in usable_route_statuses
             and all(
@@ -2047,6 +2052,29 @@ class PlannerActions:
             "horizon_end": (value.get("days") or [{}])[-1].get("date"),
             "attribution": value.get("attribution"),
         }
+
+    def route_shapes(self, trip_id: str) -> dict[str, Any]:
+        """The walking paths held for this trip, for a map to draw. A read; never fetches.
+
+        Separate from `list_routes` on purpose: that is the optimizer's view of a route,
+        which is a duration and a distance, and this is the picture. A leg with no stored
+        shape simply has none — an older route cached before shapes were kept, or a
+        transit leg, which is a timetable rather than a path.
+        """
+
+        shapes = []
+        for route in self.list_routes(trip_id):
+            points = route.get("geometry") or []
+            if len(points) >= 2:
+                shapes.append(
+                    {
+                        "origin_id": route.get("origin_id"),
+                        "destination_id": route.get("destination_id"),
+                        "mode": route.get("mode"),
+                        "points": points,
+                    }
+                )
+        return {"shapes": shapes}
 
     def country_outline(self, trip_id: str) -> dict[str, Any] | None:
         """The stored country outline, or nothing. A read; never fetches."""

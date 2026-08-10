@@ -1321,7 +1321,11 @@ class OpenRouteServiceProvider:
 
     name = "openrouteservice"
     operation = "openrouteservice:directions"
-    cache_version = "ors-foot-v1"
+    #: Points closer together than this add nothing a map can show, and a leg can carry
+    #: hundreds of them. Thinning here rather than at draw time keeps the stored route
+    #: small, since it is hashed, cached and read on every screen that draws a plan.
+    shape_step_metres = 12
+    cache_version = "ors-foot-v2"
     cache_ttl_days = 14
     mode = "walk"
 
@@ -1383,6 +1387,29 @@ class OpenRouteServiceProvider:
         features = payload.get("features") or []
         if not features:
             raise ProviderUnavailable("OpenRouteService returned no route")
+        # The path itself, which the response has always carried and this has always
+        # thrown away — so drawing the true walking line costs **no new request**, only
+        # the decision to keep what was already paid for.
+        shape: list[list[float]] = []
+        raw = ((features[0].get("geometry") or {}).get("coordinates")) or []
+        for point in raw:
+            try:
+                # GeoJSON is [longitude, latitude]; everything else here is the reverse.
+                spot = [round(float(point[1]), 5), round(float(point[0]), 5)]
+            except (IndexError, TypeError, ValueError):
+                continue
+            if shape and _distance_metres(shape[-1][0], shape[-1][1], spot[0], spot[1]) < self.shape_step_metres:
+                continue
+            shape.append(spot)
+        if raw and len(shape) >= 2:
+            # The last point is the destination, and thinning must never move it.
+            try:
+                end = [round(float(raw[-1][1]), 5), round(float(raw[-1][0]), 5)]
+                if shape[-1] != end:
+                    shape.append(end)
+            except (IndexError, TypeError, ValueError):
+                pass
+
         summary = (features[0].get("properties") or {}).get("summary") or {}
         seconds = summary.get("duration")
         metres = summary.get("distance")
@@ -1397,6 +1424,7 @@ class OpenRouteServiceProvider:
             # A foot route is walking end to end.
             "walking_minutes": minutes,
             "distance_m": int(round(float(metres))),
+            "geometry": shape if len(shape) >= 2 else [],
             "transfers": 0,
             "boarding_buffer_minutes": 0,
             # Plain transfer: no evidence that the walk is worth doing for itself.

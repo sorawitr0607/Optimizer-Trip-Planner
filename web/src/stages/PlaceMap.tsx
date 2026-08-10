@@ -243,6 +243,11 @@ export interface PlaceMapProps {
   withKey?: boolean;
   /** Enables the zoomed-in detail fetch. Omit on a map nobody zooms. */
   tripId?: string;
+  /** One entry per leg, in order. `exact` where the router gave a real path and false
+   *  where the leg is only its two endpoints — the map draws that one dashed, because a
+   *  straight line between two stops crosses the river and understates the distance, and
+   *  should not be mistaken for a route anyone can walk. */
+  paths?: { points: [number, number][]; exact: boolean }[];
   /** Joins the pins in the order given. True on the itinerary, where the order *is* the
    *  plan — a day is a sequence, and a scatter of numbered dots does not say that. False
    *  on the shortlist, where nothing has been sequenced yet and a line would invent one. */
@@ -259,6 +264,7 @@ export function PlaceMap({
   withKey = true,
   tripId,
   route = false,
+  paths = [],
 }: PlaceMapProps) {
   // Zoom and pan, because at city scale several hundred dots and a dozen pins overlap
   // and no amount of styling separates them — the answer to "where is it" is sometimes
@@ -370,6 +376,7 @@ export function PlaceMap({
 
     // The country, projected through the city's transform. It lands far outside the
     // frame, which is the point: zooming out is what brings it into view.
+    const walked = paths.map((leg) => ({ points: path(leg.points), exact: leg.exact }));
     const land = (outline?.rings ?? []).map(path);
     let landBox: { width: number; height: number } | null = null;
     if (projection && outline?.rings?.length) {
@@ -388,6 +395,7 @@ export function PlaceMap({
     return {
       projection,
       unitsPerKm,
+      walked,
       land,
       landBox,
       lines,
@@ -399,9 +407,9 @@ export function PlaceMap({
       markers,
       pinPoints: pins.map((pin) => ({ ...pin, ...at(pin.latitude, pin.longitude) })),
     };
-  }, [basemap, outline, places, detail]);
+  }, [basemap, outline, places, detail, paths]);
   const { lines, linePoints, areas, buildings, roads, rails, markers } = geometry;
-  const { land, landBox, pinPoints } = geometry;
+  const { land, landBox, pinPoints, walked } = geometry;
   // How far out the map may be zoomed: far enough to hold the whole country, which is
   // what "where is this in the country" actually asks for. Without an outline there is
   // nothing out there to look at, so it stays at the fitted city.
@@ -813,14 +821,20 @@ export function PlaceMap({
           </text>
         ))}
 
-        {/* Under the pins, so a number is never crossed out by its own route. */}
-        {route && pinPoints.length > 1 ? (
-          <polyline
-            className="plan-map-route"
-            points={pinPoints.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ")}
-            strokeWidth={2 / view.zoom}
-          />
-        ) : null}
+        {/* Under the pins, so a number is never crossed out by its own route.
+            The walked path where one is known, and the straight line only where it is
+            not: a straight line between two stops crosses the river and understates
+            every distance, so it is the fallback rather than the picture. */}
+        {route
+          ? walked.map((leg, index) => (
+              <polyline
+                className={`plan-map-route${leg.exact ? "" : " straight"}`}
+                key={`w-${index}`}
+                points={leg.points}
+                strokeWidth={2 / view.zoom}
+              />
+            ))
+          : null}
         {pinPoints.map((point) => {
           const isFocus = point.place_id === focusId;
           return (

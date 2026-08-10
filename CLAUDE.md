@@ -810,6 +810,24 @@ aside, and the moment the view reaches past its edge the basemap comes back. The
 whether or not it is small enough to fetch, because the fetch gate and the coverage test are different
 questions about the same rectangle.
 
+**The day's line follows the streets as of 2026-08-10 (`WF-048`), and it cost no new request.**
+OpenRouteService has always returned the path as GeoJSON and `normalize` has always thrown it away, so
+keeping it is a decision rather than a fetch — the trip already paid for these calls. Thinned at
+`shape_step_metres` on the way in, because a leg carries hundreds of points and the record is hashed,
+cached and read by every screen that draws a plan; a 658 m walk stores as 16 points, a 2 km one as 274.
+
+**`geometry` is dropped at `_optimizer_input` and nowhere else.** That boundary copies a route **whole**,
+so letting the shape through would change the hash of every existing plan, report drift on plans nothing
+had touched, and push a few hundred coordinates per leg through the solver and the frozen fixtures for the
+sake of a picture. `route_shapes` is a separate read for exactly this reason: `list_routes` is the
+optimizer's view of a route — a duration and a distance — and this is the picture of one.
+
+**Every leg is drawn, and a leg with no path says so.** It is dashed where the map is joining two stops
+with a straight line, because that line crosses the river and understates the distance and must not be
+mistaken for a route anyone can walk. Drawing only the routed legs was worse than either: a day with one
+of each showed a single line and no hint that anything was missing. Expect gaps — ORS's free tier answered
+40 of 57 pairs and rate-limited the rest, and a transit leg is a timetable rather than a path.
+
 **Four things followed from unlocking the network, 2026-08-10 (`WF-048`).** Worth stating why they belong
 together: `WF-034` was never protecting the *planning*, which has always called Overpass, Nominatim,
 Wikidata, Commons and Open-Meteo. It was protecting the **trip** — the app working in Taipei with no data.
