@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm --prefix web install                                             # first web run only
 uv run --locked python -m api                                        # production shell on 127.0.0.1:8765
 uv run --locked python scripts/check.py                              # every free Python + web gate
-uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 479 tests, ~11s
+uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 483 tests, ~11s
 uv run --locked python -m unittest tests.test_optimizer.OptimizerCoreTest.test_safe_route_and_weather_fallback_are_selected  # one test
 python3 scripts/validate_regression_fixtures.py                      # fixture catalog structure
 uv run --locked python scripts/run_optimizer_regressions.py          # 27 historic cases through the real optimizer
@@ -809,6 +809,33 @@ view against `detail.bbox`: while the detailed window contains the view it is dr
 aside, and the moment the view reaches past its edge the basemap comes back. The window is computed
 whether or not it is small enough to fetch, because the fetch gate and the coverage test are different
 questions about the same rectangle.
+
+**The zoom ceiling was a ratio, and that was the bug behind "I still don't see the detail".** `MAX_ZOOM`
+was 24 — about **2 km in Taipei**, which is also where the card map *opens*, so the map was already at its
+ceiling and could not be zoomed in at all. Every threshold below 2 km was unreachable, so the
+service-road tier never fired however far the owner scrolled. The ceiling now comes from `MIN_VIEW_KM`
+through the projection's own scale, the same correction the floor and the fetch gate needed: measured, the
+map reaches **178x and 800 m** where it used to stop at 24x. `SHOW_SERVICE_KM` also moved 1.5 → 2.5 so the
+small streets are in the view a card opens on rather than one step past it, and the arrows kept their own
+closer threshold because they are the noisiest thing here.
+
+**The drawing fetches retry a fast failure, which discovery has done since `WF-048` and they never did.**
+Measured 2026-08-10 on a 1.5 km Taipei window: **HTTP 504 at 8.5 s, then 200 at 8.5 s on the identical
+query**. A map with no streets on it was one retry away from having them, on exactly the fault
+`_attempt_block` was written for — `overpass-api.de` balances across backends and an unhealthy one answers
+504 in seconds. `_drawing_elements` now wraps both `basemap` and `map_detail`.
+
+**A refusal keeps what is already drawn, and says so.** Two faults hid behind each other here. Discarding
+the held detail on a failed fetch wiped streets that were still perfectly good for the view — zooming in
+asks for a *smaller* window, so a busy endpoint emptied a map that needed no new data at all; the held
+window is kept and `detailCovers` decides whether it still covers the screen, which is the only question
+that matters. And a refused fetch drew nothing while looking exactly like a bug, so
+`map_detail_unavailable` now says which it is. `SETTLE_MS` went 900 → 1500 for the cause rather than the
+symptom: every card opens on its own window, so browsing the deck was one Overpass request per card, and
+two concurrent slots do not survive that.
+
+**The scale note reads metres under a kilometre.** Rounded up, every view from a single street to a
+district said "About 1 km across" — no scale at all across the half of the range where the layers change.
 
 **The map draws a different amount at every scale as of 2026-08-10 (`WF-048`).** Everything the detailed
 fetch returned used to be drawn the moment it arrived, which is right at 1 km and wrong at 6: 244 service

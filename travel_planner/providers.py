@@ -181,6 +181,30 @@ class OpenStreetMapProvider:
         sleep(self.RETRY_PAUSE_SECONDS)
         return self._overpass_elements(query, timeout=max(1.0, deadline - monotonic()))
 
+    def _drawing_elements(self, query: str, *, timeout: float) -> list[Any]:
+        """One drawing request, retried once if it failed fast.
+
+        The same fault `_attempt_block` exists for, on the side of the app that never got
+        the fix: `overpass-api.de` balances across backends and an unhealthy one answers
+        504 in seconds. Measured 2026-08-10 on a 1.5 km Taipei window -- **504 at 8.5 s,
+        then 200 at 8.5 s on the identical query** -- so a map showing no streets at all
+        was one retry away from showing them, and the owner reported exactly that.
+
+        Every request here is short by construction, since a window is at most
+        `detail_max_span` across. The elapsed-time test is kept anyway: a request that
+        spent its whole budget failed for a reason that asking again will not fix.
+        """
+
+        started = monotonic()
+        try:
+            return self._overpass_elements(query, timeout=timeout)
+        except ProviderUnavailable as error:
+            elapsed = monotonic() - started
+            if "HTTP 5" not in str(error) or elapsed > self.FAST_FAILURE_SECONDS:
+                raise
+        sleep(self.RETRY_PAUSE_SECONDS)
+        return self._overpass_elements(query, timeout=timeout)
+
     def _discover_bbox(self, bbox: list[float], *, geocoded_name: str) -> dict[str, Any]:
         # Two requests, sequential, each best-effort.
         #
@@ -298,7 +322,7 @@ class OpenStreetMapProvider:
         is three lists of polylines and nothing else.
         """
 
-        elements = self._overpass_elements(self.basemap_query(bbox), timeout=60)
+        elements = self._drawing_elements(self.basemap_query(bbox), timeout=60)
         layers: dict[str, list[list[list[float]]]] = {"roads": [], "water": [], "green": []}
         for element in elements:
             geometry = element.get("geometry") or []
@@ -414,7 +438,7 @@ class OpenStreetMapProvider:
         areas: list[dict[str, Any]] = []
         rails: list[dict[str, Any]] = []
         markers: list[dict[str, Any]] = []
-        for element in self._overpass_elements(self.map_detail_query(bbox), timeout=90):
+        for element in self._drawing_elements(self.map_detail_query(bbox), timeout=90):
             tags = element.get("tags") or {}
             if element.get("type") == "node":
                 kind = (

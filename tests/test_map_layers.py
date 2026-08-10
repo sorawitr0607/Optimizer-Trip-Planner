@@ -13,7 +13,7 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from travel_planner.actions import PlannerActions, PlannerRefusal
-from travel_planner.providers import OpenStreetMapProvider
+from travel_planner.providers import OpenStreetMapProvider, ProviderUnavailable
 
 
 class RecordingDetailProvider:
@@ -86,7 +86,7 @@ class MapDetailQueryTest(unittest.TestCase):
             },
             {"tags": tag, "geometry": []},
         ]
-        self.provider._overpass_elements = lambda query, timeout=None: elements  # type: ignore[method-assign]
+        self.provider._drawing_elements = lambda query, *, timeout=None: elements  # type: ignore[method-assign]
         result = self.provider.map_detail([1.0, 2.0, 1.01, 2.01])
         self.assertFalse(result["too_wide"])
         self.assertEqual([[[1.0, 2.0], [1.001, 2.0], [1.001, 2.001]]], result["buildings"])
@@ -96,7 +96,7 @@ class MapDetailQueryTest(unittest.TestCase):
         pile the screen has to sort by tag."""
 
         line = [{"lat": 1.0, "lon": 2.0}, {"lat": 1.001, "lon": 2.0}, {"lat": 1.001, "lon": 2.001}]
-        self.provider._overpass_elements = lambda query, timeout=None: [  # type: ignore[method-assign]
+        self.provider._drawing_elements = lambda query, *, timeout=None: [  # type: ignore[method-assign]
             {"tags": {"building": "yes"}, "geometry": line},
             {"tags": {"highway": "primary", "name": "中華路一段", "name:en": "Section 1, Zhonghua Road",
                       "oneway": "yes"}, "geometry": line},
@@ -231,6 +231,64 @@ class CountryOutlineTest(unittest.TestCase):
         self.provider.country_outline("Taiwan")
         self.assertIn("polygon_geojson=1", seen[0])
         self.assertIn(f"polygon_threshold={self.provider.outline_threshold}", seen[0])
+
+
+class DrawingRetryTest(unittest.TestCase):
+    """A fast 5xx from a sick Overpass backend must not leave the map blank.
+
+    Measured 2026-08-10 on a 1.5 km Taipei window: HTTP 504 at 8.5 s, then 200 at 8.5 s
+    on the identical query. Discovery has retried this since `WF-048`; the drawing side
+    did not, and the whole symptom was "I still don't see the detail".
+    """
+
+    def setUp(self) -> None:
+        self.provider = OpenStreetMapProvider()
+        self.provider.RETRY_PAUSE_SECONDS = 0
+
+    def _answers(self, *outcomes):
+        seen = {"n": 0}
+
+        def call(query, timeout=None):
+            outcome = outcomes[min(seen["n"], len(outcomes) - 1)]
+            seen["n"] += 1
+            if isinstance(outcome, Exception):
+                raise outcome
+            return outcome
+
+        self.provider._overpass_elements = call  # type: ignore[method-assign]
+        return seen
+
+    def test_a_fast_five_hundred_is_asked_again(self) -> None:
+        seen = self._answers(ProviderUnavailable("Provider HTTP 504"), [])
+        self.assertEqual([], self.provider._drawing_elements("q", timeout=30))
+        self.assertEqual(2, seen["n"])
+
+    def test_a_four_hundred_is_not_retried(self) -> None:
+        # A refusal is an answer. Asking again just spends another slot to hear it twice.
+        seen = self._answers(ProviderUnavailable("Provider HTTP 429"))
+        with self.assertRaises(ProviderUnavailable):
+            self.provider._drawing_elements("q", timeout=30)
+        self.assertEqual(1, seen["n"])
+
+    def test_a_slow_failure_is_not_retried(self) -> None:
+        """A request that spent its whole budget died of its own timeout, and asking
+        again would spend the budget again to fail identically."""
+
+        self.provider.FAST_FAILURE_SECONDS = -1
+        seen = self._answers(ProviderUnavailable("Provider HTTP 504"))
+        with self.assertRaises(ProviderUnavailable):
+            self.provider._drawing_elements("q", timeout=30)
+        self.assertEqual(1, seen["n"])
+
+    def test_the_retry_reaches_map_detail_and_the_basemap(self) -> None:
+        for name, call in (
+            ("map_detail", lambda: self.provider.map_detail([25.03, 121.56, 25.04, 121.57])),
+            ("basemap", lambda: self.provider.basemap([25.03, 121.56, 25.04, 121.57])),
+        ):
+            with self.subTest(name):
+                seen = self._answers(ProviderUnavailable("Provider HTTP 504"), [])
+                call()
+                self.assertEqual(2, seen["n"])
 
 
 if __name__ == "__main__":

@@ -38,17 +38,29 @@ const FRAME = { width: 420, height: 260 } as const;
  *  still 0.07 degrees wide and the detail request was refused as too wide at every
  *  zoom the map could reach. */
 const MIN_ZOOM = 1;
+/** The fallback ceiling, used only until the projection's scale is known. The real one
+ *  is computed from `MIN_VIEW_KM`, because a *ratio* is a different real distance in
+ *  every city — 24x was about 2 km in Taipei, so the card map opened at the ceiling and
+ *  could not be zoomed in at all. Everything below 2 km was unreachable, which is why
+ *  the service-road tier never fired and the map looked like it had stopped working. */
 const MAX_ZOOM = 24;
+/** The closest the map goes: a couple of city blocks, where a footprint is a building
+ *  you could stand in front of. */
+const MIN_VIEW_KM = 0.15;
 /** Ask for the detailed layers once the window on screen is this small, in degrees.
  *  Measured against the *window*, not against the zoom factor: zoom is a ratio of the
  *  catalogue's own span, so the same factor is a different real distance in every city,
  *  and a street-scale view of Taipei is a regional view of somewhere compact. Matches
  *  `OpenStreetMapProvider.detail_max_span`, which refuses anything wider. */
 const DETAIL_MAX_SPAN = 0.06;
-/** How long the view must hold still before its detail is worth fetching. Long enough
- *  that swiping through the deck costs nothing — a card glanced at and thrown never
- *  asks — and short enough to feel immediate on the one being read. */
-const SETTLE_MS = 900;
+/** How long the view must hold still before its detail is worth fetching.
+ *
+ *  Raised from 900ms on 2026-08-10. Every card opens on its own window, so browsing the
+ *  deck was one Overpass request per card dwelt on for a second — and the endpoint grants
+ *  two concurrent slots, so a normal browsing session can exhaust its own quota and then
+ *  every map looks broken. A second and a half is still immediate on a card being read
+ *  and free on one being skimmed. */
+const SETTLE_MS = 1500;
 /** How much ground a focused map opens on, in kilometres across. A neighbourhood: near
  *  enough that streets and footprints are legible and the place can be recognised, wide
  *  enough to see what it sits next to. */
@@ -136,11 +148,15 @@ const SHOW_COUNTRY_KM = 40;
 const SHOW_MAJOR_KM = 12;
 const SHOW_MINOR_KM = 6;
 const SHOW_BUILDINGS_KM = 3;
+// Labels, station entrances and the small streets all have to survive the view a card
+// opens on, which is about 2.1 km wide. Set below that, the default view of every card
+// was a street map with no small streets on it — which is what "I don't see the detail"
+// meant, and it could not be zoomed past because the ceiling was 2 km as well.
 const SHOW_LABELS_KM = 2.5;
-// Station entrances have to survive the view a card opens on, which is about 2.2 km
-// wide: "which exit do I come out of" is the question the map is being asked there.
 const SHOW_MARKERS_KM = 3;
-const SHOW_SERVICE_KM = 1.5;
+const SHOW_SERVICE_KM = 2.5;
+/** Arrows are the noisiest thing here, so they wait for a genuinely close view. */
+const SHOW_FLOW_KM = 1.2;
 
 /** Which road classes survive at a given width of view. Majors carry the shape of a city
  *  and stay longest; alleys are the last thing added and the first thing dropped. */
@@ -244,6 +260,10 @@ export function PlaceMap({
   const [dragging, setDragging] = useState(false);
   const drag = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
   const [detail, setDetail] = useState<MapDetail | null>(null);
+  // Whether the last attempt was refused. A refused fetch used to draw nothing, which
+  // looks exactly like a bug — the owner could not tell "OpenStreetMap is busy" from
+  // "this is broken", and reported the second.
+  const [refused, setRefused] = useState(false);
   // Which window has already been asked for, so panning inside it costs nothing.
   const asked = useRef<string>("");
   // Unique per instance, because two maps are on screen at once and a `textPath` points
@@ -373,6 +393,12 @@ export function PlaceMap({
   const minZoom = landBox
     ? Math.min(MIN_ZOOM, FRAME.width / (landBox.width * 1.15), FRAME.height / (landBox.height * 1.15))
     : MIN_ZOOM;
+  // The ceiling in real distance rather than as a multiple of whatever the catalogue
+  // happened to span. Without this the closest view was ~2 km in Taipei and ~200 m in a
+  // small town, from the same number.
+  const maxZoom = geometry.unitsPerKm
+    ? Math.max(MAX_ZOOM, FRAME.width / (MIN_VIEW_KM * geometry.unitsPerKm))
+    : MAX_ZOOM;
   const focused = pinPoints.find((point) => point.place_id === focusId);
 
   // The view the map opens on, and the one Reset returns to.
@@ -471,7 +497,7 @@ export function PlaceMap({
       const box = node!.getBoundingClientRect();
       const factor = event.deltaY < 0 ? 1.2 : 1 / 1.2;
       setView((current) => {
-        const zoom = Math.min(MAX_ZOOM, Math.max(minZoom, current.zoom * factor));
+        const zoom = Math.min(maxZoom, Math.max(minZoom, current.zoom * factor));
         if (zoom === current.zoom) return current;
         // Keep the point under the cursor under the cursor.
         const px = (event.clientX - box.left) / box.width;
@@ -487,7 +513,7 @@ export function PlaceMap({
     return () => node.removeEventListener("wheel", zoomBy);
     // Re-bound when the map appears, and again when the country outline drops the zoom
     // floor — a handler bound before it arrived would still stop at the city.
-  }, [places.length, minZoom]);
+  }, [places.length, minZoom, maxZoom]);
 
   // Waited out rather than fired per frame. One continuous zoom crosses many distinct
   // windows, and asking for each one measured **five Overpass requests from a single
@@ -505,14 +531,23 @@ export function PlaceMap({
     const timer = window.setTimeout(() => {
       asked.current = windowKey;
       rpc<MapDetail>("refresh_map_detail", { trip_id: tripId, bbox: windowKey.split(",").map(Number) })
-        .then((result) => setDetail(result.too_wide ? null : result))
+        .then((result) => {
+          setRefused(false);
+          setDetail(result.too_wide ? null : result);
+        })
         .catch(() => {
-          // A provider that refused simply draws the city view, which was readable
-          // before any of this existed. The window is *un*-marked so that coming back
-          // to it asks again: Overpass answers 503 under load, and a transient refusal
-          // should not leave one patch of the city permanently plain.
+          // **What is already drawn is kept.** Zooming in asks for a smaller window, and
+          // throwing the old one away on a refusal wiped streets that were still
+          // perfectly good for the view — a busy endpoint emptied a map that needed no
+          // new data at all. `detailCovers` decides whether what is held still covers
+          // what is on screen, which is the only question that matters; if it does not,
+          // the city basemap shows through by itself.
+          //
+          // The window is *un*-marked so that coming back to it asks again: Overpass
+          // answers 503 under load, and a transient refusal should not leave one patch
+          // of the city permanently plain.
           asked.current = "";
-          setDetail(null);
+          setRefused(true);
         });
     }, SETTLE_MS);
     return () => window.clearTimeout(timer);
@@ -531,7 +566,7 @@ export function PlaceMap({
   const shownRoads = detailCovers ? roadsAtScale(viewKm) : new Set<string>();
   const showBuildings = detailCovers && viewKm <= SHOW_BUILDINGS_KM;
   const showMarkers = detailCovers && viewKm <= SHOW_MARKERS_KM;
-  const showFlow = detailCovers && viewKm <= SHOW_SERVICE_KM;
+  const showFlow = detailCovers && viewKm <= SHOW_FLOW_KM;
   const showLabels = detailCovers && viewKm <= SHOW_LABELS_KM;
   const longestByName = new Map<string, (typeof roads)[number]>();
   if (showLabels) {
@@ -748,9 +783,14 @@ export function PlaceMap({
         </button>
       )}
       <p className="places-map-scale">
-        {Number.isFinite(viewKm)
-          ? copyFormat("map_span", language, { km: Math.max(1, Math.round(viewKm)) })
-          : null}
+        {/* Metres under a kilometre. Rounded up to a whole kilometre, every view from a
+            single street to a district read "About 1 km across", which is no scale at
+            all on the half of the range where the detail actually changes. */}
+        {!Number.isFinite(viewKm)
+          ? null
+          : viewKm < 1
+            ? copyFormat("map_span_metres", language, { m: Math.max(50, Math.round(viewKm * 1000 / 50) * 50) })
+            : copyFormat("map_span", language, { km: Math.round(viewKm) })}
         {focused ? ` · ${focused.label} · ${focused.name}` : null}
       </p>
       {withKey ? (
@@ -761,6 +801,11 @@ export function PlaceMap({
             </li>
           ))}
         </ol>
+      ) : null}
+      {/* Said out loud, because a map with no streets on it and a map that could not
+          fetch its streets look identical. */}
+      {refused && visible && !detailCovers ? (
+        <p className="setup-hint">{copy("map_detail_unavailable", language)}</p>
       ) : null}
       {pinPoints.length < places.length ? (
         <p className="setup-hint">{copy("map_no_coordinates", language)}</p>
