@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm --prefix web install                                             # first web run only
 uv run --locked python -m api                                        # production shell on 127.0.0.1:8765
 uv run --locked python scripts/check.py                              # every free Python + web gate
-uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 474 tests, ~12s
+uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 479 tests, ~11s
 uv run --locked python -m unittest tests.test_optimizer.OptimizerCoreTest.test_safe_route_and_weather_fallback_are_selected  # one test
 python3 scripts/validate_regression_fixtures.py                      # fixture catalog structure
 uv run --locked python scripts/run_optimizer_regressions.py          # 27 historic cases through the real optimizer
@@ -810,13 +810,30 @@ aside, and the moment the view reaches past its edge the basemap comes back. The
 whether or not it is small enough to fetch, because the fetch gate and the coverage test are different
 questions about the same rectangle.
 
-**The faint dots are the catalogue, and they are the point of the city view.** Asked what they were and
-told to remove them if they were not necessary — they were **unreadable, not unnecessary**. The numbered
-pins are only what has already been chosen, so without the dots the map can never help anyone choose,
-which is the one job the owner named for it. They had no legend, no name and no behaviour, so they read
-as confetti. Now a legend under both maps names the six families, every dot carries its own name as a
-native tooltip, and **tapping one opens that place's card** — which turns the map from something to look
-at into the way to choose from it.
+**Zooming out goes to the country as of 2026-08-10 (`WF-048`).** The projection is fitted to the city, so
+the city was also as far out as the map could go — and "where is this place *in the country*" is the
+question that decides whether somewhere is worth a day of a trip. `OpenStreetMapProvider.country_outline`
+asks Nominatim for the destination country's boundary **simplified server-side**, which is the whole
+reason it is affordable: Taiwan's real coastline is megabytes, and at `outline_threshold` it is **137
+points and 4 KB in 1.0 s** (Japan 407 points, Thailand 215). Free, cached for a quarter, one request per
+trip rather than per window.
+
+Three things about it. The outline is projected **through** the city's transform and is deliberately not
+part of the bounds that define it — including it would open every map on a continent. The zoom floor is
+computed from it, so a map with no outline still stops at its city and nothing is lost. And it is fitted
+to the **largest ring, not all of them**: a country's boundary includes whatever it administers, so
+Taiwan's takes in Kinmen and Matsu against the Chinese coast, and fitting them all zoomed out to
+**1986 km**, at which the island the trip is on is a speck. Fitted to the main landmass it is **527 km**
+and reads as Taiwan. The outliers still draw; they are allowed off the edge.
+
+**The catalogue dots were removed on 2026-08-10, at the owner's asking.** Every discovered candidate was
+drawn as a small coloured dot with a legend naming six families, a name on hover, and a tap that opened
+its card. They cost nothing — already in memory, no request — and they were the only thing on the map
+answering "where *could* I go" rather than "where am I already going". The case for keeping them was put
+once and the owner asked twice to take them out, which settles it: several hundred marks of six colours
+over a real street map is a texture rather than a set of choices, and the deck is where choosing actually
+happens. `context` is no longer taken by `PlaceMap` at all. Restoring them is a prop and a `map`, not a
+rebuild — the reasoning is kept at the top of the component next to where they were.
 
 **Buildings arrive on zoom as of 2026-08-09 (`WF-048`) — and only on zoom.** At the full city window a
 footprint is well under a pixel, so `basemap()` still carries none: a city's shape at that scale is its

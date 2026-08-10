@@ -3598,162 +3598,17 @@
   opacity: var(--opacity-tint-40);
 }
 
-/* Coloured by what the place *is*, which the catalogue already records for all 849 of
-   them — a map legend for free, with no request and no new data. */
-.places-map-city.food { fill: var(--map-poi-food); opacity: 0.85; }
-.places-map-city.shop { fill: var(--map-poi-shop); opacity: 0.85; }
-.places-map-city.culture { fill: var(--map-poi-culture); opacity: 0.85; }
-.places-map-city.outdoors { fill: var(--map-poi-outdoors); opacity: 0.85; }
-.places-map-city.stay { fill: var(--map-poi-stay); opacity: 0.85; }
-.places-map-city.other { fill: var(--map-poi-other); opacity: var(--opacity-tint-40); }
-
-/* A dot is a control when the map can open a card, so it says so. The stroke is a halo
-   rather than an outline: it keeps a dot legible where it sits on a dark road. */
-.places-map-city.pickable {
-  cursor: pointer;
-}
-
-.places-map-city.pickable:hover {
-  stroke: var(--map-label-halo);
-  stroke-width: 2;
+/* The country the destination is in: the ground at the far end of the zoom, and the
+   answer to "where is this place in the country". */
+.places-map-country {
+  fill: var(--map-country);
+  stroke: var(--map-country-edge);
+  stroke-linejoin: round;
+  stroke-width: 0.8;
   vector-effect: non-scaling-stroke;
 }
 
-/* What the dots mean, under the map that draws them. Without it they are confetti —
-   the question "what is the dot" is the one this answers. */
-.places-map-legend {
-  display: grid;
-  gap: 4px;
-}
-
-.places-map-legend p {
-  color: var(--text-muted);
-  font-size: var(--text-2xs);
-  margin: 0;
-}
-
-.places-map-legend ul {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.places-map-legend li {
-  align-items: center;
-  color: var(--text-muted);
-  display: flex;
-  font-size: var(--text-2xs);
-  gap: 5px;
-}
-
-.places-map-swatch {
-  border-radius: var(--radius-pill);
-  display: inline-block;
-  height: 8px;
-  width: 8px;
-}
-
-.places-map-swatch.food { background: var(--map-poi-food); }
-.places-map-swatch.shop { background: var(--map-poi-shop); }
-.places-map-swatch.culture { background: var(--map-poi-culture); }
-.places-map-swatch.outdoors { background: var(--map-poi-outdoors); }
-.places-map-swatch.stay { background: var(--map-poi-stay); }
-.places-map-swatch.other { background: var(--map-poi-other); }
-
-.places-map-rose text {
-  fill: var(--text-muted);
-  font-size: 9px;
-  font-weight: var(--weight-selected);
-}
-
-.places-map-rose path {
-  fill: var(--text-muted);
-}
-
-.places-map-scale {
-  color: var(--text-muted);
-  font-size: var(--text-2xs);
-  margin: 0;
-}
-
-.hero-cta {
-  border: none;
-  cursor: pointer;
-}
-
-/* The form flashes when the hero sends you to it, so arriving somewhere on a long page
-   tells you which control you were sent to. */
-@media (prefers-reduced-motion: no-preference) {
-  .trip-form.is-called {
-    animation: form-called 1.5s var(--ease-out);
-  }
-}
-
-@keyframes form-called {
-  0%, 100% { box-shadow: var(--shadow-md); }
-  30% { box-shadow: 0 0 0 5px var(--landing-glow); }
-}
-
-/* What the app is doing, while it does it. */
-.thinking {
-  align-items: center;
-  color: var(--text-secondary);
-  display: flex;
-  font-size: var(--text-md);
-  gap: 9px;
-  margin: 0;
-  min-height: 24px;
-}
-
-.thinking-dot {
-  background: var(--color-accent);
-  border-radius: var(--radius-pill);
-  flex: none;
-  height: 9px;
-  width: 9px;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .thinking-dot { animation: thinking-pulse 1.2s ease-in-out infinite; }
-  .thinking span:last-child { animation: thinking-in 0.45s var(--ease-out); }
-}
-
-@keyframes thinking-pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: var(--opacity-dim); transform: scale(0.6); }
-}
-
-@keyframes thinking-in {
-  from { opacity: 0; transform: translateY(5px); }
-  to { opacity: 1; transform: none; }
-}
-
-.optimize-working {
-  display: grid;
-  gap: 10px;
-}
-
-/* Zoom and pan. The viewBox moves, not a transform, so pins and dots keep their size
-   as the map magnifies. */
-.places-map {
-  position: relative;
-}
-
-/* Counter-scales the pin label against the viewBox zoom, so the number stays readable
-   at 24x instead of filling the frame — through the token rather than a literal. */
-.places-map .plan-map-point text {
-  font-size: calc(var(--text-2xs) / var(--map-zoom, 1));
-}
-
-/* The ground the whole map sits on. Its own token rather than the panel's surface: at
-   a street view most of the picture *is* ground, so it has to be light enough that a
-   white road and a tan building both read against it. Written as `.places-map svg` to
-   outrank the earlier rule of that shape, which set the panel grey and otherwise wins
-   on specificity. */
-.places-map svg.places-map-svg {
+.places-map-svg {
   background: var(--map-land);
 }
 

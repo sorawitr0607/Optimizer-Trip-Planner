@@ -40,6 +40,8 @@ ACTIONS = (
     "get_basemap",
     "refresh_basemap",
     "refresh_map_detail",
+    "country_outline",
+    "refresh_country_outline",
     "save_setup",
     "get_setup",
     "setup_vocabulary",

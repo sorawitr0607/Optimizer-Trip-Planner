@@ -99,6 +99,8 @@
      night edition: dark ground, ground-coloured blocks, roads lighter than what they
      run through so the network still reads as the top layer. */
   --map-land: #1f2126;
+  --map-country: #2a2d33;
+  --map-country-edge: #3b3f47;
   --map-building: #2b2e35;
   --map-building-edge: #363a43;
   --map-green: #23301f;
@@ -296,6 +298,8 @@ button:disabled {
      the spirit of the app's cream ground: tan for what is built, muted green for what
      grows, a low-chroma blue for water, white roads on a warm casing. */
   --map-land: #faf8f3;
+  --map-country: #eeeae1;
+  --map-country-edge: #cfc6b5;
   --map-building: #e6ddcc;
   --map-building-edge: #cfc4b0;
   --map-green: #dcefd0;

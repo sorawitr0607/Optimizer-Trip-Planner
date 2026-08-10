@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
 
-import { rpc, type Basemap, type DiscoveryCandidate, type MapDetail } from "../api/client";
+import { rpc, type Basemap, type CountryOutline, type MapDetail } from "../api/client";
 import { copy, copyFormat, type Language } from "../i18n/copy";
 import type { MapPlace } from "../shared/map";
 import { projectionOf } from "./ItineraryPage";
@@ -108,31 +108,17 @@ const AREA_TONES: Record<string, string> = {
 };
 
 /**
- * The families a discovered place is coloured by: food warm, shopping blue, culture
- * purple, outdoors green, lodging pink. The catalogue already carries a category for
- * every candidate, so this costs no request and no new data.
+ * **The catalogue dots were removed on 2026-08-10, at the owner's asking.**
  *
- * **These dots are the point of the city view**, and were nearly deleted for looking
- * like noise. They are every attraction the search found, which is exactly the question
- * "where are the things I could add, and which part of town is each in" — the numbered
- * pins only show what has already been chosen, so on their own the map can never help
- * anyone choose. They were unreadable rather than unnecessary: no legend, no name, and
- * nothing happened when you touched one. Now the legend names the families, a dot
- * carries its own name, and tapping one opens that place's card.
+ * Every discovered candidate used to be drawn as a small coloured dot with a legend
+ * under the map. They were free — already in memory, no request — and they were the only
+ * thing that answered "where could I go" rather than "where am I already going". Asked
+ * twice to take them out anyway, on the grounds that they did not help: several hundred
+ * marks of six colours over a real street map is a texture, not a set of choices, and
+ * the deck is where choosing actually happens. The numbered pins remain, the map now has
+ * genuine geography under them, and `context` is no longer taken at all. Bringing them
+ * back is a prop and a `map`, not a rebuild.
  */
-const POI_FAMILIES = ["food", "shop", "culture", "outdoors", "stay", "other"] as const;
-const POI_TONES: Record<string, string> = {
-  restaurant: "food", cafe: "food", fast_food: "food", bar: "food", pub: "food",
-  marketplace: "food", food_court: "food",
-  department_store: "shop", mall: "shop", supermarket: "shop", shop: "shop",
-  museum: "culture", gallery: "culture", theatre: "culture", historic: "culture",
-  memorial: "culture", monument: "culture", place_of_worship: "culture",
-  temple: "culture", shrine: "culture", castle: "culture", ruins: "culture",
-  attraction: "culture", artwork: "culture",
-  park: "outdoors", garden: "outdoors", peak: "outdoors", viewpoint: "outdoors",
-  nature_reserve: "outdoors", beach: "outdoors", zoo: "outdoors", waterfall: "outdoors",
-  hotel: "stay", hostel: "stay", guest_house: "stay",
-};
 
 /** A street name is only worth printing if the street is long enough **on screen** to
  *  hold it, and only once however many segments OpenStreetMap splits it into. Expressed
@@ -180,8 +166,8 @@ export interface PlaceMapProps {
   places: MapPlace[];
   language: Language;
   title: string;
-  /** The whole discovered catalogue, drawn faintly so the city has a shape. */
-  context?: DiscoveryCandidate[];
+  /** The country's own outline, drawn under everything and zoomable out to. */
+  outline?: CountryOutline | null;
   /** Streets, water and parks for the whole city. Without it this is dots on grey; with
    *  it the city is recognisable and a pin has somewhere to be. */
   basemap?: Basemap | null;
@@ -191,21 +177,17 @@ export interface PlaceMapProps {
   withKey?: boolean;
   /** Enables the zoomed-in detail fetch. Omit on a map nobody zooms. */
   tripId?: string;
-  /** Opens a discovered place's card. Given one, the dots become the way to choose from
-   *  the map rather than only to look at it. */
-  onPick?: (placeId: string) => void;
 }
 
 export function PlaceMap({
   places,
   language,
   title,
-  context = [],
+  outline = null,
   basemap = null,
   focusId,
   withKey = true,
   tripId,
-  onPick,
 }: PlaceMapProps) {
   // Zoom and pan, because at city scale several hundred dots and a dozen pins overlap
   // and no amount of styling separates them — the answer to "where is it" is sometimes
@@ -231,16 +213,6 @@ export function PlaceMap({
   // is not. Memoized because dragging and zooming change only the viewBox: without this
   // every pointer move reprojected the whole city and every building corner with it.
   const geometry = useMemo(() => {
-    const city = context
-      .filter((item) => item.latitude !== null && item.longitude !== null)
-      .map((item) => ({
-        kind: "city" as const,
-        place_id: item.place_id,
-        category: item.category ?? "",
-        name: item.name ?? "",
-        latitude: item.latitude as number,
-        longitude: item.longitude as number,
-      }));
     const pins = places.map((place) => ({ ...place, kind: "pin" as const }));
     // Basemap vertices go through the *same* projection as the pins, in one pass. A
     // second projection would fit the streets to their own bounds and lay the city
@@ -254,12 +226,13 @@ export function PlaceMap({
         for (const [latitude, longitude] of line) vertices.push({ latitude, longitude });
       }
     }
-    // The projection is fitted to the city, the streets and the pins — and deliberately
-    // *not* to the detail. Detail covers only the window currently on screen, so
-    // including it would move the bounds every time a new window loaded and the whole
-    // map would jump under the hand that zoomed it. It is projected through the
-    // transform instead of helping define it.
-    const projection = projectionOf([...vertices, ...city, ...pins], FRAME);
+    // The projection is fitted to the streets and the pins — and deliberately *not* to
+    // the detail or the country. Detail covers only the window on screen, so including
+    // it would move the bounds every time a new window loaded and the map would jump
+    // under the hand that zoomed it; the country is a hundred times the city, so
+    // including it would open every map on a continent. Both are projected *through*
+    // the transform instead of helping define it.
+    const projection = projectionOf([...vertices, ...pins], FRAME);
     const at = (latitude: number, longitude: number) =>
       projection ? projection.toXY(latitude, longitude) : { x: 0, y: 0 };
     const path = (ring: [number, number][]) =>
@@ -271,7 +244,7 @@ export function PlaceMap({
       : [];
     // One kilometre, measured through this projection, so a view can be sized in real
     // distance instead of in whatever the catalogue happened to span.
-    const anchor = pins[0] ?? city[0];
+    const anchor = pins[0];
     let unitsPerKm = 0;
     if (projection && anchor) {
       const here = projection.toXY(anchor.latitude, anchor.longitude);
@@ -316,9 +289,28 @@ export function PlaceMap({
       ...at(marker.point[0], marker.point[1]),
     }));
 
+    // The country, projected through the city's transform. It lands far outside the
+    // frame, which is the point: zooming out is what brings it into view.
+    const land = (outline?.rings ?? []).map(path);
+    let landBox: { width: number; height: number } | null = null;
+    if (projection && outline?.rings?.length) {
+      // Fitted to the **largest ring**, not to every ring. A country's boundary includes
+      // whatever it administers: Taiwan's takes in Kinmen and Matsu against the Chinese
+      // coast and Pratas far to the south-west, and fitting all of them zoomed out to
+      // 1986 km, at which the island the trip is actually on is a speck. The main
+      // landmass is what "the shape of the country" means; the outliers still draw, they
+      // are just allowed to sit off the edge.
+      const main = outline.rings.reduce((a, b) => (b.length > a.length ? b : a));
+      const corners = main.map(([lat, lon]) => at(lat, lon));
+      const xs = corners.map((c) => c.x);
+      const ys = corners.map((c) => c.y);
+      landBox = { width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) };
+    }
     return {
       projection,
       unitsPerKm,
+      land,
+      landBox,
       lines,
       linePoints,
       areas,
@@ -326,13 +318,18 @@ export function PlaceMap({
       roads,
       rails,
       markers,
-      cityPoints: city.map((item) => ({ ...item, ...at(item.latitude, item.longitude) })),
       pinPoints: pins.map((pin) => ({ ...pin, ...at(pin.latitude, pin.longitude) })),
-      across: Math.round(spanKm(city.length ? city : places)),
+      across: Math.round(spanKm(vertices.length ? vertices : places)),
     };
-  }, [basemap, context, places, detail]);
+  }, [basemap, outline, places, detail]);
   const { lines, linePoints, areas, buildings, roads, rails, markers } = geometry;
-  const { cityPoints, pinPoints, across } = geometry;
+  const { land, landBox, pinPoints, across } = geometry;
+  // How far out the map may be zoomed: far enough to hold the whole country, which is
+  // what "where is this in the country" actually asks for. Without an outline there is
+  // nothing out there to look at, so it stays at the fitted city.
+  const minZoom = landBox
+    ? Math.min(MIN_ZOOM, FRAME.width / (landBox.width * 1.15), FRAME.height / (landBox.height * 1.15))
+    : MIN_ZOOM;
   const focused = pinPoints.find((point) => point.place_id === focusId);
 
   // The view the map opens on, and the one Reset returns to.
@@ -429,7 +426,7 @@ export function PlaceMap({
       const box = node!.getBoundingClientRect();
       const factor = event.deltaY < 0 ? 1.2 : 1 / 1.2;
       setView((current) => {
-        const zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, current.zoom * factor));
+        const zoom = Math.min(MAX_ZOOM, Math.max(minZoom, current.zoom * factor));
         if (zoom === current.zoom) return current;
         // Keep the point under the cursor under the cursor.
         const px = (event.clientX - box.left) / box.width;
@@ -443,8 +440,9 @@ export function PlaceMap({
     }
     node.addEventListener("wheel", zoomBy, { passive: false });
     return () => node.removeEventListener("wheel", zoomBy);
-    // Re-bound when the map appears: it renders nothing until it has places.
-  }, [places.length]);
+    // Re-bound when the map appears, and again when the country outline drops the zoom
+    // floor — a handler bound before it arrived would still stop at the city.
+  }, [places.length, minZoom]);
 
   // Waited out rather than fired per frame. One continuous zoom crosses many distinct
   // windows, and asking for each one measured **five Overpass requests from a single
@@ -559,8 +557,13 @@ export function PlaceMap({
           </marker>
         </defs>
 
-        {/* Painted in the order a map is read: ground, then water and green, then what
-            is built on it, then what runs over it, then what is written on it. */}
+        {/* The country first of all: it is the ground everything else sits on, and at
+            the far end of the zoom it is the only thing left. */}
+        {land.map((points, index) => (
+          <polygon className="places-map-country" key={`n-${index}`} points={points} />
+        ))}
+        {/* Then the order a map is read: ground, water and green, what is built on it,
+            what runs over it, and what is written on it. */}
         {detailCovers
           ? areas.map((area, index) => (
               <polygon className={`places-map-area ${area.tone}`} key={`a-${index}`} points={area.points} />
@@ -653,21 +656,6 @@ export function PlaceMap({
         {/* Radii and type are divided by the zoom: a viewBox scales its contents, so a
             fixed radius grows with the magnification and at 5x the pins already covered
             the streets they were meant to sit on. */}
-        {cityPoints.map((point) => (
-          <circle
-            className={`places-map-city ${POI_TONES[point.category] ?? "other"}${onPick ? " pickable" : ""}`}
-            cx={point.x}
-            cy={point.y}
-            key={point.place_id}
-            onClick={onPick ? () => onPick(point.place_id) : undefined}
-            r={(detailCovers ? 2.6 : 2.2) / view.zoom}
-          >
-            {/* The native tooltip, so a dot can say what it is without a hover card and
-                without anything to lay out. */}
-            <title>{point.name}</title>
-          </circle>
-        ))}
-
         {/* Street names last, over everything, each running along its own street. */}
         {labelled.map((road, index) => (
           <text
@@ -710,21 +698,6 @@ export function PlaceMap({
           : null}
         {focused ? ` · ${focused.label} · ${focused.name}` : null}
       </p>
-      {/* Shown on both maps, not only the one with a key: "what is the dot" is asked
-          wherever the dots are, and the card's map draws them too. */}
-      {cityPoints.length ? (
-        <div className="places-map-legend">
-          <p>{copy("map_legend", language)}</p>
-          <ul>
-            {POI_FAMILIES.map((family) => (
-              <li key={family}>
-                <span aria-hidden="true" className={`places-map-swatch ${family}`} />
-                {copy(`map_kind_${family}`, language)}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
       {withKey ? (
         <ol className="places-map-key">
           {pinPoints.map((point) => (

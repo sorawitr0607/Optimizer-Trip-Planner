@@ -587,6 +587,13 @@ export interface Basemap {
 /** `WF-048`. One zoomed-in window's map, in the layers a street map is read in.
  *  Everything empty with `too_wide` when the caller asked for more ground than any of
  *  it could be drawn on. */
+/** `WF-048`. The destination country's own boundary, simplified server-side, so the map
+ *  can be zoomed out until a place is seen in its country rather than only its city. */
+export interface CountryOutline {
+  country: string;
+  rings: [number, number][][];
+}
+
 export interface MapDetail {
   bbox: number[];
   /** Building footprints, as closed rings of `[latitude, longitude]`. */

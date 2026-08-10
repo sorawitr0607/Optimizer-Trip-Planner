@@ -1984,6 +1984,49 @@ class PlannerActions:
         )
         return value
 
+    def country_outline(self, trip_id: str) -> dict[str, Any] | None:
+        """The stored country outline, or nothing. A read; never fetches."""
+
+        held = self.store.get_trip_evidence(trip_id, "country_outline")
+        return held or None
+
+    def refresh_country_outline(self, trip_id: str) -> dict[str, Any]:
+        """The destination country's own shape, so the map can be zoomed out to it.
+
+        The map could only ever be zoomed out as far as the city it was fitted to, which
+        left the owner unable to see *where in the country* anything was -- the question
+        that decides whether a place is worth a day. Nominatim simplifies the polygon
+        server-side, so this is **137 points and 4 KB for Taiwan**, free, and cached for
+        a quarter because a border is not a thing that moves.
+        """
+
+        trip = self.store.get_trip(trip_id)
+        if trip is None:
+            raise PlannerRefusal("unknown_trip", trip_id=trip_id)
+        now = datetime.now(timezone.utc)
+        held = self.store.get_trip_evidence(trip_id, "country_outline")
+        if held and held.get("expires_at", "") > now.isoformat():
+            return held
+
+        # The picker's own country, not the last comma-separated segment: a city-only
+        # destination gave "Taipei" as a country and matched no boundary at all.
+        country = destinations.country_for(str(trip.destination))
+        provider = self.place_provider or OpenStreetMapProvider()
+        self._spend(
+            operation="openstreetmap:country_outline", count=1, trip_id=trip_id,
+            detail={"country": country},
+        )
+        value = provider.country_outline(country)
+        self.store.upsert_trip_evidence(
+            trip_id=trip_id,
+            kind="country_outline",
+            value=value,
+            provider=str(provider.name),
+            retrieved_at=now.isoformat(),
+            expires_at=(now + timedelta(days=90)).isoformat(),
+        )
+        return value
+
     def refresh_map_detail(self, trip_id: str, *, bbox: list[float]) -> dict[str, Any]:
         """One zoomed-in window's map layers, cached per window.
 

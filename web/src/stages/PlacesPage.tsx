@@ -9,15 +9,16 @@ import { useNavigate, useParams, useSearchParams } from "react-router";
 
 import {
   ApiError,
-  rpc,
   type Basemap,
   type CandidateChoice,
+  type CountryOutline,
   type DiscoveryRun,
   type PaidCallCheck,
   type PlaceInsight,
   type PlaceSummary,
   type Ranking,
   type RankingLaneEntry,
+  rpc,
   type SetupDraft,
 } from "../api/client";
 import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
@@ -134,6 +135,18 @@ export function PlacesPage() {
   // Fetched once per trip and stored for a month: roads and coastlines do not move.
   // Never during a capture — it writes, and a capture must observe the app, not
   // operate it, which is the lesson the summaries prefetch taught the hard way.
+  // The country's own shape, fetched once per trip and cached for a quarter, so both
+  // maps can be zoomed out to it. Read-only under a capture, like the basemap.
+  const outline = useQuery({
+    queryKey: ["country_outline", tripId],
+    queryFn: () =>
+      rpc<CountryOutline | null>(
+        typeof document !== "undefined" && document.documentElement.dataset.capture
+          ? "country_outline"
+          : "refresh_country_outline",
+        { trip_id: tripId },
+      ),
+  });
   const basemap = useQuery({
     queryKey: ["basemap", tripId],
     queryFn: () =>
@@ -670,9 +683,8 @@ export function PlacesPage() {
                   choice onward. The card's own place is enough to draw. */}
               <PlaceMap
                 basemap={basemap.data ?? null}
-                context={catalog}
                 focusId={selectedId}
-                onPick={setCardId}
+                outline={outline.data ?? null}
                 tripId={tripId}
                 language={language}
                 places={cardMapPlaces}
@@ -832,9 +844,8 @@ export function PlacesPage() {
                 disagreeing. */}
             <PlaceMap
               basemap={basemap.data ?? null}
-              context={catalog}
               language={language}
-              onPick={setCardId}
+              outline={outline.data ?? null}
               places={shortlistPlaces}
               tripId={tripId}
               title={copy("shortlist_map", language)}

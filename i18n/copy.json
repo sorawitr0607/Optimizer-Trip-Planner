@@ -1193,7 +1193,7 @@
       "tour_next": "Next",
       "tour_reopen": "How this works",
       "card_map": "Where this one is",
-      "map_span": "About {km} km across · scroll to zoom, drag to move · every discovered place shown faintly",
+      "map_span": "About {km} km across · scroll to zoom out to the country, drag to move",
       "think_reading_setup": "Reading who is going and what you like…",
       "think_searching": "Searching OpenStreetMap for real places…",
       "think_dedup": "Merging places that turned up twice…",
@@ -1226,14 +1226,7 @@
       "before_buy_hours": "Buy confirmed hours first · US${cost}",
       "before_buying": "Buying hours…",
       "before_all_covered": "Every chosen place has confirmed opening hours. Nothing to decide.",
-      "open_evidence_detail": "More evidence controls",
-      "map_legend": "Every attraction found here, by kind — tap one to open its card",
-      "map_kind_food": "Food and markets",
-      "map_kind_shop": "Shopping",
-      "map_kind_culture": "Culture and landmarks",
-      "map_kind_outdoors": "Parks and outdoors",
-      "map_kind_stay": "Places to stay",
-      "map_kind_other": "Everything else"
+      "open_evidence_detail": "More evidence controls"
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -2048,7 +2041,7 @@
       "tour_next": "ถัดไป",
       "tour_reopen": "วิธีใช้งาน",
       "card_map": "ที่นี่อยู่ตรงไหน",
-      "map_span": "กว้างประมาณ {km} กม. · เลื่อนเพื่อซูม ลากเพื่อเลื่อน · จุดจาง ๆ คือสถานที่ทั้งหมดที่ค้นพบ",
+      "map_span": "กว้างประมาณ {km} กม. · เลื่อนเพื่อซูมออกไปถึงระดับประเทศ ลากเพื่อเลื่อน",
       "think_reading_setup": "กำลังอ่านว่าใครไปบ้างและคุณชอบอะไร…",
       "think_searching": "กำลังค้นสถานที่จริงจาก OpenStreetMap…",
       "think_dedup": "กำลังรวมสถานที่ที่ซ้ำกัน…",
@@ -2081,14 +2074,7 @@
       "before_buy_hours": "ซื้อเวลาที่ยืนยันก่อน · US${cost}",
       "before_buying": "กำลังซื้อเวลาเปิด-ปิด…",
       "before_all_covered": "ทุกสถานที่ที่เลือกมีเวลาเปิด-ปิดที่ยืนยันแล้ว ไม่ต้องตัดสินใจอะไร",
-      "open_evidence_detail": "ตัวเลือกหลักฐานเพิ่มเติม",
-      "map_legend": "สถานที่ทั้งหมดที่พบ แยกตามประเภท — แตะเพื่อเปิดการ์ด",
-      "map_kind_food": "อาหารและตลาด",
-      "map_kind_shop": "แหล่งช้อปปิ้ง",
-      "map_kind_culture": "วัฒนธรรมและแลนด์มาร์ก",
-      "map_kind_outdoors": "สวนและกลางแจ้ง",
-      "map_kind_stay": "ที่พัก",
-      "map_kind_other": "ประเภทอื่น ๆ"
+      "open_evidence_detail": "ตัวเลือกหลักฐานเพิ่มเติม"
     }
   }
 }

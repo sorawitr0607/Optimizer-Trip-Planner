@@ -465,6 +465,60 @@ class OpenStreetMapProvider:
             "attribution": "© OpenStreetMap contributors", "license": "ODbL",
         }
 
+    # The country's own outline, so the map can be zoomed out until the place is seen
+    # in the country rather than only in its city. Nominatim will simplify the polygon
+    # server-side, which is the whole reason this is affordable: Taiwan's full coastline
+    # is megabytes, and at this threshold it is **137 points and 4 KB, fetched in 1.0 s**
+    # -- Japan 407 points, Thailand 215. A border is not a thing that needs precision on
+    # a drawing this size.
+    outline_threshold = 0.02
+
+    def country_outline(self, country: str) -> dict[str, Any]:
+        """One country's boundary, simplified, as rings of `[latitude, longitude]`."""
+
+        query = urlencode(
+            {
+                "q": country,
+                "format": "jsonv2",
+                "polygon_geojson": "1",
+                "polygon_threshold": str(self.outline_threshold),
+                "limit": "1",
+            }
+        )
+        payload = self._request_json(
+            Request(
+                f"{self.nominatim_url}?{query}",
+                headers={"Accept": "application/json", "User-Agent": self.user_agent},
+            )
+        )
+        found = payload[0] if isinstance(payload, list) and payload else {}
+        shape = found.get("geojson") or {}
+        kind = str(shape.get("type") or "")
+        if kind == "Polygon":
+            raw = shape.get("coordinates") or []
+        elif kind == "MultiPolygon":
+            raw = [ring for polygon in (shape.get("coordinates") or []) for ring in polygon]
+        else:
+            raw = []
+        rings: list[list[list[float]]] = []
+        for ring in raw:
+            # GeoJSON is [longitude, latitude] and everything else here is the other way
+            # round, which is exactly the kind of silent transposition that puts a
+            # country in the sea.
+            line = [
+                [round(float(point[1]), 4), round(float(point[0]), 4)]
+                for point in ring
+                if isinstance(point, (list, tuple)) and len(point) >= 2
+            ]
+            if len(line) >= 3:
+                rings.append(line)
+        return {
+            "country": country,
+            "rings": rings,
+            "attribution": "© OpenStreetMap contributors",
+            "license": "ODbL",
+        }
+
     def _find_destination(self, destination: str) -> dict[str, Any]:
         query = urlencode({"q": destination, "format": "jsonv2", "limit": 1})
         payload = self._request_json(

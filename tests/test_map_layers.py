@@ -175,5 +175,63 @@ class RefreshMapDetailTest(unittest.TestCase):
         self.assertEqual(0.0, status["spent_usd"])
 
 
+class CountryOutlineTest(unittest.TestCase):
+    """The country's own shape, which is what lets the map be zoomed out past its city."""
+
+    def setUp(self) -> None:
+        self.provider = OpenStreetMapProvider()
+
+    def test_geojson_longitude_latitude_order_is_transposed_on_the_way_in(self) -> None:
+        """GeoJSON is `[longitude, latitude]` and everything else here is the other way
+        round. Getting this wrong puts a country in the sea and looks like a projection
+        bug rather than a transposition, so it is pinned."""
+
+        self.provider._request_json = lambda request: [  # type: ignore[method-assign]
+            {"geojson": {"type": "Polygon", "coordinates": [[[121.5, 25.0], [121.6, 25.0], [121.6, 25.1]]]}}
+        ]
+        rings = self.provider.country_outline("Taiwan")["rings"]
+        self.assertEqual([[[25.0, 121.5], [25.0, 121.6], [25.1, 121.6]]], rings)
+
+    def test_a_multipolygon_becomes_one_flat_list_of_rings(self) -> None:
+        # A country is rarely one island, and Taiwan's boundary is 21 rings.
+        self.provider._request_json = lambda request: [  # type: ignore[method-assign]
+            {
+                "geojson": {
+                    "type": "MultiPolygon",
+                    "coordinates": [
+                        [[[121.0, 25.0], [121.1, 25.0], [121.1, 25.1]]],
+                        [[[119.0, 23.0], [119.1, 23.0], [119.1, 23.1]]],
+                    ],
+                }
+            }
+        ]
+        self.assertEqual(2, len(self.provider.country_outline("Taiwan")["rings"]))
+
+    def test_a_shape_too_small_to_be_a_ring_is_dropped(self) -> None:
+        self.provider._request_json = lambda request: [  # type: ignore[method-assign]
+            {"geojson": {"type": "Polygon", "coordinates": [[[121.0, 25.0], [121.1, 25.0]]]}}
+        ]
+        self.assertEqual([], self.provider.country_outline("Taiwan")["rings"])
+
+    def test_a_country_with_no_boundary_yields_nothing_rather_than_raising(self) -> None:
+        self.provider._request_json = lambda request: []  # type: ignore[method-assign]
+        self.assertEqual([], self.provider.country_outline("Nowhere")["rings"])
+
+    def test_the_request_asks_the_server_to_simplify(self) -> None:
+        """The whole reason this is affordable: unsimplified, Taiwan's coastline is
+        megabytes; at this threshold it is 137 points and 4 KB."""
+
+        seen: list[str] = []
+
+        def capture(request):
+            seen.append(request.full_url)
+            return []
+
+        self.provider._request_json = capture  # type: ignore[method-assign]
+        self.provider.country_outline("Taiwan")
+        self.assertIn("polygon_geojson=1", seen[0])
+        self.assertIn(f"polygon_threshold={self.provider.outline_threshold}", seen[0])
+
+
 if __name__ == "__main__":
     unittest.main()
