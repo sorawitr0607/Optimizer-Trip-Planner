@@ -3,6 +3,7 @@ import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from 
 import { rpc, type Basemap, type CountryOutline, type MapDetail } from "../api/client";
 import { copy, copyFormat, type Language } from "../i18n/copy";
 import type { MapPlace } from "../shared/map";
+import { tilesFor } from "../shared/tiles";
 import { projectionOf } from "./ItineraryPage";
 
 /**
@@ -47,6 +48,11 @@ const MAX_ZOOM = 24;
 /** The closest the map goes: a couple of city blocks, where a footprint is a building
  *  you could stand in front of. */
 const MIN_VIEW_KM = 0.15;
+/** Roughly how wide the map is drawn on screen, which is what decides how many tile
+ *  pixels are worth asking for. It does not have to be exact — being one zoom level out
+ *  costs sharpness, not correctness — and taking it as a constant means the tile choice
+ *  does not change with a window resize and re-request the lot. */
+const TILE_PIXEL_WIDTH = 740;
 /** Ask for the detailed layers once the window on screen is this small, in degrees.
  *  Measured against the *window*, not against the zoom factor: zoom is a ratio of the
  *  catalogue's own span, so the same factor is a different real distance in every city,
@@ -260,6 +266,10 @@ export function PlaceMap({
   const [dragging, setDragging] = useState(false);
   const drag = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
   const [detail, setDetail] = useState<MapDetail | null>(null);
+  // Tiles are the picture when there is a network and the vector map is the picture when
+  // there is not. One failed image is enough to decide: they come from one host, so if
+  // one cannot be reached none of them can.
+  const [tilesFailed, setTilesFailed] = useState(false);
   // Whether the last attempt was refused. A refused fetch used to draw nothing, which
   // looks exactly like a bug — the owner could not tell "OpenStreetMap is busy" from
   // "this is broken", and reported the second.
@@ -456,9 +466,9 @@ export function PlaceMap({
   // The detailed layers, only once the map is close enough for them to be legible, and
   // only for the window actually on screen. The inverse of the same projection is what
   // makes "the window actually on screen" expressible as latitude and longitude.
-  const inverse = geometry.projection;
   const windowBox = (() => {
-    if (!inverse) return null;
+    if (!geometry.projection) return null;
+    const inverse = geometry.projection;
     const a = inverse.toLatLon(view.x, view.y);
     const b = inverse.toLatLon(view.x + FRAME.width / view.zoom, view.y + FRAME.height / view.zoom);
     return [
@@ -475,6 +485,29 @@ export function PlaceMap({
   const windowKey = visible ? visible.join(",") : "";
   // The one measure of scale: what the note says and what the layer ladder reads.
   const viewKm = windowBox ? windowKm(windowBox) : Number.POSITIVE_INFINITY;
+
+  // Never during a capture: a tile is a remote image, so a screen baseline would
+  // photograph whatever the network happened to return, and the gate would report drift
+  // on a screen nobody had edited. The vectors are deterministic, so captures use those.
+  const capturing = typeof document !== "undefined" && Boolean(document.documentElement.dataset.capture);
+  const inverse = geometry.projection;
+  const tiles =
+    tilesFailed || capturing || !inverse || !windowBox
+      ? []
+      : tilesFor(windowBox, TILE_PIXEL_WIDTH).map((tile) => {
+          const topLeft = inverse.toXY(tile.north, tile.west);
+          const bottomRight = inverse.toXY(tile.south, tile.east);
+          return {
+            ...tile,
+            x: topLeft.x,
+            y: topLeft.y,
+            // A hair of overlap: neighbouring tiles land on fractional coordinates, and
+            // without it the seams show as hairlines of the ground colour.
+            width: bottomRight.x - topLeft.x + 0.01,
+            height: bottomRight.y - topLeft.y + 0.01,
+          };
+        });
+  const onTiles = tiles.length > 0;
   // **Does the detail still cover what is on screen?** It is one window's worth, so
   // zooming out past it left the map blank except for that patch — the city underneath
   // had been switched off the moment the detail arrived and never came back. The
@@ -576,7 +609,7 @@ export function PlaceMap({
       if (!held || road.length > held.length) longestByName.set(road.name, road);
     }
   }
-  const labelled = [...longestByName.values()]
+  const labelled = (onTiles ? [] : [...longestByName.values()])
     // The romanized name where there is one: it is far shorter than the pair, so it
     // fits on streets the pair never would, and the local spelling is still on every
     // pin and in the list under the map.
@@ -644,22 +677,37 @@ export function PlaceMap({
 
         {/* The country first of all: it is the ground everything else sits on, and at
             the far end of the zoom it is the only thing left. */}
+        {/* OpenStreetMap's own tiles, when there is a network to fetch them over. They
+            sit under everything: the pins, the numbered labels and the shortlist's own
+            geometry are this app's, and are drawn on top of whatever the ground is. */}
+        {tiles.map((tile) => (
+          <image
+            height={tile.height}
+            href={tile.url}
+            key={tile.key}
+            onError={() => setTilesFailed(true)}
+            width={tile.width}
+            x={tile.x}
+            y={tile.y}
+          />
+        ))}
+
         {/* Only once there is enough view to hold a country. It is hundreds of times
             the size of the frame at street scale, and a polygon that far outside its
             viewport is geometry the browser has to rasterise for nothing. */}
-        {viewKm >= SHOW_COUNTRY_KM
+        {!onTiles && viewKm >= SHOW_COUNTRY_KM
           ? land.map((points, index) => (
               <polygon className="places-map-country" key={`n-${index}`} points={points} />
             ))
           : null}
         {/* Then the order a map is read: ground, water and green, what is built on it,
             what runs over it, and what is written on it. */}
-        {detailCovers
+        {!onTiles && detailCovers
           ? areas.map((area, index) => (
               <polygon className={`places-map-area ${area.tone}`} key={`a-${index}`} points={area.points} />
             ))
           : null}
-        {showBuildings
+        {!onTiles && showBuildings
           ? buildings.map((points, index) => (
               <polygon className="places-map-building" key={`b-${index}`} points={points} />
             ))
@@ -667,7 +715,7 @@ export function PlaceMap({
 
         {/* The city-wide basemap steps aside once the real streets are here, rather than
             drawing a second, coarser set of the same roads on top of them. */}
-        {detailCovers
+        {onTiles || detailCovers
           ? null
           : lines.map((line, index) => (
               <polyline
@@ -682,7 +730,7 @@ export function PlaceMap({
 
         {/* Casings for every road first, then every fill: done class by class the casing
             of the next road would cut a notch out of the fill of the last. */}
-        {ROAD_ORDER.filter((cls) => shownRoads.has(cls)).map((cls) =>
+        {(onTiles ? [] : ROAD_ORDER.filter((cls) => shownRoads.has(cls))).map((cls) =>
           roads.filter((road) => road.cls === cls && ROAD_STYLES[cls].casing).map((road, index) => (
             <polyline
               className={`places-map-road-casing ${ROAD_STYLES[cls].tone}`}
@@ -692,7 +740,7 @@ export function PlaceMap({
             />
           )),
         )}
-        {ROAD_ORDER.filter((cls) => shownRoads.has(cls)).map((cls) =>
+        {(onTiles ? [] : ROAD_ORDER.filter((cls) => shownRoads.has(cls))).map((cls) =>
           roads.filter((road) => road.cls === cls).map((road, index) => (
             <polyline
               className={`places-map-road ${ROAD_STYLES[cls].tone}`}
@@ -705,12 +753,12 @@ export function PlaceMap({
 
         {/* Rail over road: a metro line passes under the street it follows, but on a map
             it is the line you are trying to find. */}
-        {(detailCovers ? rails : []).map((rail, index) => (
+        {(!onTiles && detailCovers ? rails : []).map((rail, index) => (
           <polyline className={`places-map-rail ${rail.cls}`} key={`t-${index}`} points={rail.points} />
         ))}
 
         {/* Which way the traffic goes, on the roads big enough to care about. */}
-        {showFlow
+        {!onTiles && showFlow
           ? roads
               .filter((road) => road.oneway && road.length >= leastLength && ROAD_STYLES[road.cls].casing >= 5)
               .slice(0, 60)
@@ -733,7 +781,7 @@ export function PlaceMap({
 
         {/* Transit and service markers from OpenStreetMap: a station exit is the single
             most useful thing on a city map you are navigating on foot. */}
-        {(showMarkers ? markers : []).map((marker, index) => (
+        {(!onTiles && showMarkers ? markers : []).map((marker, index) => (
           <circle
             className={`places-map-marker ${marker.kind}`}
             cx={marker.x}
@@ -802,9 +850,17 @@ export function PlaceMap({
           ))}
         </ol>
       ) : null}
+      {/* Required by the ODbL for the geometry, not only for the tiles — so this should
+          have been on screen from the first map, and was not. */}
+      <p className="places-map-credit">
+        <a href="https://www.openstreetmap.org/copyright" rel="noreferrer" target="_blank">
+          {copy("map_attribution", language)}
+        </a>
+        {tilesFailed ? ` · ${copy("map_offline", language)}` : null}
+      </p>
       {/* Said out loud, because a map with no streets on it and a map that could not
           fetch its streets look identical. */}
-      {refused && visible && !detailCovers ? (
+      {refused && visible && !detailCovers && !onTiles ? (
         <p className="setup-hint">{copy("map_detail_unavailable", language)}</p>
       ) : null}
       {pinPoints.length < places.length ? (

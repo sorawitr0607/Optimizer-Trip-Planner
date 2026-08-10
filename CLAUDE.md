@@ -810,6 +810,32 @@ aside, and the moment the view reaches past its edge the basemap comes back. The
 whether or not it is small enough to fetch, because the fetch gate and the coverage test are different
 questions about the same rectangle.
 
+**The map shows OpenStreetMap's own tiles when there is a network, as of 2026-08-10 — and `WF-034` §3 was
+revised by the owner to allow it.** Asked whether the map could look exactly like `openstreetmap.org`, the
+answer was that it never could: that site is a *tile* service rendering the whole planet database through a
+mature stylesheet, and this draws vectors from one Overpass window. So the owner was offered the trade the
+ticket had already weighed and chose the **hybrid**: OSMF standard tiles over the top, and the vector map
+the instant a tile fails to load. One failed image is enough to decide, because they all come from one
+host. **The premise `WF-034` was protecting survives** — with no network the map still has roads,
+buildings, land use and street names from data on disk — and the "product loss" that section recorded is
+repaid whenever there is one.
+
+**The projection became Web Mercator to carry them.** It was a flat `longitude × cos(latitude)`
+approximation, which is within a hair of Mercator at city scale but makes a tile a *trapezoid* instead of a
+square, so an image could not be laid on it without smearing against the pins. Everything goes through the
+one transform, so the streets, the buildings, the stops and the tiles moved together and none of them can
+disagree; the 36 baselines passed **unchanged**, which is the measure of how small the shift is at this
+scale.
+
+Four things that keep this honest. **Captures never draw tiles** — a remote image would have the screen
+baselines photographing the network, which is the drift bug twice over. **Volume stays courteous**: a view
+is 6–20 tiles, browser-cached, chosen at roughly one image pixel per screen pixel, never prefetched, and
+`tilesFor` refuses outright rather than asking a public server for hundreds of images if the arithmetic
+ever goes wrong. **`© OpenStreetMap contributors` is now on screen beside every map**, which the ODbL
+required for the geometry all along and this app had never done. And the fallback **says which map you are
+looking at**, because a drawn map and a tiled one are not the same picture and pretending otherwise is how
+someone ends up trusting the wrong one.
+
 **The zoom ceiling was a ratio, and that was the bug behind "I still don't see the detail".** `MAX_ZOOM`
 was 24 — about **2 km in Taipei**, which is also where the card map *opens*, so the map was already at its
 ceiling and could not be zoomed in at all. Every threshold below 2 km was unreachable, so the

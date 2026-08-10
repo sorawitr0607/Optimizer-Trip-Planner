@@ -44,6 +44,25 @@ export interface PlottedPoint extends CoordinatePoint {
  *  Exposed because `/places` can be zoomed, and knowing *which* piece of the world is
  *  on screen is what lets it ask for that window's buildings and nothing else. Derived
  *  from the same numbers rather than re-fitted, so the two directions cannot disagree. */
+/**
+ * Web Mercator, in radians, which is the projection the whole world's map tiles are cut
+ * to.
+ *
+ * This was a flat `longitude x cos(latitude)` approximation until tiles arrived, and at
+ * city scale the two are within a hair of each other — but a tile is a *square* in
+ * Mercator and a trapezoid in anything else, so the approximation could not carry an
+ * image without smearing it against the pins drawn on top. Everything here goes through
+ * one transform, so changing it moved the streets, the buildings and the stops together
+ * and none of them can disagree with the tiles or with each other.
+ */
+export function mercatorY(latitude: number): number {
+  return Math.log(Math.tan(Math.PI / 4 + (latitude * Math.PI) / 360));
+}
+
+export function mercatorLatitude(y: number): number {
+  return (Math.atan(Math.sinh(y)) * 180) / Math.PI;
+}
+
 export function projectionOf(
   points: { latitude: number; longitude: number }[],
   frame: { width: number; height: number } = { width: MAP_WIDTH, height: MAP_HEIGHT },
@@ -52,10 +71,8 @@ export function projectionOf(
   toLatLon: (x: number, y: number) => { latitude: number; longitude: number };
 } | null {
   if (!points.length) return null;
-  const latitude = points.reduce((total, point) => total + point.latitude, 0) / points.length;
-  const longitudeScale = Math.cos((latitude * Math.PI) / 180);
-  const xs = points.map((point) => point.longitude * longitudeScale);
-  const ys = points.map((point) => -point.latitude);
+  const xs = points.map((point) => (point.longitude * Math.PI) / 180);
+  const ys = points.map((point) => -mercatorY(point.latitude));
   const minX = Math.min(...xs);
   const minY = Math.min(...ys);
   const spanX = Math.max(...xs) - minX;
@@ -71,12 +88,12 @@ export function projectionOf(
   const offsetY = MAP_PAD + (availableHeight - spanY * finiteScale) / 2;
   return {
     toXY: (pointLatitude, pointLongitude) => ({
-      x: offsetX + (pointLongitude * longitudeScale - minX) * finiteScale,
-      y: offsetY + (-pointLatitude - minY) * finiteScale,
+      x: offsetX + ((pointLongitude * Math.PI) / 180 - minX) * finiteScale,
+      y: offsetY + (-mercatorY(pointLatitude) - minY) * finiteScale,
     }),
     toLatLon: (x, y) => ({
-      longitude: ((x - offsetX) / finiteScale + minX) / longitudeScale,
-      latitude: -((y - offsetY) / finiteScale + minY),
+      longitude: (((x - offsetX) / finiteScale + minX) * 180) / Math.PI,
+      latitude: mercatorLatitude(-((y - offsetY) / finiteScale + minY)),
     }),
   };
 }

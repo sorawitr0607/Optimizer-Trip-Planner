@@ -1228,7 +1228,9 @@
       "before_all_covered": "Every chosen place has confirmed opening hours. Nothing to decide.",
       "open_evidence_detail": "More evidence controls",
       "map_detail_unavailable": "Street detail unavailable just now — OpenStreetMap is busy. It retries when you move the map.",
-      "map_span_metres": "About {m} m across · scroll to zoom out to the country, drag to move"
+      "map_span_metres": "About {m} m across · scroll to zoom out to the country, drag to move",
+      "map_attribution": "© OpenStreetMap contributors",
+      "map_offline": "Drawn offline — map tiles could not be reached"
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -2078,7 +2080,9 @@
       "before_all_covered": "ทุกสถานที่ที่เลือกมีเวลาเปิด-ปิดที่ยืนยันแล้ว ไม่ต้องตัดสินใจอะไร",
       "open_evidence_detail": "ตัวเลือกหลักฐานเพิ่มเติม",
       "map_detail_unavailable": "ยังโหลดรายละเอียดถนนไม่ได้ — OpenStreetMap ไม่ว่าง ระบบจะลองใหม่เมื่อเลื่อนแผนที่",
-      "map_span_metres": "กว้างประมาณ {m} ม. · เลื่อนเพื่อซูมออกไปถึงระดับประเทศ ลากเพื่อเลื่อน"
+      "map_span_metres": "กว้างประมาณ {m} ม. · เลื่อนเพื่อซูมออกไปถึงระดับประเทศ ลากเพื่อเลื่อน",
+      "map_attribution": "© ผู้ร่วมสร้าง OpenStreetMap",
+      "map_offline": "วาดแบบออฟไลน์ — เข้าถึงไทล์แผนที่ไม่ได้"
     }
   }
 }

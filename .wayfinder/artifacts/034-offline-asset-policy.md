@@ -85,6 +85,25 @@ This is a small deliberate deviation from the donor, which renders faux bold —
 
 ## 3. No tile map
 
+> **Revised by the owner on 2026-08-10 — tiles ship, as a layer over the offline map, not
+> instead of it.** Asked whether the map could look exactly like `openstreetmap.org`, the
+> owner was given the trade this section names and chose the hybrid: OSMF standard tiles
+> when a network answers, and the `WF-048` vector map the moment one does not. **The
+> premise this section was protecting is intact** — a plane and a Taipei hotel with no
+> usable network still get roads, buildings, land use and street names, drawn from data
+> already on disk — and the loss recorded below is repaid whenever there *is* a network.
+> The three reasons are answered rather than overruled: (1) screen and export still agree
+> by construction, because the export was never going to carry a map and the numbered stop
+> list is still drawn and still repeated in text under every map; (2) the remote dependency
+> is introduced with a **fallback**, so it is not load-bearing; (3) the numbered map
+> remains the app's own element and sits on top of whatever the ground is.
+> Volume is one view of a few dozen 256px images, browser-cached, never bulk or
+> prefetched, and `© OpenStreetMap contributors` is now shown beside every map — which the
+> ODbL required for the geometry all along and this app was not doing.
+> Captures never draw tiles: a remote image would make the screen baselines photograph
+> the network.
+
+
 What ships is what the exports already ship:
 
 ```
