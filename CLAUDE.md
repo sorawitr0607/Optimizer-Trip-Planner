@@ -810,6 +810,15 @@ aside, and the moment the view reaches past its edge the basemap comes back. The
 whether or not it is small enough to fetch, because the fetch gate and the coverage test are different
 questions about the same rectangle.
 
+**`/itinerary` opens on the map as of 2026-08-10, and which tab is open lives in the URL.** It opened on
+the timeline from when the map was a strip of dots and there was nothing to open onto. Now it draws the
+streets, the day's walk and the stops in order, so it is the faster answer to the question the screen is
+opened with — *where am I going today* — and the timeline is one click away for the one that follows.
+Putting the tab in the query string is not a convenience: two tests assert the timeline's rows, and a
+default that silently hid them from the suite would have hidden them from the owner too. Addressable, it
+stays assertable, survives a reload and can be linked to. The four `itinerary-*` baselines were
+re-approved for the new default; the other 32 are untouched.
+
 **The day's line follows the streets as of 2026-08-10 (`WF-048`), and it cost no new request.**
 OpenRouteService has always returned the path as GeoJSON and `normalize` has always thrown it away, so
 keeping it is a decision rather than a fetch — the trip already paid for these calls. Thinned at

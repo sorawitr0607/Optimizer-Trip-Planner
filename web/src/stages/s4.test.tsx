@@ -269,7 +269,9 @@ describe("PlacesPage", () => {
 
 describe("ItineraryPage", () => {
   it("renders all six row types, the half-day fallback, and both available exports", () => {
-    const html = render(<ItineraryPage />, "en");
+    // `?view=timeline` because the map is what opens by default now. The tab is in the
+    // URL precisely so this stays assertable rather than becoming unreachable state.
+    const html = render(<ItineraryPage />, "en", undefined, "?view=timeline");
     for (const rowType of ["preparation", "travel", "visit", "buffer", "meal", "logistics"]) {
       expect(html).toContain(`plan-row ${rowType}`);
     }
@@ -297,7 +299,7 @@ describe("ItineraryPage", () => {
   });
 
   it("renders the operational rows and warnings in Thai", () => {
-    const html = render(<ItineraryPage />, "th");
+    const html = render(<ItineraryPage />, "th", undefined, "?view=timeline");
     expect(html).toContain("แผนที่ใช้งาน");
     expect(html).toContain("จุดที่ 1");
     expect(html).toContain("รอช่วงมื้ออาหาร");

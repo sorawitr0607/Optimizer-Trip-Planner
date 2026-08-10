@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useParams, useSearchParams } from "react-router";
 
 import {
   ApiError,
@@ -390,7 +390,27 @@ export function ItineraryPage() {
   });
   const { language } = useLanguage();
   const [chosenDate, setChosenDate] = useState("");
-  const [tab, setTab] = useState<"timeline" | "map">("timeline");
+  // **The map opens first as of 2026-08-10**, and which tab is open lives in the URL.
+  //
+  // It was the timeline, from when the map was a strip of dots on grey and there was
+  // nothing to open onto. Now that it draws the streets, the day's walk and the stops in
+  // order, it is the faster answer to the question this screen is opened with — *where
+  // am I going today* — and the timeline is one click away for the question that
+  // follows, which is *when*.
+  //
+  // In the URL rather than in state, for the reason `/places` puts its own view there: a
+  // reload should not throw away the tab being read, a link can point at either, and the
+  // timeline stays addressable now that it is no longer what opens by default. That last
+  // part is not a convenience — two tests assert the timeline's rows, and a default that
+  // silently hid them from the suite would have been a default that hid them from the
+  // owner too.
+  const [params, setParams] = useSearchParams();
+  const tab: "timeline" | "map" = params.get("view") === "timeline" ? "timeline" : "map";
+  const setTab = (next: "timeline" | "map") => {
+    const updated = new URLSearchParams(params);
+    updated.set("view", next);
+    setParams(updated, { replace: true });
+  };
   const snapshot = useQuery({
     queryKey: ["export_snapshot", tripId, language],
     queryFn: () => rpc<Frozen<ExportSnapshot>>("build_export_snapshot", { trip_id: tripId, language }),
