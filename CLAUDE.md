@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm --prefix web install                                             # first web run only
 uv run --locked python -m api                                        # production shell on 127.0.0.1:8765
 uv run --locked python scripts/check.py                              # every free Python + web gate
-uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 473 tests, ~11s
+uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 474 tests, ~12s
 uv run --locked python -m unittest tests.test_optimizer.OptimizerCoreTest.test_safe_route_and_weather_fallback_are_selected  # one test
 python3 scripts/validate_regression_fixtures.py                      # fixture catalog structure
 uv run --locked python scripts/run_optimizer_regressions.py          # 27 historic cases through the real optimizer
@@ -763,6 +763,43 @@ water and parks for the window discovery already searched: **809 roads, 46 water
 for Taipei in 5.6 s**, one free Overpass request, stored for 30 days because coastlines do not move.
 Tags are dropped and coordinates rounded to ~1 m on the way in, which takes the response from
 **1151 KB to 235 KB**. `WF-034` still holds: no tiles, and nothing fetched at view time.
+
+**The zoomed-in map is drawn in layers as of 2026-08-10 (`WF-048`).** One free Overpass request for
+the window on screen returns land use, water and parks, building footprints, the **whole road hierarchy**,
+rail, and station/bus/charging markers — measured over 1.6 km of Ximending at **2545 elements, 16957
+points, 2.0 MB on the wire in 13.6 s, stored at 382 KB** after tags are dropped and coordinates rounded.
+`WF-034` still holds: no tiles, nothing fetched per tile, and the numbered list under the map still
+repeats every pin.
+
+Four things that make it read as a map rather than a diagram. **Roads are drawn twice**, a wider casing
+under a narrower fill, which is what gives a road an edge and makes a crossing a junction; every road was
+one grey line of one width before, so a trunk road and a service alley were the same mark. **Street names
+run along their own streets** via `textPath`, romanized where OpenStreetMap has `name:en` — 486 of 600
+roads in that window carry a name, so `中華路一段` is labelled `Section 1, Zhonghua Road`. **The
+catalogue's own categories colour the POI dots** — food, shopping, culture, outdoors, lodging — which is a
+map legend for no request and no new data. And **footways, paths and steps are not requested at all**:
+they were 615 of those 2545 elements and at this scale they are hatching.
+
+Five bugs found by driving it, four of them the same mistake in different clothes — **a length declared in
+user units when it needed to be screen units**. `marker-mid` inherits `markerUnits: strokeWidth`, so the
+invisible one-way carrier line's default 1-*unit* stroke drew every arrow about **170 px wide**, and a few
+hundred of them merged into a taupe mass that looked like a landmass and hid the entire map; it survives
+every layer override because the arrow lives in `<defs>`, which is why it took so long to find. Chrome
+**ignores `vector-effect: non-scaling-stroke` on `<text>`**, so a 2.4px label halo became a ~100px white
+disc per glyph. The label-length threshold was a share of the *catalogue's* span rather than the visible
+width, so every label was silently discarded. `textPath` neither wraps nor shrinks, so a name longer than
+its street was cut to **a single stray glyph** — names are measured before they are offered now, and a
+street that cannot hold its own name goes unlabelled. And `.places-map svg` outranked `.places-map-svg`,
+so the map kept the panel grey until the new rule was written at matching specificity.
+
+**The map has a night palette**, not a dimmed day one: a light panel that size glares in a dark room, so
+the same layering is inverted the way a road atlas has a night edition — dark ground, roads *lighter*
+than what they run through so the network stays the top layer. That is the one deliberate baseline change
+here; the two dark `/places` screens were re-approved and the other 34 are untouched.
+
+**Not built, and why.** Star ratings and review counts are Google Places at **US$0.025 a place** — they
+stay behind the owner-triggered button `WF-047` priced, not on a background map fetch. Live traffic-light
+state is not static data and is in no free source. Both were asked for; neither is refused for effort.
 
 **Buildings arrive on zoom as of 2026-08-09 (`WF-048`) — and only on zoom.** At the full city window a
 footprint is well under a pixel, so `basemap()` still carries none: a city's shape at that scale is its

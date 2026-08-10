@@ -94,6 +94,36 @@
 
 :root.dark,
 :root[data-theme="dark"] {
+  /* The map after dark (`WF-048`). Not the light map dimmed — a light panel that size
+     glares in a dark room — but the same layering inverted, the way a road atlas has a
+     night edition: dark ground, ground-coloured blocks, roads lighter than what they
+     run through so the network still reads as the top layer. */
+  --map-land: #1f2126;
+  --map-building: #2b2e35;
+  --map-building-edge: #363a43;
+  --map-green: #23301f;
+  --map-green-edge: #2f4029;
+  --map-sport: #27351f;
+  --map-water: #16293c;
+  --map-water-edge: #1f3a53;
+  --map-built: #24272c;
+  --map-retail: #2b2724;
+  --map-industrial: #26262b;
+  --map-construction: #2b2822;
+  --map-road: #4a4f58;
+  --map-road-casing: #2a2d33;
+  --map-road-major: #5c5642;
+  --map-road-major-casing: #35322a;
+  --map-road-trunk: #6b6047;
+  --map-road-trunk-casing: #3d372b;
+  --map-walk: #2f3b45;
+  --map-walk-casing: #232b33;
+  --map-cycle: #3f5c40;
+  --map-rail: #565c65;
+  --map-metro: #5d8ac6;
+  --map-flow: #6a6558;
+  --map-label: #b6bcc5;
+  --map-label-halo: #1b1d21;
   --bg-primary: #121212;
   --bg-secondary: #1c1c1c;
   --bg-card: #181818;
@@ -260,6 +290,44 @@ button:disabled {
    single colour source and the only file the gate permits them in.
    --------------------------------------------------------------------------- */
 :root {
+  /* The map's own palette (`WF-048`). A street map is read by layer, and layers are
+     told apart by colour before anything else — so these are their own family rather
+     than borrowed from the interface, whose greys carry a different meaning. Kept in
+     the spirit of the app's cream ground: tan for what is built, muted green for what
+     grows, a low-chroma blue for water, white roads on a warm casing. */
+  --map-land: #faf8f3;
+  --map-building: #e6ddcc;
+  --map-building-edge: #cfc4b0;
+  --map-green: #dcefd0;
+  --map-green-edge: #c3e0b1;
+  --map-sport: #cfe8bd;
+  --map-water: #a9cde6;
+  --map-water-edge: #8fb9d6;
+  --map-built: #ecebe6;
+  --map-retail: #f3e6d9;
+  --map-industrial: #e8e5ea;
+  --map-construction: #eee6d2;
+  --map-road: #ffffff;
+  --map-road-casing: #d5cec0;
+  --map-road-major: #fdf3d6;
+  --map-road-major-casing: #e3d3a4;
+  --map-road-trunk: #fbe6b4;
+  --map-road-trunk-casing: #d9bf84;
+  --map-walk: #e2ecf4;
+  --map-walk-casing: #c4d6e4;
+  --map-cycle: #9bbf9b;
+  --map-rail: #9aa3ab;
+  --map-metro: #4f7fbf;
+  --map-flow: #c0b8a6;
+  --map-label: #55524b;
+  --map-label-halo: #fbf9f5;
+  --map-poi-food: #e08a3c;
+  --map-poi-shop: #3f7fc4;
+  --map-poi-culture: #8b5fbf;
+  --map-poi-outdoors: #4f9a5e;
+  --map-poi-stay: #d2679a;
+  --map-poi-other: #9a948a;
+
   --landing-ink: #091b20;
   --landing-ink-soft: #12303a;
   --landing-haze: #8d9fab;

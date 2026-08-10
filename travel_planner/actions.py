@@ -1984,12 +1984,12 @@ class PlannerActions:
         )
         return value
 
-    def refresh_buildings(self, trip_id: str, *, bbox: list[float]) -> dict[str, Any]:
-        """Building footprints for one zoomed-in window, cached per window.
+    def refresh_map_detail(self, trip_id: str, *, bbox: list[float]) -> dict[str, Any]:
+        """One zoomed-in window's map layers, cached per window.
 
-        Free, and asked for only when the map is zoomed far enough that a footprint is
-        bigger than a pixel -- at the full city window there would be six figures of
-        them drawing nothing, which is why they are not part of the basemap.
+        Free, and asked for only when the map is close enough for any of it to be
+        legible -- at the full city window a footprint is under a pixel and the road
+        hierarchy is a smudge, which is why none of this is in the basemap.
 
         Cached in `provider_cache` keyed on the rounded window, so panning back over
         ground already fetched costs nothing.
@@ -2003,7 +2003,7 @@ class PlannerActions:
         # Rounded to ~100m so small pans reuse the same tile of work rather than
         # asking again for a window one pixel over.
         window = [round(float(value), 3) for value in bbox]
-        request = {"provider": provider.name, "operation": "buildings", "bbox": window}
+        request = {"provider": provider.name, "operation": "map_detail", "bbox": window}
         fingerprint = freeze_snapshot(request).sha256
         now = datetime.now(timezone.utc)
         cache = self.store.get_provider_cache(provider.name, fingerprint)
@@ -2011,10 +2011,10 @@ class PlannerActions:
             return cache.snapshot.as_dict()
 
         self._spend(
-            operation="openstreetmap:buildings", count=1, trip_id=trip_id,
+            operation="openstreetmap:map_detail", count=1, trip_id=trip_id,
             detail={"bbox": window},
         )
-        value = provider.buildings(window)
+        value = provider.map_detail(window)
         self.store.put_provider_cache(
             ProviderCacheEntry(
                 provider=provider.name,

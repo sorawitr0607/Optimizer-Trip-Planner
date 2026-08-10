@@ -584,11 +584,29 @@ export interface Basemap {
   license: string;
 }
 
-/** `WF-048`. Footprints for one zoomed-in window. Empty with `too_wide` when the
- *  caller asked for more ground than a footprint can be drawn on. */
-export interface Buildings {
+/** `WF-048`. One zoomed-in window's map, in the layers a street map is read in.
+ *  Everything empty with `too_wide` when the caller asked for more ground than any of
+ *  it could be drawn on. */
+export interface MapDetail {
   bbox: number[];
+  /** Building footprints, as closed rings of `[latitude, longitude]`. */
   buildings: [number, number][][];
+  /** The road network, carrying the `highway` class that gives it its hierarchy and
+   *  both spellings of its name for the label that runs along it. */
+  roads: {
+    class: string;
+    name: string;
+    name_en: string;
+    oneway: boolean;
+    reversed: boolean;
+    points: [number, number][];
+  }[];
+  /** Land use and landcover: parks, water, retail, residential, and the rest. */
+  areas: { kind: string; points: [number, number][] }[];
+  /** Metro, rail and tram alignments. */
+  rails: { class: string; name: string; points: [number, number][] }[];
+  /** Station entrances, bus stops and charging points. */
+  markers: { kind: string; point: [number, number]; name: string }[];
   too_wide: boolean;
 }
 

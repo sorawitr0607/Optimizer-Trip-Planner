@@ -334,47 +334,136 @@ class OpenStreetMapProvider:
             "license": "ODbL",
         }
 
-    # Buildings, for a zoomed-in window only. Measured: about 1200 footprints and
-    # 11k points for a 2km box in 5.5s. At the full city window they are sub-pixel and
-    # there would be six figures of them, which is why they are not part of `basemap`.
-    buildings_limit = 1200
-    # Beyond this a window is too big for footprints to mean anything and too big to
+    # One window's worth of map, for a zoomed-in view only. At the full city window a
+    # footprint is well under a pixel and there would be six figures of them, which is
+    # why none of this is part of `basemap`.
+    #
+    # Measured over a 1.6 km window on Ximending: 2545 elements, 16957 points, 2.0 MB on
+    # the wire in 13.6 s -- the whole road hierarchy (63 primary, 30 secondary, 65
+    # tertiary, 99 residential, 244 service, 27 pedestrian), 994 buildings, 17 subway
+    # ways, 28 station entrances, and 1013 elements carrying a name to label them with.
+    # Footways, paths and steps are **not** requested: they were 615 of those elements
+    # and at this scale they are hatching, not information. `highway=pedestrian` is kept,
+    # because a pedestrianised street like Hanzhong St is a place, not a path.
+    detail_limit = 4000
+    # Beyond this a window is too big for any of this to be legible and too big to
     # fetch; the caller is expected to be zoomed in before asking.
-    buildings_max_span = 0.06
+    detail_max_span = 0.06
 
-    def buildings_query(self, bbox: list[float]) -> str:
+    DETAIL_ROADS = (
+        "^(motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary"
+        "|secondary_link|tertiary|tertiary_link|unclassified|residential|living_street"
+        "|pedestrian|service|cycleway)$"
+    )
+    DETAIL_AREAS = (
+        "^(park|garden|pitch|playground|grass|forest|wood|scrub|water|residential"
+        "|retail|commercial|industrial|construction|cemetery)$"
+    )
+    DETAIL_RAILS = "^(subway|light_rail|rail|tram|monorail)$"
+
+    def map_detail_query(self, bbox: list[float]) -> str:
         bounds = ",".join(f"{value:.5f}" for value in bbox)
         return (
-            f"[out:json][timeout:30];\n"
-            f'way["building"]({bounds});\n'
-            f"out geom {self.buildings_limit};"
+            f"[out:json][timeout:60];\n(\n"
+            f'  way["building"]({bounds});\n'
+            f'  way["highway"~"{self.DETAIL_ROADS}"]({bounds});\n'
+            f'  way["landuse"~"{self.DETAIL_AREAS}"]({bounds});\n'
+            f'  way["leisure"~"{self.DETAIL_AREAS}"]({bounds});\n'
+            f'  way["natural"~"{self.DETAIL_AREAS}"]({bounds});\n'
+            f'  way["waterway"="riverbank"]({bounds});\n'
+            f'  way["railway"~"{self.DETAIL_RAILS}"]({bounds});\n'
+            f'  node["railway"="subway_entrance"]({bounds});\n'
+            f'  node["highway"="bus_stop"]({bounds});\n'
+            f'  node["amenity"="charging_station"]({bounds});\n'
+            f");\nout geom {self.detail_limit};"
         )
 
-    def buildings(self, bbox: list[float]) -> dict[str, Any]:
-        """Building footprints for one small window, as rounded coordinate rings."""
+    def _ring(self, geometry: list[dict[str, Any]]) -> list[list[float]]:
+        """Rounded, de-duplicated coordinates. Rounding can collapse neighbours."""
+
+        line: list[list[float]] = []
+        for point in geometry:
+            try:
+                spot = [
+                    round(float(point["lat"]), self.basemap_precision),
+                    round(float(point["lon"]), self.basemap_precision),
+                ]
+            except (KeyError, TypeError, ValueError):
+                continue
+            if not line or line[-1] != spot:
+                line.append(spot)
+        return line
+
+    def map_detail(self, bbox: list[float]) -> dict[str, Any]:
+        """Buildings, roads, land use, rails and transit markers for one window.
+
+        Returns layers rather than one undifferentiated pile, because a map is read in
+        layers: land use under water under parks under buildings under roads under
+        labels. Names ride along on the roads -- they were already in the response, and
+        a street with no name on it is the difference between a diagram and a map.
+        """
 
         south, west, north, east = (float(value) for value in bbox)
-        if max(north - south, east - west) > self.buildings_max_span:
-            return {"bbox": bbox, "buildings": [], "too_wide": True}
-        rings: list[list[list[float]]] = []
-        for element in self._overpass_elements(self.buildings_query(bbox), timeout=45):
-            geometry = element.get("geometry") or []
-            if len(geometry) < 3:
-                continue
-            ring: list[list[float]] = []
-            for point in geometry:
+        if max(north - south, east - west) > self.detail_max_span:
+            return {
+                "bbox": bbox, "buildings": [], "roads": [], "areas": [],
+                "rails": [], "markers": [], "too_wide": True,
+            }
+        buildings: list[list[list[float]]] = []
+        roads: list[dict[str, Any]] = []
+        areas: list[dict[str, Any]] = []
+        rails: list[dict[str, Any]] = []
+        markers: list[dict[str, Any]] = []
+        for element in self._overpass_elements(self.map_detail_query(bbox), timeout=90):
+            tags = element.get("tags") or {}
+            if element.get("type") == "node":
+                kind = (
+                    "metro_entrance" if tags.get("railway") == "subway_entrance"
+                    else "bus_stop" if tags.get("highway") == "bus_stop"
+                    else "charging" if tags.get("amenity") == "charging_station"
+                    else ""
+                )
                 try:
-                    spot = [
-                        round(float(point["lat"]), self.basemap_precision),
-                        round(float(point["lon"]), self.basemap_precision),
-                    ]
+                    spot = [round(float(element["lat"]), self.basemap_precision),
+                            round(float(element["lon"]), self.basemap_precision)]
                 except (KeyError, TypeError, ValueError):
                     continue
-                if not ring or ring[-1] != spot:
-                    ring.append(spot)
-            if len(ring) >= 3:
-                rings.append(ring)
-        return {"bbox": bbox, "buildings": rings, "too_wide": False}
+                if kind:
+                    markers.append({"kind": kind, "point": spot, "name": str(tags.get("name") or "")})
+                continue
+            line = self._ring(element.get("geometry") or [])
+            if tags.get("building"):
+                if len(line) >= 3:
+                    buildings.append(line)
+            elif tags.get("highway"):
+                if len(line) >= 2:
+                    roads.append({
+                        "class": str(tags["highway"]),
+                        # Both spellings, because a street sign carries the local one and
+                        # a visitor reads the other -- the same reason `shared/names.ts`
+                        # prints two names for a place.
+                        "name": str(tags.get("name") or ""),
+                        "name_en": str(tags.get("name:en") or ""),
+                        "oneway": tags.get("oneway") in ("yes", "1", "-1"),
+                        "reversed": tags.get("oneway") == "-1",
+                        "points": line,
+                    })
+            elif tags.get("railway"):
+                if len(line) >= 2:
+                    rails.append({"class": str(tags["railway"]),
+                                  "name": str(tags.get("name") or ""), "points": line})
+            else:
+                kind = str(
+                    tags.get("leisure") or tags.get("natural")
+                    or tags.get("landuse") or tags.get("waterway") or ""
+                )
+                if kind and len(line) >= 3:
+                    areas.append({"kind": kind, "points": line})
+        return {
+            "bbox": bbox, "buildings": buildings, "roads": roads, "areas": areas,
+            "rails": rails, "markers": markers, "too_wide": False,
+            "attribution": "© OpenStreetMap contributors", "license": "ODbL",
+        }
 
     def _find_destination(self, destination: str) -> dict[str, Any]:
         query = urlencode({"q": destination, "format": "jsonv2", "limit": 1})

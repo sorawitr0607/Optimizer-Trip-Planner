@@ -39,7 +39,7 @@ ACTIONS = (
     "travel_month_guide",
     "get_basemap",
     "refresh_basemap",
-    "refresh_buildings",
+    "refresh_map_detail",
     "save_setup",
     "get_setup",
     "setup_vocabulary",

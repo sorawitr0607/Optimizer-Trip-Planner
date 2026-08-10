@@ -3598,6 +3598,15 @@
   opacity: var(--opacity-tint-40);
 }
 
+/* Coloured by what the place *is*, which the catalogue already records for all 849 of
+   them — a map legend for free, with no request and no new data. */
+.places-map-city.food { fill: var(--map-poi-food); opacity: 0.85; }
+.places-map-city.shop { fill: var(--map-poi-shop); opacity: 0.85; }
+.places-map-city.culture { fill: var(--map-poi-culture); opacity: 0.85; }
+.places-map-city.outdoors { fill: var(--map-poi-outdoors); opacity: 0.85; }
+.places-map-city.stay { fill: var(--map-poi-stay); opacity: 0.85; }
+.places-map-city.other { fill: var(--map-poi-other); opacity: var(--opacity-tint-40); }
+
 .places-map-rose text {
   fill: var(--text-muted);
   font-size: 9px;
@@ -3681,6 +3690,313 @@
    at 24x instead of filling the frame — through the token rather than a literal. */
 .places-map .plan-map-point text {
   font-size: calc(var(--text-2xs) / var(--map-zoom, 1));
+}
+
+/* The ground the whole map sits on. Its own token rather than the panel's surface: at
+   a street view most of the picture *is* ground, so it has to be light enough that a
+   white road and a tan building both read against it. Written as `.places-map svg` to
+   outrank the earlier rule of that shape, which set the panel grey and otherwise wins
+   on specificity. */
+.places-map svg.places-map-svg {
+  background: var(--map-land);
+}
+
+.places-map-svg {
+  cursor: grab;
+  touch-action: none;
+}
+
+.places-map-svg.dragging {
+  cursor: grabbing;
+}
+
+.places-map-rose {
+  color: var(--text-muted);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-selected);
+  pointer-events: none;
+  position: absolute;
+  right: 8px;
+  top: 30px;
+}
+
+.places-map-reset {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: var(--text-2xs);
+  left: 8px;
+  padding: 2px 8px;
+  position: absolute;
+  top: 30px;
+}
+
+/* The recommended range inside the chosen month. */
+.stay-window {
+  background: var(--color-success-light);
+  border: 1px solid var(--color-success);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+  padding: 12px 14px;
+}
+
+.stay-window h4 {
+  margin: 0;
+}
+
+.stay-window-dates {
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+  margin: 0;
+}
+
+.stay-window ul {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  margin: 0;
+  padding-left: 18px;
+}
+
+.stay-window-use {
+  background: var(--color-success);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius);
+  color: var(--color-on-accent);
+  cursor: pointer;
+  font-weight: var(--weight-secondary);
+  padding: 6px 12px;
+}
+
+/* The evidence screen's own question, answered before its controls. */
+.evidence-verdict {
+  background: var(--color-accent-light);
+  border: 1px solid var(--color-accent);
+  border-left-width: var(--blocked-stripe-width);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 14px 16px;
+}
+
+.evidence-verdict.settled {
+  background: var(--color-success-light);
+  border-color: var(--color-success);
+}
+
+.evidence-verdict h2 {
+  font-size: var(--text-md);
+  margin: 0;
+}
+
+.evidence-verdict-answer {
+  margin: 0;
+  max-width: 76ch;
+}
+
+.evidence-verdict-options {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.evidence-verdict-options li {
+  margin-bottom: 4px;
+}
+
+/* The drawn basemap. Quiet enough to be ground, present enough to place a pin on. */
+.places-map-roads {
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-linecap: round;
+  stroke-opacity: 0.75;
+  stroke-width: 1.1;
+  vector-effect: non-scaling-stroke;
+}
+
+.places-map-water {
+  fill: none;
+  stroke: var(--color-accent);
+  stroke-linejoin: round;
+  stroke-opacity: 0.7;
+  stroke-width: 1.8;
+  vector-effect: non-scaling-stroke;
+}
+
+.places-map-green {
+  fill: var(--color-success);
+  fill-opacity: 0.16;
+  stroke: var(--color-success);
+  stroke-opacity: 0.4;
+  stroke-width: 0.6;
+  vector-effect: non-scaling-stroke;
+}
+
+/* The zoomed-in map layers (`WF-048`). Drawn in the order a map is read; each rule is
+   only reached once the window is small enough for the layer to mean anything. */
+.places-map-area {
+  stroke-width: 0.4;
+  vector-effect: non-scaling-stroke;
+}
+
+.places-map-area.green {
+  fill: var(--map-green);
+  stroke: var(--map-green-edge);
+}
+
+.places-map-area.sport {
+  fill: var(--map-sport);
+  stroke: var(--map-green-edge);
+}
+
+.places-map-area.water {
+  fill: var(--map-water);
+  stroke: var(--map-water-edge);
+}
+
+.places-map-area.built {
+  fill: var(--map-built);
+  stroke: none;
+}
+
+.places-map-area.retail {
+  fill: var(--map-retail);
+  stroke: none;
+}
+
+.places-map-area.industrial {
+  fill: var(--map-industrial);
+  stroke: none;
+}
+
+.places-map-area.construction {
+  fill: var(--map-construction);
+  stroke: none;
+}
+
+.places-map-building {
+  fill: var(--map-building);
+  stroke: var(--map-building-edge);
+  stroke-width: 0.5;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Casing under fill is what gives a road an edge and turns a crossing into a junction.
+   Both are round-capped and round-joined so a corner is a corner, not a mitre spike. */
+.places-map-road-casing,
+.places-map-road {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.places-map-road-casing {
+  stroke: var(--map-road-casing);
+}
+
+.places-map-road-casing.major {
+  stroke: var(--map-road-major-casing);
+}
+
+.places-map-road-casing.trunk {
+  stroke: var(--map-road-trunk-casing);
+}
+
+.places-map-road-casing.walk {
+  stroke: var(--map-walk-casing);
+}
+
+.places-map-road {
+  stroke: var(--map-road);
+}
+
+.places-map-road.major {
+  stroke: var(--map-road-major);
+}
+
+.places-map-road.trunk {
+  stroke: var(--map-road-trunk);
+}
+
+.places-map-road.walk {
+  stroke: var(--map-walk);
+}
+
+.places-map-road.cycle {
+  stroke: var(--map-cycle);
+  stroke-dasharray: 3 2;
+}
+
+/* Rail is drawn as a line with its sleepers implied by the dash, metro as a solid
+   coloured route — the thing you are actually looking for on a city map. */
+.places-map-rail {
+  fill: none;
+  stroke: var(--map-rail);
+  stroke-dasharray: 4 3;
+  stroke-width: 1.4;
+  vector-effect: non-scaling-stroke;
+}
+
+.places-map-rail.subway,
+.places-map-rail.light_rail {
+  stroke: var(--map-metro);
+  stroke-dasharray: none;
+  stroke-opacity: 0.55;
+  stroke-width: 2.4;
+}
+
+/* The one-way arrows ride on an invisible line: only the marker is painted. The line
+   keeps a hairline stroke width so nothing downstream inherits a large one. */
+.places-map-flow-line {
+  fill: none;
+  stroke: none;
+  stroke-width: 0.1;
+}
+
+.places-map-flow {
+  fill: none;
+  stroke: var(--map-flow);
+  stroke-linecap: round;
+  stroke-width: 0.7;
+}
+
+.places-map-marker {
+  stroke: var(--map-label-halo);
+  stroke-width: 0.8;
+  vector-effect: non-scaling-stroke;
+}
+
+.places-map-marker.metro_entrance {
+  fill: var(--map-metro);
+}
+
+.places-map-marker.bus_stop {
+  fill: var(--map-rail);
+}
+
+.places-map-marker.charging {
+  fill: var(--map-poi-outdoors);
+}
+
+/* A street name follows its own street, with a halo so it stays readable wherever the
+   street happens to run. `paint-order` puts that halo behind the glyphs rather than
+   through them.
+
+   **The halo width is set in the component, not here.** Chrome ignores
+   `vector-effect: non-scaling-stroke` on `<text>`, so a width declared in this file is
+   in *user* units: at 24x that turned a 2.4px outline into a ~100px white disc around
+   every glyph, and 26 of them merged into pale blobs that swallowed the whole map. The
+   component divides by the zoom instead, which is the same trick the pin radii use. */
+.places-map-street {
+  fill: var(--map-label);
+  font-family: var(--font-body);
+  paint-order: stroke;
+  stroke: var(--map-label-halo);
+  stroke-linejoin: round;
 }
 
 .places-map-svg {
