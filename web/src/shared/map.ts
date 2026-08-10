@@ -7,6 +7,10 @@ export interface MapPlace {
   name: string;
   latitude: number;
   longitude: number;
+  /** An optimizer status, where the caller has one. The itinerary colours its stops by
+   *  it — a locked stop and a re-check are not the same pin, and the plan is read by
+   *  glancing at which is which. */
+  status?: string;
 }
 
 /**
@@ -38,4 +42,19 @@ export function mapPlaces(
       };
     })
     .filter((point): point is MapPlace => point !== null);
+}
+
+/**
+ * A link that hands the last fifty metres to the phone's own map.
+ *
+ * This app schedules a day; it does not do turn-by-turn, and should not try — the
+ * routing it holds is a duration, not a path. What it can do is stop being a dead end at
+ * the moment the owner is standing on a corner looking for a temple. `geo:` is the
+ * platform-neutral scheme: Android opens the user's chosen map, iOS opens Apple Maps,
+ * and a desktop browser falls back to whatever is registered, so no vendor is wired in.
+ * The name rides along as the query label so the pin says what it is.
+ */
+export function mapsLink(latitude: number, longitude: number, name: string): string {
+  const at = `${latitude.toFixed(6)},${longitude.toFixed(6)}`;
+  return `geo:${at}?q=${encodeURIComponent(`${at}(${name})`)}`;
 }

@@ -243,6 +243,10 @@ export interface PlaceMapProps {
   withKey?: boolean;
   /** Enables the zoomed-in detail fetch. Omit on a map nobody zooms. */
   tripId?: string;
+  /** Joins the pins in the order given. True on the itinerary, where the order *is* the
+   *  plan — a day is a sequence, and a scatter of numbered dots does not say that. False
+   *  on the shortlist, where nothing has been sequenced yet and a line would invent one. */
+  route?: boolean;
 }
 
 export function PlaceMap({
@@ -254,6 +258,7 @@ export function PlaceMap({
   focusId,
   withKey = true,
   tripId,
+  route = false,
 }: PlaceMapProps) {
   // Zoom and pan, because at city scale several hundred dots and a dozen pins overlap
   // and no amount of styling separates them — the answer to "where is it" is sometimes
@@ -808,11 +813,20 @@ export function PlaceMap({
           </text>
         ))}
 
+        {/* Under the pins, so a number is never crossed out by its own route. */}
+        {route && pinPoints.length > 1 ? (
+          <polyline
+            className="plan-map-route"
+            points={pinPoints.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ")}
+            strokeWidth={2 / view.zoom}
+          />
+        ) : null}
         {pinPoints.map((point) => {
           const isFocus = point.place_id === focusId;
           return (
             <g
-              className={`plan-map-point${isFocus ? " current" : ""}${focusId && !isFocus ? " context" : ""}`}
+              className={`plan-map-point${point.status ? ` ${point.status}` : ""}`
+                + `${isFocus ? " current" : ""}${focusId && !isFocus ? " context" : ""}`}
               key={point.place_id}
             >
               <circle cx={point.x} cy={point.y} r={(isFocus ? 10 : 8) / view.zoom} />

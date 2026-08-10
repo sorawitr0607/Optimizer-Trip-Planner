@@ -1406,6 +1406,93 @@ class OpenRouteServiceProvider:
         }
 
 
+class OpenMeteoForecastProvider:
+    """The actual weather for the actual dates, where the dates are close enough to know.
+
+    `OpenMeteoClimateProvider` answers "what is January like in Taipei", which is the
+    right question in August and the wrong one on 28 December. A forecast is the only
+    thing that can say "the second day is the wet one, move the outdoor day" -- and the
+    app already holds the operation that moves it.
+
+    Free and keyless like the archive it sits beside, and small: measured **0.9 KB in
+    1.0 s for 16 days**. It is *reported*, never folded into a score. A plan that
+    reshuffles itself because a forecast twitched is worse than one that says what it
+    knows and lets the owner decide -- the same rule `WF-047` set for cost and `WF-045`
+    for drift.
+    """
+
+    name = "open_meteo_forecast"
+    cache_version = "forecast-v1"
+    #: A forecast is worth re-asking for often; the archive is not.
+    cache_ttl_hours = 6
+    #: Open-Meteo's own ceiling. Past it there is nothing to fetch, not a worse answer.
+    horizon_days = 16
+
+    def __init__(self) -> None:
+        self.forecast_url = os.environ.get(
+            "TOURIST_FORECAST_URL", "https://api.open-meteo.com/v1/forecast"
+        )
+        self.user_agent = os.environ.get(
+            "TOURIST_USER_AGENT", "OptimizerTripPlanner/1.0 (local personal use)"
+        )
+
+    def cache_descriptor(self, latitude: float, longitude: float) -> dict[str, Any]:
+        return {
+            "provider": self.name,
+            "operation": "daily_forecast",
+            "version": self.cache_version,
+            # Rounded: a forecast does not differ across a city, and rounding is what
+            # lets every place in one trip share a single request.
+            "latitude": round(float(latitude), 1),
+            "longitude": round(float(longitude), 1),
+        }
+
+    def forecast(self, latitude: float, longitude: float) -> dict[str, Any]:
+        """Daily highs, lows and rain probability for as far ahead as anyone can see."""
+
+        query = urlencode(
+            {
+                "latitude": f"{float(latitude):.4f}",
+                "longitude": f"{float(longitude):.4f}",
+                "daily": "weather_code,temperature_2m_max,temperature_2m_min,"
+                "precipitation_probability_max,precipitation_sum",
+                "timezone": "auto",
+                "forecast_days": str(self.horizon_days),
+            }
+        )
+        payload = self._json(f"{self.forecast_url}?{query}")
+        daily = payload.get("daily") or {}
+        dates = daily.get("time") or []
+        days: list[dict[str, Any]] = []
+        for index, date in enumerate(dates):
+
+            def at(field: str) -> float | None:
+                values = daily.get(field) or []
+                if index >= len(values) or values[index] is None:
+                    return None
+                return float(values[index])
+
+            days.append(
+                {
+                    "date": str(date),
+                    "high_c": at("temperature_2m_max"),
+                    "low_c": at("temperature_2m_min"),
+                    "rain_chance": at("precipitation_probability_max"),
+                    "rain_mm": at("precipitation_sum"),
+                    "code": at("weather_code"),
+                }
+            )
+        return {"days": days, "attribution": "Open-Meteo", "license": "CC BY 4.0"}
+
+    def _json(self, url: str) -> dict[str, Any]:
+        request = Request(url, headers={"Accept": "application/json", "User-Agent": self.user_agent})
+        try:
+            with urlopen(request, timeout=20) as response:  # noqa: S310 - fixed API URL
+                return json.loads(response.read().decode("utf-8"))
+        except (HTTPError, URLError, TimeoutError, OSError, ValueError) as error:
+            raise ProviderUnavailable(f"Open-Meteo forecast unavailable: {error}") from error
+
+
 class OpenMeteoClimateProvider:
     """Monthly weather normals and local public holidays, both free and keyless.
 
@@ -1693,7 +1780,7 @@ class WikidataSummaryProvider:
     # under, so bumping this refetches every place once and no further -- without it a
     # place cached before geosearch existed keeps its empty gallery for the 60-day TTL,
     # which is what left cards blank after the source was added.
-    cache_version = "wikidata-summary-v3"
+    cache_version = "wikidata-summary-v4"
     # An encyclopedia article changes slowly and a description is not a fact the
     # planner schedules against, so this can sit for a long time.
     cache_ttl_days = 60
@@ -1846,6 +1933,76 @@ class WikidataSummaryProvider:
                 found.append(url)
         # Deterministic: geosearch returns distance order, but the page map is a dict
         # keyed by page id, so without sorting the gallery reshuffles between runs.
+        return sorted(found)
+
+    #: How far a *named* file may be from the place and still be of it. Wider than the
+    #: geosearch radius on purpose: this path already knows the file claims the place by
+    #: name, and the coordinate is only there to prove it is the right one of that name.
+    named_radius_metres = 2500
+    named_limit = 8
+
+    def named_photos(self, name: str, latitude: float, longitude: float) -> list[str]:
+        """Commons files whose *title* names this place and whose location agrees.
+
+        Geosearch asks "what was photographed here", which misses a photograph filed
+        under the place's name but geotagged from across the park — measured, it had
+        nothing for Shilin Presidential Residence Park while four files carry that exact
+        name. So the search runs the other way round as well.
+
+        **The coordinate check is what makes a global text search safe.** Searching
+        Commons for `Central Art Park` returns six photographs of Central Park in
+        Vinnytsya, Ukraine, none of which carry coordinates at all — so a file with no
+        location is refused outright rather than trusted, and one with a location must
+        agree with the place. Both filters, not either.
+
+        Never raises: this is the fallback to a fallback.
+        """
+
+        wanted = (name or "").strip()
+        if len(photo_key(wanted)) < PHOTO_NAME_MIN_CHARACTERS:
+            return []
+        query = urlencode(
+            {
+                "action": "query",
+                "format": "json",
+                "generator": "search",
+                # `filetype:bitmap` keeps out the SVG diagrams and PDFs a name match
+                # otherwise drags in.
+                "gsrsearch": f"filetype:bitmap {wanted}",
+                "gsrnamespace": "6",
+                "gsrlimit": str(self.named_limit),
+                "prop": "imageinfo|coordinates",
+                "iiprop": "url",
+                "iiurlwidth": "640",
+            }
+        )
+        try:
+            payload = self._json(f"{self.commons_url}?{query}")
+        except ProviderUnavailable:
+            return []
+        pages = ((payload.get("query") or {}).get("pages") or {})
+        found: list[str] = []
+        for page in pages.values() if isinstance(pages, dict) else []:
+            title = str(page.get("title") or "")
+            if not title.lower().endswith(self.photo_suffixes):
+                continue
+            if not photo_depicts_place(title, [wanted]):
+                continue
+            spot = (page.get("coordinates") or [None])[0]
+            if not spot:
+                continue
+            try:
+                away = _distance_metres(
+                    float(latitude), float(longitude), float(spot["lat"]), float(spot["lon"])
+                )
+            except (KeyError, TypeError, ValueError):
+                continue
+            if away > self.named_radius_metres:
+                continue
+            info = (page.get("imageinfo") or [{}])[0]
+            url = str(info.get("thumburl") or info.get("url") or "")
+            if url:
+                found.append(url)
         return sorted(found)
 
     def summary(self, qid: str) -> dict[str, Any]:

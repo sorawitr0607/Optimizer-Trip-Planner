@@ -6,6 +6,8 @@ import { Link, useParams } from "react-router";
 import {
   ApiError,
   rpc,
+  type Basemap,
+  type CountryOutline,
   type ExportDay,
   type ExportFallback,
   type ExportPlanItem,
@@ -13,9 +15,12 @@ import {
   type ExportStop,
   type Frozen,
   type PlanDrift,
+  type TripForecast,
 } from "../api/client";
-import { copy, copyFrom, type Language } from "../i18n/copy";
+import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
+import { mapsLink, type MapPlace } from "../shared/map";
+import { PlaceMap } from "./PlaceMap";
 
 const MAP_WIDTH = 420;
 const MAP_HEIGHT = 120;
@@ -210,17 +215,37 @@ export function CoordinateMap({
   stops,
   accommodationStatus,
   language,
+  tripId,
+  basemap = null,
+  outline = null,
 }: {
   anchor: ExportSnapshot["accommodation"]["anchor"];
   stops: ExportStop[];
   accommodationStatus: string;
   language: Language;
+  /** Enables the tiles and the zoomed-in detail. Omit and this is still a map, just the
+   *  drawn one. */
+  tripId?: string;
+  basemap?: Basemap | null;
+  outline?: CountryOutline | null;
 }) {
-  const rawPoints: CoordinatePoint[] = [];
+  // The same map `/places` draws, on the screen that is actually carried.
+  //
+  // This was a 420x120 strip of dots joined by straight lines, and its own comment said
+  // "no tiles or network" — written when that was the policy for every map here. So the
+  // screen used while *choosing* got streets, buildings and real tiles, and the screen
+  // used while *standing on the corner* kept the diagram. One component draws both now,
+  // which is also the only way they cannot disagree about where a place is.
+  //
+  // The stop list underneath stays exactly as it was: `WF-034`'s rule is that the
+  // drawing is never the only carrier, and it holds the statuses and the coordinates a
+  // map cannot spell out.
+  const points: MapPlace[] = [];
   if (anchor?.latitude != null && anchor.longitude != null) {
-    rawPoints.push({
-      id: "hotel",
+    points.push({
+      place_id: "hotel",
       label: "H",
+      name: copy("hotel_anchor", language),
       latitude: anchor.latitude,
       longitude: anchor.longitude,
       status: accommodationStatus === "booked" ? "confirmed" : "recheck",
@@ -228,37 +253,59 @@ export function CoordinateMap({
   }
   for (const stop of stops) {
     if (stop.latitude != null && stop.longitude != null) {
-      rawPoints.push({
-        id: stop.subject_id,
+      points.push({
+        place_id: stop.subject_id,
         label: String(stop.stop_number),
+        name: stop.display_name,
         latitude: stop.latitude,
         longitude: stop.longitude,
         status: stop.status,
       });
     }
   }
-  const points = plotCoordinates(rawPoints);
   return (
-    // derives-from: A1 numbered map; no tiles or network, and the list repeats every colour meaning.
+    // derives-from: A1 numbered map; the list below repeats every pin and every colour.
     <section className="plan-map">
       <h2 className="money-eyebrow">{copy("tab_map", language)}</h2>
       {points.length ? (
-        <svg aria-label={copy("tab_map", language)} role="img" viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`}>
-          {points.length > 1 ? <polyline className="plan-map-route" points={points.map((point) => `${point.x},${point.y}`).join(" ")} /> : null}
-          {points.map((point) => (
-            <g className={`plan-map-point ${point.status}`} key={point.id}>
-              <circle cx={point.x} cy={point.y} r={point.label === "H" ? 9 : 8} />
-              <text textAnchor="middle" x={point.x} y={point.y + 3}>{point.label}</text>
-            </g>
-          ))}
-        </svg>
+        <PlaceMap
+          basemap={basemap}
+          language={language}
+          outline={outline}
+          places={points}
+          route
+          title={copy("tab_map", language)}
+          tripId={tripId}
+          withKey={false}
+        />
       ) : <p>{copy("map_no_coordinates", language)}</p>}
       <ul className="plan-stops">
         {anchor ? (
-          <li><i className={`recheck ${accommodationStatus === "booked" ? "confirmed" : ""}`} /><b>H</b><span>{copy("hotel_anchor", language)} · {anchor.display_name}</span>{anchor.latitude != null && anchor.longitude != null ? <code>{anchor.latitude.toFixed(5)}, {anchor.longitude.toFixed(5)}</code> : null}</li>
+          <li>
+            <i className={`recheck ${accommodationStatus === "booked" ? "confirmed" : ""}`} /><b>H</b>
+            <span>{copy("hotel_anchor", language)} · {anchor.display_name}</span>
+            {anchor.latitude != null && anchor.longitude != null ? (
+              <a className="plan-stop-maps" href={mapsLink(anchor.latitude, anchor.longitude, anchor.display_name ?? "")}>
+                {copy("open_in_maps", language)} ↗
+              </a>
+            ) : null}
+          </li>
         ) : null}
         {stops.map((stop) => (
-          <li key={stop.subject_id}><i className={stop.status} /><b>{stop.stop_number}</b><span>{stop.display_name} · {stateText(stop.status, language)}</span>{stop.latitude != null && stop.longitude != null ? <code>{stop.latitude.toFixed(5)}, {stop.longitude.toFixed(5)}</code> : null}</li>
+          <li key={stop.subject_id}>
+            <i className={stop.status} /><b>{stop.stop_number}</b>
+            <span>{stop.display_name} · {stateText(stop.status, language)}</span>
+            {/* The coordinates stay: they are what the export prints and what a taxi
+                driver can be shown when no phone will cooperate. */}
+            {stop.latitude != null && stop.longitude != null ? (
+              <>
+                <a className="plan-stop-maps" href={mapsLink(stop.latitude, stop.longitude, stop.display_name)}>
+                  {copy("open_in_maps", language)} ↗
+                </a>
+                <code>{stop.latitude.toFixed(5)}, {stop.longitude.toFixed(5)}</code>
+              </>
+            ) : null}
+          </li>
         ))}
       </ul>
     </section>
@@ -267,6 +314,41 @@ export function CoordinateMap({
 
 export function ItineraryPage() {
   const { tripId = "" } = useParams();
+  // What the map needs to still be a map with no network: the city's own roads and water
+  // and the country's outline, both cached for a month or more. Tiles are the picture
+  // when there is a network; these are the picture when there is not.
+  const basemap = useQuery({
+    queryKey: ["basemap", tripId],
+    queryFn: () =>
+      typeof document !== "undefined" && document.documentElement.dataset.capture
+        ? rpc<Basemap | null>("get_basemap", { trip_id: tripId })
+        : rpc<Basemap | null>("refresh_basemap", { trip_id: tripId }),
+    enabled: Boolean(tripId),
+    staleTime: Infinity,
+    retry: false,
+  });
+  // The real weather for these dates, once they are near enough for anyone to know it.
+  // Shown beside the day, never folded into the plan: a schedule that reshuffles itself
+  // because a forecast twitched is worse than one that says what it knows.
+  const forecast = useQuery({
+    queryKey: ["trip_forecast", tripId],
+    queryFn: () => rpc<TripForecast>("trip_forecast", { trip_id: tripId }),
+    enabled: Boolean(tripId),
+    retry: false,
+  });
+  const outline = useQuery({
+    queryKey: ["country_outline", tripId],
+    queryFn: () =>
+      rpc<CountryOutline | null>(
+        typeof document !== "undefined" && document.documentElement.dataset.capture
+          ? "country_outline"
+          : "refresh_country_outline",
+        { trip_id: tripId },
+      ),
+    enabled: Boolean(tripId),
+    staleTime: Infinity,
+    retry: false,
+  });
   const { language } = useLanguage();
   const [chosenDate, setChosenDate] = useState("");
   const [tab, setTab] = useState<"timeline" | "map">("timeline");
@@ -292,6 +374,7 @@ export function ItineraryPage() {
   }
 
   const plan = snapshot.data.data;
+
   const day = plan.days.find((item) => item.date === chosenDate) ?? plan.days[0];
   if (!day) return <p>{copy("no_schedule", language)}</p>;
   const totals = day.totals;
@@ -359,6 +442,19 @@ export function ItineraryPage() {
             {copy("active_plan", language)} <code>{versionTag}</code>
           </span>
           <strong className="dayhead-date">{day.date}</strong>
+          {(() => {
+            const weather = forecast.data?.days.find((row) => row.date === day.date);
+            if (!weather || weather.high_c === null || weather.low_c === null) return null;
+            return (
+              <span className="dayhead-forecast">
+                {copyFormat("forecast_day", language, {
+                  low: Math.round(weather.low_c),
+                  high: Math.round(weather.high_c),
+                  rain: Math.round(weather.rain_chance ?? 0),
+                })}
+              </span>
+            );
+          })()}
           <span className="dayhead-place">
             {copy(plan.stamp.variant_status, language)} · {plan.stamp.base_currency}
           </span>
@@ -410,7 +506,15 @@ export function ItineraryPage() {
         <button aria-selected={tab === "map"} onClick={() => setTab("map")} role="tab" type="button">{copy("tab_map", language)}</button>
       </div>
       {tab === "timeline" ? <Timeline day={day} language={language} /> : (
-        <CoordinateMap anchor={plan.accommodation.anchor} stops={day.stops} accommodationStatus={plan.accommodation.status} language={language} />
+        <CoordinateMap
+          accommodationStatus={plan.accommodation.status}
+          anchor={plan.accommodation.anchor}
+          basemap={basemap.data ?? null}
+          language={language}
+          outline={outline.data ?? null}
+          stops={day.stops}
+          tripId={tripId}
+        />
       )}
 
       <h2 className="money-eyebrow">{copy("downloads", language)}</h2>

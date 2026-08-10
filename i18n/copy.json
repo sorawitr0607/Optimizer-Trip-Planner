@@ -1230,7 +1230,9 @@
       "map_detail_unavailable": "Street detail unavailable just now — OpenStreetMap is busy. It retries when you move the map.",
       "map_span_metres": "About {m} m across · scroll to zoom out to the country, drag to move",
       "map_attribution": "© OpenStreetMap contributors",
-      "map_offline": "Drawn offline — map tiles could not be reached"
+      "map_offline": "Drawn offline — map tiles could not be reached",
+      "open_in_maps": "Open in Maps",
+      "forecast_day": "Forecast {low}–{high}°C · rain {rain}%"
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -2082,7 +2084,9 @@
       "map_detail_unavailable": "ยังโหลดรายละเอียดถนนไม่ได้ — OpenStreetMap ไม่ว่าง ระบบจะลองใหม่เมื่อเลื่อนแผนที่",
       "map_span_metres": "กว้างประมาณ {m} ม. · เลื่อนเพื่อซูมออกไปถึงระดับประเทศ ลากเพื่อเลื่อน",
       "map_attribution": "© ผู้ร่วมสร้าง OpenStreetMap",
-      "map_offline": "วาดแบบออฟไลน์ — เข้าถึงไทล์แผนที่ไม่ได้"
+      "map_offline": "วาดแบบออฟไลน์ — เข้าถึงไทล์แผนที่ไม่ได้",
+      "open_in_maps": "เปิดในแผนที่",
+      "forecast_day": "พยากรณ์ {low}–{high}°C · ฝน {rain}%"
     }
   }
 }

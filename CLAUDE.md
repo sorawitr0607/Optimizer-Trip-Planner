@@ -810,6 +810,41 @@ aside, and the moment the view reaches past its edge the basemap comes back. The
 whether or not it is small enough to fetch, because the fetch gate and the coverage test are different
 questions about the same rectangle.
 
+**Four things followed from unlocking the network, 2026-08-10 (`WF-048`).** Worth stating why they belong
+together: `WF-034` was never protecting the *planning*, which has always called Overpass, Nominatim,
+Wikidata, Commons and Open-Meteo. It was protecting the **trip** — the app working in Taipei with no data.
+So unlocking it opens up what the app can do **on the ground**, and that is where the gaps were.
+
+**`/itinerary` now draws the same map as `/places`.** It was a 420×120 strip of dots joined by straight
+lines, and its own comment still read "no tiles or network" — written when that was the policy everywhere.
+So the screen used while *choosing* got streets, buildings and tiles, and the screen used while *standing
+on a corner* kept the diagram. One component draws both now, which is also the only way the two cannot
+disagree about where a place is. The day's stops are joined **in order**, because a day is a sequence and a
+scatter of numbered dots does not say that — `route` is off on the shortlist, where nothing is sequenced
+yet and a line would invent one. The stop list underneath is untouched: `WF-034`'s rule that the drawing is
+never the only carrier still holds, and it still prints the coordinates.
+
+**Every stop can hand off to the phone's own map.** This app schedules a day; it does not do turn-by-turn
+and should not try — what it stores is a duration, not a path. `mapsLink` uses the `geo:` scheme rather
+than a vendor URL, so Android opens whichever map the owner chose and iOS opens Apple Maps.
+
+**The weather is the real forecast for the real dates, where they are close enough to know.**
+`OpenMeteoForecastProvider` sits beside the archive that answers "what is January like in Taipei" — the
+right question in August and the wrong one on 28 December. Free, keyless, **0.9 KB in 1.0 s for 16 days**,
+cached six hours. Beyond the horizon it returns `covered: false` rather than a guess, which is the true
+answer and is what stops a fabricated day looking exactly like a real one. Reported beside the day, never
+folded into a score: a plan that reshuffles itself because a forecast twitched is worse than one that says
+what it knows — the same rule `WF-047` set for cost and `WF-045` for drift.
+
+**A photograph can now be found by name as well as by place.** Geosearch asks "what was photographed at
+this spot", which misses a file filed under the place's own name but geotagged from across the park —
+measured, it had nothing for Shilin Presidential Residence Park while **four files carry that exact name**.
+The search now runs both ways. **The coordinate check is what makes a global text search safe**: Commons
+returns six photographs of *Central Park in Vinnytsya, Ukraine* for `Central Art Park`, and not one of them
+carries coordinates — so a file with no location is refused outright rather than trusted, and one with a
+location must fall within `named_radius_metres`. Both filters, never either. `cache_version` goes to v4 so
+places that came up blank are asked again once.
+
 **The map shows OpenStreetMap's own tiles when there is a network, as of 2026-08-10 — and `WF-034` §3 was
 revised by the owner to allow it.** Asked whether the map could look exactly like `openstreetmap.org`, the
 answer was that it never could: that site is a *tile* service rendering the whole planet database through a

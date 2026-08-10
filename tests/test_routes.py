@@ -898,6 +898,53 @@ class NearbyPhotoMatchTest(unittest.TestCase):
 
         self.assertEqual(["https://example.invalid/right.jpg"], found)
 
+    def test_a_named_search_needs_the_location_to_agree(self) -> None:
+        """What makes a *global* text search safe. Searching Commons for `Central Art
+        Park` really returns six photographs of Central Park in Vinnytsya, Ukraine, and
+        not one of them carries coordinates — so a file with no location is refused
+        rather than trusted, and one with a location has to agree."""
+
+        provider = WikidataSummaryProvider()
+        provider._json = lambda url: {  # type: ignore[method-assign]
+            "query": {
+                "pages": {
+                    "1": {  # Right name, right place.
+                        "title": "File:Shilin Presidential Residence Park.jpg",
+                        "coordinates": [{"lat": 25.0934, "lon": 121.5308}],
+                        "imageinfo": [{"thumburl": "https://example.invalid/right.jpg"}],
+                    },
+                    "2": {  # Right name, wrong continent.
+                        "title": "File:Shilin Presidential Residence Park.jpg",
+                        "coordinates": [{"lat": 49.23, "lon": 28.47}],
+                        "imageinfo": [{"thumburl": "https://example.invalid/ukraine.jpg"}],
+                    },
+                    "3": {  # Right name, no location at all.
+                        "title": "File:Shilin Presidential Residence Park.jpg",
+                        "imageinfo": [{"thumburl": "https://example.invalid/nowhere.jpg"}],
+                    },
+                }
+            }
+        }
+
+        found = provider.named_photos("Shilin Presidential Residence Park", 25.0934, 121.5308)
+
+        self.assertEqual(["https://example.invalid/right.jpg"], found)
+
+    def test_a_named_search_still_applies_the_name_rule(self) -> None:
+        provider = WikidataSummaryProvider()
+        provider._json = lambda url: {  # type: ignore[method-assign]
+            "query": {
+                "pages": {
+                    "1": {
+                        "title": "File:A bus at the station.jpg",
+                        "coordinates": [{"lat": 25.0934, "lon": 121.5308}],
+                        "imageinfo": [{"thumburl": "https://example.invalid/bus.jpg"}],
+                    }
+                }
+            }
+        }
+        self.assertEqual([], provider.named_photos("Shilin Presidential Residence Park", 25.0934, 121.5308))
+
     def test_a_place_with_no_name_gets_no_photograph_rather_than_a_guess(self) -> None:
         provider = WikidataSummaryProvider()
         called: list[str] = []

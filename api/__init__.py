@@ -42,6 +42,7 @@ ACTIONS = (
     "refresh_map_detail",
     "country_outline",
     "refresh_country_outline",
+    "trip_forecast",
     "save_setup",
     "get_setup",
     "setup_vocabulary",

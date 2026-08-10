@@ -594,6 +594,22 @@ export interface CountryOutline {
   rings: [number, number][][];
 }
 
+/** `WF-048`. The real weather for the trip's own dates, where they are near enough to
+ *  know. `covered` is false beyond the forecast horizon, which is the true answer. */
+export interface TripForecast {
+  days: {
+    date: string;
+    high_c: number | null;
+    low_c: number | null;
+    rain_chance: number | null;
+    rain_mm: number | null;
+  }[];
+  covered: boolean;
+  trip_start: string | null;
+  trip_end: string | null;
+  horizon_end: string | null;
+}
+
 export interface MapDetail {
   bbox: number[];
   /** Building footprints, as closed rings of `[latitude, longitude]`. */

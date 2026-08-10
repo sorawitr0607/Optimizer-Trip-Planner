@@ -3621,6 +3621,17 @@
   background: var(--map-land);
 }
 
+.dayhead-forecast {
+  color: var(--text-muted);
+  font-size: var(--text-2xs);
+}
+
+.plan-stop-maps {
+  color: var(--color-accent);
+  font-size: var(--text-2xs);
+  white-space: nowrap;
+}
+
 .places-map-credit {
   color: var(--text-muted);
   font-size: var(--text-2xs);

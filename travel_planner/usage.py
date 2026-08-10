@@ -40,6 +40,7 @@ PRICES_USD = {
     "openstreetmap:basemap": 0.0,
     "openstreetmap:map_detail": 0.0,
     "openstreetmap:country_outline": 0.0,
+    "open_meteo:forecast": 0.0,
     # Wikidata and Wikipedia. Free, no key, and it replaces what
     # google_places:card_details charged US$0.04 a place for.
     "wikidata:summary": 0.0,

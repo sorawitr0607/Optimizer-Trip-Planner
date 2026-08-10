@@ -39,6 +39,7 @@ from .optimizer import (
     validate_variant,
 )
 from .providers import (
+    OpenMeteoForecastProvider,
     CARD_PHOTO_LIMIT,
     GooglePlacesCardProvider,
     GooglePlacesOpeningHoursProvider,
@@ -120,6 +121,7 @@ class PlannerActions:
         venue_notice_provider: Any = None,
         summary_provider: Any = None,
         climate_provider: Any = None,
+        forecast_provider: Any = None,
         timezone_provider: Any = None,
         hours_provider: Any = None,
         card_provider: Any = None,
@@ -136,6 +138,7 @@ class PlannerActions:
         self.venue_notice_provider = venue_notice_provider
         self.summary_provider = summary_provider
         self.climate_provider = climate_provider
+        self.forecast_provider = forecast_provider
         self.timezone_provider = timezone_provider
         self.hours_provider = hours_provider
         self.card_provider = card_provider
@@ -1984,6 +1987,67 @@ class PlannerActions:
         )
         return value
 
+    def trip_forecast(self, trip_id: str) -> dict[str, Any]:
+        """The real weather for the trip's own dates, where they are near enough to know.
+
+        `travel_month_guide` answers "which month suits this destination", which is the
+        question in August. On the 28th of December the question is "which of these five
+        days is the wet one", and only a forecast answers it. Reported beside the plan and
+        never folded into a score: a plan that reshuffles itself because a forecast
+        twitched is worse than one that says what it knows -- the same rule `WF-047` set
+        for cost and `WF-045` for drift.
+
+        Returns `covered: False` rather than a guess when the trip is beyond the horizon,
+        because "we cannot see that far yet" is the true answer and a fabricated one
+        would be indistinguishable from a real one on the screen.
+        """
+
+        trip = self.store.get_trip(trip_id)
+        if trip is None:
+            raise PlannerRefusal("unknown_trip", trip_id=trip_id)
+        setup = self.store.get_setup(trip_id)
+        basics = setup.snapshot.as_dict().get("trip_basics", {}) if setup else {}
+        start, end = basics.get("start_date"), basics.get("end_date")
+
+        discovery = self.get_latest_discovery(trip_id)
+        box = (discovery.report.as_dict() if discovery else {}).get("query_boundary")
+        if not (isinstance(box, list) and len(box) == 4):
+            raise PlannerRefusal("discovery_required_for_climate", trip_id=trip_id)
+        latitude = (float(box[0]) + float(box[2])) / 2
+        longitude = (float(box[1]) + float(box[3])) / 2
+
+        provider = self.forecast_provider or OpenMeteoForecastProvider()
+        now = datetime.now(timezone.utc)
+        fingerprint = freeze_snapshot(provider.cache_descriptor(latitude, longitude)).sha256
+        cache = self.store.get_provider_cache(provider.name, fingerprint)
+        if cache and cache.expires_at > now.isoformat():
+            value = cache.snapshot.as_dict()
+        else:
+            self._spend(operation="open_meteo:forecast", count=1, trip_id=trip_id, detail={})
+            value = provider.forecast(latitude, longitude)
+            self.store.put_provider_cache(
+                ProviderCacheEntry(
+                    provider=provider.name,
+                    request_fingerprint=fingerprint,
+                    snapshot=freeze_snapshot(value),
+                    retrieved_at=now.isoformat(),
+                    expires_at=(now + timedelta(hours=provider.cache_ttl_hours)).isoformat(),
+                )
+            )
+
+        days = [
+            day for day in value.get("days", [])
+            if start and end and str(start) <= str(day.get("date", "")) <= str(end)
+        ]
+        return {
+            "days": days,
+            "covered": bool(days),
+            "trip_start": start,
+            "trip_end": end,
+            "horizon_end": (value.get("days") or [{}])[-1].get("date"),
+            "attribution": value.get("attribution"),
+        }
+
     def country_outline(self, trip_id: str) -> dict[str, Any] | None:
         """The stored country outline, or nothing. A read; never fetches."""
 
@@ -2348,9 +2412,28 @@ class PlannerActions:
         names = [str(place.get("name") or "")]
         names.extend(str(value or "") for value in (place.get("names") or {}).values())
         try:
-            return list(finder(float(latitude), float(longitude), names))
+            found = list(finder(float(latitude), float(longitude), names))
         except (ProviderUnavailable, TypeError, ValueError):
             return []
+        if found:
+            return found
+
+        # Then the other way round: search Commons for the *name* and check the location
+        # agrees. Geosearch asks what was photographed at a spot, which misses a
+        # photograph filed under the place's own name but geotagged from across the park
+        # -- measured, it had nothing for Shilin Presidential Residence Park while four
+        # files carry that exact name.
+        by_name = getattr(provider, "named_photos", None)
+        if by_name is None:
+            return []
+        for name in names:
+            try:
+                found = list(by_name(name, float(latitude), float(longitude)))
+            except (ProviderUnavailable, TypeError, ValueError):
+                return []
+            if found:
+                return found
+        return []
 
     def _store_summary(
         self,
