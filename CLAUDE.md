@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm --prefix web install                                             # first web run only
 uv run --locked python -m api                                        # production shell on 127.0.0.1:8765
 uv run --locked python scripts/check.py                              # every free Python + web gate
-uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 483 tests, ~11s
+uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 485 tests, ~10s
 uv run --locked python -m unittest tests.test_optimizer.OptimizerCoreTest.test_safe_route_and_weather_fallback_are_selected  # one test
 python3 scripts/validate_regression_fixtures.py                      # fixture catalog structure
 uv run --locked python scripts/run_optimizer_regressions.py          # 27 historic cases through the real optimizer
@@ -292,7 +292,7 @@ Do not machine-translate the rest. The residual is places like 華江橋下自�
 ground) with no name in any free source, and inventing one is fabrication, not naming.
 
 **The planner recommends where to stay as of 2026-08-06 (`WF-040`).** `travel_planner/areas.py` is a new
-pure module and `actions.recommend_areas` the coordinator; `recommend_areas` is the **64th** allowlisted
+pure module and `actions.recommend_areas` the coordinator; `recommend_areas` was the **64th** allowlisted
 method. **The unit is a transit station, not a hotel and not a district** — that is how the owner
 searches ("it only near ximenting station"), it is the only unit whose travel time the app can measure
 exactly, and district names do not generalise (Taipei's OSM addresses carry `中正區` on 278 of 832
@@ -314,7 +314,7 @@ riding and walking** — otherwise a station across the road from a place scores
 
 **Which months suit a destination is measured, not recalled, as of 2026-08-08 (`WF-048`).**
 `travel_planner/climate.py` is a new pure module and `actions.travel_month_guide` the coordinator, the
-**75th** allowlisted method and a read. A model asked "when should I go to Seoul" answers instantly and
+**75th** allowlisted method when it landed, and a read. A model asked "when should I go to Seoul" answers instantly and
 unverifiably — the failure `WF-046` measured — so this answers from Open-Meteo's archive (five whole
 years of recorded daily highs, lows and precipitation, keyless, free) and Nager.Date's published public
 holidays. Both are priced at **US$0.00** and recorded anyway, so call counts stay reconcilable.
@@ -503,7 +503,8 @@ rule. Unknown stable codes render visibly as `⚠ CODE`; never prettify them int
 
 Python uses `unittest`; the webapp uses Vitest. No network, no paid API, no Python fixtures framework.
 **`AppTest` is gone** — S6 removed the 18 tests that used it, having first moved the 14 portable
-behaviours down to actions/core/exports. The suite is **311**.
+behaviours down to actions/core/exports. It was **311** at S6; it is **485** now, plus 85 Vitest cases in
+`web/`.
 `tests/fixtures/historic_regressions.json` encodes 20 atomic + 7 interaction failures from four real
 past trips; `scripts/run_optimizer_regressions.py` replays all of them through the real optimizer.
 Behavior changes to the optimizer should be expressed there.
@@ -649,9 +650,12 @@ readiness ICS — both snapshot-in, bytes-out. **The 9:16 poster and the trip PD
 expenses into THB against an owner-editable, timestamped rate snapshot; a paid charge locks its actual
 THB so a later rate cannot rewrite it, and a missing rate stays a visible gap rather than a guess.
 **Phase 2 S5 is complete:** `api/` owns the localhost boundary and downloads, `web/` owns the nine
-routes and in-place `StageGate`, and `scripts/check.py` is the one free green command. The allowlist is
-**61 methods**: 51 at S1, five split-ledger ones at S2, `setup_vocabulary` at S3, the paid-call preflight
-and export-snapshot reads at S4, then `checklist_vocabulary` at S5, and `refresh_transit_routes` for `WF-038`; 28 refusal codes. **All nine routes are
+routes and in-place `StageGate`, and `scripts/check.py` is the one free green command. The allowlist was
+**61 methods** at S5 — 51 at S1, five split-ledger ones at S2, `setup_vocabulary` at S3, the paid-call
+preflight and export-snapshot reads at S4, then `checklist_vocabulary` at S5, and `refresh_transit_routes`
+for `WF-038` — and is **82** now, the additions being `WF-039`'s comfort tradeoffs, `WF-040`'s
+`recommend_areas`, and `WF-048`'s month guide, basemap pair, map detail, country-outline pair, route shapes
+and trip forecast. **37 refusal codes.** `tests/test_api.py` asserts the count, so it cannot drift silently. **All nine routes are
 real screens** as of 2026-08-04 — `/setup`, `/places`, `/evidence`, `/optimize`, `/itinerary`, `/readiness`,
 `/costs`, `/split` and `/revise`. There is no `StagePage`, no `gated()` wrapper and no `stage_stub` copy key;
 they went with the last stub. `/evidence` was built between S5 and S6 because **no slice row owned it** and

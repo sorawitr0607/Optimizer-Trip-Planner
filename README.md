@@ -22,12 +22,31 @@ uv run --locked python -m api        # http://127.0.0.1:8765
 **itinerary**, **readiness**, **costs**, **split** and **revise**. A saved trip runs end to end — discovery,
 ranking, evidence, activation, readiness, costs, split and workbook/calendar export.
 
+### The map
+
+Every place, day and route is drawn on a real map. **Online it is OpenStreetMap's own tiles** — the same
+images `openstreetmap.org` serves. **Offline it draws itself** from data already on disk: land use, water,
+parks, building footprints, the road hierarchy with street names, rail, and station entrances, all from one
+free Overpass request per window. It falls back the moment a tile fails to load, so the plan still works on
+a plane, and it says which of the two you are looking at.
+
+Zoom out far enough and the destination country's own outline appears, so a place can be seen in its
+country rather than only its city. `/itinerary` opens on the map, drawing the day's stops in order along
+the walk actually taken, and every stop hands off to the phone's own map for the last fifty metres.
+
+This reverses `WF-034` §3, which ruled out tiles to protect the app's premise of a plane and a hotel with
+no usable network. The revision is recorded in that artifact with its reasoning: tiles are a layer over the
+offline map, never instead of it. `© OpenStreetMap contributors` is shown beside every map, which the ODbL
+requires of the geometry as well.
+
 The app uses `data/tourist.sqlite3` by default. Copy `secrets.example.json` to
 `secrets.local.json` for optional provider configuration; never commit local secrets.
 
-> **The database is at schema 13**, bumped on 2026-08-04. `data/tourist-pre-v13-2026-08-04.sqlite3`
-> holds the pre-bump file at version 12 and is the only way back — there is no downgrade path by decision.
-> Any future bump copies the file first and refuses to migrate if that copy fails.
+> **The database is at schema 14**, bumped on 2026-08-07 for `WF-039`'s comfort acceptances.
+> `data/tourist-pre-v14-2026-08-07.sqlite3` holds the pre-bump file at version 13 and is the only way
+> back — there is no downgrade path by decision. Any bump copies the file first and refuses to migrate if
+> that copy fails. No schema change is permitted between 29 December 2026 and 4 January 2027: those are the
+> trip's own dates.
 
 ## Repository map
 
@@ -38,6 +57,10 @@ The app uses `data/tourist.sqlite3` by default. Copy `secrets.example.json` to
 - `travel_planner/exporters.py` — snapshot-in, bytes-out writers: the six-sheet Excel workbook and the
   readiness ICS. The 9:16 poster and the trip PDF were dropped in slice S0, and with them the export-font
   requirement.
+- `travel_planner/climate.py` and `travel_planner/areas.py` — pure modules, like the rest of the core:
+  which months suit a destination, and which station neighbourhood to stay in.
+- `web/src/stages/PlaceMap.tsx` and `web/src/shared/tiles.ts` — the one map component every screen draws,
+  and the tile arithmetic behind it.
 - `travel_planner/destinations.py` — the country/city picker table. A convenience only: both
   dropdowns accept a typed value, so any worldwide destination still works.
 - `tests/` — deterministic unit tests; historic trip regressions are in `tests/fixtures/`.
