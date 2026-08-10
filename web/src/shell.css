@@ -3607,6 +3607,62 @@
 .places-map-city.stay { fill: var(--map-poi-stay); opacity: 0.85; }
 .places-map-city.other { fill: var(--map-poi-other); opacity: var(--opacity-tint-40); }
 
+/* A dot is a control when the map can open a card, so it says so. The stroke is a halo
+   rather than an outline: it keeps a dot legible where it sits on a dark road. */
+.places-map-city.pickable {
+  cursor: pointer;
+}
+
+.places-map-city.pickable:hover {
+  stroke: var(--map-label-halo);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+/* What the dots mean, under the map that draws them. Without it they are confetti —
+   the question "what is the dot" is the one this answers. */
+.places-map-legend {
+  display: grid;
+  gap: 4px;
+}
+
+.places-map-legend p {
+  color: var(--text-muted);
+  font-size: var(--text-2xs);
+  margin: 0;
+}
+
+.places-map-legend ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.places-map-legend li {
+  align-items: center;
+  color: var(--text-muted);
+  display: flex;
+  font-size: var(--text-2xs);
+  gap: 5px;
+}
+
+.places-map-swatch {
+  border-radius: var(--radius-pill);
+  display: inline-block;
+  height: 8px;
+  width: 8px;
+}
+
+.places-map-swatch.food { background: var(--map-poi-food); }
+.places-map-swatch.shop { background: var(--map-poi-shop); }
+.places-map-swatch.culture { background: var(--map-poi-culture); }
+.places-map-swatch.outdoors { background: var(--map-poi-outdoors); }
+.places-map-swatch.stay { background: var(--map-poi-stay); }
+.places-map-swatch.other { background: var(--map-poi-other); }
+
 .places-map-rose text {
   fill: var(--text-muted);
   font-size: 9px;

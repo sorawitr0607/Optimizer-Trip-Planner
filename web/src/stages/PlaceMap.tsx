@@ -107,9 +107,20 @@ const AREA_TONES: Record<string, string> = {
   industrial: "industrial", construction: "construction",
 };
 
-/** The families a discovered place is coloured by, in the spirit of a map legend: food
- *  warm, shopping blue, culture purple, outdoors green. The catalogue already carries a
- *  category for every candidate, so this costs no request and no new data. */
+/**
+ * The families a discovered place is coloured by: food warm, shopping blue, culture
+ * purple, outdoors green, lodging pink. The catalogue already carries a category for
+ * every candidate, so this costs no request and no new data.
+ *
+ * **These dots are the point of the city view**, and were nearly deleted for looking
+ * like noise. They are every attraction the search found, which is exactly the question
+ * "where are the things I could add, and which part of town is each in" — the numbered
+ * pins only show what has already been chosen, so on their own the map can never help
+ * anyone choose. They were unreadable rather than unnecessary: no legend, no name, and
+ * nothing happened when you touched one. Now the legend names the families, a dot
+ * carries its own name, and tapping one opens that place's card.
+ */
+const POI_FAMILIES = ["food", "shop", "culture", "outdoors", "stay", "other"] as const;
 const POI_TONES: Record<string, string> = {
   restaurant: "food", cafe: "food", fast_food: "food", bar: "food", pub: "food",
   marketplace: "food", food_court: "food",
@@ -180,6 +191,9 @@ export interface PlaceMapProps {
   withKey?: boolean;
   /** Enables the zoomed-in detail fetch. Omit on a map nobody zooms. */
   tripId?: string;
+  /** Opens a discovered place's card. Given one, the dots become the way to choose from
+   *  the map rather than only to look at it. */
+  onPick?: (placeId: string) => void;
 }
 
 export function PlaceMap({
@@ -191,6 +205,7 @@ export function PlaceMap({
   focusId,
   withKey = true,
   tripId,
+  onPick,
 }: PlaceMapProps) {
   // Zoom and pan, because at city scale several hundred dots and a dozen pins overlap
   // and no amount of styling separates them — the answer to "where is it" is sometimes
@@ -222,6 +237,7 @@ export function PlaceMap({
         kind: "city" as const,
         place_id: item.place_id,
         category: item.category ?? "",
+        name: item.name ?? "",
         latitude: item.latitude as number,
         longitude: item.longitude as number,
       }));
@@ -318,7 +334,6 @@ export function PlaceMap({
   const { lines, linePoints, areas, buildings, roads, rails, markers } = geometry;
   const { cityPoints, pinPoints, across } = geometry;
   const focused = pinPoints.find((point) => point.place_id === focusId);
-  const hasDetail = roads.length > 0 || buildings.length > 0;
 
   // The view the map opens on, and the one Reset returns to.
   //
@@ -376,19 +391,32 @@ export function PlaceMap({
   // only for the window actually on screen. The inverse of the same projection is what
   // makes "the window actually on screen" expressible as latitude and longitude.
   const inverse = geometry.projection;
-  const visible = (() => {
+  const windowBox = (() => {
     if (!inverse) return null;
     const a = inverse.toLatLon(view.x, view.y);
     const b = inverse.toLatLon(view.x + FRAME.width / view.zoom, view.y + FRAME.height / view.zoom);
-    const box = [
+    return [
       Math.min(a.latitude, b.latitude), Math.min(a.longitude, b.longitude),
       Math.max(a.latitude, b.latitude), Math.max(a.longitude, b.longitude),
     ].map((value) => Number(value.toFixed(3)));
-    // Wider than this and a footprint is sub-pixel anyway, so the provider refuses and
-    // there is nothing to gain by asking.
-    return Math.max(box[2] - box[0], box[3] - box[1]) <= DETAIL_MAX_SPAN ? box : null;
   })();
+  // Wider than this and a footprint is sub-pixel anyway, so the provider refuses and
+  // there is nothing to gain by asking.
+  const visible =
+    windowBox && Math.max(windowBox[2] - windowBox[0], windowBox[3] - windowBox[1]) <= DETAIL_MAX_SPAN
+      ? windowBox
+      : null;
   const windowKey = visible ? visible.join(",") : "";
+  // **Does the detail still cover what is on screen?** It is one window's worth, so
+  // zooming out past it left the map blank except for that patch — the city underneath
+  // had been switched off the moment the detail arrived and never came back. The
+  // city-wide basemap is drawn again as soon as the view reaches past the edge of the
+  // detailed window, which is what makes zooming out show the city again.
+  const detailCovers = Boolean(
+    detail && windowBox
+      && windowBox[0] >= detail.bbox[0] && windowBox[1] >= detail.bbox[1]
+      && windowBox[2] <= detail.bbox[2] && windowBox[3] <= detail.bbox[3],
+  );
 
   // Wheel is bound by hand rather than through `onWheel`, because React registers its
   // own wheel listener **passively** — `preventDefault` inside a JSX handler is ignored,
@@ -458,7 +486,7 @@ export function PlaceMap({
   const leastLength = acrossView * LABEL_MIN_SHARE;
   const labelSize = 7 / view.zoom;
   const longestByName = new Map<string, (typeof roads)[number]>();
-  if (view.zoom >= LABEL_FROM_ZOOM) {
+  if (detailCovers && view.zoom >= LABEL_FROM_ZOOM) {
     for (const road of roads) {
       if (!road.name || road.length < leastLength) continue;
       const held = longestByName.get(road.name);
@@ -533,16 +561,20 @@ export function PlaceMap({
 
         {/* Painted in the order a map is read: ground, then water and green, then what
             is built on it, then what runs over it, then what is written on it. */}
-        {areas.map((area, index) => (
-          <polygon className={`places-map-area ${area.tone}`} key={`a-${index}`} points={area.points} />
-        ))}
-        {buildings.map((points, index) => (
-          <polygon className="places-map-building" key={`b-${index}`} points={points} />
-        ))}
+        {detailCovers
+          ? areas.map((area, index) => (
+              <polygon className={`places-map-area ${area.tone}`} key={`a-${index}`} points={area.points} />
+            ))
+          : null}
+        {detailCovers
+          ? buildings.map((points, index) => (
+              <polygon className="places-map-building" key={`b-${index}`} points={points} />
+            ))
+          : null}
 
         {/* The city-wide basemap steps aside once the real streets are here, rather than
             drawing a second, coarser set of the same roads on top of them. */}
-        {hasDetail
+        {detailCovers
           ? null
           : lines.map((line, index) => (
               <polyline
@@ -557,7 +589,7 @@ export function PlaceMap({
 
         {/* Casings for every road first, then every fill: done class by class the casing
             of the next road would cut a notch out of the fill of the last. */}
-        {ROAD_ORDER.map((cls) =>
+        {(detailCovers ? ROAD_ORDER : []).map((cls) =>
           roads.filter((road) => road.cls === cls && ROAD_STYLES[cls].casing).map((road, index) => (
             <polyline
               className={`places-map-road-casing ${ROAD_STYLES[cls].tone}`}
@@ -567,7 +599,7 @@ export function PlaceMap({
             />
           )),
         )}
-        {ROAD_ORDER.map((cls) =>
+        {(detailCovers ? ROAD_ORDER : []).map((cls) =>
           roads.filter((road) => road.cls === cls).map((road, index) => (
             <polyline
               className={`places-map-road ${ROAD_STYLES[cls].tone}`}
@@ -580,12 +612,12 @@ export function PlaceMap({
 
         {/* Rail over road: a metro line passes under the street it follows, but on a map
             it is the line you are trying to find. */}
-        {rails.map((rail, index) => (
+        {(detailCovers ? rails : []).map((rail, index) => (
           <polyline className={`places-map-rail ${rail.cls}`} key={`t-${index}`} points={rail.points} />
         ))}
 
         {/* Which way the traffic goes, on the roads big enough to care about. */}
-        {view.zoom >= LABEL_FROM_ZOOM
+        {detailCovers && view.zoom >= LABEL_FROM_ZOOM
           ? roads
               .filter((road) => road.oneway && road.length >= leastLength && ROAD_STYLES[road.cls].casing >= 5)
               .slice(0, 60)
@@ -608,7 +640,7 @@ export function PlaceMap({
 
         {/* Transit and service markers from OpenStreetMap: a station exit is the single
             most useful thing on a city map you are navigating on foot. */}
-        {markers.map((marker, index) => (
+        {(detailCovers ? markers : []).map((marker, index) => (
           <circle
             className={`places-map-marker ${marker.kind}`}
             cx={marker.x}
@@ -623,12 +655,17 @@ export function PlaceMap({
             the streets they were meant to sit on. */}
         {cityPoints.map((point) => (
           <circle
-            className={`places-map-city ${POI_TONES[point.category] ?? "other"}`}
+            className={`places-map-city ${POI_TONES[point.category] ?? "other"}${onPick ? " pickable" : ""}`}
             cx={point.x}
             cy={point.y}
             key={point.place_id}
-            r={(hasDetail ? 2.6 : 1.4) / view.zoom}
-          />
+            onClick={onPick ? () => onPick(point.place_id) : undefined}
+            r={(detailCovers ? 2.6 : 2.2) / view.zoom}
+          >
+            {/* The native tooltip, so a dot can say what it is without a hover card and
+                without anything to lay out. */}
+            <title>{point.name}</title>
+          </circle>
         ))}
 
         {/* Street names last, over everything, each running along its own street. */}
@@ -673,6 +710,21 @@ export function PlaceMap({
           : null}
         {focused ? ` · ${focused.label} · ${focused.name}` : null}
       </p>
+      {/* Shown on both maps, not only the one with a key: "what is the dot" is asked
+          wherever the dots are, and the card's map draws them too. */}
+      {cityPoints.length ? (
+        <div className="places-map-legend">
+          <p>{copy("map_legend", language)}</p>
+          <ul>
+            {POI_FAMILIES.map((family) => (
+              <li key={family}>
+                <span aria-hidden="true" className={`places-map-swatch ${family}`} />
+                {copy(`map_kind_${family}`, language)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       {withKey ? (
         <ol className="places-map-key">
           {pinPoints.map((point) => (

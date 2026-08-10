@@ -801,6 +801,23 @@ here; the two dark `/places` screens were re-approved and the other 34 are untou
 stay behind the owner-triggered button `WF-047` priced, not on a background map fetch. Live traffic-light
 state is not static data and is in no free source. Both were asked for; neither is refused for effort.
 
+**Zooming out has to give the city back, fixed 2026-08-10 (`WF-048`).** The detailed layers replaced the
+city-wide basemap the moment they arrived, so zooming out past that one window left the map blank except
+for the patch it covered — reported as "it only show the certain area", and fatal to the thing the map is
+for, which is seeing where everything is before choosing. Coverage is now a question asked of the current
+view against `detail.bbox`: while the detailed window contains the view it is drawn and the basemap steps
+aside, and the moment the view reaches past its edge the basemap comes back. The window is computed
+whether or not it is small enough to fetch, because the fetch gate and the coverage test are different
+questions about the same rectangle.
+
+**The faint dots are the catalogue, and they are the point of the city view.** Asked what they were and
+told to remove them if they were not necessary — they were **unreadable, not unnecessary**. The numbered
+pins are only what has already been chosen, so without the dots the map can never help anyone choose,
+which is the one job the owner named for it. They had no legend, no name and no behaviour, so they read
+as confetti. Now a legend under both maps names the six families, every dot carries its own name as a
+native tooltip, and **tapping one opens that place's card** — which turns the map from something to look
+at into the way to choose from it.
+
 **Buildings arrive on zoom as of 2026-08-09 (`WF-048`) — and only on zoom.** At the full city window a
 footprint is well under a pixel, so `basemap()` still carries none: a city's shape at that scale is its
 roads, its water and its green. `OpenStreetMapProvider.buildings()` fetches footprints for the window

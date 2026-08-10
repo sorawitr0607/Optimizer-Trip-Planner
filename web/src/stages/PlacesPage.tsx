@@ -672,6 +672,7 @@ export function PlacesPage() {
                 basemap={basemap.data ?? null}
                 context={catalog}
                 focusId={selectedId}
+                onPick={setCardId}
                 tripId={tripId}
                 language={language}
                 places={cardMapPlaces}
@@ -833,6 +834,7 @@ export function PlacesPage() {
               basemap={basemap.data ?? null}
               context={catalog}
               language={language}
+              onPick={setCardId}
               places={shortlistPlaces}
               tripId={tripId}
               title={copy("shortlist_map", language)}

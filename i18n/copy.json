@@ -1226,7 +1226,14 @@
       "before_buy_hours": "Buy confirmed hours first · US${cost}",
       "before_buying": "Buying hours…",
       "before_all_covered": "Every chosen place has confirmed opening hours. Nothing to decide.",
-      "open_evidence_detail": "More evidence controls"
+      "open_evidence_detail": "More evidence controls",
+      "map_legend": "Every attraction found here, by kind — tap one to open its card",
+      "map_kind_food": "Food and markets",
+      "map_kind_shop": "Shopping",
+      "map_kind_culture": "Culture and landmarks",
+      "map_kind_outdoors": "Parks and outdoors",
+      "map_kind_stay": "Places to stay",
+      "map_kind_other": "Everything else"
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -2074,7 +2081,14 @@
       "before_buy_hours": "ซื้อเวลาที่ยืนยันก่อน · US${cost}",
       "before_buying": "กำลังซื้อเวลาเปิด-ปิด…",
       "before_all_covered": "ทุกสถานที่ที่เลือกมีเวลาเปิด-ปิดที่ยืนยันแล้ว ไม่ต้องตัดสินใจอะไร",
-      "open_evidence_detail": "ตัวเลือกหลักฐานเพิ่มเติม"
+      "open_evidence_detail": "ตัวเลือกหลักฐานเพิ่มเติม",
+      "map_legend": "สถานที่ทั้งหมดที่พบ แยกตามประเภท — แตะเพื่อเปิดการ์ด",
+      "map_kind_food": "อาหารและตลาด",
+      "map_kind_shop": "แหล่งช้อปปิ้ง",
+      "map_kind_culture": "วัฒนธรรมและแลนด์มาร์ก",
+      "map_kind_outdoors": "สวนและกลางแจ้ง",
+      "map_kind_stay": "ที่พัก",
+      "map_kind_other": "ประเภทอื่น ๆ"
     }
   }
 }
