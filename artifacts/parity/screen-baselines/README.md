@@ -1,7 +1,25 @@
-# Approved screen baselines — 36 images
+# Approved screen baselines — 56 images
 
 `WF-025` §2b: 4 baselines per route (light/dark × en/th) across the 9 routes,
 approved once and then diffed on every change.
+
+**Plus a phone set of 20 as of 2026-08-10**, prefixed `m500-`: landing, setup,
+places, itinerary and the tour, in the same four variants. The desktop names are
+unchanged, so both sets live here and the gate picks them up by glob.
+
+Two things about that set. It is **500×844, not 390**: headless Chrome on macOS
+clamps the window and the layout viewport to a 500px minimum, so `--window-size`
+values below that all measure 500, and a file named 390 would carry a false
+label. Every `max-width: 768px` rule is still exercised; a true 320–390px reflow
+check needs device emulation over the DevTools protocol and stays manual. And the
+**tour** is reached with `?baseline_tour=open`, which forces on the first-visit
+overlay that `data-capture` suppresses everywhere else — otherwise the one modal
+in the app has no visual regression cover at all.
+
+The desktop-only gate was not merely incomplete, it was hiding a live bug: below
+768px `.plan-stop-maps` auto-flowed into the 10px status-dot column and rendered
+"Open in Maps" as a sliver on every stop of every day. Nothing failed, because
+nothing was looking.
 
 **What this gate catches: drift over time.** It does *not* prove parity with
 Auto-Bill and must not be described as if it does — Auto-Bill has two screens

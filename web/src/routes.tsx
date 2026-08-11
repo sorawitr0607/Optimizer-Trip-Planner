@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { useQuery } from "@tanstack/react-query";
+import { lazy, Suspense } from "react";
 import { Navigate } from "react-router";
 
 import { rpc, type Journey, type Trip } from "./api/client";
@@ -7,16 +8,13 @@ import { copy } from "./i18n/copy";
 import { useLanguage } from "./i18n/LanguageProvider";
 import { AppShell } from "./shared/AppShell";
 import { StageGate } from "./shared/StageGate";
-import { CostsPage } from "./stages/CostsPage";
-import { EvidencePage } from "./stages/EvidencePage";
-import { ItineraryPage } from "./stages/ItineraryPage";
-import { OptimizePage } from "./stages/OptimizePage";
-import { ReadinessPage } from "./stages/ReadinessPage";
-import { RevisePage } from "./stages/RevisePage";
-import { PlacesPage } from "./stages/PlacesPage";
-import { SetupPage } from "./stages/SetupPage";
-import { SplitPage } from "./stages/SplitPage";
+import { STAGE_GATE, STAGE_ROUTES, type StageRoute } from "./shared/stages";
 import { TripsPage } from "./stages/TripsPage";
+
+function Loading() {
+  const { language } = useLanguage();
+  return <p>{copy("loading", language)}</p>;
+}
 
 function Landing() {
   const { language } = useLanguage();
@@ -35,83 +33,55 @@ function Landing() {
   return <Navigate replace to={landing.data} />;
 }
 
+/**
+ * The nine stage screens, each its own chunk.
+ *
+ * They used to be nine static imports, so the build was one 636 KB module and
+ * every route paid for all nine — the map, the optimizer screen, the split ledger
+ * and the workbook views included — before the first one could paint. A stage is
+ * a natural split point: the IA is a sequence and nobody is on two of them at
+ * once. `TripsPage` stays eager because it is the landing screen, so lazy-loading
+ * it would only add a round trip to the one route that has nothing to wait for.
+ */
+const PAGES: Record<StageRoute, React.LazyExoticComponent<() => React.ReactNode>> = {
+  setup: lazy(() => import("./stages/SetupPage").then((m) => ({ default: m.SetupPage }))),
+  places: lazy(() => import("./stages/PlacesPage").then((m) => ({ default: m.PlacesPage }))),
+  evidence: lazy(() => import("./stages/EvidencePage").then((m) => ({ default: m.EvidencePage }))),
+  optimize: lazy(() => import("./stages/OptimizePage").then((m) => ({ default: m.OptimizePage }))),
+  itinerary: lazy(() => import("./stages/ItineraryPage").then((m) => ({ default: m.ItineraryPage }))),
+  readiness: lazy(() => import("./stages/ReadinessPage").then((m) => ({ default: m.ReadinessPage }))),
+  costs: lazy(() => import("./stages/CostsPage").then((m) => ({ default: m.CostsPage }))),
+  split: lazy(() => import("./stages/SplitPage").then((m) => ({ default: m.SplitPage }))),
+  revise: lazy(() => import("./stages/RevisePage").then((m) => ({ default: m.RevisePage }))),
+};
+
 // The table is data; `main.tsx` builds the router from it. That split is what
 // lets the entry-point smoke test assert the nine routes and five gate keys
 // without a DOM: `createBrowserRouter` reads `window.history` at construction,
 // Vitest runs in the node environment, and adding jsdom to check a nine-row
 // array would be the wrong trade.
+//
+// The children are generated from `shared/stages.ts` rather than written out, so
+// the gate a route waits on and the state the sidebar reports for it are the same
+// fact rather than two literals that agree until one is edited.
 export const routes = [
   { path: "/", element: <Landing /> },
   { path: "/trips", element: <TripsPage /> },
   {
     path: "/trips/:tripId",
     element: <AppShell />,
-    children: [
-      { path: "setup", element: <SetupPage /> },
-      {
-        path: "places",
-        element: (
-          <StageGate stage="places">
-            <PlacesPage />
-          </StageGate>
-        ),
-      },
-      {
-        path: "evidence",
-        element: (
-          <StageGate stage="evidence">
-            <EvidencePage />
-          </StageGate>
-        ),
-      },
-      {
-        path: "optimize",
-        element: (
-          <StageGate stage="optimize">
-            <OptimizePage />
-          </StageGate>
-        ),
-      },
-      {
-        path: "itinerary",
-        element: (
-          <StageGate stage="itinerary">
-            <ItineraryPage />
-          </StageGate>
-        ),
-      },
-      {
-        path: "readiness",
-        element: (
-          <StageGate stage="setup">
-            <ReadinessPage />
-          </StageGate>
-        ),
-      },
-      {
-        path: "costs",
-        element: (
-          <StageGate stage="setup">
-            <CostsPage />
-          </StageGate>
-        ),
-      },
-      {
-        path: "split",
-        element: (
-          <StageGate stage="setup">
-            <SplitPage />
-          </StageGate>
-        ),
-      },
-      {
-        path: "revise",
-        element: (
-          <StageGate stage="itinerary">
-            <RevisePage />
-          </StageGate>
-        ),
-      },
-    ],
+    children: STAGE_ROUTES.map((route) => {
+      const Page = PAGES[route];
+      const page = (
+        <Suspense fallback={<Loading />}>
+          <Page />
+        </Suspense>
+      );
+      return {
+        path: route,
+        // Setup is the one ungated route: it is what every gate checks for.
+        element: route === "setup" ? page : <StageGate stage={STAGE_GATE[route]}>{page}</StageGate>,
+      };
+    }),
   },
 ];

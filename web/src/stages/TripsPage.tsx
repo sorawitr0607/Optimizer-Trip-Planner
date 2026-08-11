@@ -6,8 +6,10 @@ import {
   FileSpreadsheet,
   ListChecks,
   MapPinned,
+  Languages,
   Route,
   Sparkles,
+  SunMoon,
   Wallet,
 } from "lucide-react";
 import { type FormEvent, useState } from "react";
@@ -17,6 +19,7 @@ import { ApiError, rpc, type Journey, type SetupVocabulary, type Trip } from "..
 import { copy } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
 import { DeleteTrip } from "../shared/DeleteTrip";
+import { useTheme } from "../shared/ThemeProvider";
 
 /**
  * The first screen anyone sees, and until now the weakest: a bare heading, two
@@ -87,7 +90,8 @@ const STEPS = [
 ] as const;
 
 export function TripsPage() {
-  const { language } = useLanguage();
+  const { language, setLanguage } = useLanguage();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
@@ -150,6 +154,26 @@ export function TripsPage() {
 
   return (
     <main className="landing">
+      {/* Language and theme, before there is a trip to hang a sidebar off.
+          They lived only in the shell, so the first screen a Thai-speaking owner
+          ever saw was in English with no way to change it until a trip had been
+          created — and the theme could not be dimmed before then either. The
+          language button is written in the language it switches *to*, which needs
+          no translation and is the one label a reader who cannot read the current
+          one can still act on. */}
+      <div className="landing-controls">
+        <button
+          aria-label={copy("switch_language", language)}
+          onClick={() => setLanguage(language === "en" ? "th" : "en")}
+          type="button"
+        >
+          <Languages aria-hidden="true" size={16} /> {language === "en" ? "ไทย" : "English"}
+        </button>
+        <button onClick={toggleTheme} type="button">
+          <SunMoon aria-hidden="true" size={16} />{" "}
+          {copy(theme === "dark" ? "theme_to_light" : "theme_to_dark", language)}
+        </button>
+      </div>
       {/* derives-from: element 5 .hero-content as .landing-hero.
 
           Built to the reference the owner named: a layered scene with drifting clouds,

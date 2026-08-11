@@ -9,7 +9,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import inspect
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 import subprocess
 from typing import Any
@@ -344,7 +344,12 @@ class PlannerHandler(SimpleHTTPRequestHandler):
             return
 
         target = self.server.web_root / path.lstrip("/")
-        if path == "/" or not target.is_file():
+        # The SPA fallback is for *routes*, and a route has no file extension. Sending
+        # index.html for every miss meant `/favicon.ico` answered 200 with the whole
+        # application as its body — which a browser discards, so the tab kept the
+        # blank default and the app looked unfinished for a reason no log showed.
+        # A missing asset is now a 404, which is what a missing asset is.
+        if path == "/" or (not target.is_file() and not PurePosixPath(path).suffix):
             self.path = "/index.html"
         super().do_GET()
 

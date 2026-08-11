@@ -29,7 +29,9 @@ export function StageGate({ stage, children }: StageGateProps) {
 
   return (
     <section className="stage-blocked" aria-live="polite">
-      <h2>{copy("journey_blocked", language)}</h2>
+      {/* `h1`, because this replaces the whole stage. As an `h2` a blocked route was
+          the one kind of page in the app with no top-level heading at all. */}
+      <h1>{copy("journey_blocked", language)}</h1>
       <p>{copy(`stage_${blockedBy}`, language)}</p>
       <Link className="primary-link" to={`/trips/${tripId}/${blockedBy}`}>
         {copy(`stage_${blockedBy}`, language)}

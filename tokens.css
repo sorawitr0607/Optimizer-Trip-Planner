@@ -33,7 +33,9 @@
   --bg-card-border: #1a1a1a;
   --text-primary: #1a1a1a;
   --text-secondary: #4d4d4d;
-  --text-muted: #737373;
+  /* 4.52:1 on the recessed surface, which is the binding one — #737373 was 4.20
+     there and read as AA only against the card. See the contrast gate. */
+  --text-muted: #6e6e6e;
   --color-accent: #a30000;
   --color-accent-light: #f7ecec;
   --color-accent-hover: #800000;
@@ -41,10 +43,19 @@
   --color-success-light: #eaf5f0;
   --color-danger: #d11a2a;
   --color-danger-light: #fcecee;
-  --color-warning: #c46200;
+  /* #c46200 was 3.65:1 on the recessed surface and 4.12:1 on a card — the only
+     semantic colour that failed in the light theme. */
+  --color-warning: #ad5600;
   --color-warning-light: #faf3ec;
   --color-purple: #8b5cf6;
   --color-purple-light: rgb(139 92 246 / 15%);
+  /* The accent does two jobs — it fills a button and it colours a link — and one
+     value has to be legible in both. Contrast is symmetric, so an accent that
+     clears 4.5:1 as *text* on the theme's lightest surface also takes the
+     opposite ink at 4.5:1 as a *fill*. That is the whole rule: light accents are
+     dark enough to read on #f3f1ec and carry white; dark accents are light enough
+     to read on #1c1c1c and carry #1a1a1a. Every accent therefore has a per-theme
+     value, and `scripts/check_design_tokens.py` fails if one drifts out. */
   --color-on-accent: #ffffff;
   --shadow-hard-sm: 1px 1px 0 0 var(--bg-card-border);
   --shadow-hard-md: 3px 3px 0 0 var(--bg-card-border);
@@ -133,54 +144,95 @@
   --bg-card-border: #3a3a3a;
   --text-primary: #f5f5f5;
   --text-secondary: #a3a3a3;
-  --color-accent: #e53e3e;
+  /* Every one of these moved for the same reason: measured against the dark
+     surfaces they sit on, not against the theory of them. `#737373` was 3.59:1 on
+     the recessed surface, and the four semantic colours were 3.72-4.13:1 on their
+     own tints — the tint is always the binding background, because it is the
+     lightest thing a semantic colour is ever written on. */
+  --text-muted: #8a8a8a;
+  --color-accent: #ec6060;
   --color-accent-light: #3b1c1c;
-  --color-accent-hover: #fc8181;
-  --color-success: #38a169;
+  --color-accent-hover: #f28d8d;
+  --color-success: #45b87b;
   --color-success-light: #1c3b24;
-  --color-danger: #e53e3e;
+  --color-danger: #ee6b6b;
   --color-danger-light: #3b1c1c;
-  --color-warning: #dd6b20;
+  --color-warning: #e5813f;
   --color-warning-light: #3b2a1c;
-  --color-success-border: rgb(56 161 105 / 20%);
-  --color-danger-border: rgb(229 62 62 / 20%);
+  --color-success-border: rgb(69 184 123 / 20%);
+  --color-danger-border: rgb(238 107 107 / 20%);
+  /* A dark accent is light, so what sits on it is ink. See the note in `:root`. */
+  --color-on-accent: #1a1a1a;
 }
 
-/* D6: one country-to-accent mapping. Unknown countries keep the house red (D3). */
-:root[data-country="china"] { --color-accent: #dc2626; --color-accent-hover: #b91c1c; --color-accent-light: rgb(220 38 38 / 12%); }
-:root[data-country="japan"] { --color-accent: #e11d48; --color-accent-hover: #be123c; --color-accent-light: rgb(225 29 72 / 12%); }
+/* D6: one country-to-accent mapping. Unknown countries keep the house red (D3).
+   These are the **light-theme** values: dark enough to be read as link text on
+   the recessed surface, which by the symmetry above is exactly what makes white
+   legible on them as a fill. Six of them moved for that — australia, eurozone,
+   hong-kong, malaysia, taiwan and vietnam were 2.94-4.10:1 against white button
+   text, taiwan being the pilot destination's own accent. The hue is kept; only
+   the lightness moved, and every one is checked by the token gate. */
+:root[data-country="china"] { --color-accent: #d62323; --color-accent-hover: #b91c1c; --color-accent-light: rgb(214 35 35 / 12%); }
+:root[data-country="japan"] { --color-accent: #d61c45; --color-accent-hover: #bc123b; --color-accent-light: rgb(214 28 69 / 12%); }
 :root[data-country="south-korea"] { --color-accent: #2563eb; --color-accent-hover: #1d4ed8; --color-accent-light: rgb(37 99 235 / 12%); }
-:root[data-country="singapore"] { --color-accent: #7c3aed; --color-accent-hover: #6d28d9; --color-accent-light: rgb(124 58 237 / 12%); }
+:root[data-country="singapore"] { --color-accent: #7c3aed; --color-accent-hover: #6d27d9; --color-accent-light: rgb(124 58 237 / 12%); }
 :root[data-country="united-states"] { --color-accent: #1e3a8a; --color-accent-hover: #172554; --color-accent-light: rgb(30 58 138 / 12%); }
 :root[data-country="united-kingdom"] { --color-accent: #475569; --color-accent-hover: #334155; --color-accent-light: rgb(71 85 105 / 12%); }
-:root[data-country="eurozone"] { --color-accent: #0284c7; --color-accent-hover: #0369a1; --color-accent-light: rgb(2 132 199 / 12%); }
-:root[data-country="taiwan"] { --color-accent: #0d9488; --color-accent-hover: #0f766e; --color-accent-light: rgb(13 148 136 / 12%); }
-:root[data-country="hong-kong"] { --color-accent: #059669; --color-accent-hover: #047857; --color-accent-light: rgb(5 150 105 / 12%); }
-:root[data-country="vietnam"] { --color-accent: #ea580c; --color-accent-hover: #c2410c; --color-accent-light: rgb(234 88 12 / 12%); }
-:root[data-country="malaysia"] { --color-accent: #ca8a04; --color-accent-hover: #a16207; --color-accent-light: rgb(202 138 4 / 12%); }
+:root[data-country="eurozone"] { --color-accent: #0274b0; --color-accent-hover: #03649a; --color-accent-light: rgb(2 116 176 / 12%); }
+:root[data-country="taiwan"] { --color-accent: #0b7b71; --color-accent-hover: #0e6a63; --color-accent-light: rgb(11 123 113 / 12%); }
+:root[data-country="hong-kong"] { --color-accent: #047e59; --color-accent-hover: #046d4f; --color-accent-light: rgb(4 126 89 / 12%); }
+:root[data-country="vietnam"] { --color-accent: #be480a; --color-accent-hover: #a9390a; --color-accent-light: rgb(190 72 10 / 12%); }
+:root[data-country="malaysia"] { --color-accent: #946503; --color-accent-hover: #885306; --color-accent-light: rgb(148 101 3 / 12%); }
 :root[data-country="switzerland"] { --color-accent: #be185d; --color-accent-hover: #9d174d; --color-accent-light: rgb(190 24 93 / 12%); }
-:root[data-country="australia"] { --color-accent: #16a34a; --color-accent-hover: #15803d; --color-accent-light: rgb(22 163 74 / 12%); }
+:root[data-country="australia"] { --color-accent: #117f3a; --color-accent-hover: #126d34; --color-accent-light: rgb(17 127 58 / 12%); }
 
-/* Two of the 13 destination accents were chosen on a light background and fail
-   contrast on #121212: united-states #1e3a8a at 1.81:1 and united-kingdom
-   #475569 at 2.47:1, both used for buttons and links. These keep the hue and
-   clear 3:1 in dark. Higher specificity than the plain country rule, so the
-   order in this file does not matter. `scripts/check_design_tokens.py` enforces
-   the floor, so a new accent cannot reintroduce the problem.
+/* The same 13 accents in the dark theme, and all 13 are here rather than the two
+   that used to be. An accent picked to be read on a cream page is by definition
+   too dark to be read on #1c1c1c, so an override is not a patch for two bad
+   choices — it is the other half of the pair, and leaving eleven of them
+   unwritten is what left china at 3.68:1 and switzerland at 2.94:1 as link text
+   after dark. Higher specificity than the plain country rule, so file order does
+   not matter. `scripts/check_design_tokens.py` enforces both halves, so neither
+   can be added without the other.
    This is D1 in practice: the dark theme's accent has to actually apply. */
+:root.dark[data-country="china"],
+:root[data-theme="dark"][data-country="china"] { --color-accent: #e35151; --color-accent-hover: #e76d6d; --color-accent-light: rgb(227 81 81 / 20%); }
+
+:root.dark[data-country="japan"],
+:root[data-theme="dark"][data-country="japan"] { --color-accent: #e7496b; --color-accent-hover: #eb6783; --color-accent-light: rgb(231 73 107 / 20%); }
+
+:root.dark[data-country="south-korea"],
+:root[data-theme="dark"][data-country="south-korea"] { --color-accent: #4b7fef; --color-accent-hover: #6491f1; --color-accent-light: rgb(75 127 239 / 20%); }
+
+:root.dark[data-country="singapore"],
+:root[data-theme="dark"][data-country="singapore"] { --color-accent: #9a67f1; --color-accent-hover: #a87cf3; --color-accent-light: rgb(154 103 241 / 20%); }
+
 :root.dark[data-country="united-states"],
-:root[data-theme="dark"][data-country="united-states"] {
-  --color-accent: #3b82f6;
-  --color-accent-hover: #60a5fa;
-  --color-accent-light: rgb(59 130 246 / 16%);
-}
+:root[data-theme="dark"][data-country="united-states"] { --color-accent: #5e7fdc; --color-accent-hover: #7390e1; --color-accent-light: rgb(94 127 220 / 20%); }
 
 :root.dark[data-country="united-kingdom"],
-:root[data-theme="dark"][data-country="united-kingdom"] {
-  --color-accent: #7d8ea3;
-  --color-accent-hover: #94a3b8;
-  --color-accent-light: rgb(125 142 163 / 16%);
-}
+:root[data-theme="dark"][data-country="united-kingdom"] { --color-accent: #72859f; --color-accent-hover: #8494ab; --color-accent-light: rgb(114 133 159 / 20%); }
+
+:root.dark[data-country="eurozone"],
+:root[data-theme="dark"][data-country="eurozone"] { --color-accent: #028ad0; --color-accent-hover: #029ae7; --color-accent-light: rgb(2 138 208 / 20%); }
+
+:root.dark[data-country="taiwan"],
+:root[data-theme="dark"][data-country="taiwan"] { --color-accent: #0d9488; --color-accent-hover: #0ea597; --color-accent-light: rgb(13 148 136 / 20%); }
+
+:root.dark[data-country="hong-kong"],
+:root[data-theme="dark"][data-country="hong-kong"] { --color-accent: #059669; --color-accent-hover: #06a875; --color-accent-light: rgb(5 150 105 / 20%); }
+
+:root.dark[data-country="vietnam"],
+:root[data-theme="dark"][data-country="vietnam"] { --color-accent: #ea580c; --color-accent-hover: #f4702a; --color-accent-light: rgb(234 88 12 / 20%); }
+
+:root.dark[data-country="malaysia"],
+:root[data-theme="dark"][data-country="malaysia"] { --color-accent: #ca8a04; --color-accent-hover: #e09904; --color-accent-light: rgb(202 138 4 / 20%); }
+
+:root.dark[data-country="switzerland"],
+:root[data-theme="dark"][data-country="switzerland"] { --color-accent: #e74387; --color-accent-hover: #eb639b; --color-accent-light: rgb(231 67 135 / 20%); }
+
+:root.dark[data-country="australia"],
+:root[data-theme="dark"][data-country="australia"] { --color-accent: #16a34a; --color-accent-hover: #18b652; --color-accent-light: rgb(22 163 74 / 20%); }
 
 @theme {
   --color-page: var(--bg-primary);
@@ -216,18 +268,31 @@
 
   --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  --text-2xs: 0.65rem;
-  --text-xs: 0.6875rem;
-  --text-sm: 0.75rem;
-  --text-base: 0.8125rem;
-  --text-md: 0.875rem;
-  --text-lg: 0.9375rem;
-  --text-xl: 1.05rem;
-  --text-2xl: 1.15rem;
-  --text-3xl: 1.25rem;
-  --text-4xl: 1.4rem;
-  --text-5xl: 1.5rem;
-  --text-6xl: 1.85rem;
+  /* The scale was lifted on 2026-08-10 after a UX audit measured the screens: on
+     `/setup`, 36 of the 51 elements carrying their own text rendered at 11px or
+     less, and the app is mostly times, money and evidence — the content that is
+     hardest to scan and least forgiving of a misread digit.
+
+     Every step moved by about a fifth rather than the floor alone, because the
+     steps here are deliberately fine (five of them used to live between 11 and
+     15px) and lifting only the smallest would have collapsed the distinctions the
+     design uses. Body is 16px, supporting text 14-15px, and 12px is left for
+     metadata: coordinates, plan-version tags, map labels and unit suffixes.
+
+     Sizes are in rem so a browser or OS text-size preference still scales them —
+     the audit's older-traveller case is exactly the one that setting exists for. */
+  --text-2xs: 0.75rem;    /* 12px — metadata only */
+  --text-xs: 0.875rem;    /* 14px */
+  --text-sm: 0.9375rem;   /* 15px */
+  --text-base: 1rem;      /* 16px — body */
+  --text-md: 1.0625rem;   /* 17px */
+  --text-lg: 1.125rem;    /* 18px */
+  --text-xl: 1.25rem;     /* 20px */
+  --text-2xl: 1.375rem;   /* 22px */
+  --text-3xl: 1.5rem;     /* 24px */
+  --text-4xl: 1.6875rem;  /* 27px */
+  --text-5xl: 1.8125rem;  /* 29px */
+  --text-6xl: 2.25rem;    /* 36px */
 
   --ease-standard: ease;
   --ease-out: ease-out;

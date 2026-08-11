@@ -557,10 +557,32 @@ must stay directed. Rebuild only through `python3 scripts/build_project_graph.py
 failure), and only when explicitly asked or after a topology-changing milestone. After any graph
 change, `--check` must pass before committing. See `AGENTS.md`.
 
-**Rebuilt on 2026-08-10 and `--check` passes**: **2337 nodes, 5683 directed edges, 177 communities**;
-recorded cumulative cost is US$0.426294 over 40 runs. That is +294 nodes and +651 edges over the previous
-build, which is the map work — `web/src/shared/tiles.ts`, `tests/test_map_layers.py`, the rebuilt
-`PlaceMap`, and the forecast, country-outline and route-shape providers.
+**Rebuilt again on 2026-08-10 for `WF-049` and `--check` passes**: **2389 nodes, 5732 directed edges,
+200 communities**; recorded cumulative cost is US$0.455929 over 41 runs. Adding the ticket file is what
+required it — `--check` demands a node per ticket, so stage 4 of `check.py` failed with
+`Extraction produced no node for WF-049` until this ran. It cost **US$0.0296** and succeeded on the
+first attempt, with no `no node for …` flake.
+
+**A fold guard was wrong, and the rebuild's own output is what showed it.** `normalize_raw_graph`
+prints every fold precisely so they can be read, and this run printed eight. Four were genuine file
+twins. The other four were **real methods being deleted**: `json` is in `SOURCE_EXTENSIONS`, `_json`
+is also an ordinary Python method name, and `PlannerHandler._json` (`api/__init__.py:275`) extracted
+as `api_init_plannerhandler_json`, found its own *class* sitting there as a stem, and was folded out
+of existence — along with the `_json` on three providers in `travel_planner/providers.py`.
+
+The comment above that code claimed "the stem-must-exist guard is what makes a wrong fold
+unreachable". That was true only while every stem was a file. **A class is not a file, and a method is
+not a duplicate of its class.** The fold now requires the stem to be a *file node*, recognised rather
+than guessed: extraction labels a file with its own name and places it at `L1`, where a class or
+method carries an identifier and its real line, and both conditions are required because a one-line
+module would satisfy either alone. Re-running with the fix recovered exactly those four nodes and
+folded the same four twins, on a **warm semantic cache at 76 hits / 0 misses, so it cost nothing** —
+which is the same property that makes a retry after a failed rebuild free.
+
+The earlier build the same day gave **2337 nodes, 5683 directed edges, 177 communities** at
+US$0.426294 over 40 runs — +294 nodes and +651 edges over the one before it, which was the map work:
+`web/src/shared/tiles.ts`, `tests/test_map_layers.py`, the rebuilt `PlaceMap`, and the forecast,
+country-outline and route-shape providers.
 
 **Extraction is not deterministic, and the per-ticket guard will catch that.** The first run failed with
 `Extraction produced no node for WF-048` after being billed US$0.0262 — every ticket from 001 to 047
@@ -695,8 +717,10 @@ that declaration is what kept the gate working when the POC went.
 
 ## Phase 2 implementation follows the locked slice order
 
-`WF-MAP-002` is **decision-complete as of 2026-08-03**. Across both maps there are 48 tickets, **48
-closed, 0 open**. Nothing is outstanding.
+`WF-MAP-002` is **decision-complete as of 2026-08-03**. Across both maps there are 49 tickets, **49
+closed, 0 open**. Nothing is outstanding. `WF-049` is the 49th and was written *after* the work,
+which is the exception rather than the rule: it answers an external audit rather than opening a
+question, so there was nothing to claim an assignee on before starting.
 
 **`WF-048` rebuilt the journey's explanations on 2026-08-07**, after the owner walked the whole
 thing and could not use it. The findings were mechanical, not matters of taste: the landing page
@@ -1080,6 +1104,68 @@ exactly. Matching a look is fair; reproducing an illustrator's work is not, and 
 reason this is drawn rather than copied. Every animation sits behind `prefers-reduced-motion`, and the
 36 stage baselines pass **unchanged**, which is the proof that "only the first page" held.
 
+**A UX audit was answered on 2026-08-10, and the accessibility half was the real content.** All
+sixteen findings were reproduced in a browser against a byte-identical copy of the pilot before
+anything was changed; two of them turned out to be worse than reported and one turned out not to
+exist. What binds later work:
+
+**The accent does two jobs and one value has to serve both.** It fills a button and it colours a
+link, so `--color-on-accent` alone was never going to be enough. Contrast is symmetric, so an accent
+legible as *text* on the theme's lightest surface necessarily takes the opposite ink as a *fill* —
+that single rule replaces a second text-accent token, and it is why **all thirteen destination
+accents now have a `:root.dark[data-country=…]` half** rather than the two that used to. Six light
+accents moved (australia, eurozone, hong-kong, malaysia, taiwan, vietnam were 2.94–4.10:1 against
+their own white button text; taiwan is the pilot's). `check_design_tokens.py` now **fails** below
+4.5:1 instead of reporting below 3:1, and it checks each semantic colour against **its own `-light`
+tint** — the tint is the binding background in dark, which is how four colours sat at 3.72–4.13:1
+unnoticed. Negative-tested: restoring `--text-muted: #737373` and taiwan's `#0d9488` reproduces the
+audit's exact numbers.
+
+**The type scale is not a preference, it was measured.** On `/setup`, **36 of the 51 elements
+carrying their own text rendered at 11px or less**. Every step of the scale moved by about a fifth
+rather than the floor alone, because five steps used to live between 11 and 15px and lifting only
+the smallest would have collapsed the distinctions the design uses. Body is 16px, supporting text
+14–15px, 12px is metadata. Verified for overflow on all nine routes in **Thai**, which is the longer
+language.
+
+**Tailwind's preflight resets `h1`–`h6` to `font-size: inherit`.** Only the landing page ever styled
+its own, so every stage title on all nine screens rendered at exactly body size. That — not the
+palette — is the largest single reason the journey read like a different product from the landing
+page, and it was invisible in review because the markup was correct all along.
+
+**The tour is a native `<dialog>`.** `role="dialog" aria-modal="true"` says a thing is modal without
+making it one: focus stayed on `<body>`, the first Tab went to the navigation behind the scrim, and
+Escape did nothing. `showModal()` gives focus containment, inertness and Escape from the platform.
+The one thing it does not do is choose where focus lands afterwards — it restores to whatever had it
+before, which on a first visit is `<body>` — so the reopen button is always rendered and explicitly
+refocused. Verified in a real browser: focusing a nav link behind the open dialog is refused.
+
+**The sidebar and the gate answer from one predicate.** `web/src/shared/stages.ts` holds the
+nine-routes-to-five-gate-keys table that used to exist only as literals on each `<StageGate>`;
+`routes.tsx` generates its children from it and `AppShell` reads it. A link marked locked is
+therefore exactly a link the gate will block, and the prerequisite is named **before** the click.
+Do not derive a second copy of that table in the shell — that is the drift this fixes.
+
+**`<details>` hides its contents; it does not avoid building them.** `/places` mounted all 849
+catalogue rows and the full provider JSON inside a collapsed report on every visit. Rendering on
+first open plus a 50-row page took the screen from ~4900 DOM nodes to **543**.
+
+**The payload half of that finding was deliberately not taken.** `rank_candidates` is 1.16 MB and
+`get_latest_discovery` 860 KB on the pilot. Trimming the discovery response at the API boundary is
+**wrong, not merely unattractive**: `candidates` is a `Frozen` snapshot and the client is handed the
+`sha256` beside it, so shipping a mutilated `data` would put a hash on the wire that does not
+describe its payload — the one contract the whole design rests on. A lightweight read is a *new*
+method, not a narrower old one. And per-card fetching for the deck is what `WF-048` already paid to
+undo. Left as an open item with the numbers, not as a silent omission.
+
+**A capture writes nothing, and that was measured rather than assumed.** Diffing every table across
+a full 56-image run found one `open_meteo:forecast` row and one `provider_cache` row per run — free,
+invisible on screen (the forecast is `covered: false` until ~13 December), and still the app being
+operated rather than observed. The forecast query is now disabled under the capture flag like the
+basemap and the summaries prefetch before it. A clean run over the pilot copy now changes **no row
+in any of the 23 tables**. The pilot database itself was never opened: `data/tourist.sqlite3` is
+still `d91ac5ad…`.
+
 **A capture must observe the app, never operate it.** Two things broke that and both showed up as
 double-digit baseline drift on screens nobody had edited. The `/places` first-visit tour is suppressed
 by `document.documentElement.dataset.capture`, because a fresh Chrome profile is always a first visit
@@ -1142,10 +1228,30 @@ two screens and the planner has nine, so that comparison is meaningless:
   difference fails only when unexplained — a registered deviation must actually license the rebuilt value,
   so D2 permits only `{2px, 9999px, 0px}`, D8 only a real token weight, and any shadow blur other than 0 is
   drift whatever the register says.
-- **`check_screen_baselines.py`** compares 36 approved images (9 routes x light/dark x en/th) against a
-  fresh capture. It catches **drift over time only**. Tolerance is the owner's pair: fail above 0.1% of
-  pixels differing *and* more than 8/255 on a channel. See `artifacts/parity/screen-baselines/README.md`
-  for the two capture races that had to be fixed to make it deterministic, and for the negative test.
+- **`check_screen_baselines.py`** compares **56** approved images against a fresh capture: 36 desktop
+  (9 routes x light/dark x en/th) plus **20 phone** (landing, setup, places, itinerary and the tour,
+  same four variants). It catches **drift over time only**. Tolerance is the owner's pair: fail above
+  0.1% of pixels differing *and* more than 8/255 on a channel. See
+  `artifacts/parity/screen-baselines/README.md` for the two capture races that had to be fixed to
+  make it deterministic, and for the negative test.
+
+  **The phone set landed 2026-08-10 because the desktop-only gate was hiding things.** Every
+  responsive rule in the stylesheet was unguarded, and a UX audit found a regression living in
+  exactly that gap: below 768px the stop-row grid drops to three columns and re-places `code`, but
+  never re-placed `.plan-stop-maps` — so "Open in Maps" auto-flowed into the 10px status-dot column
+  on every stop of every day, holding text that needs 77px. Nothing failed, because nothing looked.
+
+  **The phone viewport is 500x844 and the number is not a preference.** Headless Chrome on macOS
+  clamps its window, and with it the layout viewport, to a 500px minimum — `--window-size=320,844`
+  and `--window-size=450,844` both measure 500. Naming the set 390 would be a 500px image with a
+  false label, and the next person to "correct" it would get the same 500 back. Every
+  `max-width: 768px` rule is still exercised. A true 320–390px reflow check needs device emulation
+  over the DevTools protocol and remains a manual step.
+
+  **The tour has a capture seam of its own.** `?baseline_tour=open` forces the first-visit overlay
+  on, which `data-capture` otherwise exists to suppress — without it the app's one modal had no
+  visual cover at all. It is the inverse of the suppression, not a hole in it: the flag still hides
+  the tour everywhere else.
 
 Capturing needs a running server and headless Chrome, so only the *comparison* is a `check.py` stage; it
 skips cleanly where nothing has been captured. Baselines are machine-specific by decision — re-approve when

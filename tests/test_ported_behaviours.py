@@ -382,8 +382,13 @@ class S4PortedBehaviourTest(unittest.TestCase):
                 place_id, [item["place_id"] for item in after["lanes"]["main_queue"]]
             )
             self.assertIn(place_id, after["lanes"]["browse_all"])
+            # Updated 2026-08-10 with the terminology pass: "Personalized place
+            # cards" became "Places picked for your trip" in both languages. The
+            # literal stays pinned rather than being relaxed to a presence check —
+            # the point of this line is that the Thai is written, and a test that
+            # only asks whether *something* is there would pass on the English.
             self.assertEqual(
-                "การ์ดสถานที่ที่เหมาะกับทริป", COPY["TEXT"]["th"]["ranking_title"]
+                "สถานที่ที่คัดมาให้ทริปนี้", COPY["TEXT"]["th"]["ranking_title"]
             )
 
     def test_missing_hours_and_hotel_remain_visible_in_a_provisional_export(self) -> None:

@@ -72,10 +72,26 @@ class TicketNodeResolutionTest(unittest.TestCase):
             "alpha",
             resolve_ticket_node("WF-012", self.TITLE, self.AMBIGUOUS, required=False)["id"],
         )
-
-
 class DuplicateModuleNodeTest(unittest.TestCase):
-    """Extraction emits a module twice when a document cites it by path."""
+    """Extraction emits a module twice when a document cites it by path.
+
+    Every test here calls `file_twins` itself. They used to hold their own copy of the
+    comprehension the build runs, which meant they asserted against a reimplementation
+    and passed whatever the build actually did — and the `_json` fold below survived
+    three rebuilds because of it. A test that reimplements the code tests nothing.
+    """
+
+    @staticmethod
+    def file_node(node_id: str, label: str) -> dict:
+        """A file as extraction emits one: its own name, at L1."""
+
+        return {"id": node_id, "label": label, "source_location": "L1"}
+
+    @staticmethod
+    def member(node_id: str, label: str, line: int) -> dict:
+        """A class or method: an identifier, at its real line."""
+
+        return {"id": node_id, "label": label, "source_location": f"L{line}"}
 
     def test_a_py_suffixed_twin_folds_into_the_real_node(self) -> None:
         """`tests_test_x_py` and `tests_test_x` are the same file. Both land in the raw
@@ -83,26 +99,22 @@ class DuplicateModuleNodeTest(unittest.TestCase):
         collapses the duplicate and the build fails claiming data was lost. Measured on
         `wayfinder_tickets_046... -> tests_test_assumed_windows_py`, 2026-08-07."""
 
-        from scripts.build_project_graph import SOURCE_SUFFIX_IDS
+        from scripts.build_project_graph import file_twins
 
-        node_ids = {
-            "tests_test_x", "tests_test_x_py",
-            "web_src_shared_names", "web_src_shared_names_ts",
-            "travel_planner_areas",
-        }
-        suffixed = {
-            node_id: stem
-            for node_id in node_ids
-            for suffix in SOURCE_SUFFIX_IDS
-            if node_id.endswith(suffix) and (stem := node_id[: -len(suffix)]) in node_ids
-        }
+        nodes = [
+            self.file_node("tests_test_x", "test_x.py"),
+            self.file_node("tests_test_x_py", "test_x.py"),
+            self.file_node("web_src_shared_names", "names.ts"),
+            self.file_node("web_src_shared_names_ts", "names.ts"),
+            self.file_node("travel_planner_areas", "areas.py"),
+        ]
 
         self.assertEqual(
             {
                 "tests_test_x_py": "tests_test_x",
                 "web_src_shared_names_ts": "web_src_shared_names",
             },
-            suffixed,
+            file_twins(nodes),
         )
 
     def test_a_twin_spelled_without_a_separator_also_folds(self) -> None:
@@ -115,20 +127,17 @@ class DuplicateModuleNodeTest(unittest.TestCase):
         maintained as incomplete rather than exhaustive.
         """
 
-        from scripts.build_project_graph import SOURCE_SUFFIX_IDS
+        from scripts.build_project_graph import file_twins
 
-        node_ids = {
-            "travel_planner_destinations", "travel_planner_destinationspy",
-            "web_src_routes", "web_src_routestsx",
-            "web_src_stages_tripspage", "web_src_stages_tripspagetsx",
-            "travel_planner_areas",
-        }
-        suffixed = {
-            node_id: stem
-            for node_id in node_ids
-            for suffix in SOURCE_SUFFIX_IDS
-            if node_id.endswith(suffix) and (stem := node_id[: -len(suffix)]) in node_ids
-        }
+        nodes = [
+            self.file_node("travel_planner_destinations", "destinations.py"),
+            self.file_node("travel_planner_destinationspy", "destinations.py"),
+            self.file_node("web_src_routes", "routes.tsx"),
+            self.file_node("web_src_routestsx", "routes.tsx"),
+            self.file_node("web_src_stages_tripspage", "TripsPage.tsx"),
+            self.file_node("web_src_stages_tripspagetsx", "TripsPage.tsx"),
+            self.file_node("travel_planner_areas", "areas.py"),
+        ]
 
         self.assertEqual(
             {
@@ -136,50 +145,76 @@ class DuplicateModuleNodeTest(unittest.TestCase):
                 "web_src_routestsx": "web_src_routes",
                 "web_src_stages_tripspagetsx": "web_src_stages_tripspage",
             },
-            suffixed,
+            file_twins(nodes),
         )
 
     def test_a_word_merely_ending_in_an_extension_is_not_folded(self) -> None:
         """The separator-less spelling widens what can match, so the guard that keeps it
-        honest is that the stem must itself be a node.
+        honest is that the stem must itself be a file node.
 
         `wayfinder_tickets` ends in `ts` and `travel_planner_summary` in `md`; neither
-        `wayfinder_ticke` nor `travel_planner_summ` is a node, so neither folds. The
-        residual hazard is a genuine pair like `x_even` and `x_events` both existing --
-        vanishingly unlikely for identifier-derived ids, and every fold is now printed
-        by the build, so a wrong one is visible rather than silent.
+        `wayfinder_ticke` nor `travel_planner_summ` is a node, so neither folds. Every
+        fold is also printed by the build, so a wrong one is visible rather than silent.
         """
 
-        from scripts.build_project_graph import SOURCE_SUFFIX_IDS
+        from scripts.build_project_graph import file_twins
 
-        node_ids = {
-            "wayfinder_tickets", "travel_planner_summary", "web_src_components",
-            "travel_planner_areas",
-        }
-        suffixed = {
-            node_id: stem
-            for node_id in node_ids
-            for suffix in SOURCE_SUFFIX_IDS
-            if node_id.endswith(suffix) and (stem := node_id[: -len(suffix)]) in node_ids
-        }
+        nodes = [
+            self.file_node("wayfinder_tickets", "tickets.md"),
+            self.file_node("travel_planner_summary", "summary.py"),
+            self.file_node("web_src_components", "components.ts"),
+            self.file_node("travel_planner_areas", "areas.py"),
+        ]
 
-        self.assertEqual({}, suffixed)
+        self.assertEqual({}, file_twins(nodes))
 
     def test_a_lone_py_node_is_left_alone(self) -> None:
         """Only a *twin* is folded. A node that exists solely under the suffixed name is
         the real node, and rewriting it would point edges at nothing."""
 
-        from scripts.build_project_graph import SOURCE_SUFFIX_IDS
+        from scripts.build_project_graph import file_twins
 
-        node_ids = {"tests_only_here_py", "web_src_only_here_ts", "travel_planner_areas"}
-        suffixed = {
-            node_id: stem
-            for node_id in node_ids
-            for suffix in SOURCE_SUFFIX_IDS
-            if node_id.endswith(suffix) and (stem := node_id[: -len(suffix)]) in node_ids
-        }
+        nodes = [
+            self.file_node("tests_only_here_py", "only_here.py"),
+            self.file_node("web_src_only_here_ts", "only_here.ts"),
+            self.file_node("travel_planner_areas", "areas.py"),
+        ]
 
-        self.assertEqual({}, suffixed)
+        self.assertEqual({}, file_twins(nodes))
+
+    def test_a_method_named_after_an_extension_is_not_folded_into_its_class(self) -> None:
+        """The regression that cost four real nodes, found by reading a rebuild's own
+        fold list on 2026-08-10.
+
+        `json` is a source extension and `_json` is an ordinary Python method name, so
+        `PlannerHandler._json` (`api/__init__.py:275`) extracted as
+        `api_init_plannerhandler_json`, found its own **class** sitting there as a stem,
+        and was deleted -- along with the `_json` on three providers in
+        `travel_planner/providers.py`. The old guard was "the stem must itself be a
+        node", which is true of a class and was never the property that mattered.
+
+        Both halves are asserted together on purpose: narrowing this until nothing folds
+        would also pass a test that only checked the method survives.
+        """
+
+        from scripts.build_project_graph import file_twins
+
+        nodes = [
+            self.file_node("api_init", "__init__.py"),
+            self.member("api_init_plannerhandler", "PlannerHandler", 251),
+            self.member("api_init_plannerhandler_json", "._json()", 275),
+            self.member("travel_planner_providers_openmeteoforecastprovider",
+                        "OpenMeteoForecastProvider", 1437),
+            self.member("travel_planner_providers_openmeteoforecastprovider_json",
+                        "._json()", 1515),
+            # A real file twin in the same set, so the narrowing cannot pass by
+            # simply folding nothing at all.
+            self.file_node("travel_planner_split", "split.py"),
+            self.file_node("travel_planner_split_py", "split.py"),
+        ]
+
+        self.assertEqual({"travel_planner_split_py": "travel_planner_split"}, file_twins(nodes))
+
 
 
 class GraphBuilderEdgeValidationTest(unittest.TestCase):

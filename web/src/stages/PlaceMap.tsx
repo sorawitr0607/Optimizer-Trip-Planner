@@ -252,6 +252,12 @@ export interface PlaceMapProps {
    *  plan — a day is a sequence, and a scatter of numbered dots does not say that. False
    *  on the shortlist, where nothing has been sequenced yet and a line would invent one. */
   route?: boolean;
+  /** Where this map's caption sits in its page's outline. One component is drawn at
+   *  three different depths — a whole tab on `/itinerary`, a section of the shortlist
+   *  drawer, and a field of one card's detail panel — and a fixed `<h4>` made two of
+   *  them skip a level. A screen reader reads the outline to decide what contains
+   *  what, so the depth is the caller's fact, not the map's. */
+  headingLevel?: 2 | 3 | 4;
 }
 
 export function PlaceMap({
@@ -265,6 +271,7 @@ export function PlaceMap({
   tripId,
   route = false,
   paths = [],
+  headingLevel = 3,
 }: PlaceMapProps) {
   // Zoom and pan, because at city scale several hundred dots and a dozen pins overlap
   // and no amount of styling separates them — the answer to "where is it" is sometimes
@@ -631,10 +638,12 @@ export function PlaceMap({
     .sort((left, right) => right.length - left.length)
     .slice(0, LABEL_MAX);
 
+  const Caption = `h${headingLevel}` as const;
+
   return (
     // derives-from: A1 numbered map; no tiles or network, and the list repeats every pin.
     <section className="places-map">
-      <h4>{title}</h4>
+      <Caption className="places-map-title">{title}</Caption>
       <svg
         aria-label={title}
         className={`places-map-svg${dragging ? " dragging" : ""}`}

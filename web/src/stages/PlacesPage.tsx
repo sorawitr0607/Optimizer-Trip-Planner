@@ -45,6 +45,12 @@ const PHOTO_LIMIT = 5;
  *  free and uncapped, but each place is several requests, so this stays a window
  *  that slides rather than a sweep of all 832 candidates. */
 const PREFETCH_AHEAD = 6;
+/** How many audit rows to build at a time. The Taipei catalogue is 849 places, and
+ *  the table listing them sits inside a `<details>` that is closed on arrival —
+ *  which hides it without costing any less: React builds every row, the browser
+ *  lays out 4245 cells, and none of them are on screen. Nobody reads 849 rows in
+ *  order anyway; this is the provenance table, opened to check one place. */
+const CATALOG_PAGE = 50;
 
 type Lane = (typeof LANES)[number];
 
@@ -126,6 +132,13 @@ export function PlacesPage() {
     enabled: Boolean(tripId),
   });
   const [cardId, setCardId] = useState("");
+  // The coverage report is collapsed on arrival and holds the audit table and the
+  // raw provider JSON. `<details>` hides its contents; it does not avoid building
+  // them, so both were mounted on every visit to this screen. Rendering them on
+  // first open is the whole fix, and closing it again keeps them — reopening
+  // something you just read should not rebuild it.
+  const [coverageOpened, setCoverageOpened] = useState(false);
+  const [catalogShown, setCatalogShown] = useState(CATALOG_PAGE);
   const [rejectionReason, setRejectionReason] = useState("null");
   const [flash, setFlash] = useState<string | null>(null);
   const [insights, setInsights] = useState<Record<string, PlaceInsight>>({});
@@ -410,7 +423,9 @@ export function PlacesPage() {
               unknown city need different reactions from the owner. */}
           {!catalog.length ? (
             <div className="catalog-empty">
-              <h3>{copy("catalog_empty_title", language)}</h3>
+              {/* `h2`: this sits directly under the page's `h1`, and an `h3` here made
+                  the empty state look nested inside a section that does not exist. */}
+              <h2>{copy("catalog_empty_title", language)}</h2>
               <p>{copy("catalog_empty_help", language)}</p>
               {report?.provider_error ? (
                 <p className="setup-hint">
@@ -427,8 +442,15 @@ export function PlacesPage() {
               </button>
             </div>
           ) : null}
-          <details className="places-coverage">
+          <details
+            className="places-coverage"
+            onToggle={(event) => {
+              if (event.currentTarget.open) setCoverageOpened(true);
+            }}
+          >
           <summary><h2 className="money-eyebrow">{copy("coverage", language)}</h2></summary>
+          {coverageOpened ? (
+          <>
           <p className="places-status">
             <strong>{copy("provider_status", language)}:</strong>{" "}
             {copy(`provider_${discovery.data.status}`, language)}
@@ -453,7 +475,7 @@ export function PlacesPage() {
                 <table className="money-table">
                   <thead><tr><th>{copy("name", language)}</th><th>{copy("local_name", language)}</th><th>{copy("category", language)}</th><th>{copy("opening", language)}</th><th>{copy("source", language)}</th></tr></thead>
                   <tbody>
-                    {catalog.map((item) => {
+                    {catalog.slice(0, catalogShown).map((item) => {
                       const source = item.provider_aliases[0]?.source_url;
                       return (
                         <tr key={item.place_id}>
@@ -468,12 +490,27 @@ export function PlacesPage() {
                   </tbody>
                 </table>
               </div>
+              {/* A native button and a slice, not a virtualiser. The count is always
+                  on screen, so a truncated table can never be mistaken for the whole
+                  catalogue — which is the only thing paging can get wrong here. */}
+              {catalogShown < catalog.length ? (
+                <div className="places-catalog-more">
+                  <span className="setup-hint">
+                    {copyFormat("showing_of", language, { shown: catalogShown, total: catalog.length })}
+                  </span>
+                  <button onClick={() => setCatalogShown((shown) => shown + CATALOG_PAGE)} type="button">
+                    {copy("load_more", language)}
+                  </button>
+                </div>
+              ) : null}
             </details>
           ) : <p>{copy("no_candidates", language)}</p>}
           {report.attribution && report.license_url ? (
             <a href={report.license_url} rel="noreferrer" target="_blank">{report.attribution} · {report.license}</a>
           ) : null}
           <details><summary>{copy("details", language)}</summary><pre className="places-json">{JSON.stringify(report, null, 2)}</pre></details>
+          </>
+          ) : null}
           </details>
         </>
       ) : null}
@@ -684,6 +721,7 @@ export function PlacesPage() {
               <PlaceMap
                 basemap={basemap.data ?? null}
                 focusId={selectedId}
+                headingLevel={4}
                 outline={outline.data ?? null}
                 tripId={tripId}
                 language={language}

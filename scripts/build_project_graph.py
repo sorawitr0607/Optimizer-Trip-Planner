@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path, PurePosixPath
+from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -255,6 +256,35 @@ SOURCE_SUFFIX_IDS = tuple(
 )
 
 
+def file_twins(nodes: list[dict[str, Any]]) -> dict[str, str]:
+    """`{twin_id: stem_id}` for extraction's duplicate *file* nodes, and only those.
+
+    A function rather than a comprehension inline in `normalize_raw_graph` because the
+    tests used to hold their own copy of that expression: they asserted against a
+    reimplementation, so they passed whatever the build actually did, and the `_json`
+    fold below went through three rebuilds unnoticed. Testing a copy of the logic tests
+    nothing.
+    """
+
+    extensions = tuple(f".{extension}" for extension in SOURCE_EXTENSIONS)
+    # A file node, recognised rather than guessed: extraction labels it with the file's
+    # own name and puts it at L1. Both are required -- a one-line module satisfies
+    # either alone, and a method named after an extension satisfies neither.
+    file_stems = {
+        node["id"]
+        for node in nodes
+        if str(node.get("source_location", "")).strip() in {"L1", "1", ""}
+        and str(node.get("label", "")).lower().endswith(extensions)
+    }
+    node_ids = {node["id"] for node in nodes}
+    return {
+        node_id: stem
+        for node_id in node_ids
+        for suffix in SOURCE_SUFFIX_IDS
+        if node_id.endswith(suffix) and (stem := node_id[: -len(suffix)]) in file_stems
+    }
+
+
 def normalize_raw_graph() -> set[tuple[str, str, str]]:
     data = json.loads(GRAPH.read_text(encoding="utf-8"))
     nodes = deduplicate_nodes(data.get("nodes", []))
@@ -284,12 +314,22 @@ def normalize_raw_graph() -> set[tuple[str, str, str]]:
     # already performs, not a relaxation of the guard: the edge is preserved, pointed at
     # the node that survives. Only a *twin* folds; a file that exists solely under the
     # suffixed name is the real node and rewriting it would point edges at nothing.
-    suffixed = {
-        node_id: stem
-        for node_id in node_ids
-        for suffix in SOURCE_SUFFIX_IDS
-        if node_id.endswith(suffix) and (stem := node_id[: -len(suffix)]) in node_ids
-    }
+    #
+    # **The stem must be a file, and that is not the same as existing.** The guard above
+    # said "a wrong fold is unreachable because the stem must itself be a node", which
+    # held only while every stem was a file. It is not: `json` is a source extension and
+    # `_json` is also a perfectly ordinary Python method name, so `PlannerHandler._json`
+    # (`api/__init__.py:275`) extracted as `api_init_plannerhandler_json`, found its own
+    # *class* sitting there as a stem, and was folded out of existence. Measured on the
+    # 2026-08-10 rebuild: four real methods deleted — `PlannerHandler._json` and the
+    # `_json` on three providers — beside four genuine file twins. A class is not a file,
+    # and a method is not a duplicate of its class.
+    #
+    # A file node is recognisable rather than guessable: extraction labels it with the
+    # file's own name and places it at `L1`, where a class or method carries an
+    # identifier and its real line. Both are required, because a one-line module would
+    # satisfy either alone.
+    suffixed = file_twins(nodes)
     if suffixed:
         # Named, not silent: a fold that happens quietly is indistinguishable from the
         # guard being weakened, and the whole point is that it is not.

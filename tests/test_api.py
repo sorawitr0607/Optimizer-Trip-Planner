@@ -301,6 +301,22 @@ class SocketGuardTest(unittest.TestCase):
         self.assertEqual(b"file", body)
         self.assertEqual('attachment; filename="trip.bin"', headers["content-disposition"])
 
+    def test_a_missing_asset_is_a_404_and_not_the_whole_application(self) -> None:
+        """The SPA fallback is for routes, and a route has no file extension.
+
+        `/favicon.ico` used to answer 200 with `index.html` as its body. A browser
+        discards that as an icon, so the tab kept the blank default and nothing in
+        any log said why — the audit read it as an unfinished app. The distinction
+        has to hold in both directions, so a real route still gets the shell.
+        """
+
+        for path in ("/favicon.ico", "/assets/index-deadbeef.js", "/robots.txt"):
+            status, _, _ = self.request("GET", path)
+            self.assertEqual(404, status, path)
+        status, _, body = self.request("GET", "/trips/example/setup")
+        self.assertEqual(200, status)
+        self.assertIn(b"S1 shell", body)
+
     def test_shell_and_real_api_call_round_trip(self) -> None:
         status, _, body = self.request("GET", "/trips/example/setup")
         self.assertEqual(200, status)

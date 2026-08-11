@@ -189,8 +189,12 @@ function expectNoMissingCopy(html: string): void {
 describe("PlacesPage", () => {
   it("renders discovery, ranking, choices, and paid cost before its button", () => {
     const html = render(<PlacesPage />, "en");
-    expect(html).toContain("Broad attraction discovery");
-    expect(html).toContain("Personalized place cards");
+    // The 2026-08-10 terminology pass renamed both of these: "Broad attraction
+    // discovery" and "Personalized place cards" were the engineering-console
+    // wording a UX audit flagged. Pinned rather than loosened — a screen that
+    // silently loses its title should still fail here.
+    expect(html).toContain("Choose where to go");
+    expect(html).toContain("Places picked for your trip");
     expect(html).toContain("Taipei 101");
     expect(html).toContain("Museum");
     expect(html).toContain("78.4");
@@ -300,7 +304,8 @@ describe("ItineraryPage", () => {
 
   it("renders the operational rows and warnings in Thai", () => {
     const html = render(<ItineraryPage />, "th", undefined, "?view=timeline");
-    expect(html).toContain("แผนที่ใช้งาน");
+    // "Active plan" became "Your itinerary" in the terminology pass.
+    expect(html).toContain("ตารางเดินทางของคุณ");
     expect(html).toContain("จุดที่ 1");
     expect(html).toContain("รอช่วงมื้ออาหาร");
     expect(html).toContain("แผนสำรองของช่วงนี้");

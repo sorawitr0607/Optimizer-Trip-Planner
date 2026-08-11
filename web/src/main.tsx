@@ -8,6 +8,7 @@ import "./shell.css";
 import type { Language } from "./i18n/copy";
 import { LanguageProvider } from "./i18n/LanguageProvider";
 import { routes } from "./routes";
+import { ThemeProvider } from "./shared/ThemeProvider";
 
 const router = createBrowserRouter(routes);
 const queryClient = new QueryClient({
@@ -54,16 +55,29 @@ if (theme === "dark" || theme === "light") {
     // which is the part of a photograph this gate can meaningfully own.
     ".place-deck-photo img,.place-about-photo,.place-insight img{opacity:0!important}";
   document.head.append(frozen);
+  // The one state the capture flag *hides*, asked for back on one screen. The tour
+  // is first-visit-only and a fresh Chrome profile is always a first visit, so it
+  // has to be suppressed by default or every image photographs it — which left the
+  // app's one modal with no visual regression cover at all.
+  if (parameters.get("baseline_tour") === "open") {
+    document.documentElement.dataset.captureTour = "1";
+  }
 }
+// Passed only when the seam asked for it. Handing `LanguageProvider` a default of
+// "en" on every load would make the capture parameter indistinguishable from no
+// parameter, and the owner's stored choice would lose to it on every visit.
 const requested = parameters.get("baseline_language");
-const language: Language = requested === "th" ? "th" : "en";
+const language: Language | undefined =
+  requested === "th" ? "th" : requested === "en" ? "en" : undefined;
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <LanguageProvider initial={language}>
-        <RouterProvider router={router} />
-      </LanguageProvider>
+      <ThemeProvider>
+        <LanguageProvider initial={language}>
+          <RouterProvider router={router} />
+        </LanguageProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   </StrictMode>,
 );

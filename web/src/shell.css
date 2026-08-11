@@ -28,21 +28,32 @@
   text-decoration: none;
 }
 
-.sidebar nav h2 {
+/* Not `h2`: see the note in AppShell. The look is unchanged; only the element is. */
+.sidebar nav .nav-section {
   color: var(--text-muted);
   font-size: var(--text-xs);
+  font-weight: var(--weight-secondary);
   letter-spacing: 0.09em;
   margin: 0 0 6px;
   text-transform: uppercase;
 }
 
+/* A row rather than a block, because a stage link now carries its state beside its
+   name: a tick, a padlock, a "next" flag, or the prerequisite on its own line. */
 .stage-link {
+  align-items: center;
   color: var(--text-secondary);
-  display: block;
+  display: flex;
+  flex-wrap: wrap;
   font-size: var(--text-md);
   font-weight: var(--weight-unselected);
-  padding: 5px 8px;
+  gap: 6px;
+  padding: 6px 8px;
   text-decoration: none;
+}
+
+.stage-link-name {
+  flex: 1 1 auto;
 }
 
 .stage-link:hover,
@@ -54,6 +65,36 @@
 .stage-link.active {
   border-left: 3px solid var(--color-accent);
   font-weight: var(--weight-selected);
+}
+
+/* Finished, and still open — a completed stage stays revisable, so this dims
+   nothing and only adds a mark. */
+.stage-link[data-state="complete"] svg {
+  color: var(--color-success);
+}
+
+/* Locked, and still a link. `<StageGate>` renders the explanation in place rather
+   than redirecting, so removing the link would hide the explanation; the point is
+   that the prerequisite is legible *before* the click rather than after it. */
+.stage-link[data-state="locked"] {
+  color: var(--text-muted);
+}
+
+.stage-link-badge {
+  background: var(--color-accent);
+  border-radius: var(--radius);
+  color: var(--color-on-accent);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-selected);
+  letter-spacing: 0.06em;
+  padding: 1px 6px;
+  text-transform: uppercase;
+}
+
+.stage-link-blocker {
+  color: var(--text-muted);
+  flex: 1 0 100%;
+  font-size: var(--text-2xs);
 }
 
 .sidebar-controls {
@@ -98,7 +139,7 @@
 
 .stage-card h1,
 .stage-card h2,
-.stage-blocked h2 {
+.stage-blocked h1 {
   margin-top: 0;
 }
 
@@ -1224,9 +1265,15 @@
   padding-left: 18px;
 }
 
-.plan-drift a {
-  display: inline-block;
-  margin-top: 4px;
+/* `inline-block` still flows on the sentence's own line, so with no violation list
+   between them the warning read `...Rebuild to use it.Rebuild the plan`. This is
+   the trust banner, so the action gets its own line and looks like an action. */
+.plan-drift-action {
+  display: block;
+  font-weight: var(--weight-selected);
+  margin-top: 10px;
+  text-underline-offset: 3px;
+  width: fit-content;
 }
 
 /* WF-039. Same card treatment as the panels around it on /optimize. */
@@ -1509,7 +1556,7 @@
   padding: 7px 13px;
 }
 
-.plan-tabs button[aria-selected="true"] {
+.plan-tabs button[aria-pressed="true"] {
   background: var(--color-accent-light);
   color: var(--color-accent);
 }
@@ -1706,6 +1753,17 @@
 
   .plan-stops code {
     grid-column: 3;
+  }
+
+  /* The desktop row is four columns and this link is the fourth. Dropping to three
+     re-placed `code` explicitly and left the link to auto-flow — into row 2 column
+     1, which is the 10px status dot. Measured at 390px it was 10px wide holding
+     text that needs 77px, so "Open in Maps" was a sliver of ellipsis on every stop
+     of every day. It goes in the text column, at its own width. */
+  .plan-stop-maps {
+    grid-column: 3;
+    justify-self: start;
+    width: auto;
   }
 }
 
@@ -2132,6 +2190,39 @@
   max-width: none;
   min-height: 100vh;
   padding: 0;
+  position: relative;
+}
+
+/* Language and theme, on the first screen. The landing page has its own palette
+   (`WF-048`), so these read from the landing tokens rather than the interface
+   ones — the sidebar's controls are the same two buttons in the app's own colours. */
+.landing-controls {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 14px 20px 0;
+  position: relative;
+  z-index: 3;
+}
+
+.landing-controls button {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--landing-haze);
+  border-radius: var(--radius);
+  color: var(--landing-on-ink);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-secondary);
+  gap: 6px;
+  min-height: 36px;
+  padding: 6px 12px;
+}
+
+.landing-controls button:hover {
+  background: var(--landing-ink-soft);
+  border-color: var(--landing-sand);
 }
 
 .landing-hero {
@@ -3124,7 +3215,11 @@
   padding-top: 10px;
 }
 
-.places-map h4 {
+/* The caption's element varies with the map's depth in its page (see `headingLevel`),
+   so it is styled by class — otherwise the same caption would be three different sizes
+   on three screens for a reason that is about the outline, not about the design. */
+.places-map-title {
+  font-size: var(--text-md);
   margin: 0;
 }
 
@@ -3358,18 +3453,34 @@
    The first-visit tour on `/places`. It shows once, reopens on demand, and never
    appears in a capture — a fresh Chrome profile is always a first visit.
    --------------------------------------------------------------------------- */
+/* A native <dialog>, so the scrim is `::backdrop` and the element itself is only a
+   transparent centring frame. The user-agent sheet gives a dialog a border, padding,
+   a canvas background and a max-width of `calc(100% - 6px - 2em)`; all four are
+   cleared here. Author rules beat the UA sheet whatever the specificity, which is
+   also why `:not([open])` has to be restated -- `display: flex` would otherwise keep
+   the closed dialog on screen. Being in the top layer, it needs no z-index. */
 .tour-backdrop {
   align-items: center;
+  background: transparent;
+  border: 0;
+  display: flex;
+  height: auto;
+  inset: 0;
+  justify-content: center;
+  max-height: none;
+  max-width: none;
+  padding: 0;
+  position: fixed;
+  width: auto;
+}
+
+.tour-backdrop:not([open]) {
+  display: none;
+}
+
+.tour-backdrop::backdrop {
   backdrop-filter: blur(2px);
   background: var(--landing-scrim);
-  bottom: 0;
-  display: flex;
-  justify-content: center;
-  left: 0;
-  position: fixed;
-  right: 0;
-  top: 0;
-  z-index: 20;
 }
 
 .tour-card {
@@ -4089,4 +4200,162 @@
   stroke-opacity: 0.55;
   stroke-width: 0.3;
   vector-effect: non-scaling-stroke;
+}
+
+/* ---------------------------------------------------------------------------
+   Touch targets, 2026-08-10.
+
+   Measured at a true 390px viewport during a UX audit: setup's buttons, inputs
+   and selects came out 29-39px high and the native checkboxes 13x13. Labels
+   widen some of those hit areas, but the screen still asked for more precision
+   than a thumb has, on the one device this app is actually carried on — it is a
+   trip planner, and the itinerary is read standing on a corner.
+
+   Scoped to the phone breakpoint on purpose. A 44px floor on a 1440px screen
+   would inflate every dense table and toolbar the desktop layout depends on, and
+   pointer precision is not the problem there. Compact styling is kept for the
+   inline actions that are not primary — the deck's own dots, tags and eyebrow
+   text carry no tap target at all.
+   --------------------------------------------------------------------------- */
+@media (max-width: 768px) {
+  button,
+  select,
+  textarea,
+  a.primary-link,
+  a.setup-primary,
+  .stage-link,
+  input:not([type="checkbox"]):not([type="radio"]) {
+    min-height: 44px;
+  }
+
+  /* A flex button with a minimum height stacks its content at the top unless it
+     is told otherwise, and most of these are flex rows of an icon and a word. */
+  button {
+    align-items: center;
+  }
+
+  input[type="checkbox"],
+  input[type="radio"] {
+    height: 22px;
+    width: 22px;
+  }
+
+  /* The label is the checkbox's hit area, and a bare line of text is a 22px-tall
+     one. Padding is what turns it into something a thumb can find. */
+  label:has(> input[type="checkbox"]),
+  label:has(> input[type="radio"]) {
+    align-items: center;
+    display: flex;
+    gap: 10px;
+    min-height: 44px;
+    padding: 4px 0;
+  }
+}
+
+/* The audit table's page control. Native `<details>` plus a slice; no virtualiser
+   joins the six web runtime dependencies for a table nobody scrolls to the end of. */
+.places-catalog-more {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  padding-top: 8px;
+}
+
+/* ---------------------------------------------------------------------------
+   One product, 2026-08-10.
+
+   A UX audit put it plainly: the landing page is warm, spacious and persuasive,
+   and the journey it leads into is dense administration — "two different
+   products". The fix asked for was not a redesign, and this is not one. It
+   carries over four cues and nothing else.
+
+   **Headings that are headings.** Tailwind's preflight resets `h1`-`h6` to
+   `font-size: inherit`, and only the landing page ever styled its own — so every
+   stage title, on all nine screens, rendered at exactly body size. That is the
+   single biggest reason the journey reads flat next to the hero, and it was
+   invisible in review because the markup is correct.
+
+   **An introduction that can be read.** The sentence under each title was
+   `--text-sm` grey and ran the full width of the card; it is the one line telling
+   an owner what the screen is for.
+
+   **Room.** Cards and sections get the spacing the larger type needs.
+
+   **One primary action.** `.setup-primary` was a bordered grey button that only
+   became the accent inside two specific containers, so the main action on a
+   screen looked different depending on which toolbar it happened to sit in.
+   --------------------------------------------------------------------------- */
+.stage-card h1,
+.stage-blocked h1 {
+  font-size: var(--text-4xl);
+  font-weight: var(--weight-selected);
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+/* `.money-eyebrow` is a deliberate small-caps label and keeps its own size; this
+   is for the section headings that are not wearing it. */
+.stage-card h2:not(.money-eyebrow),
+.stage-blocked h2 {
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-selected);
+  line-height: 1.25;
+}
+
+.stage-card h3:not(.money-eyebrow) {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-selected);
+}
+
+.stage-card h4 {
+  font-size: var(--text-base);
+  font-weight: var(--weight-selected);
+}
+
+.money-head {
+  margin-bottom: 4px;
+}
+
+.money-head p {
+  font-size: var(--text-md);
+  margin-top: 6px;
+  /* A measure, not a width. A one-line explanation running 1200px wide is the
+     thing that makes a screen look like a console. */
+  max-width: 68ch;
+}
+
+.stage-card,
+.stage-blocked {
+  padding: 28px;
+}
+
+.stage-main {
+  padding: 24px 28px 48px 4px;
+}
+
+/* The main action looks the same wherever it is. */
+.setup-primary {
+  background: var(--color-accent);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-on-accent);
+  cursor: pointer;
+  font-weight: var(--weight-selected);
+  padding: 8px 14px;
+}
+
+.setup-primary:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+}
+
+@media (max-width: 768px) {
+  .stage-card,
+  .stage-blocked {
+    padding: 18px;
+  }
+
+  .stage-main {
+    padding: 14px 14px 40px;
+  }
 }

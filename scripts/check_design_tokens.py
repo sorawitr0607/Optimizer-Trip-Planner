@@ -45,6 +45,13 @@ ALLOWED_LITERAL_CONTEXT = re.compile(r"^\s*(/\*|\*|@import|@theme|@custom-varian
 REQUIRED_TRIPLE = ("--color-accent", "--color-accent-hover", "--color-accent-light")
 
 
+def declarations(body: str) -> dict[str, str]:
+    return {
+        name.strip(): value.strip()
+        for name, value in re.findall(r"(--[\w-]+)\s*:\s*([^;]+);", body)
+    }
+
+
 def country_blocks(text: str) -> dict[str, dict[str, str]]:
     """Every `:root[data-country="x"]` rule and the properties it sets."""
 
@@ -52,12 +59,34 @@ def country_blocks(text: str) -> dict[str, dict[str, str]]:
     for match in re.finditer(
         r':root\[data-country="([^"]+)"\]\s*\{([^}]*)\}', text, re.S
     ):
-        country, body = match.group(1), match.group(2)
-        found[country] = {
-            name.strip(): value.strip()
-            for name, value in re.findall(r"(--[\w-]+)\s*:\s*([^;]+);", body)
-        }
+        found[match.group(1)] = declarations(match.group(2))
     return found
+
+
+def dark_country_blocks(text: str) -> dict[str, dict[str, str]]:
+    """The `:root.dark[data-country="x"]` half of each accent pair."""
+
+    found: dict[str, dict[str, str]] = {}
+    for match in re.finditer(
+        r':root\.dark\[data-country="([^"]+)"\][^{]*\{([^}]*)\}', text, re.S
+    ):
+        found[match.group(1)] = declarations(match.group(2))
+    return found
+
+
+def theme_tokens(text: str) -> tuple[dict[str, str], dict[str, str]]:
+    """(light, dark). Every `:root` declaration, with the dark block over it."""
+
+    light: dict[str, str] = {}
+    for match in re.finditer(r"(?m)^:root\s*\{(.*?)^\}", text, re.S):
+        light.update(declarations(match.group(1)))
+    dark = dict(light)
+    match = re.search(
+        r'(?m)^:root\.dark,\s*\n:root\[data-theme="dark"\]\s*\{(.*?)^\}', text, re.S
+    )
+    if match:
+        dark.update(declarations(match.group(1)))
+    return light, dark
 
 
 def channels(value: str) -> tuple[float, float, float] | None:
@@ -90,6 +119,111 @@ def contrast(foreground: str, background: str) -> float | None:
     a, b = relative_luminance(left), relative_luminance(right)
     lighter, darker = max(a, b), min(a, b)
     return (lighter + 0.05) / (darker + 0.05)
+
+
+# --------------------------------------------------------------------------
+# Contrast, as a gate rather than a report.
+#
+# This used to print the accent's contrast against the two page backgrounds and
+# fail only below 3:1, which is the floor for a large graphic — not for the words
+# in a button. A UX audit on 2026-08-10 found what that left through: dark muted
+# text at 3.74:1, dark error text at 4.30:1, four semantic colours illegible on
+# their own tints, and six of the thirteen destination accents between 2.94:1 and
+# 4.10:1 against the white text printed on them. Every one of those is normal
+# body text, so the bar is 4.5:1 and it is checked here.
+#
+# Three things this knows that the old report did not.
+#
+# **The tint is the binding background.** A semantic colour is written on the
+# page, on the recessed surface, on a card, and on its own `-light` tint — and the
+# tint is the lightest of those in the dark theme, so it decides. Checking only
+# the page background passed colours that were unreadable everywhere they were
+# actually used.
+#
+# **The accent is both a fill and a link.** Contrast is symmetric, so an accent
+# legible as text on the theme's lightest surface necessarily takes the opposite
+# ink as a fill. One rule covers both roles, which is why there is no separate
+# text-accent token.
+#
+# **A translucent value cannot be judged.** `rgb(... / 12%)` composites over
+# whatever is behind it, so its contrast is unknowable from this file alone and it
+# is skipped rather than measured wrongly against its own opaque channels.
+# --------------------------------------------------------------------------
+
+AA_NORMAL = 4.5
+SURFACES = ("--bg-primary", "--bg-secondary", "--bg-card")
+BODY_TEXT = ("--text-primary", "--text-secondary", "--text-muted")
+SEMANTIC = ("--color-accent", "--color-success", "--color-danger", "--color-warning")
+
+
+def opaque(value: str) -> bool:
+    """False for anything carrying an alpha channel, which cannot be judged here."""
+
+    if "/" in value or value.lower().startswith(("rgba", "hsla")):
+        return False
+    if value.startswith("#"):
+        return len(value.lstrip("#")) in (3, 6)
+    return channels(value) is not None
+
+
+def check_pair(
+    failures: list[str], theme: str, where: str, fg: str, fg_value: str, bg: str, bg_value: str
+) -> None:
+    if not (opaque(fg_value) and opaque(bg_value)):
+        return
+    ratio = contrast(fg_value, bg_value)
+    if ratio is not None and ratio < AA_NORMAL:
+        failures.append(
+            f"{theme} {where}: {fg} {fg_value} on {bg} {bg_value} is {ratio:.2f}:1, "
+            f"below the {AA_NORMAL}:1 AA floor for normal text"
+        )
+
+
+def check_contrast(text: str) -> list[str]:
+    """Every foreground/background pair the stylesheet can actually produce."""
+
+    failures: list[str] = []
+    light, dark = theme_tokens(text)
+    countries = country_blocks(text)
+    dark_countries = dark_country_blocks(text)
+
+    for theme, base, overrides in (
+        ("light", light, countries),
+        ("dark", dark, dark_countries),
+    ):
+        for name in BODY_TEXT + SEMANTIC:
+            value = base.get(name)
+            if not value:
+                continue
+            for surface in SURFACES:
+                check_pair(failures, theme, "text", name, value, surface, base.get(surface, ""))
+            tint = base.get(f"{name}-light")
+            if tint:
+                check_pair(failures, theme, "on its own tint", name, value, f"{name}-light", tint)
+
+        # Every destination accent, in both of its roles.
+        for country in sorted(countries):
+            accent = overrides.get(country, {}).get("--color-accent")
+            hover = overrides.get(country, {}).get("--color-accent-hover")
+            if accent is None:
+                failures.append(
+                    f"{theme}: {country} has no --color-accent for this theme. An accent "
+                    "chosen on one background is not legible on the other; write both halves"
+                )
+                continue
+            ink = base.get("--color-on-accent", "")
+            for surface in SURFACES:
+                check_pair(
+                    failures, theme, f"{country} accent as link text",
+                    "--color-accent", accent, surface, base.get(surface, ""),
+                )
+            for role, fill in (("accent", accent), ("accent-hover", hover)):
+                if fill:
+                    check_pair(
+                        failures, theme, f"{country} text on the {role} fill",
+                        "--color-on-accent", ink, f"--color-{role}", fill,
+                    )
+    return failures
 
 
 DONOR = ROOT / "artifacts" / "parity" / "2026-08-04-auto-bill-donor"
@@ -280,7 +414,13 @@ def audit_deviations(tokens_text: str) -> list[tuple[str, str, str, str]]:
     ))
 
     # D9 -- flags are a local sprite with a mandatory country name.
-    renders_flag = bool(re.search(r"flag", web_text, re.I))
+    # The probe reads *rendered* code, not prose: the word "flag" turns up in
+    # comments about capture flags and feature flags, and one of those flipped this
+    # entry from "no flag is rendered" to "local sprite in use" — a register line
+    # asserting a sprite that does not exist. Comments are stripped before asking.
+    renders_flag = bool(
+        re.search(r"flag", re.sub(r"/\*.*?\*/|//[^\n]*", "", web_text, flags=re.S), re.I)
+    )
     uses_cdn = "flagcdn" in web_text.lower() or "flagcdn" in shell_text.lower()
     results.append((
         "D9", OUTSTANDING if uses_cdn else (NOT_APPLICABLE if not renders_flag else ENFORCED),
@@ -340,48 +480,35 @@ def main() -> int:
     # 3a. Every declared ancestor is the right one.
     failures.extend(validate_ancestors())
 
-    # 3. Every stage/shared component declares an ancestor.
+    # 3. Every stage/shared component that renders an element declares an ancestor.
+    #    A provider renders only its own context and puts nothing on the page, so it
+    #    has no counterpart in the donor to derive from and no styling to conform to.
+    #    Requiring the note there would be answered with a fictional one.
+    #    Detected by what a styled element must have — an intrinsic tag or a class —
+    #    rather than by trying to tell JSX from a generic, which `useState<Theme>`
+    #    loses. A false positive here only asks for the note that was already
+    #    required, so the ambiguous direction is the safe one.
+    renders_markup = re.compile(r"className=|<[a-z][a-zA-Z0-9]*[\s/>]")
     for path in WEB_TSX:
         if path.name.endswith(".test.tsx"):
             continue
         text = path.read_text(encoding="utf-8")
+        if not renders_markup.search(re.sub(r"/\*.*?\*/|//[^\n]*", "", text, flags=re.S)):
+            continue
         if "derives-from:" not in text:
             failures.append(
                 f"{path.relative_to(ROOT)} declares no `derives-from:` ancestor; "
                 "a new element passes on token conformance plus a declared ancestor"
             )
 
-    # 4. Contrast report. Informational: an accent picked on white is not
-    #    automatically legible on #121212, and no other gate would notice.
-    light_bg = re.search(r"--bg-primary:\s*([^;]+);", tokens_text)
-    dark_bg = re.search(
-        r":root\.dark[^{]*\{[^}]*?--bg-primary:\s*([^;]+);", tokens_text, re.S
-    )
-    if light_bg and dark_bg:
-        dark_overrides = {
-            match.group(1): match.group(2)
-            for match in re.finditer(
-                r'\[data-country="([^"]+)"\][^{]*\{[^}]*?--color-accent:\s*([^;]+);',
-                re.sub(r":root\[data-country", "IGNORED", tokens_text),
-                re.S,
-            )
-        }
-        weak = []
-        for country, properties in sorted(blocks.items()):
-            accent = dark_overrides.get(country) or properties.get("--color-accent", "")
-            on_dark = contrast(accent, dark_bg.group(1))
-            if on_dark is not None and on_dark < 3.0:
-                weak.append(f"{country} {accent} → {on_dark:.2f}:1")
-        if weak:
-            failures.append(
-                "accents below 3:1 against the dark background "
-                f"({len(weak)} of {len(blocks)}): " + "; ".join(weak)
-                + " — add a `:root.dark[data-country=...]` override"
-            )
-        else:
-            notes.append(
-                f"all {len(blocks)} destination accents clear 3:1 on both backgrounds"
-            )
+    # 4. Contrast, at the AA floor for normal text, in both themes.
+    contrast_problems = check_contrast(tokens_text)
+    failures.extend(contrast_problems)
+    if not contrast_problems:
+        notes.append(
+            f"every text token and all {len(blocks)} destination accents clear "
+            f"{AA_NORMAL}:1 in both themes, as link text and as a fill"
+        )
 
     register = audit_deviations(tokens_text)
     outstanding = [row for row in register if row[1] == OUTSTANDING]

@@ -295,10 +295,13 @@ export function CoordinateMap({
   return (
     // derives-from: A1 numbered map; the list below repeats every pin and every colour.
     <section className="plan-map">
-      <h2 className="money-eyebrow">{copy("tab_map", language)}</h2>
+      {/* The section's own `<h2>` used to sit directly above a map that prints the
+          same word as its caption, so the outline carried "Map" twice at two levels.
+          The map's caption is the `<h2>` now and there is one of it. */}
       {points.length ? (
         <PlaceMap
           basemap={basemap}
+          headingLevel={2}
           language={language}
           outline={outline}
           paths={walked}
@@ -308,7 +311,12 @@ export function CoordinateMap({
           tripId={tripId}
           withKey={false}
         />
-      ) : <p>{copy("map_no_coordinates", language)}</p>}
+      ) : (
+        <>
+          <h2 className="money-eyebrow">{copy("tab_map", language)}</h2>
+          <p>{copy("map_no_coordinates", language)}</p>
+        </>
+      )}
       <ul className="plan-stops">
         {anchor ? (
           <li>
@@ -360,10 +368,17 @@ export function ItineraryPage() {
   // The real weather for these dates, once they are near enough for anyone to know it.
   // Shown beside the day, never folded into the plan: a schedule that reshuffles itself
   // because a forecast twitched is worse than one that says what it knows.
+  // Not during a capture, for the reason the basemap and the summaries prefetch are
+  // not: it fetches and it *writes*, storing the forecast for six hours. Found on
+  // 2026-08-10 by diffing the database across a capture run — one `open_meteo:forecast`
+  // row and one `provider_cache` row per run, free but still the app being operated
+  // rather than observed. It costs the baselines nothing: beyond Open-Meteo's 16-day
+  // horizon the answer is `covered: false` and the day header renders no weather at
+  // all, so the images are identical either way.
   const forecast = useQuery({
     queryKey: ["trip_forecast", tripId],
     queryFn: () => rpc<TripForecast>("trip_forecast", { trip_id: tripId }),
-    enabled: Boolean(tripId),
+    enabled: Boolean(tripId) && !(typeof document !== "undefined" && document.documentElement.dataset.capture),
     retry: false,
   });
   // The walking paths, so the day's line follows the streets rather than cutting across
@@ -476,7 +491,14 @@ export function ItineraryPage() {
                 ))}
               </ul>
             ) : null}
-            <Link to={`/trips/${tripId}/optimize`}>{copy("rebuild_the_plan", language)}</Link>
+            {/* Its own line, and a styled one. JSX drops the whitespace between two
+                expressions on separate lines, so with no violations to list this
+                rendered as `...Rebuild to use it.Rebuild the plan` -- the sentence
+                and its action run together in the one banner that has to be
+                believed. A block element cannot do that whatever is above it. */}
+            <Link className="plan-drift-action" to={`/trips/${tripId}/optimize`}>
+              {copy("rebuild_the_plan", language)}
+            </Link>
           </span>
         </div>
       ) : null}
@@ -560,9 +582,17 @@ export function ItineraryPage() {
         <span>{copy("meal_minutes", language)} {totals.meal_minutes ?? 0} · {copy("preparation_minutes", language)} {totals.preparation_minutes ?? 0} · {copy("logistics_minutes", language)} {totals.logistics_minutes ?? 0}</span>
       </details>
 
-      <div className="plan-tabs" role="tablist">
-        <button aria-selected={tab === "timeline"} onClick={() => setTab("timeline")} role="tab" type="button">{copy("timeline", language)}</button>
-        <button aria-selected={tab === "map"} onClick={() => setTab("map")} role="tab" type="button">{copy("tab_map", language)}</button>
+      {/* Two buttons with `aria-pressed`, not an ARIA tablist. `role="tab"` is a
+          contract: it promises the reader ids and `aria-controls` linking each tab to
+          a `tabpanel`, one tab stop for the set with a roving `tabIndex`, and arrow
+          keys to move between them. None of that was here — the role was doing the
+          styling's job — so a screen reader announced "tab 1 of 2" and then behaved
+          like nothing of the sort. Implementing the full pattern is the other way to
+          fix it, but these two are not really tabs: the state lives in the query
+          string, each is independently linkable, and a toggle pair is what that is. */}
+      <div className="plan-tabs">
+        <button aria-pressed={tab === "timeline"} onClick={() => setTab("timeline")} type="button">{copy("timeline", language)}</button>
+        <button aria-pressed={tab === "map"} onClick={() => setTab("map")} type="button">{copy("tab_map", language)}</button>
       </div>
       {tab === "timeline" ? <Timeline day={day} language={language} /> : (
         <CoordinateMap

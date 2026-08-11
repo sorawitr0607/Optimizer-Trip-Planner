@@ -1,5 +1,5 @@
 import { HelpCircle } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { copy, type Language } from "../i18n/copy";
 
@@ -18,6 +18,19 @@ import { copy, type Language } from "../i18n/copy";
  * grey whisper it started as. And it **never appears in a capture**: a fresh Chrome
  * profile is always a first visit, so without the seam every screen baseline would
  * photograph this overlay instead of the screen it is watching.
+ *
+ * **It is a native `<dialog>` as of 2026-08-10, and that is the whole accessibility
+ * fix.** It used to be a `<div role="dialog" aria-modal="true">`, which says a thing is
+ * modal without making it one: a UX audit found focus still on `<body>` after it
+ * opened, the first Tab landing on the navigation *behind* the scrim, focus escaping to
+ * "Discover attractions", and Escape doing nothing — so a keyboard or screen-reader user
+ * was operating controls they could not see, on the densest screen in the app.
+ * `showModal()` gives all four back from the platform: focus moves inside, everything
+ * else goes inert, Tab is contained, and Escape closes. Writing that by hand is fifty
+ * lines of listeners that would have to be right about focus order forever. The one
+ * thing the platform does not do here is choose *where* focus lands afterwards — it
+ * restores to whatever was focused before, and on a first visit that is `<body>` — so
+ * the reopen button is always rendered and explicitly refocused on close.
  */
 
 const SEEN_KEY = "tourist.places_tour_seen";
@@ -32,9 +45,11 @@ const STEPS = [
 /** Remembered per browser. `localStorage` can throw in a locked-down profile, and a
  *  tour is not worth a blank screen, so every access is guarded. */
 function alreadySeen(tripId: string): boolean {
-  if (typeof document !== "undefined" && document.documentElement.dataset.capture) {
-    return true;
-  }
+  const root = typeof document === "undefined" ? null : document.documentElement;
+  // `?baseline_tour=open` — the phone baseline set photographs this overlay, which
+  // the capture flag otherwise exists to hide. Checked first, so asking for it wins.
+  if (root?.dataset.captureTour) return false;
+  if (root?.dataset.capture) return true;
   try {
     return window.localStorage.getItem(`${SEEN_KEY}.${tripId}`) === "1";
   } catch {
@@ -58,27 +73,40 @@ export interface PlacesTourProps {
 export function PlacesTour({ language, tripId }: PlacesTourProps) {
   const [open, setOpen] = useState(() => !alreadySeen(tripId));
   const [step, setStep] = useState(0);
+  const dialog = useRef<HTMLDialogElement>(null);
+  const reopen = useRef<HTMLButtonElement>(null);
+
+  // `showModal()` is what makes the element modal; rendering it is not. Driven from
+  // state rather than called at the click, so Escape -- which closes the dialog
+  // without going through any handler of ours -- cannot leave the two disagreeing.
+  useEffect(() => {
+    const node = dialog.current;
+    if (!node) return;
+    if (open && !node.open) node.showModal();
+    if (!open && node.open) node.close();
+  }, [open]);
 
   function close() {
     remember(tripId);
     setOpen(false);
     setStep(0);
-  }
-
-  if (!open) {
-    return (
-      <button className="tour-reopen" onClick={() => setOpen(true)} type="button">
-        <HelpCircle aria-hidden="true" size={14} /> {copy("tour_reopen", language)}
-      </button>
-    );
+    // The platform restores focus to whatever had it before, which on a first visit
+    // is `<body>` -- a keyboard user would be back at the top of the document on the
+    // app's densest screen. Put it on the control that reopens this instead.
+    reopen.current?.focus();
   }
 
   const current = STEPS[step];
   const last = step === STEPS.length - 1;
 
   return (
-    // derives-from: element 38 .modal-card as .tour-card
-    <div className="tour-backdrop" role="dialog" aria-modal="true" aria-label={copy("tour_title", language)}>
+    <>
+      <button className="tour-reopen" onClick={() => setOpen(true)} ref={reopen} type="button">
+        <HelpCircle aria-hidden="true" size={14} /> {copy("tour_reopen", language)}
+      </button>
+      {/* derives-from: element 38 .modal-card as .tour-card */}
+      <dialog aria-label={copy("tour_title", language)} className="tour-backdrop" onClose={close} ref={dialog}>
+      {open ? (
       <div className="tour-card">
         <p className="money-eyebrow">{copy("tour_title", language)}</p>
 
@@ -125,6 +153,8 @@ export function PlacesTour({ language, tripId }: PlacesTourProps) {
           )}
         </div>
       </div>
-    </div>
+      ) : null}
+      </dialog>
+    </>
   );
 }

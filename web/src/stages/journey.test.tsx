@@ -8,6 +8,7 @@ import type { PlanPreview, SetupDraft, SetupVocabulary, Trip } from "../api/clie
 import type { Language } from "../i18n/copy";
 import { LanguageProvider } from "../i18n/LanguageProvider";
 import { AppShell } from "../shared/AppShell";
+import { ThemeProvider } from "../shared/ThemeProvider";
 import { OptimizePage } from "./OptimizePage";
 import { SetupPage } from "./SetupPage";
 
@@ -149,13 +150,15 @@ function render(page: ReactNode, language: Language): string {
   client.setQueryData(["plan_preview", TRIP], PREVIEW);
   return renderToStaticMarkup(
     <QueryClientProvider client={client}>
-      <LanguageProvider initial={language}>
-        <MemoryRouter initialEntries={[`/trips/${TRIP}/x`]}>
-          <Routes>
-            <Route element={page} path="/trips/:tripId/x" />
-          </Routes>
-        </MemoryRouter>
-      </LanguageProvider>
+      <ThemeProvider>
+        <LanguageProvider initial={language}>
+          <MemoryRouter initialEntries={[`/trips/${TRIP}/x`]}>
+            <Routes>
+              <Route element={page} path="/trips/:tripId/x" />
+            </Routes>
+          </MemoryRouter>
+        </LanguageProvider>
+      </ThemeProvider>
     </QueryClientProvider>,
   );
 }
@@ -168,13 +171,15 @@ function renderWithoutSetup(page: ReactNode, language: Language): string {
   client.setQueryData(["setup_vocabulary"], VOCABULARY);
   return renderToStaticMarkup(
     <QueryClientProvider client={client}>
-      <LanguageProvider initial={language}>
-        <MemoryRouter initialEntries={[`/trips/${TRIP}/x`]}>
-          <Routes>
-            <Route element={page} path="/trips/:tripId/x" />
-          </Routes>
-        </MemoryRouter>
-      </LanguageProvider>
+      <ThemeProvider>
+        <LanguageProvider initial={language}>
+          <MemoryRouter initialEntries={[`/trips/${TRIP}/x`]}>
+            <Routes>
+              <Route element={page} path="/trips/:tripId/x" />
+            </Routes>
+          </MemoryRouter>
+        </LanguageProvider>
+      </ThemeProvider>
     </QueryClientProvider>,
   );
 }
