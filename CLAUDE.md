@@ -1202,6 +1202,26 @@ canonicalises with sorted keys, so reading `shares_thb` directly lists them alph
 matching the "Shared by" column beside it — and that order is what the equal-split remainder rule is
 documented against.
 
+**`/split` gained the donor's four modes, its cardholder and its two charts on 2026-08-11.** The mode
+was previously *inferred* — `participants.length === 1 ? "single_payer" : "equal_all"` — so choosing
+one was not something the screen offered, and "we split this three ways but Ake only had a drink"
+could not be said at all. The manual panel shows the remainder **while typing** rather than only
+refusing on save, because "it does not add up" is far more useful with the number still in front of
+you; it tolerates one satang per participant, which is the most a by-hand equal split can be out.
+
+**Map item 5 is answered where the data is.** The donor's donut and bar chart had no planner use *on
+`/places`* — the element inventory found no distribution there, which is what that item recorded — but
+the split ledger holds two real ones, money per category and money per person, and they are the two
+questions the screen is opened with. Both are SVG: `WF-026` fixes the web runtime at six dependencies
+and a ring is one `stroke-dasharray` per slice. **The legend carries the name and the number**, so
+colour is never the only thing separating two slices — the same rule the map follows with its numbered
+list. The six slice colours are ordered so *neighbours* differ in hue rather than the set looking
+varied: accent-then-success put teal beside green on the pilot and the swatches were not tellable
+apart at 10px, which was caught by looking at the screen rather than by reading the code.
+
+Verified end to end in a browser against a copy: a manual 60/40/0 bar tab saves with its allocation
+intact, the settlement moves to `Sister pays you 40`, and the balances still sum to zero.
+
 **A capture must observe the app, never operate it.** Two things broke that and both showed up as
 double-digit baseline drift on screens nobody had edited. The `/places` first-visit tour is suppressed
 by `document.documentElement.dataset.capture`, because a fresh Chrome profile is always a first visit

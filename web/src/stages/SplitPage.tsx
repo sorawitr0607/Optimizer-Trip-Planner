@@ -10,12 +10,19 @@ import {
   type SplitRow,
   type SplitSummary,
 } from "../api/client";
-import { copy } from "../i18n/copy";
+import { copy, copyFormat } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
-import { money, Note, Tag, Tile, travellerNames } from "./money";
+import { Donut, Meters, money, Note, Tag, Tile, travellerNames } from "./money";
 
 const TAGS = ["transport", "accommodation", "activity", "food", "fees", "shopping", "other"];
 const CURRENCIES = ["THB", "TWD", "JPY", "KRW", "CNY", "USD"];
+
+/** The donor's four, in its own order. The mode used to be *inferred* from how
+ *  many people were ticked -- one meant single_payer and anything else meant an
+ *  equal split -- so "we split this three ways but Ake only had a drink" could
+ *  not be said at all, and choosing a mode was not a thing the screen offered. */
+const MODES = ["equal_all", "selected", "single_payer", "manual"] as const;
+type Mode = (typeof MODES)[number];
 
 interface Draft {
   label: string;
@@ -23,6 +30,10 @@ interface Draft {
   original_currency: string;
   paid_by: string;
   participants: string[];
+  mode: Mode;
+  /** Keyed by traveller, held as typed text so a half-entered "1" is not 1. */
+  allocation: Record<string, string>;
+  notes: string;
   tag: string;
   cost_id: string;
 }
@@ -33,6 +44,9 @@ const EMPTY: Draft = {
   original_currency: "THB",
   paid_by: "owner",
   participants: [],
+  mode: "equal_all",
+  allocation: {},
+  notes: "",
   tag: "other",
   cost_id: "",
 };
@@ -65,6 +79,10 @@ export function SplitPage() {
     queryKey: ["cost_totals", tripId],
     queryFn: () => rpc<CostTotals>("cost_totals", { trip_id: tripId }),
   });
+  const cardholder = useQuery({
+    queryKey: ["split_cardholder", tripId],
+    queryFn: () => rpc<string>("get_split_cardholder", { trip_id: tripId }),
+  });
 
   async function refresh() {
     await Promise.all([
@@ -84,7 +102,16 @@ export function SplitPage() {
           original_currency: draft.original_currency,
           paid_by: draft.paid_by,
           participants: draft.participants,
-          mode: draft.participants.length === 1 ? "single_payer" : "equal_all",
+          mode: draft.mode,
+          // Only under `manual`; `validate_row` clears it for every other mode so
+          // a stale allocation cannot outweigh the mode actually chosen.
+          allocation:
+            draft.mode === "manual"
+              ? Object.fromEntries(
+                  draft.participants.map((person) => [person, Number(draft.allocation[person] || 0)]),
+                )
+              : {},
+          notes: draft.notes || null,
           tag: draft.tag,
           cost_id: draft.cost_id || null,
         },
@@ -99,6 +126,15 @@ export function SplitPage() {
     mutationFn: (input: { split_id: string; voided: boolean }) =>
       rpc<SplitRow>("set_split_voided", { trip_id: tripId, ...input }),
     onSuccess: refresh,
+  });
+
+  const setCardholder = useMutation({
+    mutationFn: (traveller_id: string) =>
+      rpc<{ traveller_id: string }>("set_split_cardholder", { trip_id: tripId, traveller_id }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["split_cardholder", tripId] });
+      await refresh();
+    },
   });
 
   const setSettled = useMutation({
@@ -116,6 +152,13 @@ export function SplitPage() {
   const totalsData = totals.data;
   const yourShare = summary.data.balances.find((entry) => entry.traveller_id === "owner");
   const filtering = Object.keys(filters).length > 0;
+  // What is still unallocated on a manual row. Positive means under-allocated.
+  const allocationLeft =
+    Number(draft.original_amount || 0)
+    - draft.participants.reduce((total, id) => total + Number(draft.allocation[id] || 0), 0);
+  const allocationOff =
+    draft.mode === "manual"
+    && Math.abs(allocationLeft) > 0.01 * Math.max(draft.participants.length, 1);
 
   function toggleFilter(key: "who" | "category", value: string) {
     setFilters((current) => (current[key] === value ? { ...current, [key]: undefined } : { ...current, [key]: value }));
@@ -175,12 +218,52 @@ export function SplitPage() {
         </Note>
       ) : null}
 
+      {/* Map item 5, answered where the data actually is. `/places` charts
+          nothing because it has no distribution; the split ledger has two. */}
+      <div className="money-charts">
+        <Donut
+          label={copy("costs_by_category", language)}
+          slices={Object.entries(summary.data.by_category).map(([key, value]) => ({
+            key,
+            name: copy(key, language),
+            value,
+          }))}
+          total={summary.data.actual_thb}
+        />
+        <Meters
+          label={copy("split_shares", language)}
+          rows={summary.data.balances.map((entry) => ({
+            key: entry.traveller_id,
+            name: names[entry.traveller_id] ?? entry.traveller_id,
+            value: entry.shares_thb,
+          }))}
+        />
+      </div>
+
       <h2 className="money-eyebrow">{copy("split_settle_up", language)}</h2>
       {/* Wording that has to stay true after the owner has been paid back,
           because the number does not change when they are. */}
       <Note mark="◇" tone="plain">
         <b>{copy("split_suggestions", language)}</b> {copy("split_suggestions_help", language)}
       </Note>
+      {/* Donor element 30. Everyone settles through one person, and until now
+          that person was a constant -- so a trip where someone else's card is on
+          file settled through the wrong traveller and no screen could say so. */}
+      <label className="money-cardholder">
+        {copy("split_cardholder", language)}
+        <select
+          disabled={setCardholder.isPending}
+          onChange={(event) => setCardholder.mutate(event.target.value)}
+          value={cardholder.data ?? "owner"}
+        >
+          {roster.map((id) => (
+            <option key={id} value={id}>
+              {names[id]}
+            </option>
+          ))}
+        </select>
+        <span className="setup-hint">{copy("split_cardholder_help", language)}</span>
+      </label>
       {summary.data.settlement.length === 0 ? (
         <p className="money-empty">{copy("split_nothing_to_settle", language)}</p>
       ) : (
@@ -409,8 +492,81 @@ export function SplitPage() {
             </label>
           ))}
         </fieldset>
+
+        {/* The mode, chosen rather than guessed. `single_payer` splits between
+            exactly one traveller, so picking it narrows the list to whoever is
+            already ticked first -- refusing at save time instead would be the
+            form knowing something it declined to say. */}
+        <fieldset className="money-modes">
+          <legend>{copy("split_shares", language)}</legend>
+          {MODES.map((mode) => (
+            <label key={mode}>
+              <input
+                checked={draft.mode === mode}
+                name="split-mode"
+                onChange={() =>
+                  setDraft((current) => ({
+                    ...current,
+                    mode,
+                    participants:
+                      mode === "single_payer" && current.participants.length > 1
+                        ? current.participants.slice(0, 1)
+                        : current.participants,
+                  }))
+                }
+                type="radio"
+              />
+              {copy(`split_mode_${mode}`, language)}
+            </label>
+          ))}
+        </fieldset>
+
+        {/* The donor's manual view carried a validation panel; this is it. The
+            running remainder is shown while typing rather than only refused on
+            save, because "it does not add up" is far more useful with the number
+            still in front of you. It is allowed to be a satang out per person --
+            33.33 three times is 99.99 and the apportionment absorbs it. */}
+        {draft.mode === "manual" ? (
+          <fieldset className="money-allocation">
+            <legend>{copy("split_allocation", language)}</legend>
+            <p className="setup-hint">{copy("split_allocation_help", language)}</p>
+            {draft.participants.map((id) => (
+              <label key={id}>
+                {names[id]}
+                <input
+                  min="0"
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      allocation: { ...current.allocation, [id]: event.target.value },
+                    }))
+                  }
+                  step="0.01"
+                  type="number"
+                  value={draft.allocation[id] ?? ""}
+                />
+              </label>
+            ))}
+            {draft.participants.length ? (
+              <p className={Math.abs(allocationLeft) > 0.01 * draft.participants.length ? "field-error" : "setup-hint"}>
+                {copyFormat("split_allocation_left", language, { amount: money(allocationLeft) })}
+              </p>
+            ) : null}
+          </fieldset>
+        ) : null}
+
+        <label className="money-notes">
+          {copy("split_notes", language)}
+          <input
+            onChange={(event) => setDraft({ ...draft, notes: event.target.value })}
+            value={draft.notes}
+          />
+        </label>
         {save.error ? <p className="field-error">⚠ {save.error.message}</p> : null}
-        <button disabled={save.isPending || draft.participants.length === 0} type="submit">
+        <button
+          disabled={save.isPending || draft.participants.length === 0 || allocationOff}
+          type="submit"
+        >
           {copy("split_save", language)}
         </button>
       </form>

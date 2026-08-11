@@ -4368,3 +4368,132 @@
   gap: 10px;
   margin-bottom: 4px;
 }
+
+/* Donor elements 19, 24 and 25. Two real distributions, drawn without a chart
+   dependency: `WF-026` fixes the web runtime at six. */
+.money-charts {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.money-chart {
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius);
+  margin: 0;
+  padding: 14px;
+}
+
+.money-chart-body {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.money-donut {
+  flex: none;
+  height: 132px;
+  transform: rotate(-90deg);
+  width: 132px;
+}
+
+/* Six, cycled, ordered so that *neighbours* differ in hue rather than the list
+   looking varied overall. Accent-then-success put teal beside green on the pilot
+   and the two swatches were not tellable apart at 10px -- caught by looking at
+   it, not by reading it. The legend still carries the name and the number, so
+   colour is never the only thing separating two slices. */
+.money-slice-0 { stroke: var(--color-accent); color: var(--color-accent); }
+.money-slice-1 { stroke: var(--color-warning); color: var(--color-warning); }
+.money-slice-2 { stroke: var(--color-purple); color: var(--color-purple); }
+.money-slice-3 { stroke: var(--color-success); color: var(--color-success); }
+.money-slice-4 { stroke: var(--color-danger); color: var(--color-danger); }
+.money-slice-5 { stroke: var(--text-muted); color: var(--text-muted); }
+
+.money-legend {
+  display: grid;
+  flex: 1 1 150px;
+  gap: 5px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.money-legend li {
+  align-items: center;
+  display: grid;
+  font-size: var(--text-xs);
+  gap: 8px;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+}
+
+.money-swatch {
+  background: currentColor;
+  border-radius: var(--radius-pill);
+  height: 10px;
+  width: 10px;
+}
+
+.money-meters {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.money-meters li {
+  align-items: center;
+  display: grid;
+  font-size: var(--text-xs);
+  gap: 10px;
+  grid-template-columns: minmax(64px, 1fr) minmax(0, 2fr) auto;
+}
+
+.money-meter-track {
+  background: var(--bg-secondary);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius);
+  display: block;
+  height: 14px;
+  overflow: hidden;
+}
+
+.money-meter-track i {
+  background: var(--color-accent);
+  display: block;
+  height: 100%;
+}
+
+/* The four allocation modes, and the manual panel's own rows. */
+.money-modes,
+.money-allocation {
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 8px;
+  grid-column: 1 / -1;
+  padding: 10px 12px;
+}
+
+.money-modes label,
+.money-allocation label {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.money-allocation input {
+  margin-left: auto;
+  max-width: 140px;
+}
+
+.money-cardholder {
+  display: grid;
+  gap: 4px;
+  max-width: 360px;
+}
+
+.money-notes {
+  grid-column: 1 / -1;
+}
