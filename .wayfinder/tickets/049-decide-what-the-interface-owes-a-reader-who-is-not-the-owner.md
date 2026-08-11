@@ -192,6 +192,51 @@ were exercised against a scratch database: HTTP 503, no draft and no revision hi
 submitted. The landing page's absolute “No upload” sentence was corrected to distinguish the local trip
 file from these explicitly optional provider/model transmissions.
 
+## Final local closure pass, 2026-08-11
+
+Device emulation removed the old 500px verification limit. The landing page and all nine journey
+routes were exercised in Thai at 640, 427 and 320 CSS pixels — the reflow equivalents of 200%,
+300% and 400% zoom from a 1280px layout. All 30 cases kept document width within the viewport,
+exposed exactly one `h1`, had no unnamed interactive node in Chrome's accessibility tree, and
+reported no console or failed-request event. The remaining sub-24px hit areas were inline
+attribution/source links, which use the inline-link target-size exception. Mobile disclosures and
+the two itinerary actions now have a 44px floor. The itinerary's compass rose was also absolutely
+positioned against the page because its map lacked a positioned ancestor; it is now anchored to
+the map itself.
+
+The native dialog had one real state bug left. Escape closed the browser's dialog while React's
+`open` state stayed true, leaving the card mounted and making the reopen button a no-op. The
+`cancel` event now prevents the browser-first close and runs the same state-led close path as the
+visible buttons. Three repeated browser runs each closed the card, remembered the dismissal,
+returned focus to “How this works”, and reopened immediately with focus inside. A forced attempt
+to focus the background was rejected while the modal was open.
+
+Static delivery now receives the same treatment as the large JSON snapshots: compressible files
+are gzip-negotiated, hashed assets are immutable for one year, and route shells are revalidated.
+The built main script measured **515,343 B identity and 152,748 B gzip**. Under 4x CPU slowdown,
+150ms latency and about 1.6 Mbps, local transfer was 240,436 B for landing, 204,849 B for setup,
+791,930 B for Places and 313,602 B for itinerary; CLS stayed zero. Places still decoded 3,502,625 B
+and produced five 95–139ms long tasks while rendering its real pilot data. Vite still warns about
+the 515KB raw entry chunk: moving libraries into a second chunk would silence the threshold without
+reducing bytes, so this pass fixes transfer rather than disguising the warning.
+
+Every external HTTP link exposed by the representative nine-route walkthrough was followed on the
+day of the check: Wikipedia, Huashan 1914 and the two OpenStreetMap pages all returned HTTP 200.
+The stored catalogue was checked without hammering a public service: all **855** source URLs equal
+the canonical OpenStreetMap URL for their own provider id, and all **58** distinct place-evidence
+URLs are HTTPS with no literal space (41 Commons, 12 English Wikipedia, four Thai Wikipedia and one
+Huashan). A representative Commons file redirect returned an image with HTTP 200. The two itinerary
+map handoffs use syntactically pinned `geo:` URIs. Open-Meteo, Overpass and OpenRouteService were
+reachable, and an explicitly approved synthetic paid smoke made one Google Places request and one
+Google Routes request; both were reachable and no trip data was sent. All application/browser work
+used the scratch database. The owner database remained unopened by the app at
+`6c708328a5d3c8fbd208078af40609f9a0d9453414790fba11336e8b552af92c`.
+
+What remains is evidence this machine cannot manufacture: a native Thai copy review; a full
+VoiceOver/Safari journey; NVDA/Firefox on Windows; and field Core Web Vitals from a deployed URL and
+real users. Headless Chrome did not expose LCP, so the local profile does not substitute a number.
+Those are release-validation boundaries, not unimplemented product fixes.
+
 ## What followed, 2026-08-11
 
 The same review asked a second question — *can `/split` and `/costs` do what

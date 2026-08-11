@@ -3268,6 +3268,7 @@
   gap: 6px;
   margin-top: 10px;
   padding-top: 10px;
+  position: relative;
 }
 
 /* The caption's element varies with the map's depth in its page (see `headingLevel`),
@@ -4280,6 +4281,14 @@
   a.setup-primary,
   .stage-link,
   input:not([type="checkbox"]):not([type="radio"]) {
+    min-height: 44px;
+  }
+
+  summary,
+  .plan-drift-action,
+  .plan-stop-maps {
+    align-items: center;
+    display: flex;
     min-height: 44px;
   }
 

@@ -247,6 +247,9 @@ class SocketGuardTest(unittest.TestCase):
         web = root / "dist"
         web.mkdir()
         (web / "index.html").write_text("<main>S1 shell</main>", encoding="utf-8")
+        (web / "assets").mkdir()
+        self.static_javascript = b"const answer = 42;\n" * 200
+        (web / "assets" / "index-deadbeef.js").write_bytes(self.static_javascript)
         self.actions = PlannerActions(root / "planner.sqlite3")
         self.server = PlannerHTTPServer(("127.0.0.1", 0), self.actions, web)
         self.thread = Thread(target=self.server.serve_forever, daemon=True)
@@ -330,12 +333,45 @@ class SocketGuardTest(unittest.TestCase):
         has to hold in both directions, so a real route still gets the shell.
         """
 
-        for path in ("/favicon.ico", "/assets/index-deadbeef.js", "/robots.txt"):
+        for path in ("/favicon.ico", "/assets/missing-deadbeef.js", "/robots.txt"):
             status, _, _ = self.request("GET", path)
             self.assertEqual(404, status, path)
         status, _, body = self.request("GET", "/trips/example/setup")
         self.assertEqual(200, status)
         self.assertIn(b"S1 shell", body)
+
+    def test_hashed_static_assets_are_gzipped_and_cached_immutably(self) -> None:
+        status, headers, body = self.request(
+            "GET",
+            "/assets/index-deadbeef.js",
+            headers={"Accept-Encoding": "br, gzip"},
+        )
+
+        self.assertEqual(200, status)
+        self.assertEqual("gzip", headers["content-encoding"])
+        self.assertEqual("Accept-Encoding", headers["vary"])
+        self.assertEqual("public, max-age=31536000, immutable", headers["cache-control"])
+        self.assertEqual(self.static_javascript, gzip.decompress(body))
+        self.assertLess(len(body), len(self.static_javascript))
+
+        status, headers, body = self.request(
+            "GET",
+            "/assets/index-deadbeef.js",
+            headers={"Accept-Encoding": "gzip;q=0"},
+        )
+        self.assertEqual(200, status)
+        self.assertNotIn("content-encoding", headers)
+        self.assertEqual("Accept-Encoding", headers["vary"])
+        self.assertEqual(self.static_javascript, body)
+
+        status, headers, body = self.request(
+            "GET",
+            "/assets/index-deadbeef.js",
+            headers={"Accept-Encoding": "gzip;q=0, *;q=1"},
+        )
+        self.assertEqual(200, status)
+        self.assertNotIn("content-encoding", headers)
+        self.assertEqual(self.static_javascript, body)
 
     def test_shell_and_real_api_call_round_trip(self) -> None:
         status, _, body = self.request("GET", "/trips/example/setup")

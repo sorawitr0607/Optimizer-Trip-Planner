@@ -75,25 +75,27 @@ export function PlacesTour({ language, tripId }: PlacesTourProps) {
   const [step, setStep] = useState(0);
   const dialog = useRef<HTMLDialogElement>(null);
   const reopen = useRef<HTMLButtonElement>(null);
+  const returnFocus = useRef(false);
 
-  // `showModal()` is what makes the element modal; rendering it is not. Driven from
-  // state rather than called at the click, so Escape -- which closes the dialog
-  // without going through any handler of ours -- cannot leave the two disagreeing.
+  // `showModal()` is what makes the element modal; rendering it is not. Every close,
+  // including Escape's `cancel` event, updates state first so React and the platform
+  // cannot disagree about whether the card is open.
   useEffect(() => {
     const node = dialog.current;
     if (!node) return;
     if (open && !node.open) node.showModal();
     if (!open && node.open) node.close();
+    if (!open && returnFocus.current) {
+      returnFocus.current = false;
+      reopen.current?.focus();
+    }
   }, [open]);
 
   function close() {
     remember(tripId);
+    returnFocus.current = true;
     setOpen(false);
     setStep(0);
-    // The platform restores focus to whatever had it before, which on a first visit
-    // is `<body>` -- a keyboard user would be back at the top of the document on the
-    // app's densest screen. Put it on the control that reopens this instead.
-    reopen.current?.focus();
   }
 
   const current = STEPS[step];
@@ -105,7 +107,21 @@ export function PlacesTour({ language, tripId }: PlacesTourProps) {
         <HelpCircle aria-hidden="true" size={14} /> {copy("tour_reopen", language)}
       </button>
       {/* derives-from: element 38 .modal-card as .tour-card */}
-      <dialog aria-label={copy("tour_title", language)} className="tour-backdrop" onClose={close} ref={dialog}>
+      <dialog
+        aria-label={copy("tour_title", language)}
+        className="tour-backdrop"
+        onCancel={(event) => {
+          // Chrome closes a native dialog on Escape before React's `onClose` sees a
+          // usable state transition. Preventing that default lets the same state-led
+          // close path serve Escape and both visible buttons, including focus return.
+          event.preventDefault();
+          close();
+        }}
+        onClose={() => {
+          if (open) close();
+        }}
+        ref={dialog}
+      >
       {open ? (
       <div className="tour-card">
         <p className="money-eyebrow">{copy("tour_title", language)}</p>

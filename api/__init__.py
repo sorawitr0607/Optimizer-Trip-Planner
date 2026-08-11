@@ -294,17 +294,41 @@ class PlannerHandler(SimpleHTTPRequestHandler):
         body: bytes,
         content_type: str,
         *,
+        cache_control: str = "no-store",
         content_encoding: str | None = None,
+        vary_accept_encoding: bool = False,
     ) -> None:
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
+        self.send_header("Cache-Control", cache_control)
         if content_encoding:
             self.send_header("Content-Encoding", content_encoding)
+        if vary_accept_encoding:
             self.send_header("Vary", "Accept-Encoding")
         self.end_headers()
         self.wfile.write(body)
+
+    def _accepts_gzip(self) -> bool:
+        qualities: dict[str, float] = {}
+        for item in self.headers.get("Accept-Encoding", "").lower().split(","):
+            encoding, *parameters = (part.strip() for part in item.split(";"))
+            if not encoding:
+                continue
+            quality = 1.0
+            for parameter in parameters:
+                if parameter.startswith("q="):
+                    try:
+                        quality = float(parameter.removeprefix("q="))
+                    except ValueError:
+                        quality = 0.0
+            qualities[encoding] = quality
+        return qualities.get("gzip", qualities.get("*", 0.0)) > 0
+
+    def _encoded(self, body: bytes) -> tuple[bytes, str | None]:
+        if self._accepts_gzip() and len(body) >= 1024:
+            return gzip.compress(body, mtime=0), "gzip"
+        return body, None
 
     def _json(self, status: int, value: Any) -> None:
         body = json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
@@ -312,13 +336,13 @@ class PlannerHandler(SimpleHTTPRequestHandler):
         # highly repetitive. Narrowing either would make its exposed sha256 describe
         # different bytes from the payload. HTTP compression preserves that contract
         # and cuts the real pilot responses by about 93%, using only the stdlib.
-        accepts_gzip = "gzip" in self.headers.get("Accept-Encoding", "").lower()
-        encoding = "gzip" if accepts_gzip and len(body) >= 1024 else None
+        encoded, encoding = self._encoded(body)
         self._body(
             status,
-            gzip.compress(body, mtime=0) if encoding else body,
+            encoded,
             "application/json; charset=utf-8",
             content_encoding=encoding,
+            vary_accept_encoding=True,
         )
 
     def _error(self, error: Exception) -> None:
@@ -385,15 +409,45 @@ class PlannerHandler(SimpleHTTPRequestHandler):
                 self._error(error)
             return
 
-        target = self.server.web_root / path.lstrip("/")
+        root = self.server.web_root.resolve()
+        target = (root / path.lstrip("/")).resolve()
         # The SPA fallback is for *routes*, and a route has no file extension. Sending
         # index.html for every miss meant `/favicon.ico` answered 200 with the whole
         # application as its body — which a browser discards, so the tab kept the
         # blank default and the app looked unfinished for a reason no log showed.
         # A missing asset is now a 404, which is what a missing asset is.
         if path == "/" or (not target.is_file() and not PurePosixPath(path).suffix):
-            self.path = "/index.html"
-        super().do_GET()
+            target = root / "index.html"
+        try:
+            relative = target.relative_to(root)
+        except ValueError:
+            self.send_error(404)
+            return
+        if not target.is_file():
+            super().do_GET()
+            return
+
+        body = target.read_bytes()
+        content_type = self.guess_type(str(target))
+        compressible = content_type.startswith("text/") or content_type in {
+            "application/javascript",
+            "application/json",
+            "image/svg+xml",
+        }
+        encoded, encoding = self._encoded(body) if compressible else (body, None)
+        cache_control = (
+            "public, max-age=31536000, immutable"
+            if relative.parts[:1] == ("assets",)
+            else "no-cache"
+        )
+        self._body(
+            200,
+            encoded,
+            content_type,
+            cache_control=cache_control,
+            content_encoding=encoding,
+            vary_accept_encoding=compressible,
+        )
 
 
 def ensure_web_build() -> None:
