@@ -424,8 +424,9 @@ resolving tickets are throwaway artifacts, not the build.
 
 ## Out of scope
 
-- Hosted deployment, accounts, per-traveller login, remote member voting, notifications. These stay a
-  later phase; the destination is explicitly local and owner-led.
+- Hosted deployment, accounts, per-traveller login, remote member voting and notifications stay a
+  later phase; the destination is explicitly local and owner-led. The build order and gates for that
+  future phase are recorded in [`PUBLIC_RELEASE_PLAN.md`](../PUBLIC_RELEASE_PLAN.md).
 - Rewriting the planning core, optimizer, or ranking in JavaScript or TypeScript.
 - Building any slice 6 feature in Streamlit.
 - Changing optimizer, ranking, or scoring behaviour as part of the redesign. A UI port that alters

@@ -237,6 +237,12 @@ VoiceOver/Safari journey; NVDA/Firefox on Windows; and field Core Web Vitals fro
 real users. Headless Chrome did not expose LCP, so the local profile does not substitute a number.
 Those are release-validation boundaries, not unimplemented product fixes.
 
+The owner later asked that those checks be retained for the day this becomes public. They now live
+in [`PUBLIC_RELEASE_PLAN.md`](../../PUBLIC_RELEASE_PLAN.md), together with the larger hosted-service
+work they imply: authentication and tenant isolation, durable hosted data, privacy/provider controls,
+security and recovery, field performance, release operations and an invite-only beta. This ticket
+remains the evidence record; the public-release file is the forward plan.
+
 ## What followed, 2026-08-11
 
 The same review asked a second question — *can `/split` and `/costs` do what

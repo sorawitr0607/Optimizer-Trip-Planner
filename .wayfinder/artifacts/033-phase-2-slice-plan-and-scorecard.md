@@ -151,6 +151,11 @@ Not on track ⇒ Taipei is planned by hand in Excel, as the four reference trips
 an off-by-default checkbox with cost, privacy and typed-operation boundaries visible before use; the
 non-AI path remains fully usable.
 
+**Public operation is a separate phase.** Accounts, hosted data isolation, public privacy/security
+controls, human accessibility/language sign-off, field performance and release operations are not
+retrofit into these completed local-pilot slices. Their canonical sequence and exit gates are in
+[`PUBLIC_RELEASE_PLAN.md`](../../PUBLIC_RELEASE_PLAN.md).
+
 | Deferred | Why it is safe to defer |
 |---|---|
 | **The ranked candidate card grid** | `WF-021` called it the biggest design gap and said the port *unlocks* it rather than ports it, so it is new design. `places` is already the most expensive screen; a functional ranked list serves the pilot. `WF-036` stays open |

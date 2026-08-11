@@ -509,6 +509,14 @@ behaviours down to actions/core/exports. It was **311** at S6; it is **512** now
 past trips; `scripts/run_optimizer_regressions.py` replays all of them through the real optimizer.
 Behavior changes to the optimizer should be expressed there.
 
+## Public release boundary
+
+The current application is local-only and single-owner. Do not make `PlannerHandler`, the SQLite
+file or locally loaded provider credentials Internet-facing. A future hosted release is a separate
+operating phase whose canonical build order and exit gates are in `PUBLIC_RELEASE_PLAN.md`. Link to
+that plan from implementation tickets instead of copying its checklist; retain run evidence under
+`artifacts/validation/<run-id>/`.
+
 ## Configuration
 
 **The default model is `gpt-5.6-luna` as of 2026-08-07** (`TOURIST_OPENAI_MODEL` still overrides), and it

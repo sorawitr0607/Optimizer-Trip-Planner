@@ -47,7 +47,9 @@ Reach a decision-complete, implementation-ready specification for a local Phase 
 
 ## Intentionally deferred beyond Phase 1
 
-- Exact sequencing for a hosted PWA, remote member voting, broader worldwide validation, and production polish. These are future roadmap candidates, not POC dependencies.
+- Hosted operation, remote member voting, broader worldwide validation and production polish remain
+  outside Phase 1. Their later build order and release gates are now recorded in
+  [`PUBLIC_RELEASE_PLAN.md`](../PUBLIC_RELEASE_PLAN.md), not inferred from this closed local-pilot map.
 - Operational monitoring and background notifications for a hosted product; the local prototype can refresh only while running.
 
 ## Implementation-time evidence, not unresolved decisions

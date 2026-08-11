@@ -11,6 +11,14 @@ and `store.py` remain the domain boundary. **`views/`, `app.py` and `ui/` were
 deleted at slice S6 on 2026-08-04**, once the webapp reached parity across all
 nine routes; there is one runnable surface now.
 
+## Release status
+
+This repository is a **local, single-owner personal-planning pilot**, not an Internet-facing
+service. Its local server, SQLite file and credential model must not be exposed directly to public
+traffic. When the owner chooses a hosted release, follow [the public release improvement
+plan](PUBLIC_RELEASE_PLAN.md); it covers the production trust boundary, privacy, human accessibility
+and Thai review, field performance, operations and an invite-only beta gate.
+
 ## Run locally
 
 ```bash
@@ -50,7 +58,8 @@ The app uses `data/tourist.sqlite3` by default. Copy `secrets.example.json` to
 
 ## Repository map
 
-- `api/` — stdlib localhost transport and the production webapp entry point.
+- `PUBLIC_RELEASE_PLAN.md` — the deferred build and evidence gates for a future hosted public service.
+- `api/` — stdlib localhost transport and the local webapp entry point.
 - `web/` — React, TypeScript, Tailwind, route shell, and stage gates.
 - `i18n/copy.json` and `tokens.css` — copy and design truth shared across renderers.
 - `travel_planner/` — planner domain logic, storage, providers, ranking, and optimization.
