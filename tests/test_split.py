@@ -64,8 +64,31 @@ class RoundingTest(unittest.TestCase):
     def test_satang_always_sum_to_the_row_exactly(self) -> None:
         for amount in (0.01, 0.02, 10.0, 99.99, 100.0, 1240.55, 8400.0):
             for count in range(1, 9):
-                portions = split._split_satang(amount, count)
+                portions = split._apportion_satang(amount, [1.0] * count)
                 self.assertEqual(round(amount * 100), sum(portions), (amount, count))
+
+    def test_an_uneven_weighting_also_sums_to_the_row_exactly(self) -> None:
+        """The property the settlement depends on, under the weights manual rows use.
+
+        If apportioned shares miss the total by a satang, `summary` books a
+        different figure into `owed` than into `fronted` and the star settlement
+        stops closing -- so this is checked over ratios chosen to round badly
+        (thirds, sevenths, and a lone payer among people owing nothing).
+        """
+
+        weightings = ([1, 2], [1, 1, 1], [1, 2, 4], [0, 0, 5], [3, 3, 1], [1, 6])
+        for amount in (0.01, 0.03, 10.0, 99.99, 1240.55):
+            for weights in weightings:
+                portions = split._apportion_satang(amount, [float(w) for w in weights])
+                self.assertEqual(
+                    round(amount * 100), sum(portions), (amount, weights)
+                )
+                self.assertTrue(all(part >= 0 for part in portions), (amount, weights))
+
+    def test_an_all_zero_weighting_falls_back_to_equal(self) -> None:
+        """A manual row for 0.00 is the one weighting that cannot be apportioned."""
+
+        self.assertEqual([0, 0, 0], split._apportion_satang(0.0, [0.0, 0.0, 0.0]))
 
     def test_a_single_payer_row_bears_the_whole_amount(self) -> None:
         shares = split.shares(
@@ -232,3 +255,142 @@ class ValidationTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ManualAllocationTest(unittest.TestCase):
+    """The fourth split mode, added 2026-08-11.
+
+    The donor had it from the start -- its badges are `m-all`, `m-sel`, `m-sgl`
+    and `m-man`, and its rows carry an explicit `splits` map -- and it is the only
+    one of the four whose arithmetic the other three cannot express.
+    """
+
+    def test_an_uneven_bill_splits_the_way_it_was_typed(self) -> None:
+        resolved_row = resolved(
+            row(
+                mode="manual",
+                original_amount=100.0,
+                allocation={"owner": 50.0, "member_1": 30.0, "member_2": 20.0},
+            )
+        )[0]
+
+        self.assertEqual(
+            {"owner": 50.0, "member_1": 30.0, "member_2": 20.0},
+            split.shares(resolved_row),
+        )
+
+    def test_a_manual_row_converts_currency_before_it_is_divided(self) -> None:
+        """Converting each person's share separately would round three times and
+        lose the guarantee that the shares add up to the bill."""
+
+        resolved_row = resolved(
+            row(
+                mode="manual",
+                original_currency="TWD",
+                original_amount=100.0,
+                allocation={"owner": 33.0, "member_1": 33.0, "member_2": 34.0},
+            )
+        )[0]
+        shares = split.shares(resolved_row)
+
+        self.assertEqual(112.0, resolved_row["reported_thb"])
+        self.assertEqual(112.0, round(sum(shares.values()), 2))
+
+    def test_a_hand_typed_equal_split_is_forgiven_and_lands_exactly(self) -> None:
+        """33.33 three times is 99.99, and refusing that would be pedantic.
+
+        The donor took the same view from the other end -- it tolerated a flat
+        0.015 and then moved the difference onto the first positive share. Here the
+        allocation is a set of weights, so apportioning the real total by them
+        lands on 100.00 with nothing to correct and nobody quietly adjusted.
+        """
+
+        shares = split.shares(
+            resolved(
+                row(
+                    mode="manual",
+                    original_amount=100.0,
+                    allocation={"owner": 33.33, "member_1": 33.33, "member_2": 33.33},
+                )
+            )[0]
+        )
+
+        self.assertEqual(100.0, round(sum(shares.values()), 2))
+        self.assertEqual(33.34, max(shares.values()))
+
+    def test_a_manual_allocation_that_does_not_add_up_is_refused(self) -> None:
+        """The donor's manual view carried a validation panel; this is what it was
+        for. A row that cannot balance must not reach settlement."""
+
+        with self.assertRaises(ValueError) as caught:
+            row(
+                mode="manual",
+                original_amount=100.0,
+                allocation={"owner": 50.0, "member_1": 30.0, "member_2": 10.0},
+            )
+
+        self.assertIn("add up", str(caught.exception))
+
+    def test_a_manual_allocation_must_name_exactly_the_participants(self) -> None:
+        with self.assertRaises(ValueError):
+            row(mode="manual", original_amount=100.0, allocation={"owner": 100.0})
+        with self.assertRaises(ValueError):
+            row(
+                mode="manual",
+                original_amount=100.0,
+                participants=["owner", "member_1"],
+                allocation={"owner": 60.0, "member_1": 20.0, "member_2": 20.0},
+            )
+
+    def test_a_negative_share_is_refused(self) -> None:
+        with self.assertRaises(ValueError):
+            row(
+                mode="manual",
+                original_amount=100.0,
+                allocation={"owner": 120.0, "member_1": -10.0, "member_2": -10.0},
+            )
+
+    def test_switching_away_from_manual_strands_no_allocation(self) -> None:
+        """A stored shape that depends on the mode is how a stale allocation ends
+        up quietly out-weighing the mode the owner actually chose."""
+
+        self.assertEqual({}, row(mode="equal_all", allocation={"owner": 100.0})["allocation"])
+
+    def test_a_manual_row_still_settles_to_zero(self) -> None:
+        """The invariant every mode shares: what is owed and what was fronted are
+        the same money, so the star settlement closes exactly."""
+
+        result = summary(
+            *resolved(
+                row(
+                    mode="manual",
+                    original_amount=99.99,
+                    paid_by="member_1",
+                    allocation={"owner": 33.33, "member_1": 33.33, "member_2": 33.33},
+                )
+            )
+        )
+
+        self.assertEqual(
+            0, round(sum(entry["net_thb"] for entry in result["balances"]) * 100)
+        )
+        owed = {entry["traveller_id"]: entry["net_thb"] for entry in result["balances"]}
+        self.assertEqual(33.33, owed["owner"])
+        self.assertEqual(-66.66, owed["member_1"])
+
+    def test_one_person_can_bear_nothing(self) -> None:
+        """Three ate and one only sat down. `selected` can drop them from the row,
+        but then the row no longer records that they were there."""
+
+        shares = split.shares(
+            resolved(
+                row(
+                    mode="manual",
+                    original_amount=90.0,
+                    allocation={"owner": 45.0, "member_1": 45.0, "member_2": 0.0},
+                )
+            )[0]
+        )
+
+        self.assertEqual(0.0, shares["member_2"])
+        self.assertEqual(90.0, round(sum(shares.values()), 2))

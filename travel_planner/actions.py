@@ -3036,9 +3036,13 @@ class PlannerActions:
             len(self._roster(trip_id)),
         )
 
-    # ponytail: the owner is the cardholder. Auto-Bill made it selectable, but
-    # this app is owner-led and single-card, and every line of artifact 031's
-    # wording says "you" -- store a setting only if that stops being true.
+    # The owner is the *default* cardholder, and was the only one until
+    # 2026-08-11. The note here used to say "store a setting only if that stops
+    # being true", and it has: the donor's element 30 is a main-cardholder
+    # selector, and a trip where someone else's card is the one on file settles
+    # through them, not through the owner. `CARDHOLDER` stays as the fallback and
+    # as the first entry of the roster, which is a different job from being the
+    # card the settlement stars through.
     CARDHOLDER = "owner"
 
     def _roster(self, trip_id: str) -> tuple[str, ...]:
@@ -3054,6 +3058,34 @@ class PlannerActions:
                 for member in setup.snapshot.as_dict().get("travellers", ())
             ),
         )
+
+    def get_split_cardholder(self, trip_id: str) -> str:
+        """Whose card the settlement stars through. The owner unless chosen."""
+
+        held = self.store.get_trip_evidence(trip_id, "split_cardholder")
+        chosen = str((held or {}).get("traveller_id") or "")
+        # A roster check on *read*, not only on write: a cardholder can leave the
+        # trip by being removed from setup, and a settlement starring through
+        # someone who is no longer on the roster would have no one to pay.
+        return chosen if chosen in self._roster(trip_id) else self.CARDHOLDER
+
+    def set_split_cardholder(self, *, trip_id: str, traveller_id: str) -> dict[str, Any]:
+        """Choose whose card the group settles through."""
+
+        if self.store.get_trip(trip_id) is None:
+            raise PlannerRefusal("unknown_trip", trip_id=trip_id)
+        if traveller_id not in self._roster(trip_id):
+            raise PlannerRefusal("unknown_traveller", traveller_id=traveller_id)
+        now = datetime.now(timezone.utc)
+        self.store.upsert_trip_evidence(
+            trip_id=trip_id,
+            kind="split_cardholder",
+            value={"traveller_id": traveller_id},
+            provider="owner",
+            retrieved_at=now.isoformat(),
+            expires_at=(now + timedelta(days=3650)).isoformat(),
+        )
+        return {"traveller_id": traveller_id}
 
     def save_split_row(
         self, *, trip_id: str, row: Mapping[str, Any], split_id: str | None = None
@@ -3076,6 +3108,8 @@ class PlannerActions:
             "plan_day": None,
             "place_id": None,
             "voided": False,
+            "allocation": {},
+            "notes": None,
             **dict(row),
         }
         clean = split.validate_row(payload, roster)
@@ -3119,7 +3153,7 @@ class PlannerActions:
         return split.summary(
             self.list_split_rows(trip_id),
             travellers=self._roster(trip_id),
-            cardholder=self.CARDHOLDER,
+            cardholder=self.get_split_cardholder(trip_id),
             settled=self.store.list_settled_markers(trip_id),
         )
 

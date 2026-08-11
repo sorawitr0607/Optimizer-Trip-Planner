@@ -33,7 +33,14 @@ from .costs import BASE_CURRENCY, CATEGORIES, _currency as currency_code
 # `equal_all` and `selected` differ only in how the participant list was chosen;
 # the arithmetic is one equal split either way.  `single_payer` is one traveller
 # bearing the whole amount, which is that same split across a list of one.
-MODES = ("equal_all", "selected", "single_payer")
+#
+# `manual` is the fourth, added 2026-08-11.  The donor had it all along -- its
+# split-mode badges are `m-all`, `m-sel`, `m-sgl` and `m-man`, and its stored rows
+# carry an explicit per-person `splits` map -- and it is the only one of the four
+# whose arithmetic the other three cannot express: one person drank, three ate,
+# and the bill does not divide.  Without it that row has to be typed as several
+# rows or silently rounded to an equal split that nobody agreed to.
+MODES = ("equal_all", "selected", "single_payer", "manual")
 
 # Artifact 023: the seven cost categories are the default tag vocabulary, so a
 # tag that is one of them maps to itself and most trips need no mapping at all.
@@ -63,6 +70,7 @@ def validate_row(
         raise ValueError("participants cannot repeat a traveller")
     if mode == "single_payer" and len(participants) != 1:
         raise ValueError("single_payer splits between exactly one traveller")
+    allocation = _clean_allocation(row.get("allocation"), participants, mode)
     # The roster lives in setup, so membership is only checkable where it is
     # known.  A participant is chosen, never typed, so settlement cannot
     # fracture on `Mum` versus `mum`.
@@ -73,6 +81,25 @@ def validate_row(
     amount = float(row.get("original_amount") or 0)
     if amount < 0:
         raise ValueError("original_amount cannot be negative")
+    # The donor's manual view carried a validation panel, and this is what it was
+    # for: an allocation that does not add up to the bill is a typing error.
+    #
+    # Forgiving by exactly one satang per participant, which is the donor's
+    # behaviour arrived at from the other end. It refused above a flat 0.015 and
+    # silently moved the difference onto the first person with a positive share;
+    # here the allocation is a set of *weights* and `shares()` apportions the real
+    # total by them, so a hand-typed 33.33 three times against a 100.00 bill comes
+    # out 33.34 / 33.33 / 33.33 and sums exactly, with nothing to correct. The
+    # tolerance is one satang each because that is the most a by-hand equal split
+    # can be out; past it, the numbers mean something the app should not guess at.
+    if mode == "manual":
+        typed = sum(allocation.values())
+        slack = 0.01 * len(participants)
+        if abs(typed - amount) > slack + 1e-9:
+            raise ValueError(
+                "a manual allocation must add up to the amount: "
+                f"{typed:.2f} against {amount:.2f}"
+            )
     recorded = row.get("actual_thb")
     if recorded not in (None, "") and float(recorded) < 0:
         raise ValueError("actual_thb cannot be negative")
@@ -90,7 +117,44 @@ def validate_row(
         "cost_id": str(row["cost_id"]).strip() or None if row.get("cost_id") else None,
         "plan_day": row.get("plan_day") or None,
         "place_id": row.get("place_id") or None,
+        # Empty for the three equal modes, so a row's stored shape does not depend
+        # on which mode it happens to be in and switching mode cannot strand a
+        # stale allocation behind the new one.
+        "allocation": allocation,
+        # The donor's transaction table has a notes cell, and it is the only place
+        # a row can say *why* -- "Ake paid me back in cash", "receipt in the folder".
+        "notes": str(row.get("notes") or "").strip() or None,
     }
+
+
+def _clean_allocation(
+    raw: Any, participants: list[str], mode: str
+) -> dict[str, float]:
+    """The per-person amounts for a manual row, in the row's own currency.
+
+    Empty for every other mode. Kept in the *original* currency rather than THB
+    because that is what the owner reads off the bill; `shares()` converts once,
+    at the same moment and by the same rule as an equal split.
+    """
+
+    if mode != "manual":
+        return {}
+    if not isinstance(raw, dict):
+        raise ValueError("a manual split needs an allocation per participant")
+    named = {str(person).strip(): raw[person] for person in raw}
+    missing = [person for person in participants if person not in named]
+    if missing:
+        raise ValueError(f"manual allocation is missing: {', '.join(sorted(missing))}")
+    extra = sorted(set(named) - set(participants))
+    if extra:
+        raise ValueError(f"manual allocation names non-participants: {', '.join(extra)}")
+    allocation: dict[str, float] = {}
+    for person in participants:
+        value = float(named[person] or 0)
+        if value < 0:
+            raise ValueError(f"a manual allocation cannot be negative: {person}")
+        allocation[person] = round(value, 2)
+    return allocation
 
 
 def category_for_tag(tag: Any) -> str:
@@ -131,13 +195,30 @@ def apply_rates(
 
 
 def shares(row: dict[str, Any]) -> dict[str, float]:
-    """One resolved row's THB split per participant."""
+    """One resolved row's THB split per participant.
+
+    A manual row is apportioned by the amounts the owner typed rather than
+    equally, but through the *same* function and therefore the same rounding
+    rule -- an equal split is just the case where every weight is 1. Two
+    apportionment implementations is exactly the divergence `WF-018` forbids, and
+    it would show up as a settlement that does not close by a satang.
+
+    The weights are in the row's original currency and the total is in THB, which
+    is deliberate: converting each person's share separately would round each one
+    and lose the guarantee that the shares add up to the bill.
+    """
 
     reported = row.get("reported_thb")
     participants = list(row.get("participants") or ())
     if reported is None or not participants:
         return {}
-    portions = _split_satang(reported, len(participants))
+    allocation = row.get("allocation") or {}
+    weights = (
+        [float(allocation.get(person) or 0) for person in participants]
+        if row.get("mode") == "manual" and allocation
+        else [1.0] * len(participants)
+    )
+    portions = _apportion_satang(reported, weights)
     return {
         person: round(satang / 100, 2)
         for person, satang in zip(participants, portions)
@@ -225,18 +306,42 @@ def summary(
 # ponytail: 2-decimal floats at the boundary, matching costs.py, with the
 # division done in integer satang so the remainder is exact. Move the stored
 # values to integer minor units only if a real reconciliation error appears.
-def _split_satang(total_thb: float, count: int) -> list[int]:
-    """Equal split in satang, remainder one unit at a time from the front.
+def _apportion_satang(total_thb: float, weights: list[float]) -> list[int]:
+    """Split satang by weight, remainder one unit at a time, in row order.
 
-    The absorber is documented rather than incidental: the first ``remainder``
-    participants in the row's own order each take one extra satang.  The donor
-    dumped the whole remainder on the first person, which over-charges them by
-    up to ``count - 1`` satang; spreading it caps the error at one.
+    The absorber is documented rather than incidental: the participants with the
+    largest fractional remainders each take one extra satang, ties broken by the
+    row's own order.  The donor dumped the whole remainder on the first person,
+    which over-charges them by up to ``count - 1`` satang; spreading it caps the
+    error at one.
+
+    **Equal weights reproduce the previous behaviour exactly**, which is why this
+    replaced `_split_satang` rather than sitting beside it: with every weight 1
+    the fractional parts are all equal and the tie-break hands the extra satang to
+    the first ``remainder`` participants, one each. Keeping two functions would be
+    keeping two rounding rules, and the whole point of `WF-018` is that there is
+    one.
+
+    Every branch returns integers summing to the total, so a settlement always
+    closes. An all-zero weighting -- a manual row for 0.00 -- falls back to equal,
+    because dividing by a zero total would otherwise be the one case that cannot
+    be apportioned at all.
     """
 
     total = round(float(total_thb) * 100)
-    base, remainder = divmod(total, count)
-    return [base + (1 if index < remainder else 0) for index in range(count)]
+    count = len(weights)
+    weighted = sum(weights)
+    if weighted <= 0:
+        weights, weighted = [1.0] * count, float(count)
+    exact = [total * weight / weighted for weight in weights]
+    portions = [int(value // 1) for value in exact]
+    remainder = total - sum(portions)
+    # Largest fractional part first; `index` breaks ties by row order, and is what
+    # makes an equal split land on the front participants as it always did.
+    order = sorted(range(count), key=lambda index: (-(exact[index] % 1), index))
+    for index in order[:remainder]:
+        portions[index] += 1
+    return portions
 
 
 def _same_money(left: Any, right: Any) -> bool:

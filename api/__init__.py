@@ -129,6 +129,8 @@ ACTIONS = (
     "set_split_voided",
     "split_summary",
     "set_split_settled",
+    "get_split_cardholder",
+    "set_split_cardholder",
     "quick_actions",
     "propose_revision",
     "interpret_revision",
