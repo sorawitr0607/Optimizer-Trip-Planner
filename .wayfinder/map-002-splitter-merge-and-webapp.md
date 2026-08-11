@@ -327,6 +327,26 @@ resolving tickets are throwaway artifacts, not the build.
   WF-025 chose Tailwind v4 precisely for its native custom-property model. Adds **D8** and **D9** to the parity
   register.
 
+- [Decide what the interface owes a reader who is not the owner](tickets/049-decide-what-the-interface-owes-a-reader-who-is-not-the-owner.md) —
+  **The app's only interface evidence had been one person watching it work**, which found real mechanical
+  faults (`WF-048`) but can only report what one reader, on one machine, at one window size, with a mouse,
+  notices. An external audit measured the rest: functionality 9/10, accessibility **5/10**, sixteen findings,
+  none Critical. Three were worse than reported. `--text-xs` has 44 uses, so **36 of 51 text-bearing elements
+  on `/setup` rendered at 11px or less**. **Tailwind's preflight resets `h1`-`h6` to `font-size: inherit`** and
+  only the landing page ever styled its own — one line of a vendor stylesheet, invisible in review because the
+  markup is correct, and the real cause of the "two different products" complaint. And the six failing accents
+  are six because `--color-accent` does **two jobs**, fill and link, so fixing either alone leaves the other.
+  Decided: **one accent per theme rather than a second token**, since contrast is symmetric — which means
+  writing the dark half of all thirteen; the token gate now **fails** at 4.5:1 and checks each semantic colour
+  against its own `-light` tint, where four dark colours had been sitting at 3.72-4.13:1. The tour becomes a
+  native `<dialog>`, the nav and `<StageGate>` answer from one table in `web/src/shared/stages.ts`, and the
+  screen gate gains a **second viewport** — 500x844, not the audited 390, because headless Chrome clamps there
+  and a falsely-labelled image would be corrected straight back to 500. **The Places wire payload was
+  deliberately not trimmed**: `candidates` is a `Frozen` snapshot shipped with its `sha256`, so a narrowed
+  `data` would put a hash on the wire that does not describe its payload — a lightweight read is a new method,
+  and it is left open with its numbers. Found on the way: **a capture was writing** one free forecast row per
+  run, the same rule `WF-048` set and the third time it has been broken.
+
 ## Not yet specified
 
 <!-- In-scope fog: suspected questions not yet sharp enough to ticket. Graduates as the frontier advances. -->
@@ -334,15 +354,24 @@ resolving tickets are throwaway artifacts, not the build.
 - Whether the 45-site `PlannerRefusal` migration is its own ticket. The 26-code vocabulary is locked by
   the API contract, but the migration fixes a *Phase 1* bilingual defect and is therefore **not** gated by
   this map's decision gate. Sharp enough to ticket as soon as the owner wants it sequenced.
-- Whether voided split rows appear in the PDF and Excel exports, or only in the app where the owner can see
-  why a total moved.
+- ~~Whether voided split rows appear in the PDF and Excel exports~~ — **settled 2026-08-11.** The PDF went
+  at S0, so this was only ever about the workbook. A void is *why a total moved*, which is the one thing a
+  shared money file is read for, so the money workbook carries voided rows **marked and excluded from every
+  total** rather than dropping them. Silently omitting them is what makes a total look wrong to the person
+  who did not do the voiding. See [Decide what the interface owes a reader who is not the owner](tickets/049-decide-what-the-interface-owes-a-reader-who-is-not-the-owner.md).
 - How slice 6's free-text GenAI revision presents itself in the new design, and whether its typed-intent
   preview survives as a modal, a diff panel, or something else.
-- Whether per-person cost data should feed anything **upstream** — affordability in ranking, budget caps in
-  optimization. Narrowed by the reconciliation ticket, which settled the downstream half: estimated
-  per-person is `planned_thb / headcount` on the cost overview, actual per-person comes from `split.py`'s
-  resolved shares, and neither touches `group_preference_weights`. Whether either figure should influence
-  scoring or scheduling is still open, and would be a Phase 1 contract change rather than a UI decision.
+- ~~Whether per-person cost data should feed anything **upstream**~~ — affordability in ranking, budget caps
+  in optimization. **Closed 2026-08-11 as decided-not-now, which is a decision rather than a deferral.** The
+  downstream half was already settled by the reconciliation ticket: estimated per-person is
+  `planned_thb / headcount` on the cost overview, actual per-person comes from `split.py`'s resolved shares,
+  and neither touches `group_preference_weights`. The upstream half fails this map's own **Out of scope**
+  line — "changing optimizer, ranking, or scoring behaviour as part of the redesign; a UI port that alters
+  planning output is a regression, not an improvement." It is also not a small change dressed as one: all 27
+  historic regression cases in `tests/fixtures/historic_regressions.json` assume today's scoring, so
+  affordability entering `FORMULA_WEIGHTS` or a budget cap entering the objective tuple needs its own
+  fixtures and its own ticket. Reopen it as a Phase 1 contract change if the pilot asks for it; do not fold
+  it into interface work.
 - Whether the donut and vertical bar charts have any planner use at all. The element inventory found no
   distribution the planner charts today; the only candidate is the ranking dimension breakdown, which is
   already a table with an explicit per-dimension maximum.
@@ -362,9 +391,19 @@ resolving tickets are throwaway artifacts, not the build.
   commit, and using GitHub's own *Archive repository* setting, which is the canonical mechanic for a repo
   with a remote and makes it read-only for everyone rather than just on this disk.
 
-  How lifted code is attributed remains open, and is now the only part of this item outstanding. Nothing
-  depends on it: `split.py` was rebuilt rather than copied, and the visual lineage is recorded per element
-  by the `derives-from:` declarations that `check_design_tokens.py` validates.
+  ~~How lifted code is attributed remains open~~ — **settled 2026-08-11, and the answer is that almost
+  nothing was lifted.** No Auto-Bill source file is in this repository. `travel_planner/split.py` was
+  rebuilt from the donor's *behaviour* and deliberately diverges on the one rule that matters — the donor
+  dumped rounding remainders on the first person, this spreads them one satang at a time in row order
+  (`WF-018`) — so it is a reimplementation, not a copy. What was genuinely taken is **visual**: 41 element
+  designs, and those are already attributed *per element, in the source*, by the `derives-from:`
+  declarations that `check_design_tokens.py` validates against the donor catalogue and fails on when they
+  cite the wrong one. That is a stronger record than a licence header, because it names which element and
+  is machine-checked rather than asserted once in a file nobody reads.
+
+  Both repositories are the same owner's, so there is no third-party licence to satisfy and no obligation
+  outstanding. The remaining courtesy is a line in this repository's `README.md` naming Auto-Bill-Splitter
+  as the design donor — added 2026-08-11 — which is where a reader looks, rather than buried in a ticket.
 
 ## Out of scope
 

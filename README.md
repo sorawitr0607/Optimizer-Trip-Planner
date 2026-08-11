@@ -97,3 +97,13 @@ npm --prefix web run typecheck
 npm --prefix web run lint
 npm --prefix web run test
 ```
+
+## Credits
+
+The split ledger and the interface's visual language come from
+**Auto-Bill-Splitter**, this project's own earlier app, absorbed as a read-only
+donor in Phase 2 and archived afterwards. Nothing was copied: `split.py` was
+rebuilt from the donor's behaviour and deliberately diverges on rounding, and the
+41 lifted element designs are attributed individually in the source by the
+`derives-from:` declarations that `scripts/check_design_tokens.py` validates
+against `artifacts/parity/2026-08-04-auto-bill-donor/`.
