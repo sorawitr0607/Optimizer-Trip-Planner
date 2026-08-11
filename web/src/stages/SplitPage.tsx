@@ -12,7 +12,17 @@ import {
 } from "../api/client";
 import { copy, copyFormat } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
-import { Donut, Meters, money, Note, Tag, Tile, travellerNames } from "./money";
+import {
+  categoryName,
+  type CostCategory,
+  Donut,
+  Meters,
+  money,
+  Note,
+  Tag,
+  Tile,
+  travellerNames,
+} from "./money";
 
 const TAGS = ["transport", "accommodation", "activity", "food", "fees", "shopping", "other"];
 const CURRENCIES = ["THB", "TWD", "JPY", "KRW", "CNY", "USD"];
@@ -78,6 +88,10 @@ export function SplitPage() {
   const totals = useQuery({
     queryKey: ["cost_totals", tripId],
     queryFn: () => rpc<CostTotals>("cost_totals", { trip_id: tripId }),
+  });
+  const categoryList = useQuery({
+    queryKey: ["cost_categories", tripId],
+    queryFn: () => rpc<CostCategory[]>("cost_categories", { trip_id: tripId }),
   });
   const cardholder = useQuery({
     queryKey: ["split_cardholder", tripId],
@@ -225,7 +239,7 @@ export function SplitPage() {
           label={copy("costs_by_category", language)}
           slices={Object.entries(summary.data.by_category).map(([key, value]) => ({
             key,
-            name: copy(key, language),
+            name: categoryName(key, categoryList.data, language),
             value,
           }))}
           total={summary.data.actual_thb}
@@ -335,7 +349,7 @@ export function SplitPage() {
             onClick={() => toggleFilter("category", category)}
             type="button"
           >
-            {copy(category, language)}
+            {categoryName(category, categoryList.data, language)}
           </button>
         ))}
         {filtering ? (
@@ -368,7 +382,7 @@ export function SplitPage() {
                     <>
                       {names[row.paid_by] ?? row.paid_by} {copy("split_paid", language)} ·{" "}
                       {copy("split_shared_by", language)} {row.participants.length} ·{" "}
-                      <Tag>{copy(row.category, language)}</Tag>
+                      <Tag>{categoryName(row.category, categoryList.data, language)}</Tag>
                       {row.cost_id ? ` · ${copy("split_linked", language)}` : ""}
                     </>
                   )}
@@ -451,11 +465,13 @@ export function SplitPage() {
             onChange={(event) => setDraft({ ...draft, tag: event.target.value })}
             value={draft.tag}
           >
-            {TAGS.map((tag) => (
-              <option key={tag} value={tag}>
-                {copy(tag, language)}
-              </option>
-            ))}
+            {(categoryList.data ?? TAGS.map((code) => ({ code, label: null, built_in: true }))).map(
+              (entry) => (
+                <option key={entry.code} value={entry.code}>
+                  {categoryName(entry.code, categoryList.data, language)}
+                </option>
+              ),
+            )}
           </select>
         </label>
         <label>

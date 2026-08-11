@@ -157,15 +157,24 @@ def _clean_allocation(
     return allocation
 
 
-def category_for_tag(tag: Any) -> str:
-    """Map an owner-defined tag onto the seven cost categories."""
+def category_for_tag(tag: Any, allowed: tuple[str, ...] | None = None) -> str:
+    """Map an owner-defined tag onto the trip's cost categories.
 
+    `allowed` defaults to the seven, so a caller with no trip in hand behaves
+    exactly as before. `other` is always reachable regardless: it is where an
+    unrecognised tag lands, and a vocabulary without it would have nowhere to
+    put one.
+    """
+
+    vocabulary = set(allowed) if allowed else set(CATEGORIES)
     key = str(tag or "").strip().lower()
-    return key if key in CATEGORIES else DEFAULT_CATEGORY
+    return key if key in vocabulary else DEFAULT_CATEGORY
 
 
 def apply_rates(
-    rows: list[dict[str, Any]], snapshot: dict[str, Any] | None
+    rows: list[dict[str, Any]],
+    snapshot: dict[str, Any] | None,
+    allowed: tuple[str, ...] | None = None,
 ) -> list[dict[str, Any]]:
     """Resolve each row's THB against the cost ledger's snapshot, no buffer."""
 
@@ -182,7 +191,7 @@ def apply_rates(
         resolved.append(
             {
                 **row,
-                "category": category_for_tag(row.get("tag")),
+                "category": category_for_tag(row.get("tag"), allowed),
                 "applied_rate": None if rate is None else float(rate),
                 "applied_rate_date": (snapshot or {}).get("as_of"),
                 "converted_thb": converted,

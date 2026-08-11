@@ -110,7 +110,7 @@ class DispatchContractTest(unittest.TestCase):
         # method cannot join the allowlist unnoticed -- save_plan_version writes an
         # activated version with no optimizer validation and record_paid_call forges
         # ledger rows, so what is reachable over the socket has to be deliberate.
-        self.assertEqual(85, len(ACTIONS))  # ... +the split cardholder pair and the money snapshot, WF-049
+        self.assertEqual(87, len(ACTIONS))  # ... +cardholder pair, money snapshot, category pair, WF-049
         self.assertIn("refresh_assumed_windows", ACTIONS)
         self.assertIn("active_plan_drift", ACTIONS)
         self.assertIn("scan_venue_notices", ACTIONS)
@@ -125,7 +125,7 @@ class DispatchContractTest(unittest.TestCase):
         self.assertNotIn("record_paid_call", ACTIONS)
         self.assertIn("check_paid_call", ACTIONS)
         self.assertIn("build_export_snapshot", ACTIONS)
-        self.assertEqual(35, len(REFUSAL_STATUS))
+        self.assertEqual(38, len(REFUSAL_STATUS))
 
     def test_the_split_ledger_is_reachable_but_deletion_is_not(self) -> None:
         for name in (

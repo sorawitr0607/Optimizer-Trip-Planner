@@ -182,3 +182,29 @@ export function Meters({
     </figure>
   );
 }
+
+
+export interface CostCategory {
+  code: string;
+  label: string | null;
+  built_in: boolean;
+}
+
+/**
+ * A category's display name.
+ *
+ * The built-in seven are stable codes rendered through the copy catalogue, so
+ * they translate. A custom one carries the label the owner typed, because a code
+ * they invented has no catalogue entry and `copy()` would render it visibly as
+ * `⚠ ski_hire` -- correct behaviour for a missing code, and the wrong answer
+ * here, since nothing is missing.
+ */
+export function categoryName(
+  code: string,
+  categories: CostCategory[] | undefined,
+  language: Language,
+): string {
+  const found = categories?.find((entry) => entry.code === code);
+  if (found && !found.built_in) return found.label ?? found.code;
+  return copy(code, language);
+}

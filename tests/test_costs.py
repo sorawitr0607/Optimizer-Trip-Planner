@@ -468,3 +468,97 @@ class ReconciliationTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class EditableCategoryTest(unittest.TestCase):
+    """Artifact 023 fixed the vocabulary at seven; the donor let a trip edit it.
+
+    A trip that hires skis or pays a visa agent otherwise has nowhere to put that
+    but `other` -- the category meaning "unclassified" -- which loses the very
+    grouping the sheet exists for.
+    """
+
+    def setUp(self) -> None:
+        from tempfile import TemporaryDirectory
+        from pathlib import Path
+        from travel_planner.actions import PlannerActions
+
+        directory = TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.actions = PlannerActions(Path(directory.name) / "cats.sqlite3")
+        self.trip = self.actions.create_trip(name="Niseko", destination="Niseko, Japan")
+
+    def codes(self) -> list[str]:
+        return [entry["code"] for entry in self.actions.cost_categories(self.trip.trip_id)]
+
+    def test_a_trip_starts_with_the_seven(self) -> None:
+        self.assertEqual(list(costs.CATEGORIES), self.codes())
+        self.assertTrue(
+            all(entry["built_in"] for entry in self.actions.cost_categories(self.trip.trip_id))
+        )
+
+    def test_a_custom_category_is_added_and_carries_its_own_label(self) -> None:
+        """A code the owner invented has no catalogue entry, so without a stored
+        label it would render as `⚠ ski_hire` in both languages."""
+
+        self.actions.set_cost_categories(
+            trip_id=self.trip.trip_id, categories=[{"code": "Ski hire", "label": "Ski hire"}]
+        )
+
+        entry = self.actions.cost_categories(self.trip.trip_id)[-1]
+        self.assertEqual("ski_hire", entry["code"])
+        self.assertEqual("Ski hire", entry["label"])
+        self.assertFalse(entry["built_in"])
+        # And it is now a category a cost row may actually use.
+        self.actions.save_cost_item(
+            trip_id=self.trip.trip_id,
+            item={"label": "Skis", "category": "ski_hire", "original_amount": 4000},
+        )
+
+    def test_the_seven_survive_any_edit(self) -> None:
+        """They are what an unrecognised tag falls back to, what `validate_cost`
+        accepts with no trip in hand, and what the reference workbooks match."""
+
+        self.actions.set_cost_categories(trip_id=self.trip.trip_id, categories=[])
+
+        self.assertEqual(list(costs.CATEGORIES), self.codes())
+
+    def test_a_category_still_on_a_row_cannot_be_removed(self) -> None:
+        """Dropping it would leave rows pointing at a category the trip no longer
+        has, and `category_for_tag` would silently re-file them under `other` --
+        moving someone's money between groups without saying so."""
+
+        from travel_planner.actions import PlannerRefusal
+
+        self.actions.set_cost_categories(
+            trip_id=self.trip.trip_id, categories=[{"code": "ski_hire", "label": "Ski hire"}]
+        )
+        self.actions.save_split_row(
+            trip_id=self.trip.trip_id,
+            row={"label": "Skis", "original_amount": 4000, "tag": "ski_hire"},
+        )
+
+        with self.assertRaises(PlannerRefusal) as caught:
+            self.actions.set_cost_categories(trip_id=self.trip.trip_id, categories=[])
+
+        self.assertEqual("category_still_in_use", caught.exception.code)
+        self.assertIn("ski_hire", self.codes())
+
+    def test_a_custom_category_without_a_label_is_refused(self) -> None:
+        from travel_planner.actions import PlannerRefusal
+
+        with self.assertRaises(PlannerRefusal) as caught:
+            self.actions.set_cost_categories(
+                trip_id=self.trip.trip_id, categories=[{"code": "ski_hire"}]
+            )
+
+        self.assertEqual("category_label_missing", caught.exception.code)
+
+    def test_a_tag_outside_the_trip_vocabulary_still_falls_to_other(self) -> None:
+        self.actions.save_split_row(
+            trip_id=self.trip.trip_id,
+            row={"label": "Souvenirs", "original_amount": 100, "tag": "gifts for Mum"},
+        )
+
+        row = self.actions.list_split_rows(self.trip.trip_id)[0]
+        self.assertEqual("other", row["category"])

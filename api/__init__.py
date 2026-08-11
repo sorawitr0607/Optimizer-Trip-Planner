@@ -129,6 +129,8 @@ ACTIONS = (
     "list_cost_items",
     "delete_cost_item",
     "cost_totals",
+    "cost_categories",
+    "set_cost_categories",
     "save_split_row",
     "list_split_rows",
     "set_split_voided",
@@ -170,6 +172,11 @@ REFUSAL_STATUS = {
     "invalid_time_window": 422,
     "accommodation_query_missing": 422,
     "invalid_paid_cap": 422,
+    # Editable expense categories. A built-in is never removable and a category
+    # still on a row cannot be dropped, or its money silently re-files as `other`.
+    "category_label_missing": 422,
+    "category_code_repeated": 422,
+    "category_still_in_use": 409,
     "revision_already_pending": 409,
     "no_pending_revision": 409,
     "revision_not_applicable": 409,

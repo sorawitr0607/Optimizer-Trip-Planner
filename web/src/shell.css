@@ -4497,3 +4497,32 @@
 .money-notes {
   grid-column: 1 / -1;
 }
+
+/* Donor "Expense Categories". The seven are shown but not removable. */
+.money-categories {
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+}
+
+.money-category-list {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+}
+
+.money-category-list li {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.money-category-add {
+  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}

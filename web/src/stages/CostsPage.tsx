@@ -5,7 +5,7 @@ import { Link, useParams } from "react-router";
 import { rpc, type CostItem, type CostTotals, type SetupDraft } from "../api/client";
 import { copy } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
-import { money, Note, signed, Tag, Tile } from "./money";
+import { categoryName, type CostCategory, money, Note, signed, Tag, Tile } from "./money";
 
 /**
  * The overview screen, and the one place the two ledgers are read together.
@@ -31,6 +31,11 @@ export function CostsPage() {
     queryKey: ["rate_snapshot", tripId],
     queryFn: () => rpc<{ rates?: Record<string, number> } | null>("get_rate_snapshot", { trip_id: tripId }),
   });
+  const categoryList = useQuery({
+    queryKey: ["cost_categories", tripId],
+    queryFn: () => rpc<CostCategory[]>("cost_categories", { trip_id: tripId }),
+  });
+  const [newCategory, setNewCategory] = useState("");
   // This screen had no mutation at all: it told the owner to "add estimates" and gave
   // them no way to. save_cost_item was allowlisted the whole time and unreachable, so
   // the planned-versus-actual comparison could only ever compare nothing.
@@ -43,6 +48,21 @@ export function CostsPage() {
     paid: false,
   });
   const [flash, setFlash] = useState("");
+  const saveCategories = useMutation({
+    mutationFn: (categories: CostCategory[]) =>
+      rpc<CostCategory[]>("set_cost_categories", {
+        trip_id: tripId,
+        // Only the custom ones are the trip's to keep; the server ignores a
+        // built-in arriving here, so sending the whole list back is harmless and
+        // keeps the screen from having to know which is which.
+        categories: categories.map((entry) => ({ code: entry.code, label: entry.label })),
+      }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["cost_categories", tripId] });
+      await queryClient.invalidateQueries({ queryKey: ["cost_totals", tripId] });
+    },
+  });
+
   const saveCost = useMutation({
     mutationFn: () =>
       rpc<CostItem>("save_cost_item", {
@@ -73,6 +93,7 @@ export function CostsPage() {
   const headcount = 1 + (setup.data?.snapshot.data.travellers?.length ?? 0);
   const claimed = new Set(figures.claimed_cost_ids);
   const categories = Object.entries(figures.by_category_comparison);
+  const vocabulary = categoryList.data;
   const spentPercent =
     figures.planned_thb > 0 ? (figures.actual_thb / figures.planned_thb) * 100 : 0;
 
@@ -82,6 +103,64 @@ export function CostsPage() {
         <h1>{copy("costs_planned_title", language)}</h1>
         <p>{copy("costs_planned_help", language)}</p>
       </header>
+
+      {/* Donor "Expense Categories". Artifact 023 fixed this vocabulary at seven,
+          shared by both ledgers and both workbooks; a trip that hires skis had
+          nowhere to put it but `other`, which is the category meaning
+          "unclassified" -- so using it for a real recurring expense loses the
+          grouping the table above exists for. The seven are not removable: they
+          are what an unrecognised tag falls back to and what the four reference
+          workbooks are matched against. */}
+      <details className="money-categories">
+        <summary>{copy("costs_categories_edit", language)}</summary>
+        <p className="setup-hint">{copy("costs_categories_help", language)}</p>
+        <ul className="money-category-list">
+          {(categoryList.data ?? []).map((entry) => (
+            <li key={entry.code}>
+              <span>{categoryName(entry.code, categoryList.data, language)}</span>
+              {entry.built_in ? (
+                <small className="setup-hint">{copy("costs_categories_built_in", language)}</small>
+              ) : (
+                <button
+                  disabled={saveCategories.isPending}
+                  onClick={() =>
+                    saveCategories.mutate(
+                      (categoryList.data ?? []).filter(
+                        (item) => !item.built_in && item.code !== entry.code,
+                      ),
+                    )
+                  }
+                  type="button"
+                >
+                  {copy("split_void", language)}
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+        <div className="money-category-add">
+          <label>
+            {copy("costs_categories_new", language)}
+            <input onChange={(event) => setNewCategory(event.target.value)} value={newCategory} />
+          </label>
+          <button
+            disabled={saveCategories.isPending || !newCategory.trim()}
+            onClick={() => {
+              saveCategories.mutate([
+                ...(categoryList.data ?? []).filter((entry) => !entry.built_in),
+                { code: newCategory, label: newCategory.trim(), built_in: false },
+              ]);
+              setNewCategory("");
+            }}
+            type="button"
+          >
+            {copy("split_save", language)}
+          </button>
+        </div>
+        {saveCategories.error ? (
+          <p className="field-error">⚠ {saveCategories.error.message}</p>
+        ) : null}
+      </details>
 
       <h2 className="money-eyebrow">{copy("costs_by_category", language)}</h2>
       <div className="money-table-scroll">
@@ -98,7 +177,7 @@ export function CostsPage() {
           <tbody>
             {categories.map(([key, entry]) => (
               <tr key={key}>
-                <td>{copy(key, language)}</td>
+                <td>{categoryName(key, categoryList.data, language)}</td>
                 {/* A category with a plan and no spend is not the same as one
                     with spend and no plan; a zero would claim it was. */}
                 <td className="money-num">{entry.planned ? money(entry.planned_thb) : "—"}</td>
@@ -170,7 +249,9 @@ export function CostsPage() {
       {figures.categories_without_plan.length > 0 ? (
         <Note mark="⚠" tone="warn">
           {copy("costs_without_plan", language)}{" "}
-          {figures.categories_without_plan.map((key) => copy(key, language)).join(", ")}
+          {figures.categories_without_plan
+            .map((key) => categoryName(key, categoryList.data, language))
+            .join(", ")}
         </Note>
       ) : null}
 
@@ -191,7 +272,7 @@ export function CostsPage() {
               <span className="money-row-main">
                 <strong>{item.label}</strong>
                 <span className="money-row-meta">
-                  <Tag>{copy(item.category, language)}</Tag>{" "}
+                  <Tag>{categoryName(item.category, categoryList.data, language)}</Tag>{" "}
                   {copy(item.payment_state, language)}
                   {isClaimed ? ` · ${copy("costs_claimed", language)}` : ""}
                 </span>
@@ -265,11 +346,11 @@ export function CostsPage() {
               onChange={(event) => setDraft({ ...draft, category: event.target.value })}
               value={draft.category}
             >
-              {["transport", "accommodation", "activity", "food", "fees", "shopping", "other"].map(
-                (code) => (
-                  <option key={code} value={code}>{copy(code, language)}</option>
-                ),
-              )}
+              {(vocabulary ?? []).map((entry) => (
+                <option key={entry.code} value={entry.code}>
+                  {categoryName(entry.code, vocabulary, language)}
+                </option>
+              ))}
             </select>
           </label>
           <label className="setup-check">

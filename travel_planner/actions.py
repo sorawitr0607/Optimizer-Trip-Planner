@@ -2989,6 +2989,99 @@ class PlannerActions:
     def get_rate_snapshot(self, trip_id: str) -> dict[str, Any] | None:
         return self.store.get_rate_snapshot(trip_id)
 
+    def cost_categories(self, trip_id: str) -> list[dict[str, Any]]:
+        """This trip's expense categories: the seven, plus anything it added.
+
+        Artifact 023 made the seven a fixed vocabulary shared by both ledgers and
+        both workbooks. The donor let a trip edit its own list, and a trip that
+        hires skis or pays a visa agent otherwise has nowhere to put that but
+        `other` -- which is the category that means "unclassified", so using it
+        for a real recurring expense loses the very grouping the sheet is for.
+
+        **The seven always stay.** They are what an unrecognised tag falls back
+        to, what `costs.validate_cost` accepts with no trip in hand, and what the
+        four reference workbooks are matched against. A custom category is an
+        addition, never a replacement.
+
+        A custom entry carries its own `label`, because a code the owner invented
+        has no catalogue entry and would otherwise render as `⚠ ski_hire` in both
+        languages. The built-in seven carry `label: None` and are rendered
+        through `i18n/copy.json` as they always were.
+        """
+
+        held = self.store.get_trip_evidence(trip_id, "cost_categories") or {}
+        custom = [
+            entry
+            for entry in held.get("categories", [])
+            if isinstance(entry, dict)
+            and str(entry.get("code") or "") not in costs.CATEGORIES
+        ]
+        return [
+            {"code": code, "label": None, "built_in": True} for code in costs.CATEGORIES
+        ] + [
+            {
+                "code": str(entry["code"]),
+                "label": str(entry.get("label") or entry["code"]),
+                "built_in": False,
+            }
+            for entry in custom
+        ]
+
+    def _category_codes(self, trip_id: str) -> tuple[str, ...]:
+        return tuple(entry["code"] for entry in self.cost_categories(trip_id))
+
+    def set_cost_categories(
+        self, *, trip_id: str, categories: list[Mapping[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """Replace the trip's *custom* categories. The seven are not removable."""
+
+        if self.store.get_trip(trip_id) is None:
+            raise PlannerRefusal("unknown_trip", trip_id=trip_id)
+        cleaned: list[dict[str, str]] = []
+        seen: set[str] = set()
+        for entry in categories:
+            code = re.sub(r"[^a-z0-9_]+", "_", str(entry.get("code") or "").strip().lower()).strip("_")
+            label = str(entry.get("label") or "").strip()
+            if not code or code in costs.CATEGORIES:
+                # A built-in arriving here is not an error -- the screen sends the
+                # whole list back -- it simply is not stored, because the seven are
+                # not the trip's to keep or drop.
+                continue
+            if not label:
+                raise PlannerRefusal("category_label_missing", category=code)
+            if code in seen:
+                raise PlannerRefusal("category_code_repeated", category=code)
+            seen.add(code)
+            cleaned.append({"code": code, "label": label})
+
+        # A category still on a row cannot be removed. Same shape as the
+        # cardholder's roster check and for the same reason: dropping it would
+        # leave rows pointing at a category the trip no longer has, and
+        # `category_for_tag` would silently re-file them under `other` -- moving
+        # someone's money between groups without saying so.
+        surviving = set(costs.CATEGORIES) | seen
+        in_use = {
+            str(row.get("category") or "")
+            for row in self.list_split_rows(trip_id)
+        } | {
+            str(item.get("category") or "")
+            for item in self.store.list_cost_items(trip_id)
+        }
+        orphaned = sorted(code for code in in_use - surviving if code)
+        if orphaned:
+            raise PlannerRefusal("category_still_in_use", categories=orphaned)
+
+        now = datetime.now(timezone.utc)
+        self.store.upsert_trip_evidence(
+            trip_id=trip_id,
+            kind="cost_categories",
+            value={"categories": cleaned},
+            provider="owner",
+            retrieved_at=now.isoformat(),
+            expires_at=(now + timedelta(days=3650)).isoformat(),
+        )
+        return self.cost_categories(trip_id)
+
     def save_cost_item(
         self, *, trip_id: str, item: Mapping[str, Any], cost_id: str | None = None
     ) -> dict[str, Any]:
@@ -3007,7 +3100,7 @@ class PlannerActions:
             "note": None,
             **dict(item),
         }
-        clean = costs.validate_cost(payload)
+        clean = costs.validate_cost(payload, self._category_codes(trip_id))
         return self.store.upsert_cost_item(
             item_id=cost_id or clean.get("cost_id"),
             trip_id=trip_id,
@@ -3126,7 +3219,9 @@ class PlannerActions:
         """Split rows in THB, resolved without the estimate buffer."""
 
         return split.apply_rates(
-            self.store.list_split_rows(trip_id), self.store.get_rate_snapshot(trip_id)
+            self.store.list_split_rows(trip_id),
+            self.store.get_rate_snapshot(trip_id),
+            self._category_codes(trip_id),
         )
 
     def set_split_voided(

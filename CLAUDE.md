@@ -1222,6 +1222,31 @@ apart at 10px, which was caught by looking at the screen rather than by reading 
 Verified end to end in a browser against a copy: a manual 60/40/0 bar tab saves with its allocation
 intact, the settlement moves to `Sister pays you 40`, and the balances still sum to zero.
 
+**A trip may add its own expense categories as of 2026-08-11, and the seven always stay.** Artifact
+023 made them a fixed vocabulary shared by both ledgers and both workbooks; a trip that hires skis or
+pays a visa agent had nowhere to put that but `other`, which is the category meaning *unclassified* —
+so using it for a real recurring expense loses the grouping the sheet exists for.
+
+Three rules hold it together. **The seven are not removable**: they are what an unrecognised tag falls
+back to, what `costs.validate_cost` accepts with no trip in hand, and what the four reference
+workbooks are matched against — a custom category is an addition, never a replacement. **A category
+still on a row cannot be dropped**, which is the same shape as the cardholder's roster check and for
+the same reason: `category_for_tag` would silently re-file those rows under `other`, moving someone's
+money between groups without saying so; `set_cost_categories` refuses with `category_still_in_use` and
+names them. And **a custom category carries its own label**, because a code the owner invented has no
+catalogue entry and `copy()` renders a missing code visibly as `⚠ ski_hire` — correct behaviour, wrong
+answer, since nothing is actually missing.
+
+`costs.validate_cost` and `split.category_for_tag`/`apply_rates` take the vocabulary as an argument
+defaulting to the seven, so every existing caller and all 27 fixtures are untouched.
+
+`web/src/stages/money.tsx`'s `categoryName()` is the one place a category becomes words: built-ins
+through the copy catalogue so they translate, custom ones through their stored label. Driving the
+screens found **five** places rendering a raw category, not the two the grep first suggested — the
+by-category table, the row tags, the donut legend, the filter chips, and the "categories without a
+plan" note. The last one is the reason this is worth stating: it was a `.map(copy)` inside a sentence,
+which no amount of reading the diff would have surfaced.
+
 **A capture must observe the app, never operate it.** Two things broke that and both showed up as
 double-digit baseline drift on screens nobody had edited. The `/places` first-visit tour is suppressed
 by `document.documentElement.dataset.capture`, because a fresh Chrome profile is always a first visit

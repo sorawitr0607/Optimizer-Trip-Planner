@@ -15,6 +15,13 @@ from typing import Any
 
 
 BASE_CURRENCY = "THB"
+# The defaults, not the whole of it, as of 2026-08-11. Artifact 023 made these
+# seven the fixed vocabulary shared by the cost ledger, the split ledger and both
+# workbooks; the donor let a trip edit its own list, and a trip that hires skis or
+# pays a visa agent has nowhere to put that but `other`. A trip may now add to
+# these -- see `PlannerActions.cost_categories` -- and every seven stays, because
+# they are what an unassigned tag falls back to and what the reference workbooks
+# are matched against.
 CATEGORIES = (
     "transport",
     "accommodation",
@@ -89,13 +96,21 @@ def new_rate_snapshot(
     }
 
 
-def validate_cost(item: dict[str, Any]) -> dict[str, Any]:
-    """Reject a cost row that breaks the agreed contract."""
+def validate_cost(
+    item: dict[str, Any], allowed: tuple[str, ...] | None = None
+) -> dict[str, Any]:
+    """Reject a cost row that breaks the agreed contract.
 
+    `allowed` is the trip's own category vocabulary. It defaults to the seven so
+    every existing caller and fixture is unaffected, and so this module stays
+    usable without a trip in hand.
+    """
+
+    vocabulary = tuple(allowed) if allowed else CATEGORIES
     label = str(item.get("label") or "").strip()
     if not label:
         raise ValueError("A cost needs a label")
-    if item.get("category") not in CATEGORIES:
+    if item.get("category") not in vocabulary:
         raise ValueError(f"Unsupported cost category: {item.get('category')}")
     state = item.get("payment_state")
     if state not in PAYMENT_STATES:
