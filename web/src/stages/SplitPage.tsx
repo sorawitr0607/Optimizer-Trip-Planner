@@ -133,6 +133,19 @@ export function SplitPage() {
         <p>{copy("split_help", language)}</p>
       </header>
 
+      {/* `WF-030`'s second workbook, reachable from the screen whose data it
+          carries. Its whole purpose is that it can be handed to someone: the plan
+          file holds the itinerary, every address and the readiness evidence, so
+          it is the one export that cannot be shared, and until this existed the
+          split ledger only came out inside it. No active plan is needed, which is
+          the point -- bills get paid before an itinerary is built. */}
+      <div className="money-export">
+        <a className="primary-link" download href={`/api/export/${encodeURIComponent(tripId)}/money.xlsx`}>
+          {copy("money_workbook", language)}
+        </a>
+        <span className="setup-hint">{copy("money_workbook_help", language)}</span>
+      </div>
+
       <div className="money-tiles">
         <Tile
           hint={`${copy("split_rows_counted", language)} ${summary.data.rows} · ${copy(

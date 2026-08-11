@@ -4359,3 +4359,12 @@
     padding: 14px 14px 40px;
   }
 }
+
+/* The shareable money file's own control, on the screen whose data it carries. */
+.money-export {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 4px;
+}

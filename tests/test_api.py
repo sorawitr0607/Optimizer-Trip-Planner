@@ -110,7 +110,7 @@ class DispatchContractTest(unittest.TestCase):
         # method cannot join the allowlist unnoticed -- save_plan_version writes an
         # activated version with no optimizer validation and record_paid_call forges
         # ledger rows, so what is reachable over the socket has to be deliberate.
-        self.assertEqual(84, len(ACTIONS))  # ... +the split cardholder pair, WF-049
+        self.assertEqual(85, len(ACTIONS))  # ... +the split cardholder pair and the money snapshot, WF-049
         self.assertIn("refresh_assumed_windows", ACTIONS)
         self.assertIn("active_plan_drift", ACTIONS)
         self.assertIn("scan_venue_notices", ACTIONS)
@@ -300,6 +300,25 @@ class SocketGuardTest(unittest.TestCase):
         self.assertEqual(200, status)
         self.assertEqual(b"file", body)
         self.assertEqual('attachment; filename="trip.bin"', headers["content-disposition"])
+
+    def test_the_money_file_downloads_without_an_active_plan(self) -> None:
+        """`WF-030`'s second workbook. It must not be gated on the plan: /split
+        gates on a confirmed setup, so bills exist long before an itinerary does,
+        and the shareable file has to be reachable exactly then."""
+
+        trip = self.actions.create_trip(name="Taipei", destination="Taipei, Taiwan")
+        self.actions.save_split_row(
+            trip_id=trip.trip_id, row={"label": "Dinner", "original_amount": 900}
+        )
+
+        status, headers, body = self.request("GET", f"/api/export/{trip.trip_id}/money.xlsx")
+
+        self.assertEqual(200, status)
+        self.assertTrue(body.startswith(b"PK"), "not a zip, so not a workbook")
+        self.assertIn("-money.xlsx", headers["content-disposition"])
+        # The plan file still refuses, which is what makes the separation real
+        # rather than the two routes being the same file under two names.
+        self.assertEqual(409, self.request("GET", f"/api/export/{trip.trip_id}/workbook.xlsx")[0])
 
     def test_a_missing_asset_is_a_404_and_not_the_whole_application(self) -> None:
         """The SPA fallback is for routes, and a route has no file extension.

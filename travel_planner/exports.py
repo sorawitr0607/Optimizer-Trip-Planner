@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from . import costs, split
 from .core import LANGUAGES
 
 
@@ -524,4 +525,84 @@ def _readiness(variant: dict[str, Any], planner_input: dict[str, Any]) -> dict[s
         "validation_valid": bool(variant["validation"]["valid"]),
         "capability_gaps": gaps,
         "blocking_warnings": sorted(set(variant.get("warnings", []))),
+    }
+
+
+def build_money_snapshot(
+    *,
+    trip: dict[str, Any],
+    language: str,
+    exported_at: str,
+    split_rows: list[dict[str, Any]],
+    split_summary: dict[str, Any],
+    cost_totals: dict[str, Any] | None = None,
+    rate_snapshot: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """The display-ready snapshot behind the shareable money workbook.
+
+    A second builder beside `build_export_snapshot`, and the reason is that the
+    money file must not be gated on the plan. `/split` gates on a confirmed setup
+    and nothing more -- bills get paid before an itinerary is activated -- while
+    `build_export_snapshot` refuses without a plan version and is shaped around a
+    variant for five of its six sheets. Threading `None` through that would put a
+    plan-shaped hole in every one of them to serve a file that reads none of it.
+
+    `WF-030`'s one-source rule still holds, at the source rather than at the
+    snapshot: every figure here comes from `costs.totals()` and `split.summary()`,
+    which are already the *only* derivations of claimed-ness and of a resolved
+    share. Two renderings of the same number cannot diverge when there is one
+    function computing it, which is what that rule is protecting.
+
+    **It carries no itinerary, no addresses and no readiness evidence**, because
+    it is the file that leaves the owner's hands. That is not a filter applied on
+    the way out -- none of it is assembled here in the first place, so nothing can
+    be forgotten. The place a row was paid at is deliberately dropped for the same
+    reason: `place_id` says where the group was, and a bill does not need it.
+    """
+
+    if language not in LANGUAGES:
+        raise ValueError(f"Unsupported language: {language}")
+    rows = []
+    for row in split_rows:
+        shares = split.shares(row) if not row.get("voided") else {}
+        rows.append(
+            {
+                "split_id": row.get("split_id"),
+                "label": row.get("label"),
+                "category": row.get("category") or split.DEFAULT_CATEGORY,
+                "tag": row.get("tag"),
+                "day": row.get("plan_day"),
+                "mode": row.get("mode"),
+                "paid_by": row.get("paid_by"),
+                "participants": list(row.get("participants") or ()),
+                "original_currency": row.get("original_currency"),
+                "original_amount": row.get("original_amount"),
+                "applied_rate": row.get("applied_rate"),
+                "reported_thb": row.get("reported_thb"),
+                "rate_missing": bool(row.get("rate_missing")),
+                # Carried, marked, and excluded from every total. A void is *why a
+                # total moved*, which is the one question a shared money file is
+                # opened to answer; dropping the row makes the total look wrong to
+                # the person who did not do the voiding.
+                "voided": bool(row.get("voided")),
+                "notes": row.get("notes"),
+                "shares_thb": shares,
+            }
+        )
+    totals = cost_totals or {}
+    return {
+        "trip": {"trip_id": trip.get("trip_id"), "name": trip.get("name")},
+        "language": language,
+        "exported_at": exported_at,
+        "base_currency": costs.BASE_CURRENCY,
+        "travellers": [entry["traveller_id"] for entry in split_summary.get("balances", [])],
+        "cardholder": split_summary.get("cardholder"),
+        "rows": rows,
+        "balances": split_summary.get("balances", []),
+        "settlement": split_summary.get("settlement", []),
+        "actual_thb": split_summary.get("actual_thb"),
+        "by_category": split_summary.get("by_category", {}),
+        "planned_thb": totals.get("planned_thb"),
+        "planned_per_person_thb": totals.get("planned_per_person_thb"),
+        "rate_snapshot": rate_snapshot,
     }

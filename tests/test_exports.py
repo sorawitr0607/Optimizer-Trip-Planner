@@ -15,7 +15,7 @@ import zipfile
 from travel_planner import exporters
 from travel_planner.actions import PlannerActions
 from travel_planner.core import new_optimization_preview
-from travel_planner.exporters import plan_workbook_xlsx
+from travel_planner.exporters import money_workbook_xlsx, plan_workbook_xlsx
 from travel_planner.exports import build_export_snapshot, half_day
 from travel_planner.optimizer import optimize_trip
 
@@ -529,3 +529,129 @@ class ArtifactTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MoneyWorkbookTest(unittest.TestCase):
+    """`WF-030` decided two workbooks and only the plan file was built.
+
+    Until 2026-08-11 the only way to export split data was inside the plan file --
+    which is exactly the file that ticket says must not leave the owner's hands,
+    because it carries the itinerary, every address and the readiness evidence.
+    """
+
+    def build(self, **overrides):
+        from travel_planner.actions import PlannerActions
+
+        directory = TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        actions = PlannerActions(Path(directory.name) / "money.sqlite3")
+        trip = actions.create_trip(name="Taipei", destination="Taipei, Taiwan")
+        actions.save_rate_snapshot(
+            trip_id=trip.trip_id,
+            rates={"TWD": 1.12},
+            as_of="2026-12-28",
+            source="Bank of Thailand",
+            buffer_percent=0.0,
+        )
+        rows = overrides.get(
+            "rows",
+            [
+                {"label": "Dinner", "original_amount": 900.0, "original_currency": "THB"},
+                {
+                    "label": "Taxi",
+                    "original_amount": 300.0,
+                    "original_currency": "THB",
+                    "voided": True,
+                },
+            ],
+        )
+        for row in rows:
+            actions.save_split_row(trip_id=trip.trip_id, row=row)
+        return actions, trip
+
+    def test_the_money_file_builds_with_no_active_plan(self) -> None:
+        """The regression this exists to prevent. `/split` gates on a confirmed
+        setup, so bills are entered long before an itinerary is activated -- and a
+        money file that refuses until then is unavailable for exactly the stretch
+        of a trip when people are paying for things."""
+
+        actions, trip = self.build()
+
+        with self.assertRaises(Exception):
+            actions.build_export_snapshot(trip.trip_id)  # no plan, as expected
+        snapshot = actions.build_money_snapshot(trip.trip_id).as_dict()
+
+        self.assertEqual(2, len(snapshot["rows"]))
+        self.assertIsInstance(money_workbook_xlsx(snapshot), bytes)
+
+    def test_it_carries_no_itinerary_no_addresses_and_no_readiness(self) -> None:
+        """The property that makes it shareable, asserted on the snapshot rather
+        than the rendering: none of it is assembled, so none can be forgotten."""
+
+        actions, trip = self.build()
+        snapshot = actions.build_money_snapshot(trip.trip_id).as_dict()
+
+        for forbidden in ("days", "checklist", "readiness", "stops", "unscheduled", "sources"):
+            self.assertNotIn(forbidden, snapshot)
+        for row in snapshot["rows"]:
+            self.assertNotIn("place_id", row)
+            self.assertNotIn("address", row)
+
+    def test_a_voided_row_is_carried_marked_and_left_out_of_every_total(self) -> None:
+        """Map item 2. A void is *why a total moved*, which is the one question a
+        shared money file is opened to answer -- so dropping the row makes the
+        total look wrong to the person who did not do the voiding."""
+
+        actions, trip = self.build()
+        snapshot = actions.build_money_snapshot(trip.trip_id).as_dict()
+
+        voided = [row for row in snapshot["rows"] if row["voided"]]
+        self.assertEqual(1, len(voided))
+        self.assertEqual("Taxi", voided[0]["label"])
+        # Present, but contributing nothing: no shares, and outside the total.
+        self.assertEqual({}, voided[0]["shares_thb"])
+        self.assertEqual(900.0, snapshot["actual_thb"])
+
+    def test_its_formulas_ship_with_cached_values(self) -> None:
+        """The money file keeps live formulas because its rows are in the same
+        file -- so the same rule the plan workbook follows has to hold here."""
+
+        actions, trip = self.build()
+        archive = zipfile.ZipFile(
+            BytesIO(money_workbook_xlsx(actions.build_money_snapshot(trip.trip_id).as_dict()))
+        )
+        bare = []
+        for name in sorted(n for n in archive.namelist() if "worksheets/sheet" in n):
+            cells = re.findall(r"<c [^>]*>(.*?)</c>", archive.read(name).decode("utf-8"))
+            bare.extend(cell for cell in cells if "<f>" in cell and "<v>" not in cell)
+
+        self.assertEqual([], bare)
+
+    def test_every_code_it_writes_has_a_catalogue_entry(self) -> None:
+        """`_code` renders a missing entry as `⚠ CODE`, so a workbook with one is
+        a workbook shipped with a visible hole in it."""
+
+        actions, trip = self.build(
+            rows=[
+                {
+                    "label": "Dinner",
+                    "original_amount": 900.0,
+                    "mode": "manual",
+                    "participants": ["owner"],
+                    "allocation": {"owner": 900.0},
+                    "tag": tag,
+                }
+                for tag in ("food", "transport", "accommodation", "activity", "fees", "other", "shopping")
+            ]
+        )
+        snapshot = actions.build_money_snapshot(trip.trip_id).as_dict()
+
+        for language in ("en", "th"):
+            from travel_planner.copy import OPTIMIZER_CODE_TEXT, TEXT
+
+            words = TEXT[language] | OPTIMIZER_CODE_TEXT[language]
+            for row in snapshot["rows"]:
+                self.assertNotIn("⚠", exporters._code(words, row["category"]))
+                self.assertNotIn("⚠", exporters._code(words, f"split_mode_{row['mode']}"))
+            for entry in snapshot["settlement"]:
+                self.assertNotIn("⚠", exporters._code(words, entry["direction"]))

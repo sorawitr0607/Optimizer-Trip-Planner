@@ -19,7 +19,11 @@ from travel_planner.actions import PlannerActions, PlannerRefusal
 from travel_planner.copy import OPTIMIZER_CODE_TEXT, TEXT
 from travel_planner.core import FrozenSnapshot
 from travel_planner.credentials import load_local_credentials
-from travel_planner.exporters import checklist_ics, plan_workbook_xlsx
+from travel_planner.exporters import (
+    checklist_ics,
+    money_workbook_xlsx,
+    plan_workbook_xlsx,
+)
 from travel_planner.providers import (
     ProviderBudgetExceeded,
     ProviderUnavailable,
@@ -68,6 +72,7 @@ ACTIONS = (
     "restore_plan_version",
     "get_active_plan",
     "build_export_snapshot",
+    "build_money_snapshot",
     "checklist_vocabulary",
     "propose_checklist",
     "apply_checklist_proposal",
@@ -219,20 +224,29 @@ def _labels(language: str) -> dict[str, str]:
 
 
 def _download(actions: PlannerActions, path: str) -> tuple[bytes, str, str]:
-    match = re.fullmatch(r"/api/export/([^/]+)/(workbook\.xlsx|checklist\.ics)", path)
+    match = re.fullmatch(
+        r"/api/export/([^/]+)/(workbook\.xlsx|money\.xlsx|checklist\.ics)", path
+    )
     if match is None:
         raise PlannerRefusal("unknown_download")
     trip_id, kind = unquote(match.group(1)), match.group(2)
     trip = actions.get_trip(trip_id)
-    snapshot = actions.build_export_snapshot(trip_id).as_dict()
     labels = _labels(trip.language if trip else "en")
     name = re.sub(r"[^A-Za-z0-9._-]+", "-", trip.name if trip else "trip").strip("-") or "trip"
-    if kind == "workbook.xlsx":
+    XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    # The money file is built from its own snapshot and never touches the plan's.
+    # Not a tidiness point: `build_export_snapshot` refuses without an active plan,
+    # so building it here first would have made the shareable file unavailable for
+    # exactly the stretch of a trip when people are paying for things.
+    if kind == "money.xlsx":
         return (
-            plan_workbook_xlsx(snapshot, labels),
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            f"{name}-plan.xlsx",
+            money_workbook_xlsx(actions.build_money_snapshot(trip_id).as_dict(), labels),
+            XLSX,
+            f"{name}-money.xlsx",
         )
+    snapshot = actions.build_export_snapshot(trip_id).as_dict()
+    if kind == "workbook.xlsx":
+        return plan_workbook_xlsx(snapshot, labels), XLSX, f"{name}-plan.xlsx"
     return checklist_ics(snapshot, labels), "text/calendar; charset=utf-8", f"{name}-readiness.ics"
 
 

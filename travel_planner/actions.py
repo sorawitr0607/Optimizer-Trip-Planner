@@ -3527,6 +3527,32 @@ class PlannerActions:
             )
         )
 
+    def build_money_snapshot(
+        self, trip_id: str, *, language: str | None = None
+    ) -> FrozenSnapshot:
+        """The shareable money file's snapshot. Needs no plan, by design.
+
+        `/split` gates on a confirmed setup and nothing more, so bills are entered
+        long before an itinerary is activated -- and a money file that refuses
+        until then would be unavailable for exactly the stretch of a trip when
+        people are actually paying for things.
+        """
+
+        trip = self.store.get_trip(trip_id)
+        if trip is None:
+            raise PlannerRefusal("unknown_trip", trip_id=trip_id)
+        return freeze_snapshot(
+            exports.build_money_snapshot(
+                trip={"trip_id": trip.trip_id, "name": trip.name},
+                language=language or trip.language,
+                exported_at=datetime.now(timezone.utc).isoformat(),
+                split_rows=self.list_split_rows(trip_id),
+                split_summary=self.split_summary(trip_id),
+                cost_totals=self.cost_totals(trip_id),
+                rate_snapshot=self.store.get_rate_snapshot(trip_id),
+            )
+        )
+
     def list_plan_versions(self, trip_id: str) -> list[PlanVersion]:
         return self.store.list_plan_versions(trip_id)
 

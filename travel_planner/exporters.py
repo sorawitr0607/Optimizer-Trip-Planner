@@ -715,3 +715,229 @@ DEFAULT_LABELS = {
     "action_needed": "Action needed",
     "verification_needed": "Verification needed",
 }
+
+
+MONEY_SHEETS = ("Bills", "Split Detail", "Settlement", "Summary")
+
+
+def money_workbook_xlsx(
+    snapshot: dict[str, Any], labels: dict[str, str] | None = None
+) -> bytes:
+    """The shareable money file: who paid, who owes, and why a total moved.
+
+    `WF-030` decided two workbooks and only the plan file was built, so until now
+    the only way to export split data was inside the file that also carries the
+    itinerary, every address and the readiness evidence -- exactly the file the
+    ticket says must not be handed to anyone. The whole point of the second file
+    is that it *can* be: "a money file can be handed to Mum without handing over
+    the whole itinerary."
+
+    Four sheets, which the ticket left to this decision. Bills is the ledger as
+    entered; Split Detail is one row per person per bill, because "what do I owe"
+    is answered per person and a wide matrix stops being readable at six
+    travellers; Settlement is the star through the cardholder; Summary carries the
+    per-category and per-person figures with the rate provenance under them.
+
+    **Formulas are live here.** The ticket's own reasoning: cross-workbook
+    references are unreliable, so the plan file's Costs sheet carries values, but
+    this file's rows are in the same file as its totals and can point at them. A
+    recipient who deletes a row they have already settled sees the totals move,
+    which is the behaviour a spreadsheet is expected to have.
+    """
+
+    words = _labels(labels)
+    buffer = BytesIO()
+    workbook = xlsxwriter.Workbook(buffer, {"in_memory": True})
+    header = workbook.add_format(
+        {"bold": True, "bg_color": _design_token("--export-header-bg"), "border": 1}
+    )
+    title = workbook.add_format({"bold": True, "font_size": 13})
+    wrap = workbook.add_format({"text_wrap": True, "valign": "top"})
+    struck = workbook.add_format({"font_strikeout": True, "italic": True})
+    money = workbook.add_format({"num_format": "#,##0.00"})
+    money_struck = workbook.add_format(
+        {"num_format": "#,##0.00", "font_strikeout": True, "italic": True}
+    )
+
+    sheets = {name: workbook.add_worksheet(name) for name in MONEY_SHEETS}
+    live_rows = _write_bills(sheets["Bills"], snapshot, words, header, wrap, struck, money, money_struck)
+    _write_split_detail(sheets["Split Detail"], snapshot, words, header, money)
+    _write_settlement(sheets["Settlement"], snapshot, words, header, title, money)
+    _write_money_summary(sheets["Summary"], snapshot, words, header, title, money, live_rows)
+    workbook.close()
+    return buffer.getvalue()
+
+
+BILL_COLUMNS = (
+    ("Bill", 30),
+    ("Day", 8),
+    ("Category", 16),
+    ("Split", 14),
+    ("Paid by", 14),
+    ("Shared by", 26),
+    ("Currency", 9),
+    ("Amount", 12),
+    ("Rate", 9),
+    ("THB", 12),
+    ("Voided", 8),
+    ("Notes", 32),
+)
+
+
+def _write_bills(
+    sheet: Any,
+    snapshot: dict[str, Any],
+    words: dict[str, str],
+    header: Any,
+    wrap: Any,
+    struck: Any,
+    money: Any,
+    money_struck: Any,
+) -> list[int]:
+    """The ledger as entered. Returns the sheet rows that count toward a total."""
+
+    for index, (name, width) in enumerate(BILL_COLUMNS):
+        sheet.write(0, index, name, header)
+        sheet.set_column(index, index, width)
+    sheet.freeze_panes(1, 0)
+
+    live: list[int] = []
+    for offset, row in enumerate(snapshot["rows"], start=1):
+        voided = row["voided"]
+        text = struck if voided else None
+        cash = money_struck if voided else money
+        sheet.write(offset, 0, row["label"], text)
+        sheet.write(offset, 1, row["day"] or "", text)
+        sheet.write(offset, 2, _code(words, row["category"]), text)
+        sheet.write(offset, 3, _code(words, f"split_mode_{row['mode']}"), text)
+        sheet.write(offset, 4, row["paid_by"], text)
+        sheet.write(offset, 5, ", ".join(row["participants"]), text)
+        sheet.write(offset, 6, row["original_currency"], text)
+        sheet.write(offset, 7, row["original_amount"] or 0, cash)
+        sheet.write(offset, 8, row["applied_rate"] if row["applied_rate"] is not None else "", text)
+        sheet.write(offset, 9, row["reported_thb"] if row["reported_thb"] is not None else "", cash)
+        # A word, not only a strikethrough: the wording alone has to carry the
+        # state, which is this repo's accessibility rule and survives a paste into
+        # anything that drops formatting.
+        sheet.write(offset, 10, words.get("voided", "Voided") if voided else "", text)
+        sheet.write(offset, 11, row["notes"] or "", wrap)
+        if not voided and row["reported_thb"] is not None:
+            live.append(offset)
+    return live
+
+
+def _write_split_detail(
+    sheet: Any, snapshot: dict[str, Any], words: dict[str, str], header: Any, money: Any
+) -> None:
+    """One row per person per bill.
+
+    Long rather than wide on purpose: a person-per-column matrix is unreadable
+    past about six travellers and cannot be filtered to "just mine", which is the
+    one thing a recipient of this file wants to do with it.
+    """
+
+    for index, (name, width) in enumerate(
+        (("Bill", 30), ("Day", 8), ("Category", 16), ("Person", 14), ("Share (THB)", 14))
+    ):
+        sheet.write(0, index, name, header)
+        sheet.set_column(index, index, width)
+    sheet.freeze_panes(1, 0)
+
+    row_at = 0
+    for row in snapshot["rows"]:
+        # In the row's own participant order, not the mapping's. `freeze_snapshot`
+        # canonicalises with sorted keys, so reading `shares_thb` directly lists
+        # people alphabetically and stops matching the "Shared by" column beside
+        # it -- and that order is the one the equal-split remainder rule is
+        # documented against, so the sheet should not quietly re-sort it.
+        #
+        # A voided bill has no shares by construction, so it simply contributes
+        # nothing here rather than needing to be filtered out again.
+        for person in row["participants"]:
+            if person not in row["shares_thb"]:
+                continue
+            amount = row["shares_thb"][person]
+            row_at += 1
+            sheet.write_row(
+                row_at,
+                0,
+                [row["label"], row["day"] or "", _code(words, row["category"]), person],
+            )
+            sheet.write(row_at, 4, amount, money)
+
+
+def _write_settlement(
+    sheet: Any,
+    snapshot: dict[str, Any],
+    words: dict[str, str],
+    header: Any,
+    title: Any,
+    money: Any,
+) -> None:
+    cardholder = snapshot.get("cardholder") or ""
+    sheet.set_column(0, 0, 22)
+    sheet.set_column(1, 4, 16)
+    sheet.write(0, 0, words.get("split_settle_up", "Settle up"), title)
+    sheet.write(1, 0, words.get("split_cardholder", "Cardholder"))
+    sheet.write(1, 1, cardholder)
+
+    for index, name in enumerate(
+        ("Person", "Their share", "They paid out", "Net", "Direction")
+    ):
+        sheet.write(3, index, name, header)
+    for offset, entry in enumerate(snapshot["balances"], start=4):
+        sheet.write(offset, 0, entry["traveller_id"])
+        sheet.write(offset, 1, entry["shares_thb"], money)
+        sheet.write(offset, 2, entry["paid_out_thb"], money)
+        sheet.write(offset, 3, entry["net_thb"], money)
+        direction = next(
+            (
+                item["direction"]
+                for item in snapshot["settlement"]
+                if item["traveller_id"] == entry["traveller_id"]
+            ),
+            "",
+        )
+        sheet.write(offset, 4, _code(words, direction) if direction else "")
+
+
+def _write_money_summary(
+    sheet: Any,
+    snapshot: dict[str, Any],
+    words: dict[str, str],
+    header: Any,
+    title: Any,
+    money: Any,
+    live_rows: list[int],
+) -> None:
+    sheet.set_column(0, 0, 26)
+    sheet.set_column(1, 2, 16)
+    sheet.write(0, 0, snapshot["trip"]["name"] or "", title)
+    sheet.write(1, 0, words.get("exported_at", "Saved"))
+    sheet.write(1, 1, snapshot["exported_at"])
+
+    # Live, because these rows are in this file. The cached value keeps the sheet
+    # readable in anything that does not evaluate formulas, which is the rule
+    # `test_every_formula_ships_with_a_cached_value` protects.
+    total = "=0" if not live_rows else "=" + "+".join(f"Bills!J{row + 1}" for row in live_rows)
+    sheet.write(3, 0, words.get("split_actual_spend", "Actual spend"), header)
+    sheet.write_formula(3, 1, total, money, snapshot.get("actual_thb") or 0)
+    sheet.write(4, 0, words.get("costs_planned_title", "Planned"), header)
+    sheet.write(4, 1, snapshot.get("planned_thb") or 0, money)
+
+    sheet.write(6, 0, words.get("costs_by_category", "By category"), header)
+    sheet.write(6, 1, snapshot["base_currency"], header)
+    at = 6
+    for code, amount in sorted(snapshot.get("by_category", {}).items()):
+        at += 1
+        sheet.write(at, 0, _code(words, code))
+        sheet.write(at, 1, amount, money)
+
+    rates = snapshot.get("rate_snapshot") or {}
+    at += 2
+    sheet.write(at, 0, words.get("rate_snapshot", "Exchange rates"), header)
+    sheet.write(at, 1, str(rates.get("as_of") or ""), header)
+    for currency, rate in sorted((rates.get("rates") or {}).items()):
+        at += 1
+        sheet.write(at, 0, currency)
+        sheet.write(at, 1, rate)

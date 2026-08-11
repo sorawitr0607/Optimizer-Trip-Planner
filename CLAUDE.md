@@ -1166,6 +1166,42 @@ basemap and the summaries prefetch before it. A clean run over the pilot copy no
 in any of the 23 tables**. The pilot database itself was never opened: `data/tourist.sqlite3` is
 still `d91ac5ad…`.
 
+**The money workbook was decided in `WF-030` and never built, until 2026-08-11.** `exporters.py` had
+only `plan_workbook_xlsx`, and `_download` matched only `workbook.xlsx` and `checklist.ics` — so the
+only way to export split data was inside the plan file, which is precisely the file that ticket says
+must not be handed to anyone, because it carries the itinerary, every address and the readiness
+evidence. The stated purpose of the second file is that it *can* be: "a money file can be handed to
+Mum without handing over the whole itinerary." That capability did not exist.
+
+`money_workbook_xlsx` has four sheets, which the ticket explicitly left open. **Bills** is the ledger
+as entered; **Split Detail** is one row per person per bill, long rather than wide because a
+person-per-column matrix is unreadable past about six travellers and cannot be filtered to "just
+mine"; **Settlement** is the star through the cardholder; **Summary** carries the per-category figures
+with the rate provenance under them. Formulas are **live** here — the ticket's own reasoning is that
+cross-workbook references are unreliable, so the plan file carries values while this file's rows are
+in the same file as its totals.
+
+**It is not gated on the plan, and that is a departure from the letter of `WF-030`.** The ticket says
+both files read `build_export_snapshot()`; that function refuses without an active plan and is shaped
+around a variant for five of its six sheets. But `/split` gates on a confirmed setup and nothing more,
+so bills are entered long before an itinerary is activated — a money file that refused until then
+would be unavailable for exactly the stretch of a trip when people are paying for things. So
+`exports.build_money_snapshot` is a second builder, and the one-source rule holds **at the source
+rather than at the snapshot**: every figure comes from `costs.totals()` and `split.summary()`, which
+are already the only derivations of claimed-ness and of a resolved share. Two renderings cannot
+diverge when one function computes the number.
+
+Three details worth keeping. **A voided row is carried, marked, and excluded from every total** — a
+void is *why a total moved*, which is the one question a shared file is opened to answer, and dropping
+it makes the total look wrong to the person who did not do the voiding; the Summary formula sums only
+the live rows by name (`=Bills!J2+Bills!J4`), so the exclusion is visible in the spreadsheet itself.
+**The word "Removed" is written beside the strikethrough**, because wording alone carrying the state
+is this repo's accessibility rule and survives a paste into anything that drops formatting. And
+**Split Detail lists people in the row's own participant order**, not the mapping's: `freeze_snapshot`
+canonicalises with sorted keys, so reading `shares_thb` directly lists them alphabetically and stops
+matching the "Shared by" column beside it — and that order is what the equal-split remainder rule is
+documented against.
+
 **A capture must observe the app, never operate it.** Two things broke that and both showed up as
 double-digit baseline drift on screens nobody had edited. The `/places` first-visit tour is suppressed
 by `document.documentElement.dataset.capture`, because a fresh Chrome profile is always a first visit
