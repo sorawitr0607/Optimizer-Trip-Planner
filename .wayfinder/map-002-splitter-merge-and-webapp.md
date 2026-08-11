@@ -347,6 +347,19 @@ resolving tickets are throwaway artifacts, not the build.
   and it is left open with its numbers. Found on the way: **a capture was writing** one free forecast row per
   run, the same rule `WF-048` set and the third time it has been broken.
 
+- **Auto-Bill parity for `/split` and `/costs`, settled 2026-08-11 by building it.** Measured against the
+  donor's own source rather than its element inventory — it is on disk at
+  `ML/Personal_Project/Tourist/Auto-Bill-Splitter`, archived read-only, not the Windows path `WF-020`
+  records. Built: manual allocation as a fourth split mode, the main-cardholder selector, per-row notes,
+  the donut and per-person meters, and per-trip expense categories over an unremovable floor of the seven.
+  The largest finding was not a parity gap: **`WF-030` locked two workbooks and only the plan file existed**,
+  so the split ledger could only be exported inside the file carrying the itinerary, the addresses and the
+  readiness evidence — the one file that ticket says must not be shared. Two divergences were offered and
+  **declined**, and stay so: a people manager inside `/split`, because the roster lives in setup and
+  `validate_row` refusing an unknown traveller id is what stops settlement fracturing on `Mum` versus `mum`;
+  and a JSON import/export backup, because `WF-024` decided no importer is built. Detail in
+  [Decide what the interface owes a reader who is not the owner](tickets/049-decide-what-the-interface-owes-a-reader-who-is-not-the-owner.md).
+
 ## Not yet specified
 
 <!-- In-scope fog: suspected questions not yet sharp enough to ticket. Graduates as the frontier advances. -->

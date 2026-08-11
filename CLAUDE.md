@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm --prefix web install                                             # first web run only
 uv run --locked python -m api                                        # production shell on 127.0.0.1:8765
 uv run --locked python scripts/check.py                              # every free Python + web gate
-uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 485 tests, ~10s
+uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 510 tests, ~11s
 uv run --locked python -m unittest tests.test_optimizer.OptimizerCoreTest.test_safe_route_and_weather_fallback_are_selected  # one test
 python3 scripts/validate_regression_fixtures.py                      # fixture catalog structure
 uv run --locked python scripts/run_optimizer_regressions.py          # 27 historic cases through the real optimizer
@@ -503,7 +503,7 @@ rule. Unknown stable codes render visibly as `⚠ CODE`; never prettify them int
 
 Python uses `unittest`; the webapp uses Vitest. No network, no paid API, no Python fixtures framework.
 **`AppTest` is gone** — S6 removed the 18 tests that used it, having first moved the 14 portable
-behaviours down to actions/core/exports. It was **311** at S6; it is **485** now, plus 85 Vitest cases in
+behaviours down to actions/core/exports. It was **311** at S6; it is **510** now, plus 85 Vitest cases in
 `web/`.
 `tests/fixtures/historic_regressions.json` encodes 20 atomic + 7 interaction failures from four real
 past trips; `scripts/run_optimizer_regressions.py` replays all of them through the real optimizer.
@@ -688,9 +688,10 @@ THB so a later rate cannot rewrite it, and a missing rate stays a visible gap ra
 routes and in-place `StageGate`, and `scripts/check.py` is the one free green command. The allowlist was
 **61 methods** at S5 — 51 at S1, five split-ledger ones at S2, `setup_vocabulary` at S3, the paid-call
 preflight and export-snapshot reads at S4, then `checklist_vocabulary` at S5, and `refresh_transit_routes`
-for `WF-038` — and is **82** now, the additions being `WF-039`'s comfort tradeoffs, `WF-040`'s
-`recommend_areas`, and `WF-048`'s month guide, basemap pair, map detail, country-outline pair, route shapes
-and trip forecast. **37 refusal codes.** `tests/test_api.py` asserts the count, so it cannot drift silently. **All nine routes are
+for `WF-038` — and is **87** now, the additions being `WF-039`'s comfort tradeoffs, `WF-040`'s
+`recommend_areas`, `WF-048`'s month guide, basemap pair, map detail, country-outline pair, route shapes
+and trip forecast, and `WF-049`'s split-cardholder pair, `build_money_snapshot` and category pair.
+**38 refusal codes.** `tests/test_api.py` asserts the count, so it cannot drift silently. **All nine routes are
 real screens** as of 2026-08-04 — `/setup`, `/places`, `/evidence`, `/optimize`, `/itinerary`, `/readiness`,
 `/costs`, `/split` and `/revise`. There is no `StagePage`, no `gated()` wrapper and no `stage_stub` copy key;
 they went with the last stub. `/evidence` was built between S5 and S6 because **no slice row owned it** and

@@ -176,6 +176,41 @@ real VoiceOver/Safari and NVDA/Firefox over the whole journey, 320px reflow, 200
 field Core Web Vitals on a deployed build — is untouched. DOM semantics are not a screen
 reader, and this ticket only claims the semantics.
 
+## What followed, 2026-08-11
+
+The same review asked a second question — *can `/split` and `/costs` do what
+`Auto-Bill-Splitter` did* — and it is recorded here rather than in a ticket of its
+own, because a new ticket file fails `--check` until a paid graph rebuild pays for
+its node, and none of what follows is a decision this map had not already taken.
+
+**The donor is readable, and reading it changed three answers.** It is at
+`ML/Personal_Project/Tourist/Auto-Bill-Splitter`, archived read-only, not the
+Windows path `WF-020` records. Working from its 41-element inventory rather than
+its source had produced an inferred gap list, and the source corrected it:
+`equalSplit` really does dump the whole rounding remainder on `people[0]`, exactly
+as `WF-018` claimed; its manual mode tolerates a 0.015 mismatch and silently moves
+the difference onto the first positive share, where an exact-equality rule would
+have rejected a hand-typed 33.33 three times against a 100.00 bill; and its
+**Daily Spending Flow** chart is keyed on a day field this app already stores as
+`plan_day` and has never surfaced.
+
+**The largest finding was not a parity gap at all.** `WF-030` locked two
+workbooks and only the plan file was ever built, so the split ledger could only be
+exported inside the file that carries the itinerary, every address and the
+readiness evidence — the one file that ticket says must not be handed to anyone.
+See the money-workbook section of `CLAUDE.md` for the four sheets and for why it
+is deliberately not gated on an active plan.
+
+Also built: manual allocation as a fourth split mode, the main-cardholder
+selector, per-row notes, the donut and per-person meters (which is where map item
+5's question gets its real answer), and per-trip expense categories with the seven
+kept as an unremovable floor.
+
+**Two divergences were offered and declined**, and stay declined: a people manager
+inside `/split` (the roster lives in setup, and `validate_row` refusing an unknown
+traveller id is what stops settlement fracturing on `Mum` versus `mum`) and a JSON
+import/export backup (`WF-024` decided no importer is built).
+
 ## Related
 
 - [Decide what the journey must explain before it asks](048-decide-what-the-journey-must-explain-before-it-asks.md) —
