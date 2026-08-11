@@ -111,9 +111,10 @@ resolving tickets are throwaway artifacts, not the build.
   [`019-local-api-contract.md`](artifacts/019-local-api-contract.md). Three findings outrank the framework
   choice: the exposed surface must be a **literal allowlist**, because `save_plan_version` would write an
   arbitrary snapshot as an activated immutable version with no optimizer validation and `record_paid_call`
-  would forge append-only ledger rows — introspection would have exposed both. The 46 `raise ValueError` in
-  `actions.py` collapse into **26 stable codes** behind `PlannerRefusal`, which fixes a live *Phase 1*
-  bilingual defect: a Thai owner reads English at every refusal today. And the boundary is guarded by
+  would forge append-only ledger rows — introspection would have exposed both. The owner-visible
+  `ValueError` migration landed in S1; all **38 current refusal codes** are `PlannerRefusal` values with
+  bilingual copy, discovered and pinned by tests. The sole `ValueError` left in `actions.py` is an internal
+  provider-result invariant caught inside discovery. And the boundary is guarded by
   requiring `application/json` plus a `Host` allowlist, which is a real security control rather than
   hygiene, since `set_paid_cap` and `delete_trip` are exposed RPCs. Hashes are **exposed and never
   accepted**; long operations block behind a persisted in-flight marker and never invent a progress
@@ -305,8 +306,9 @@ resolving tickets are throwaway artifacts, not the build.
   with its own runnable check. **Two answers conflicted and the resolution is recorded**: thin-walkable-path
   put money at S4 while the split ledger was wanted early, so money moved to **S2** and the journey screens
   shifted back one. **S4 is where the webapp first works end to end**, and it is what 1 November measures.
-  Deferred past the pilot: GenAI revision, the ranked candidate card grid, voided rows in exports, and
-  per-person figures feeding upstream.
+  Originally deferred past the pilot: GenAI revision, the ranked candidate card grid, voided rows in
+  exports, and per-person figures feeding upstream. The GenAI surface and voided export rows were delivered
+  on 2026-08-11; the candidate grid remains deferred and upstream cost inputs remain decided-not-now.
 - [Decide the offline asset policy for the webapp](tickets/034-decide-the-offline-asset-policy-for-the-webapp.md) —
   **The largest item in the ticket turned out not to exist.** Map tiles were called the biggest remote
   dependency, but the exports contain **no map at all** — just numbered stops with coordinates as text — and the
@@ -341,10 +343,11 @@ resolving tickets are throwaway artifacts, not the build.
   against its own `-light` tint, where four dark colours had been sitting at 3.72-4.13:1. The tour becomes a
   native `<dialog>`, the nav and `<StageGate>` answer from one table in `web/src/shared/stages.ts`, and the
   screen gate gains a **second viewport** — 500x844, not the audited 390, because headless Chrome clamps there
-  and a falsely-labelled image would be corrected straight back to 500. **The Places wire payload was
-  deliberately not trimmed**: `candidates` is a `Frozen` snapshot shipped with its `sha256`, so a narrowed
-  `data` would put a hash on the wire that does not describe its payload — a lightweight read is a new method,
-  and it is left open with its numbers. Found on the way: **a capture was writing** one free forecast row per
+  and a falsely-labelled image would be corrected straight back to 500. **The Places snapshots remain
+  untrimmed, but their wire cost is fixed**: `candidates` is a `Frozen` snapshot shipped with its `sha256`,
+  so a narrowed `data` would put a hash on the wire that does not describe its payload. The local server now
+  gzip-compresses JSON over 1 KB when accepted, cutting the three pilot Places reads from about 2.22 MB to
+  158 KB without changing decoded content or hashes. Found on the way: **a capture was writing** one free forecast row per
   run, the same rule `WF-048` set and the third time it has been broken.
 
 - **Auto-Bill parity for `/split` and `/costs`, settled 2026-08-11 by building it.** Measured against the
@@ -364,16 +367,17 @@ resolving tickets are throwaway artifacts, not the build.
 
 <!-- In-scope fog: suspected questions not yet sharp enough to ticket. Graduates as the frontier advances. -->
 
-- Whether the 45-site `PlannerRefusal` migration is its own ticket. The 26-code vocabulary is locked by
-  the API contract, but the migration fixes a *Phase 1* bilingual defect and is therefore **not** gated by
-  this map's decision gate. Sharp enough to ticket as soon as the owner wants it sequenced.
+- ~~Whether the `PlannerRefusal` migration is its own ticket~~ — **already settled in S1.** Every
+  owner-visible action refusal uses `PlannerRefusal`; AST and API tests pin all 38 bilingual codes and
+  statuses. The one remaining `ValueError` is caught as an internal discovery invariant.
 - ~~Whether voided split rows appear in the PDF and Excel exports~~ — **settled 2026-08-11.** The PDF went
   at S0, so this was only ever about the workbook. A void is *why a total moved*, which is the one thing a
   shared money file is read for, so the money workbook carries voided rows **marked and excluded from every
   total** rather than dropping them. Silently omitting them is what makes a total look wrong to the person
   who did not do the voiding. See [Decide what the interface owes a reader who is not the owner](tickets/049-decide-what-the-interface-owes-a-reader-who-is-not-the-owner.md).
-- How slice 6's free-text GenAI revision presents itself in the new design, and whether its typed-intent
-  preview survives as a modal, a diff panel, or something else.
+- ~~How slice 6's free-text GenAI revision presents itself~~ — **settled 2026-08-11.** It is an
+  off-by-default panel on `/revise`; one paid interpretation may create the existing typed pending draft,
+  and the existing consequence panel plus explicit Apply remain the acceptance boundary.
 - ~~Whether per-person cost data should feed anything **upstream**~~ — affordability in ranking, budget caps
   in optimization. **Closed 2026-08-11 as decided-not-now, which is a decision rather than a deferral.** The
   downstream half was already settled by the reconciliation ticket: estimated per-person is

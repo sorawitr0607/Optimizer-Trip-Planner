@@ -285,11 +285,15 @@ describe("RevisePage", () => {
     expectNoMissingCopy(html);
   });
 
-  it("never offers the deferred free-text GenAI surface", () => {
+  it("keeps free-text GenAI opt-in and constrained before it can spend", () => {
     const html = render(<RevisePage />, "en");
 
-    // Artifact 033 defers constrained GenAI revision past the pilot.
-    expect(html).not.toContain("textarea");
-    expect(html).not.toContain("interpret");
+    expect(html).toContain('type="checkbox"');
+    expect(html).toContain("<textarea");
+    expect(html).toContain("disabled");
+    expect(html).toContain("About US$0.002 per interpretation");
+    expect(html).toContain("Only the plan slice and your request are sent");
+    expect(html).toContain("never sets an opening time, route, fare or closure");
+    expectNoMissingCopy(html);
   });
 });

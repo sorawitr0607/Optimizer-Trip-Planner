@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 from http.client import HTTPConnection
 from io import BytesIO
 import inspect
@@ -358,6 +359,24 @@ class SocketGuardTest(unittest.TestCase):
         )
         self.assertEqual(200, status)
         self.assertEqual("setup", json.loads(body)["next"])
+
+    def test_large_json_is_gzipped_without_changing_its_payload(self) -> None:
+        for index in range(80):
+            self.actions.create_trip(name=f"Trip {index}", destination="Taipei, Taiwan")
+
+        status, headers, body = self.request(
+            "POST",
+            "/api/list_trips",
+            body=b"{}",
+            headers={"Content-Type": "application/json", "Accept-Encoding": "gzip"},
+        )
+
+        self.assertEqual(200, status)
+        self.assertEqual("gzip", headers["content-encoding"])
+        self.assertEqual("Accept-Encoding", headers["vary"])
+        decoded = json.loads(gzip.decompress(body))
+        self.assertEqual(80, len(decoded))
+        self.assertLess(len(body), len(gzip.decompress(body)))
 
     def test_s4_taipei_journey_reaches_activation_and_both_downloads(self) -> None:
         """The S4 transport path, with route evidence prepared deterministically."""

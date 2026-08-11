@@ -11,6 +11,7 @@ import { AppShell } from "../shared/AppShell";
 import { ThemeProvider } from "../shared/ThemeProvider";
 import { OptimizePage } from "./OptimizePage";
 import { SetupPage } from "./SetupPage";
+import { TripsPage } from "./TripsPage";
 
 const TRIP = "taipei";
 
@@ -187,6 +188,21 @@ function renderWithoutSetup(page: ReactNode, language: Language): string {
 function expectNoMissingCopy(html: string): void {
   expect(html).not.toMatch(/⚠ [a-z][a-z0-9_]{3,}/);
 }
+
+describe("TripsPage", () => {
+  it("keeps the Thai headline wrap-capable and states the optional network boundary", () => {
+    const html = render(<TripsPage />, "th");
+    const heading = html.match(/<h1>(.*?)<\/h1>/)?.[1] ?? "";
+
+    // Thai does not separate every word with a space. Wrapping its whole headline in
+    // the English word-animation span made it one unbreakable inline block on phones.
+    expect(heading).toContain("วางแผนเที่ยวให้พอดีกับเวลาจริง");
+    expect(heading).not.toContain("hero-word");
+    expect(html).toContain("การทำงานเสริมผ่านผู้ให้บริการหรือ AI");
+    expect(html).not.toContain("ไม่มีการอัปโหลด");
+    expectNoMissingCopy(html);
+  });
+});
 
 describe("SetupPage", () => {
   it("opens a returning owner on the first question, not on the intro", () => {

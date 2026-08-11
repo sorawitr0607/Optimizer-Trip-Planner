@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm --prefix web install                                             # first web run only
 uv run --locked python -m api                                        # production shell on 127.0.0.1:8765
 uv run --locked python scripts/check.py                              # every free Python + web gate
-uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 510 tests, ~11s
+uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 511 tests, ~11s
 uv run --locked python -m unittest tests.test_optimizer.OptimizerCoreTest.test_safe_route_and_weather_fallback_are_selected  # one test
 python3 scripts/validate_regression_fixtures.py                      # fixture catalog structure
 uv run --locked python scripts/run_optimizer_regressions.py          # 27 historic cases through the real optimizer
@@ -503,7 +503,7 @@ rule. Unknown stable codes render visibly as `⚠ CODE`; never prettify them int
 
 Python uses `unittest`; the webapp uses Vitest. No network, no paid API, no Python fixtures framework.
 **`AppTest` is gone** — S6 removed the 18 tests that used it, having first moved the 14 portable
-behaviours down to actions/core/exports. It was **311** at S6; it is **510** now, plus 85 Vitest cases in
+behaviours down to actions/core/exports. It was **311** at S6; it is **511** now, plus 86 Vitest cases in
 `web/`.
 `tests/fixtures/historic_regressions.json` encodes 20 atomic + 7 interaction failures from four real
 past trips; `scripts/run_optimizer_regressions.py` replays all of them through the real optimizer.
@@ -518,8 +518,10 @@ luna's rate card** (US$0.20/M input, US$1.20/M output at short context; nothing 
 context, and `store: false` means caching never applies). luna is a *reasoning* model, so output is
 mostly hidden reasoning and varies: six measured `opening_window` calls ran US$0.000090–US$0.000266, so
 it is priced at **US$0.0005** and a 13-place refresh costs US$0.0065. `interpret_revision` and
-`explain_revision` are sized from the real payload rather than measured end to end, since that surface
-is deferred. **The ledger over-reports OpenAI spend by ~US$0.325** from 30 calls recorded at interim
+`explain_revision` are sized from the real payload rather than measured end to end. The revision
+surface is now reachable, but no real paid interpretation was submitted during its 2026-08-11
+verification, so the UI correctly says **about** US$0.002. **The ledger over-reports OpenAI spend by
+~US$0.325** from 30 calls recorded at interim
 tenfold prices; `paid_usage` is append-only by design, the error is in the safe direction, and it decays
 as new rows use the measured price.
 
@@ -697,11 +699,13 @@ real screens** as of 2026-08-04 — `/setup`, `/places`, `/evidence`, `/optimize
 they went with the last stub. `/evidence` was built between S5 and S6 because **no slice row owned it** and
 S6 has since deleted the POC — see `artifacts/validation/2026-08-04-evidence-screen/notes.md`. It is the screen a
 *newly created* trip needs, since route and opening evidence are hard optimizer constraints.
-**Slice 6's non-AI half now has its React surface** (S5); its GenAI half stays deferred past the pilot. The
-core landed long before either: `revision.py`'s non-AI quick actions (`a7ad537`) and
+**Slice 6's React surface is complete as of 2026-08-11.** S5 delivered the non-AI quick actions;
+`/revise` now also exposes the constrained free-text interpreter behind an off-by-default checkbox,
+with price and transmitted-data disclosure visible before the control is enabled. The core landed long
+before either: `revision.py`'s non-AI quick actions (`a7ad537`) and
 `interpret.py`'s constrained GenAI revision (`a2d59f6`) landed 2026-07-29 with tests. The pure modules
 survived the redesign exactly as intended; their Streamlit surfaces went at S6. The live pilot remains
-unbuilt. Every new output must read
+local-only. Every new output must read
 `build_export_snapshot()` rather than the raw variant — that is what keeps their times, totals, and
 statuses from diverging. Complete a slice vertically with its own runnable check before starting the next.
 
@@ -1151,13 +1155,21 @@ Do not derive a second copy of that table in the shell — that is the drift thi
 catalogue rows and the full provider JSON inside a collapsed report on every visit. Rendering on
 first open plus a 50-row page took the screen from ~4900 DOM nodes to **543**.
 
-**The payload half of that finding was deliberately not taken.** `rank_candidates` is 1.16 MB and
-`get_latest_discovery` 860 KB on the pilot. Trimming the discovery response at the API boundary is
+**The payload half is fixed at the transport boundary without trimming a snapshot.** `rank_candidates`
+is 1.19 MB, `get_latest_discovery` 880 KB and `list_candidate_choices` 152 KB on the current scratch
+copy of the pilot. Trimming the discovery response at the API boundary is
 **wrong, not merely unattractive**: `candidates` is a `Frozen` snapshot and the client is handed the
 `sha256` beside it, so shipping a mutilated `data` would put a hash on the wire that does not
 describe its payload — the one contract the whole design rests on. A lightweight read is a *new*
-method, not a narrower old one. And per-card fetching for the deck is what `WF-048` already paid to
-undo. Left as an open item with the numbers, not as a silent omission.
+method, not a narrower old one, and per-card fetching for the deck is what `WF-048` already paid to
+undo. The stdlib HTTP server now sends JSON over 1 KB with `Content-Encoding: gzip` when the browser
+accepts it. Those three responses measure **80 KB + 62 KB + 16 KB** compressed on the same data —
+about **93% less wire transfer** — while their decoded bytes and sha256 values remain unchanged.
+
+**The landing page no longer says “No upload.”** The trip file and deterministic planner stay local,
+but optional provider and model actions do transmit disclosed slices. The first-screen copy now says
+that plainly; `/revise` names the exact model boundary (request plus relevant plan slice) and retention
+qualification before its opt-in control.
 
 **A capture writes nothing, and that was measured rather than assumed.** Diffing every table across
 a full 56-image run found one `open_meteo:forecast` row and one `provider_cache` row per run — free,
@@ -1349,10 +1361,11 @@ Streamlit.
 **S5 landed the last journey screens on 2026-08-04**
 (evidence: `artifacts/validation/2026-08-04-slice-5/notes.md`). Four things from it bind S6:
 
-- **The GenAI surface is absent on purpose.** `interpret_revision` is allowlisted and the transport would
-  carry it, but `RevisePage` never calls it, because artifact 033 defers constrained GenAI revision past the
-  pilot. A test asserts the screen renders no textarea and no interpret control, so the deferral cannot be
-  undone by accident.
+- **The GenAI surface is opt-in and constrained.** `RevisePage` keeps AI off initially, states the
+  approximate price, data slice and retention boundary before enabling the textarea, and calls the
+  existing `interpret_revision` action. A supported result creates the same pending typed draft as a
+  quick action; unsupported, missing-key, offline, refused and malformed-result paths leave the active
+  plan unchanged. The existing consequence preview and explicit Apply remain the only write path.
 - **`placeName` / `placeNameFrom` in `web/src/shared/names.ts` is the one place naming happens.** `places`,
   `optimize` and `revise` each had their own copy with a different signature; they are consolidated. A
   consequence or plan row must name a place, never a truncated `place_id`, and divergence here is invisible
@@ -1513,9 +1526,10 @@ Already decided, and binding on any future implementation:
   validation and `record_paid_call` forges append-only ledger rows — `dir()` would expose both. And a
   snapshot `sha256` is **exposed but never accepted as an argument**; the server re-derives every hash
   itself. Full contract in `.wayfinder/artifacts/019-local-api-contract.md`.
-- Refusals get stable codes: the 46 `raise ValueError` in `actions.py` collapse into 26 codes behind
-  `PlannerRefusal(ValueError)`. Until that migration lands, a Thai owner reads English at every refusal —
-  a **Phase 1** defect, so it is not gated by the Phase 2 decision gate.
+- Refusals use stable codes: the migration landed in S1. `actions.py` now has one `ValueError`, an
+  internal provider-result invariant caught inside discovery; every owner-visible refusal is a
+  `PlannerRefusal`. `tests/test_foundation.py` discovers all **38** codes and requires bilingual copy,
+  while `tests/test_api.py` pins the status map.
 - The webapp stack: **TypeScript, react-router, TanStack Query, Tailwind v4 configured in CSS**, npm with
   Node pinned by `.nvmrc`. `web/src/` is organised **by stage** beside `shared/`, `api/` and `i18n/`.
   ESLint with `react-hooks`, `tsc` for types, no formatter. `web/dist` is not committed. Six web runtime

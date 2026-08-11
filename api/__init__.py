@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from collections.abc import Mapping
 from dataclasses import fields, is_dataclass
+import gzip
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import inspect
 import json
@@ -287,19 +288,37 @@ class PlannerHandler(SimpleHTTPRequestHandler):
             f"localhost:{port}",
         }
 
-    def _body(self, status: int, body: bytes, content_type: str) -> None:
+    def _body(
+        self,
+        status: int,
+        body: bytes,
+        content_type: str,
+        *,
+        content_encoding: str | None = None,
+    ) -> None:
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        if content_encoding:
+            self.send_header("Content-Encoding", content_encoding)
+            self.send_header("Vary", "Accept-Encoding")
         self.end_headers()
         self.wfile.write(body)
 
     def _json(self, status: int, value: Any) -> None:
+        body = json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        # The Places screen's immutable discovery and ranking snapshots are large but
+        # highly repetitive. Narrowing either would make its exposed sha256 describe
+        # different bytes from the payload. HTTP compression preserves that contract
+        # and cuts the real pilot responses by about 93%, using only the stdlib.
+        accepts_gzip = "gzip" in self.headers.get("Accept-Encoding", "").lower()
+        encoding = "gzip" if accepts_gzip and len(body) >= 1024 else None
         self._body(
             status,
-            json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
+            gzip.compress(body, mtime=0) if encoding else body,
             "application/json; charset=utf-8",
+            content_encoding=encoding,
         )
 
     def _error(self, error: Exception) -> None:

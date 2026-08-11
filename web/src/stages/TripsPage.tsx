@@ -274,11 +274,13 @@ export function TripsPage() {
             <Compass aria-hidden="true" size={15} /> Optimizer Trip Planner
           </p>
           <h1>
-            {copy("landing_headline", language).split(" ").map((word, index) => (
-              <span className="hero-word" key={`${word}-${index}`} style={{ animationDelay: `${0.09 * index}s` }}>
-                {word}{" "}
-              </span>
-            ))}
+            {language === "th"
+              ? copy("landing_headline", language)
+              : copy("landing_headline", language).split(" ").map((word, index) => (
+                  <span className="hero-word" key={`${word}-${index}`} style={{ animationDelay: `${0.09 * index}s` }}>
+                    {word}{" "}
+                  </span>
+                ))}
           </h1>
           <p className="landing-lead">{copy("landing_subtext", language)}</p>
           {/* It was an anchor to `#start` and no element carried that id, so the one

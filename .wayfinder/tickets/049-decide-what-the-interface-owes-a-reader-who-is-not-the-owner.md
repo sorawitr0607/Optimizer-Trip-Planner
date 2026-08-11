@@ -176,6 +176,22 @@ real VoiceOver/Safari and NVDA/Firefox over the whole journey, 320px reflow, 200
 field Core Web Vitals on a deployed build — is untouched. DOM semantics are not a screen
 reader, and this ticket only claims the semantics.
 
+## Audit closure follow-up, 2026-08-11
+
+The wire half is now reduced without violating the decision above. On the same isolated pilot copy,
+`get_latest_discovery`, `rank_candidates` and `list_candidate_choices` measure 880,068 B, 1,187,918 B
+and 151,727 B raw; the running server reduces them to 80,319 B, 61,755 B and 16,268 B — about **93% less**.
+The server selects compression from `Accept-Encoding`; the decoded snapshots and their hashes are
+unchanged, and a socket test decompresses and compares the real JSON shape.
+
+The constrained revision surface is also complete. AI starts off, and the price, request/plan-slice
+boundary and provider-retention qualification are visible before the textarea is enabled. One
+interpretation may create the existing typed pending draft; it cannot alter the active plan, and the
+existing consequence preview and Apply button remain the only acceptance path. Missing credentials
+were exercised against a scratch database: HTTP 503, no draft and no revision history. No paid call was
+submitted. The landing page's absolute “No upload” sentence was corrected to distinguish the local trip
+file from these explicitly optional provider/model transmissions.
+
 ## What followed, 2026-08-11
 
 The same review asked a second question — *can `/split` and `/costs` do what

@@ -16,7 +16,7 @@ const queryClient = new QueryClient({
 });
 
 /**
- * A capture seam for the 36 screen baselines, and nothing more.
+ * A capture seam for the 56 screen baselines, and nothing more.
  *
  * Headless Chrome cannot click the theme and language controls, so it needs a way
  * to load a route already in one of the four states. These two parameters set

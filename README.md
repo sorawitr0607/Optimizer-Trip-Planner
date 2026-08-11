@@ -67,7 +67,7 @@ The app uses `data/tourist.sqlite3` by default. Copy `secrets.example.json` to
   `tests/test_ported_behaviours.py` is organised by provenance rather than domain on purpose: it holds
   the actions-level homes for the 14 behaviours that used to be asserted through Streamlit `AppTest`, and
   it was the checklist read before deleting `views/`.
-- `artifacts/parity/` — the donor style capture and the 36 approved screen baselines with their README.
+- `artifacts/parity/` — the donor style capture and 56 approved screen baselines (36 desktop plus 20 phone) with their README.
 - `scripts/` — validation, regression, provider, and Graphify maintenance commands.
 - `data/reference-itineraries/<city>/` — source workbooks and PDF itineraries.
 - `graphify-out/` — checked-in graph snapshot; generated caches are ignored.

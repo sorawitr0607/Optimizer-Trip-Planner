@@ -9,6 +9,7 @@ import {
   type PlanVersionRecord,
   type QuickAction,
   type RevisionDraft,
+  type RevisionInterpretationResult,
   type RevisionRecord,
 } from "../api/client";
 import { copy, copyFrom, type Language } from "../i18n/copy";
@@ -24,18 +25,17 @@ function operationLabel(operation: string, language: Language): string {
   return label.startsWith("⚠ ") ? operation : label;
 }
 
-/**
- * The revise screen. Free-text GenAI revision is deliberately absent: artifact
- * 033 defers it past the pilot, and `interpret_revision` stays unreferenced here
- * even though the transport allows it. The non-AI quick actions are local, free
- * and deterministic, which is why they stayed in scope.
- */
+/** The revise screen. AI may choose one typed operation; it never edits a plan. */
 export function RevisePage() {
   const { tripId = "" } = useParams();
   const { language } = useLanguage();
   const queryClient = useQueryClient();
   const [chosen, setChosen] = useState(0);
   const [flash, setFlash] = useState<string | null>(null);
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [requestText, setRequestText] = useState("");
+  const [interpretation, setInterpretation] =
+    useState<RevisionInterpretationResult | null>(null);
 
   const offered = useQuery({
     queryKey: ["quick_actions", tripId],
@@ -71,6 +71,16 @@ export function RevisePage() {
 
   const fail = (error: unknown) =>
     setFlash(error instanceof ApiError ? code(error.code, language) : String(error));
+
+  const failInterpretation = (error: unknown) => {
+    setInterpretation(null);
+    if (!(error instanceof ApiError)) {
+      setFlash(String(error));
+      return;
+    }
+    const tailored = copy(`ai_${error.code}`, language);
+    setFlash(tailored.startsWith("⚠ ") ? code(error.code, language) : tailored);
+  };
 
   const propose = useMutation({
     mutationFn: (operation: QuickAction) =>
@@ -112,6 +122,30 @@ export function RevisePage() {
       await refresh();
     },
     onError: fail,
+  });
+
+  const interpret = useMutation({
+    mutationFn: () =>
+      rpc<RevisionInterpretationResult>("interpret_revision", {
+        trip_id: tripId,
+        request_text: requestText,
+        language,
+        replace_pending: true,
+      }),
+    onSuccess: async (result) => {
+      if (!result.supported) {
+        setFlash(null);
+        setInterpretation(result);
+        return;
+      }
+      setInterpretation(null);
+      setRequestText("");
+      setFlash(
+        `${copy("interpreted_as", language)} ${operationLabel(result.operation ?? "", language)}`,
+      );
+      await refresh();
+    },
+    onError: failInterpretation,
   });
 
   if (offered.isPending || draft.isPending) return <p>{copy("loading", language)}</p>;
@@ -209,6 +243,63 @@ export function RevisePage() {
       {actions.length === 0 ? (
         <p className="setup-hint">{copy("revision_needs_plan", language)}</p>
       ) : null}
+
+      <div className="revise-ai">
+        <label className="setup-check">
+          <input
+            checked={aiEnabled}
+            onChange={(event) => setAiEnabled(event.target.checked)}
+            type="checkbox"
+          />
+          <span>{copy("ai_enabled", language)}</span>
+        </label>
+        {!aiEnabled ? <p className="setup-hint">{copy("ai_disabled_note", language)}</p> : null}
+        <p className="setup-hint">{copy("ai_cost", language)}</p>
+        <p className="setup-hint">{copy("ai_disclosure", language)}</p>
+        <fieldset className="revise-ai-fields" disabled={!aiEnabled}>
+          <label>
+            {copy("free_text", language)}
+            <textarea
+              onChange={(event) => setRequestText(event.target.value)}
+              rows={4}
+              value={requestText}
+            />
+          </label>
+          <p className="setup-hint">{copy("free_text_help", language)}</p>
+          <button
+            className="setup-primary"
+            disabled={!requestText.trim() || interpret.isPending}
+            onClick={() => interpret.mutate()}
+            type="button"
+          >
+            {copy("interpret", language)}
+          </button>
+        </fieldset>
+        {interpretation && !interpretation.supported ? (
+          <div aria-live="polite" className="revise-interpretation">
+            <p className="money-note money-note-warn">
+              <b aria-hidden="true">⚠</b>
+              <span>
+                {copy("unsupported_request", language)}
+                {interpretation.unsupported_reason &&
+                !["UNSUPPORTED_REQUEST", "NEEDS_CLARIFICATION"].includes(
+                  interpretation.unsupported_reason,
+                )
+                  ? `: ${interpretation.unsupported_reason}`
+                  : ""}
+              </span>
+            </p>
+            {interpretation.clarification ? (
+              <p className="money-note money-note-info">
+                <b aria-hidden="true">i</b>
+                <span>
+                  {copy("clarification", language)}: {interpretation.clarification}
+                </span>
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
 
       {pending ? (
         <div className="revise-draft">

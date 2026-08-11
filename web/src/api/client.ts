@@ -738,6 +738,15 @@ export interface RevisionDraft {
   can_apply?: boolean;
 }
 
+export interface RevisionInterpretationResult {
+  supported: boolean;
+  operation: string | null;
+  clarification: string | null;
+  unsupported_reason: string | null;
+  model?: string | null;
+  draft: RevisionDraft | null;
+}
+
 export interface RevisionRecord {
   created_at: string;
   operation: string;
