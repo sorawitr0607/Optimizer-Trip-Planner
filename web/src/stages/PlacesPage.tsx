@@ -299,7 +299,6 @@ export function PlacesPage() {
     if (!wanted.length) return;
     for (const placeId of wanted) asked.current.add(placeId);
     fetchSummary.mutate(wanted);
-    // `upcoming` is rebuilt every render; its contents are what matter.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [upcoming.join(","), summaries.data, fetchSummary.isPending]);
 
@@ -811,9 +810,19 @@ export function PlacesPage() {
       >
         <div className="shortlist-head">
           <h2 className="money-eyebrow">{copy("your_shortlist", language)}</h2>
-          <button onClick={() => setShortlistOpen(false)} type="button">
-            {copy("close", language)}
-          </button>
+          <div className="shortlist-head-actions">
+            <button
+              className="setup-primary shortlist-build-btn"
+              disabled={!selectedChoices.length}
+              onClick={() => navigate(`/trips/${tripId}/optimize`)}
+              type="button"
+            >
+              {copy("stage_optimize", language)} →
+            </button>
+            <button onClick={() => setShortlistOpen(false)} type="button">
+              {copy("close", language)}
+            </button>
+          </div>
         </div>
         <p className="setup-hint">{copy("shortlist_help", language)}</p>
         {selectedChoices.length ? (

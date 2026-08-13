@@ -70,7 +70,7 @@ const SETTLE_MS = 1500;
 /** How much ground a focused map opens on, in kilometres across. A neighbourhood: near
  *  enough that streets and footprints are legible and the place can be recognised, wide
  *  enough to see what it sits next to. */
-const FOCUS_KM = 1.6;
+const FOCUS_KM = 0.8;
 /**
  * Snapping the window onto a shared grid was tried, so that neighbouring places would
  * ask for one window and the second would be a cache hit. **It made the map worse and

@@ -130,8 +130,15 @@ export function AppShell() {
                   className={({ isActive }) => `stage-link${isActive ? " active" : ""}`}
                   data-state={status.state}
                   key={stageRoute}
-                  onClick={() => setNavOpen(false)}
-                  to={`/trips/${tripId}/${stageRoute}`}
+                  onClick={(event) => {
+                    if (status.state === "locked") {
+                      event.preventDefault();
+                      return;
+                    }
+                    setNavOpen(false);
+                  }}
+                  aria-disabled={status.state === "locked"}
+                  to={status.state === "locked" ? "#" : `/trips/${tripId}/${stageRoute}`}
                 >
                   <span className="stage-link-name">{name}</span>
                   {status.state === "complete" ? <Check aria-hidden="true" size={14} /> : null}

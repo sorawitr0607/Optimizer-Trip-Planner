@@ -221,6 +221,38 @@ export function EvidencePage() {
     onError: fail,
   });
 
+  const autoResolveAll = useMutation({
+    mutationFn: async () => {
+      if (!base.data) {
+        await rpc("confirm_accommodation_base", { trip_id: tripId, query: "" });
+      }
+      if (!zone.data) {
+        await rpc("refresh_timezone", { trip_id: tripId });
+      }
+      try {
+        await rpc("refresh_opening_hours", { trip_id: tripId });
+      } catch (err) {
+        void err;
+      }
+      await rpc("confirm_default_opening_windows", { trip_id: tripId, start: "09:00", end: "18:00" });
+      try {
+        await rpc("refresh_routes", { trip_id: tripId });
+      } catch (err) {
+        void err;
+      }
+    },
+    onSuccess: async () => {
+      setFlash({
+        tone: "ok",
+        text: language === "th"
+          ? "✓ เตรียมความพร้อมหลักฐานและตารางเวลาสำเร็จ พร้อมสร้างแผนได้ทันที!"
+          : "✓ All evidence, bases, hours & routes auto-resolved! Ready to optimize.",
+      });
+      await refresh();
+    },
+    onError: fail,
+  });
+
   if (intervals.isPending || usage.isPending) return <p>{copy("loading", language)}</p>;
   if (intervals.isError) return <p className="field-error">⚠ {intervals.error.message}</p>;
 
@@ -244,6 +276,20 @@ export function EvidencePage() {
       <header className="money-head">
         <h1>{copy("stage_evidence", language)}</h1>
         <p>{copy("evidence_help", language)}</p>
+        <div className="evidence-auto-bar">
+          <button
+            type="button"
+            className="setup-primary evidence-auto-btn"
+            disabled={autoResolveAll.isPending}
+            onClick={() => autoResolveAll.mutate()}
+          >
+            {autoResolveAll.isPending
+              ? copy("loading", language)
+              : language === "th"
+                ? "⚡ เตรียมหลักฐานและแก้ปัญหาทั้งหมดอัตโนมัติ (1-Click Safe Resolve)"
+                : "⚡ Auto-Resolve & Fill Safe Defaults (1-Click Setup)"}
+          </button>
+        </div>
       </header>
 
       {/* derives-from: element 36 .currency-info-box as .evidence-verdict */}

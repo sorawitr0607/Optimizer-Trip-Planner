@@ -184,7 +184,41 @@ export function PlaceDeck({
   }, [upcoming, nextUrl]);
 
   if (!entry || !card) {
-    return <p className="setup-hint">{copy("deck_exhausted", language)}</p>;
+    const rejectedChoices = choices.filter((c) => c.action === "not_for_trip");
+    const shortlistedChoices = choices.filter((c) => c.action === "interested" || c.action === "must_do");
+    return (
+      <div className="place-deck-exhausted">
+        <div className="deck-finished-card">
+          <p className="deck-finished-title">✓ {copy("deck_exhausted", language)}</p>
+          <p className="setup-hint">
+            {language === "th"
+              ? `คุณได้เลือกเก็บไว้ ${shortlistedChoices.length} สถานที่ (ข้ามไป ${rejectedChoices.length} แห่ง)`
+              : `You have shortlisted ${shortlistedChoices.length} places and passed on ${rejectedChoices.length}.`}
+          </p>
+          {rejectedChoices.length > 0 ? (
+            <div className="deck-reconsider">
+              <h4 className="money-eyebrow">
+                {language === "th" ? "เปลี่ยนใจ? นำสถานที่ที่ข้ามกลับเข้าแผน" : "Reconsider skipped places"}
+              </h4>
+              <ul className="deck-reconsider-list">
+                {rejectedChoices.map((c) => (
+                  <li className="deck-reconsider-row" key={c.place_id}>
+                    <span className="deck-reconsider-name">{nameOf(c.place_id)}</span>
+                    <button
+                      className="deck-reconsider-btn"
+                      onClick={() => onDecide(c.place_id, "interested", null)}
+                      type="button"
+                    >
+                      + {language === "th" ? "เก็บไว้" : "Add to list"}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    );
   }
 
   const name = nameOf(entry.place_id);

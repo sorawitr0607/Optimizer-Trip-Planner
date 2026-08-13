@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import {
   ApiError,
@@ -112,14 +112,50 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
     queryKey: ["month_guide", tripId, chosen?.days ?? 0],
     queryFn: () =>
       rpc<MonthGuide>("travel_month_guide", { trip_id: tripId, days: chosen?.days ?? null }),
-    enabled: false,
+    enabled: Boolean(tripId),
     staleTime: Infinity,
   });
 
   const chosenMonth = guide.data?.months.find((item) => item.month === month);
   const defaultStart = firstOfMonth(month, today);
+  const defaultSpan = chosen ? Math.max(chosen.days - 1, 0) : 0;
+  
+  const dateOptions = useMemo(() => {
+    const year = month <= today.getMonth() + 1 ? today.getFullYear() + 1 : today.getFullYear();
+    const mm = String(month).padStart(2, "0");
+    const optionsList: { key: string; label: string; start: string; end: string; desc?: string }[] = [];
+    
+    if (chosenMonth?.best_window) {
+      optionsList.push({
+        key: "best_window",
+        label: copy("best_dates", language),
+        start: chosenMonth.best_window.start,
+        end: chosenMonth.best_window.end,
+        desc: chosenMonth.best_window.reasons.map((r) => copyFormat(r.code, language, r.args)).join(" · "),
+      });
+    }
+    
+    const earlyStart = `${year}-${mm}-01`;
+    optionsList.push({
+      key: "early",
+      label: language === "th" ? "ต้นเดือน" : "Early Month",
+      start: earlyStart,
+      end: addDays(earlyStart, defaultSpan),
+    });
+    
+    const midStart = `${year}-${mm}-15`;
+    optionsList.push({
+      key: "mid",
+      label: language === "th" ? "กลางเดือน" : "Mid Month",
+      start: midStart,
+      end: addDays(midStart, defaultSpan),
+    });
+    
+    return optionsList;
+  }, [chosenMonth, month, today, defaultSpan, language]);
+
   const start = windowChosen?.start ?? defaultStart;
-  const end = windowChosen?.end ?? (chosen ? addDays(start, Math.max(chosen.days - 1, 0)) : start);
+  const end = windowChosen?.end ?? (chosen ? addDays(start, defaultSpan) : start);
 
   const save = useMutation({
     mutationFn: async () => {
@@ -127,19 +163,6 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
         trip_id: tripId,
         ...wholeDraftWithDates(stored.data ?? null, start, end),
       });
-      // Re-link discovery to the setup it now belongs to.
-      //
-      // Saving dates moves the setup hash, and discovery stores the hash it was run
-      // against — so the places already found went stale and the planner refused to
-      // schedule them. Telling the owner to "run discovery again" was a dead end
-      // dressed as advice: this screen exists *because* they have places and no dates.
-      //
-      // It costs nothing to do for them. `discover_places` keys the provider cache on
-      // the destination alone, so with a 7-day-fresh entry this rebuilds the run from
-      // disk with no network call — measured at 0.05s on a 715-place Seoul catalogue —
-      // and `place_id` is a hash of name, coordinates and category, so every existing
-      // choice still points at the same place. Not forced: a forced refresh would go
-      // back to Overpass and undo the whole point.
       await rpc("discover_places", { trip_id: tripId, force_refresh: false });
       return draft;
     },
@@ -183,26 +206,13 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
       </div>
 
       <h3 className="money-eyebrow">{copy("pick_month", language)}</h3>
-      {/* Banded from recorded weather and published holidays, never from recall — a
-          model will happily invent a season for a city it has never checked, which is
-          the failure `WF-046` measured. Every month stays pressable: this reports what
-          the numbers say and the owner may be travelling on dates a school decides. */}
       {guide.data ? (
         <p className="setup-hint">
           {copyFormat("month_guide_help", language, { years: `${guide.data.observed_from.slice(0, 4)}–${guide.data.observed_to.slice(0, 4)}` })}
         </p>
-      ) : (
-        <div className="optimize-actions">
-          <button
-            disabled={guide.isFetching}
-            onClick={() => guide.refetch()}
-            type="button"
-          >
-            {guide.isFetching ? copy("loading", language) : copy("load_month_guide", language)}
-          </button>
-          <span className="setup-hint">{copy("month_guide_free", language)}</span>
-        </div>
-      )}
+      ) : guide.isFetching ? (
+        <p className="setup-hint">{copy("loading", language)}</p>
+      ) : null}
       <div className="stay-months" role="group" aria-label={copy("pick_month", language)}>
         {Array.from({ length: MONTH_COUNT }, (_, index) => index + 1).map((value) => {
           const rated = guide.data?.months.find((item) => item.month === value);
@@ -258,48 +268,33 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
           ) : null}
         </div>
       ) : null}
-      {guide.data ? (
-        <p className="setup-hint">
-          {copyFormat("month_guide_source", language, {
-            from: guide.data.observed_from,
-            to: guide.data.observed_to,
-            year: guide.data.holiday_year,
-            source: guide.data.holiday_source ?? "—",
-          })}
-          {guide.data.holiday_source ? null : (
-            <>
-              {" "}
-              {copyFormat("month_guide_no_holidays", language, { country: guide.data.country })}
-            </>
-          )}
-        </p>
-      ) : null}
-      <p className="setup-hint">{copy("pick_month_help", language)}</p>
 
-      {/* The month says roughly when; this says which days. Same holiday data, no
-          further request — the quietest run that fits, weekends counted at half a
-          holiday because both fill the same trains. */}
-      {chosenMonth?.best_window ? (
-        <div className="stay-window">
-          <h4>{copy("best_dates", language)}</h4>
-          <p className="stay-window-dates">
-            <strong>{chosenMonth.best_window.start}</strong> →{" "}
-            <strong>{chosenMonth.best_window.end}</strong>
-          </p>
-          <ul>
-            {chosenMonth.best_window.reasons.map((item) => (
-              <li key={item.code}>{copyFormat(item.code, language, item.args)}</li>
-            ))}
-          </ul>
-          <button
-            className="stay-window-use"
-            onClick={() => setWindowChosen(chosenMonth.best_window ?? null)}
-            type="button"
-          >
-            {copy("use_best_dates", language)}
-          </button>
+      <div className="stay-options-group">
+        <h4 className="money-eyebrow">{copy("recommend_dates", language) || "Recommended Date Ranges"}</h4>
+        <div className="stay-window-options">
+          {dateOptions.map((opt) => {
+            const isSelected = start === opt.start && end === opt.end;
+            return (
+              <button
+                key={opt.key}
+                type="button"
+                className={`stay-window-card${isSelected ? " active" : ""}`}
+                onClick={() => {
+                  setWindowChosen({ start: opt.start, end: opt.end });
+                  setSaved(false);
+                }}
+              >
+                <div className="stay-window-card-head">
+                  <strong>{opt.label}</strong>
+                  <span>{opt.start} → {opt.end}</span>
+                </div>
+                {opt.desc ? <small className="setup-hint">{opt.desc}</small> : null}
+              </button>
+            );
+          })}
         </div>
-      ) : null}
+      </div>
+
       <p className="stay-dates">
         <strong>{start}</strong> → <strong>{end}</strong>
       </p>

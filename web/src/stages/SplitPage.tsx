@@ -490,23 +490,26 @@ export function SplitPage() {
         </label>
         <fieldset className="money-participants">
           <legend>{copy("split_participants", language)}</legend>
-          {roster.map((id) => (
-            <label key={id}>
-              <input
-                checked={draft.participants.includes(id)}
-                onChange={(event) =>
-                  setDraft({
-                    ...draft,
-                    participants: event.target.checked
-                      ? [...draft.participants, id]
-                      : draft.participants.filter((person) => person !== id),
-                  })
-                }
-                type="checkbox"
-              />
-              {names[id]}
-            </label>
-          ))}
+          {roster.map((id) => {
+            const currentList = draft.participants.length ? draft.participants : roster;
+            return (
+              <label key={id}>
+                <input
+                  checked={currentList.includes(id)}
+                  onChange={(event) =>
+                    setDraft({
+                      ...draft,
+                      participants: event.target.checked
+                        ? [...currentList.filter((p) => p !== id), id]
+                        : currentList.filter((person) => person !== id),
+                    })
+                  }
+                  type="checkbox"
+                />
+                {names[id]}
+              </label>
+            );
+          })}
         </fieldset>
 
         {/* The mode, chosen rather than guessed. `single_payer` splits between
@@ -515,58 +518,88 @@ export function SplitPage() {
             form knowing something it declined to say. */}
         <fieldset className="money-modes">
           <legend>{copy("split_shares", language)}</legend>
-          {MODES.map((mode) => (
-            <label key={mode}>
-              <input
-                checked={draft.mode === mode}
-                name="split-mode"
-                onChange={() =>
-                  setDraft((current) => ({
-                    ...current,
-                    mode,
-                    participants:
-                      mode === "single_payer" && current.participants.length > 1
-                        ? current.participants.slice(0, 1)
-                        : current.participants,
-                  }))
-                }
-                type="radio"
-              />
-              {copy(`split_mode_${mode}`, language)}
-            </label>
-          ))}
+          <div className="money-modes-grid">
+            {MODES.map((mode) => (
+              <label className={`money-mode-card${draft.mode === mode ? " active" : ""}`} key={mode}>
+                <input
+                  checked={draft.mode === mode}
+                  name="split-mode"
+                  onChange={() =>
+                    setDraft((current) => {
+                      const curParts = current.participants.length ? current.participants : roster;
+                      return {
+                        ...current,
+                        mode,
+                        participants:
+                          mode === "single_payer" && curParts.length > 1
+                            ? curParts.slice(0, 1)
+                            : curParts,
+                      };
+                    })
+                  }
+                  type="radio"
+                />
+                <span className="money-mode-title">{copy(`split_mode_${mode}`, language)}</span>
+              </label>
+            ))}
+          </div>
         </fieldset>
 
-        {/* The donor's manual view carried a validation panel; this is it. The
-            running remainder is shown while typing rather than only refused on
-            save, because "it does not add up" is far more useful with the number
-            still in front of you. It is allowed to be a satang out per person --
-            33.33 three times is 99.99 and the apportionment absorbs it. */}
         {draft.mode === "manual" ? (
           <fieldset className="money-allocation">
             <legend>{copy("split_allocation", language)}</legend>
             <p className="setup-hint">{copy("split_allocation_help", language)}</p>
-            {draft.participants.map((id) => (
-              <label key={id}>
-                {names[id]}
-                <input
-                  min="0"
-                  onChange={(event) =>
-                    setDraft((current) => ({
-                      ...current,
-                      allocation: { ...current.allocation, [id]: event.target.value },
-                    }))
-                  }
-                  step="0.01"
-                  type="number"
-                  value={draft.allocation[id] ?? ""}
-                />
-              </label>
-            ))}
-            {draft.participants.length ? (
-              <p className={Math.abs(allocationLeft) > 0.01 * draft.participants.length ? "field-error" : "setup-hint"}>
-                {copyFormat("split_allocation_left", language, { amount: money(allocationLeft) })}
-              </p>
+            <div className="money-allocation-list">
+              {(draft.participants.length ? draft.participants : roster).map((id) => {
+                const val = Number(draft.allocation[id] ?? 0);
+                const total = Number(draft.original_amount || 0);
+                const pct = total > 0 ? Math.round((val / total) * 100) : 0;
+                return (
+                  <div className="money-allocation-row" key={id}>
+                    <div className="money-allocation-user">
+                      <span className="money-allocation-avatar">{names[id]?.[0]?.toUpperCase() ?? "T"}</span>
+                      <span className="money-allocation-name">{names[id]}</span>
+                    </div>
+                    <div className="money-allocation-input-wrap">
+                      <span className="money-allocation-currency">{draft.original_currency}</span>
+                      <input
+                        min="0"
+                        onChange={(event) =>
+                          setDraft((current) => {
+                            const curParts = current.participants.length ? current.participants : roster;
+                            return {
+                              ...current,
+                              participants: curParts,
+                              allocation: { ...current.allocation, [id]: event.target.value },
+                            };
+                          })
+                        }
+                        placeholder="0.00"
+                        step="0.01"
+                        type="number"
+                        value={draft.allocation[id] ?? ""}
+                      />
+                      <span className="money-allocation-pct">{pct}%</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {(draft.participants.length ? draft.participants : roster).length ? (
+              <div className="money-allocation-summary">
+                <div
+                  className={`money-allocation-balance ${
+                    Math.abs(allocationLeft) > 0.01 * (draft.participants.length ? draft.participants : roster).length
+                      ? "balance-off"
+                      : "balance-exact"
+                  }`}
+                >
+                  <span className="balance-indicator">
+                    {Math.abs(allocationLeft) <= 0.01 * (draft.participants.length ? draft.participants : roster).length ? "✓" : "⚠"}
+                  </span>
+                  <span>{copyFormat("split_allocation_left", language, { amount: money(allocationLeft) })}</span>
+                </div>
+              </div>
             ) : null}
           </fieldset>
         ) : null}

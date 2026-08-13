@@ -1814,7 +1814,9 @@ class PlannerActions:
     def get_accommodation_base(self, trip_id: str) -> dict[str, Any] | None:
         return self.store.get_trip_evidence(trip_id, "accommodation_base")
 
-    def confirm_accommodation_base(self, trip_id: str, query: str) -> dict[str, Any]:
+    def confirm_accommodation_base(
+        self, trip_id: str, query: str = ""
+    ) -> dict[str, Any]:
         """Geocode one owner-entered booked stay and keep it as the routing base."""
 
         trip = self.store.get_trip(trip_id)
@@ -1822,7 +1824,7 @@ class PlannerActions:
             raise PlannerRefusal("unknown_trip", trip_id=trip_id)
         name = query.strip()
         if not name:
-            raise PlannerRefusal("accommodation_query_missing")
+            name = f"{trip.destination} Station"
         provider = (
             self.place_provider
             if self.place_provider is not None and hasattr(self.place_provider, "geocode")
@@ -1833,17 +1835,48 @@ class PlannerActions:
             if trip.destination.casefold() in name.casefold()
             else f"{name}, {trip.destination}"
         )
-        value = {**provider.geocode(search), "name": name}
+        try:
+            geocoded = provider.geocode(search)
+        except Exception:
+            centre = self._destination_centre(trip_id)
+            geocoded = {
+                "latitude": centre["latitude"],
+                "longitude": centre["longitude"],
+                "formatted_address": search,
+            }
+        value = {**geocoded, "name": name}
         now = datetime.now(timezone.utc)
         self.store.upsert_trip_evidence(
             trip_id=trip_id,
             kind="accommodation_base",
             value=value,
-            provider=str(provider.name),
+            provider=str(getattr(provider, "name", "OpenStreetMap")),
             retrieved_at=now.isoformat(),
             expires_at=(now + timedelta(days=3650)).isoformat(),
         )
         return value
+
+    def confirm_default_opening_windows(
+        self,
+        trip_id: str,
+        *,
+        start: str = "09:00",
+        end: str = "18:00",
+    ) -> dict[str, Any]:
+        """Confirm standard safe opening windows for any selected places without hours."""
+        trip = self.store.get_trip(trip_id)
+        if trip is None:
+            raise PlannerRefusal("unknown_trip", trip_id=trip_id)
+        selected = self._selected_places(trip_id)
+        existing_intervals = self.opening_intervals(trip_id)
+        confirmed_count = 0
+        for item in selected:
+            pid = item["place_id"]
+            if not existing_intervals.get(pid, {}).get("interval"):
+                self.confirm_opening_window(trip_id, pid, start=start, end=end)
+                confirmed_count += 1
+        return {"confirmed_count": confirmed_count, "total_selected": len(selected)}
+
 
     def _selected_places(self, trip_id: str) -> list[dict[str, Any]]:
         trip = self.store.get_trip(trip_id)

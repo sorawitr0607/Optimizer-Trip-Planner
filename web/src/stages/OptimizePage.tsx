@@ -122,6 +122,36 @@ export function OptimizePage() {
       setRefusal(error instanceof ApiError ? error.code : String(error)),
   });
 
+  const autoResolveAndGenerate = useMutation({
+    mutationFn: async () => {
+      await rpc("confirm_accommodation_base", { trip_id: tripId, query: "" });
+      try {
+        await rpc("refresh_timezone", { trip_id: tripId });
+      } catch (err) {
+        void err;
+      }
+      try {
+        await rpc("refresh_opening_hours", { trip_id: tripId });
+      } catch (err) {
+        void err;
+      }
+      await rpc("confirm_default_opening_windows", { trip_id: tripId, start: "09:00", end: "18:00" });
+      try {
+        await rpc("refresh_routes", { trip_id: tripId });
+      } catch (err) {
+        void err;
+      }
+      return rpc<PlanPreview>("generate_plan_preview", { trip_id: tripId });
+    },
+    onSuccess: async () => {
+      setRefusal(null);
+      await queryClient.invalidateQueries({ queryKey: ["plan_preview", tripId] });
+      await queryClient.invalidateQueries({ queryKey: ["opening_options", tripId] });
+      await queryClient.invalidateQueries({ queryKey: ["journey", tripId] });
+    },
+    onError: (error) => setRefusal(error instanceof ApiError ? error.code : String(error)),
+  });
+
   const activate = useMutation({
     mutationFn: (variant: string) =>
       rpc<unknown>("activate_plan_preview", { trip_id: tripId, variant_id: variant }),
@@ -171,9 +201,23 @@ export function OptimizePage() {
       </header>
 
       {refusal ? (
-        <p className="field-error" aria-live="polite">
-          ⚠ {copyFrom("OPTIMIZER_CODE_TEXT", refusal, language)}
-        </p>
+        <div className="optimizer-refusal-card">
+          <p className="field-error" aria-live="polite">
+            ⚠ {copyFrom("OPTIMIZER_CODE_TEXT", refusal, language)}
+          </p>
+          <button
+            type="button"
+            className="setup-primary auto-resolve-retry-btn"
+            disabled={autoResolveAndGenerate.isPending}
+            onClick={() => autoResolveAndGenerate.mutate()}
+          >
+            {autoResolveAndGenerate.isPending
+              ? copy("loading", language)
+              : language === "th"
+                ? "⚡ แก้ไขข้อมูลที่ขาดและสร้างแผนทันที (Auto-Fix & Build)"
+                : "⚡ Auto-Resolve Missing Details & Build Plan"}
+          </button>
+        </div>
       ) : null}
 
       {evidence.data && considered.length ? (

@@ -163,6 +163,17 @@
   --color-danger-border: rgb(238 107 107 / 20%);
   /* A dark accent is light, so what sits on it is ink. See the note in `:root`. */
   --color-on-accent: #1a1a1a;
+
+  --landing-ink: #10161a;
+  --landing-ink-soft: #1a2228;
+  --landing-haze: #93a5b3;
+  --landing-sand: #1f2a32;
+  --landing-amber: #e89547;
+  --landing-amber-soft: #f0a35e;
+  --landing-cream: #141b20;
+  --landing-on-ink: #f0f4f8;
+  --landing-scrim: rgb(16 22 26 / 85%);
+  --landing-glow: rgb(232 149 71 / 35%);
 }
 
 /* D6: one country-to-accent mapping. Unknown countries keep the house red (D3).

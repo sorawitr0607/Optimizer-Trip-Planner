@@ -111,7 +111,8 @@ class DispatchContractTest(unittest.TestCase):
         # method cannot join the allowlist unnoticed -- save_plan_version writes an
         # activated version with no optimizer validation and record_paid_call forges
         # ledger rows, so what is reachable over the socket has to be deliberate.
-        self.assertEqual(87, len(ACTIONS))  # ... +cardholder pair, money snapshot, category pair, WF-049
+        self.assertEqual(88, len(ACTIONS))  # ... +cardholder pair, money snapshot, category pair, confirm_default_opening_windows
+        self.assertIn("confirm_default_opening_windows", ACTIONS)
         self.assertIn("refresh_assumed_windows", ACTIONS)
         self.assertIn("active_plan_drift", ACTIONS)
         self.assertIn("scan_venue_notices", ACTIONS)

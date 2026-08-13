@@ -2,6 +2,7 @@
 name = "tourist-planner"
 version = "0.1.0"
 description = "Local, evidence-aware personal travel planner"
+license = { text = "MIT" }
 requires-python = ">=3.12"
 # One. `xlsxwriter` exists only because slice 5 renders a workbook. Streamlit
 # went with the POC at S6; the local API is a stdlib ThreadingHTTPServer and the

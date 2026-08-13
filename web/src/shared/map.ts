@@ -56,5 +56,5 @@ export function mapPlaces(
  */
 export function mapsLink(latitude: number, longitude: number, name: string): string {
   const at = `${latitude.toFixed(6)},${longitude.toFixed(6)}`;
-  return `geo:${at}?q=${encodeURIComponent(`${at}(${name})`)}`;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name ? `${name} ` : "")}${at}`;
 }

@@ -284,8 +284,8 @@ describe("ItineraryPage", () => {
     expect(html).toContain(`/api/export/${TRIP}/workbook.xlsx`);
     expect(html).toContain(`/api/export/${TRIP}/checklist.ics`);
     const mapHtml = render(<ItineraryPage />, "en", undefined, "?view=map");
-    expect(mapHtml).toContain('href="geo:25.042000,121.508000?q=');
-    expect((mapHtml.match(/href="geo:/g) ?? []).length).toBe(2);
+    expect(mapHtml).toContain('href="https://www.google.com/maps/search/?api=1&amp;query=');
+    expect((mapHtml.match(/href="https:\/\/www\.google\.com\/maps\/search\/\?api=1&amp;query=/g) ?? []).length).toBe(2);
     expectNoMissingCopy(html);
   });
 
