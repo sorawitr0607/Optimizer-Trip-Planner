@@ -47,6 +47,7 @@ function Landing() {
 const PAGES: Record<StageRoute, React.LazyExoticComponent<() => React.ReactNode>> = {
   setup: lazy(() => import("./stages/SetupPage").then((m) => ({ default: m.SetupPage }))),
   places: lazy(() => import("./stages/PlacesPage").then((m) => ({ default: m.PlacesPage }))),
+  stay: lazy(() => import("./stages/StayPage").then((m) => ({ default: m.StayPage }))),
   evidence: lazy(() => import("./stages/EvidencePage").then((m) => ({ default: m.EvidencePage }))),
   optimize: lazy(() => import("./stages/OptimizePage").then((m) => ({ default: m.OptimizePage }))),
   itinerary: lazy(() => import("./stages/ItineraryPage").then((m) => ({ default: m.ItineraryPage }))),

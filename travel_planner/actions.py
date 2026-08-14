@@ -295,7 +295,7 @@ class PlannerActions:
         end_date: str | None = None,
         arrival_time: str | None = None,
         departure_time: str | None = None,
-        accommodation_status: str = "unknown",
+        accommodation_status: str = "not_booked",
         confirmed: bool = False,
     ) -> SetupDraft:
         trip = self.store.get_trip(trip_id)
@@ -347,7 +347,7 @@ class PlannerActions:
         # certain. Asserted against the core sets so a new member cannot be
         # added there and silently miss the form.
         modes = ("explore_first", "ready_to_schedule")
-        statuses = ("unknown", "not_booked", "booked")
+        statuses = ("not_booked", "booked")
         assert set(modes) == set(PLANNING_MODES)
         assert set(statuses) == set(setup_module.ACCOMMODATION_STATUSES)
         return {
@@ -1917,7 +1917,23 @@ class PlannerActions:
         )
 
     def get_accommodation_base(self, trip_id: str) -> dict[str, Any] | None:
-        return self.store.get_trip_evidence(trip_id, "accommodation_base")
+        """The stored base, and whether the planner is actually using it.
+
+        `used_by_planner` is not decoration. `_optimizer_input` drops a base further than
+        `ACCOMMODATION_BASE_TOO_FAR_KM` from every chosen place, so without this the
+        "Where to stay" screen would print an address the plan had already discarded and
+        call it what the planner is using — the same class of untrue statement the guard
+        exists to stop. The verdict is computed here, from the same helper, rather than
+        re-derived on the screen: a second copy of that distance rule in TypeScript is
+        exactly how the two would come to disagree.
+        """
+
+        base = self.store.get_trip_evidence(trip_id, "accommodation_base")
+        if not base:
+            return None
+        chosen = self._selected_places(trip_id)
+        implausible = self._base_is_implausible(base, chosen) if chosen else False
+        return {**base, "implausible": implausible, "used_by_planner": not implausible}
 
     #: How far a confirmed base may sit from the places it serves before it is treated
     #: as a geocoding accident rather than a stay. Generous on purpose: someone really

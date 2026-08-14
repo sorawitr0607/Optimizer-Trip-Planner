@@ -1,0 +1,131 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { useParams } from "react-router";
+
+import { ApiError, rpc, type AccommodationBase } from "../api/client";
+import { copy } from "../i18n/copy";
+import { useLanguage } from "../i18n/LanguageProvider";
+import { StayAreas } from "./StayAreas";
+
+/**
+ * Where to stay. One screen, at the owner's asking, 2026-08-14.
+ *
+ * The question was split across two screens that are about other things. The area
+ * ranking sat under the deck on `/places`, where it competed with several hundred cards
+ * for attention and was reported as a section with no visible output; the accommodation
+ * base sat as one card among five on `/evidence`, which is where evidence is *checked*
+ * rather than where a decision is made. So the two halves of one question — which
+ * neighbourhood, and then which address — were never on screen together, and neither
+ * said what the planner was actually doing in the meantime.
+ *
+ * That last part is the reason this page exists rather than being a heading. Without a
+ * confirmed base the optimizer plans from the **centre of the places you chose**, which
+ * is a reasonable default and was completely invisible: an owner who had booked nothing
+ * had no way to know a base was being assumed on their behalf, and an owner whose base
+ * was wrong had no way to see that either — which is exactly how a hotel 286 km from the
+ * trip survived to plan an itinerary around itself.
+ */
+
+export function StayPage() {
+  const { tripId = "" } = useParams();
+  const { language } = useLanguage();
+  const queryClient = useQueryClient();
+  const [query, setQuery] = useState<string | null>(null);
+  const [flash, setFlash] = useState<string | null>(null);
+
+  const base = useQuery({
+    queryKey: ["accommodation_base", tripId],
+    queryFn: () => rpc<AccommodationBase | null>("get_accommodation_base", { trip_id: tripId }),
+  });
+
+  const saveBase = useMutation({
+    // Never the empty query. `confirm_accommodation_base("")` geocodes
+    // `"{destination} Station"`, which for "New York, United States" resolved 286 km
+    // upstate and was then stored as a *booked* base. A base is something the owner
+    // types, or it is not a base.
+    mutationFn: () =>
+      rpc<AccommodationBase>("confirm_accommodation_base", {
+        trip_id: tripId,
+        query: (query ?? base.data?.name ?? "").trim(),
+      }),
+    onSuccess: async () => {
+      setFlash("accommodation_base_saved");
+      await Promise.all(
+        ["accommodation_base", "journey", "plan_preview"].map((key) =>
+          queryClient.invalidateQueries({ queryKey: [key, tripId] }),
+        ),
+      );
+    },
+    onError: (error) => setFlash(error instanceof ApiError ? error.code : String(error)),
+  });
+
+  const typed = (query ?? base.data?.name ?? "").trim();
+
+  return (
+    <section className="stage-card">
+      <header className="money-head">
+        <h1>{copy("stay_page_title", language)}</h1>
+        <p>{copy("stay_page_help", language)}</p>
+      </header>
+
+      {/* What the planner is using right now, stated before anything is offered. An
+          assumption nobody is told about is indistinguishable from a fact.
+          derives-from: element 36 .currency-info-box as .evidence-card — the same
+          one-card-per-decision block `/evidence` uses, which is where this came from. */}
+      <div className="evidence-card">
+        <strong>{copy("stay_current_base", language)}</strong>
+        {base.data && base.data.used_by_planner !== false ? (
+          <span className="evidence-value">
+            {base.data.name}
+            {base.data.address ? ` · ${base.data.address}` : ""}
+          </span>
+        ) : (
+          <span className="setup-hint">{copy("stay_using_centroid", language)}</span>
+        )}
+        {/* A stored base the planner has discarded. Printing it as "what the planner is
+            using" would be the same untrue statement the guard exists to stop, so the
+            page says both things: the address on file, and that the plan is not built
+            from it. The verdict comes from the server, computed by the same helper the
+            optimizer uses — a second copy of that distance rule here is how the two
+            would come to disagree. */}
+        {base.data?.used_by_planner === false ? (
+          <p className="field-error">
+            ⚠ {copy("stay_base_ignored", language)} {base.data.name}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="evidence-card">
+        <strong>{copy("accommodation_base_title", language)}</strong>
+        <span className="setup-hint">{copy("accommodation_base_help", language)}</span>
+        <label>
+          {copy("accommodation_query", language)}
+          <input
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={copy("accommodation_query_example", language)}
+            value={query ?? base.data?.name ?? ""}
+          />
+        </label>
+        {/* Disabled on an empty field rather than defaulting it: the empty query is the
+            bug, so there is no harmless version of pressing this with nothing typed. */}
+        <button
+          disabled={saveBase.isPending || typed.length === 0}
+          onClick={() => saveBase.mutate()}
+          type="button"
+        >
+          {copy("save_accommodation_base", language)}
+        </button>
+        {typed.length === 0 ? (
+          <span className="setup-hint">{copy("stay_type_a_place", language)}</span>
+        ) : null}
+        {flash ? (
+          <p aria-live="polite" className="setup-hint">
+            {copy(flash, language)}
+          </p>
+        ) : null}
+      </div>
+
+      <StayAreas language={language} tripId={tripId} />
+    </section>
+  );
+}

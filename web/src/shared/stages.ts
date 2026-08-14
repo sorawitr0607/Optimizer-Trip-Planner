@@ -1,7 +1,7 @@
 import type { Journey, StageKey } from "../api/client";
 
 /**
- * The nine stage routes and the five gate keys they resolve to.
+ * The ten stage routes and the five gate keys they resolve to.
  *
  * This table used to exist twice: once as the literal `stage=` on each
  * `<StageGate>` in `routes.tsx`, and nowhere else — so the sidebar could not say
@@ -18,6 +18,10 @@ import type { Journey, StageKey } from "../api/client";
 export const STAGE_ROUTES = [
   "setup",
   "places",
+  // Its own route at the owner's asking, 2026-08-14. It was a section under the deck on
+  // `/places` and a card on `/evidence`, so the two halves of one question were never on
+  // screen together. Ten routes now, not the nine artifact 028 decided.
+  "stay",
   "evidence",
   "optimize",
   "itinerary",
@@ -38,6 +42,10 @@ export type StageRoute = (typeof STAGE_ROUTES)[number];
 export const STAGE_GATE: Record<StageRoute, StageKey> = {
   setup: "setup",
   places: "places",
+  // Needs somewhere to be near, and that is the chosen places — the same gate the deck's
+  // own output has. It deliberately does not wait on evidence: choosing a neighbourhood
+  // is what you do *before* buying opening hours for the places in it.
+  stay: "places",
   evidence: "evidence",
   optimize: "optimize",
   itinerary: "itinerary",

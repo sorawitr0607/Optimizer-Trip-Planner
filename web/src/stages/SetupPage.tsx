@@ -75,7 +75,7 @@ const EMPTY: Draft = {
   end_date: null,
   arrival_time: null,
   departure_time: null,
-  accommodation_status: "unknown",
+  accommodation_status: "not_booked",
   owner_age: null,
   main_style: [],
   also_enjoy: [],
@@ -98,7 +98,10 @@ function toDraft(record: SetupDraft | null): Draft {
     end_date: basics.end_date ?? null,
     arrival_time: basics.arrival_time ?? null,
     departure_time: basics.departure_time ?? null,
-    accommodation_status: basics.accommodation_status ?? "unknown",
+    accommodation_status:
+      basics.accommodation_status === "unknown" || !basics.accommodation_status
+        ? "not_booked"
+        : basics.accommodation_status,
     owner_age: owner.age ?? null,
     main_style: owner.main_style ?? [],
     also_enjoy: owner.also_enjoy ?? [],

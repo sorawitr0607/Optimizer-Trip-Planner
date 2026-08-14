@@ -3134,26 +3134,29 @@
 /* The card, held back until its first photograph has painted. `visibility` rather than
    `display`, so the card keeps its size and nothing below it jumps when the bytes land —
    and the image still loads, which is what we are waiting for. */
+/* `display: none`, not `visibility: hidden`. Hidden, the card still occupied its full
+   height — measured at **1802px** on a real deck — so the placeholder overlaying it was
+   1800px tall and its centred text landed some 900px down, below the fold. That is the
+   "loading card is huge, and the text is somewhere odd" report. Taken out of layout, the
+   deck is as tall as the small placeholder and the loading state is genuinely small.
+   The card returning at full height is a jump, and a deliberate one: it is the answer to
+   "make the loading card smaller", and it happens once per card, on arrival. */
 .place-deck-drag.pending {
-  visibility: hidden;
+  display: none;
 }
 
 .place-deck {
   position: relative;
 }
 
+/* In the flow, not overlaid. It stood over the card because the card used to be merely
+   invisible rather than absent; now that the card is out of layout there is nothing to
+   stand over, and a flow block is what makes the deck shrink to the placeholder's size. */
 .place-deck-pending {
-  align-content: center;
   display: grid;
   gap: 10px;
-  /* Over the card it stands in for, so the deck keeps one card's height — but centred and
-     narrow rather than filling it, because a full-size grey rectangle reads as a card that
-     failed rather than one still arriving. */
-  inset: 0;
   justify-items: center;
-  padding: 14px;
-  position: absolute;
-  z-index: 1;
+  padding: 24px 14px;
 }
 
 .place-deck-pending .skeleton-photo {

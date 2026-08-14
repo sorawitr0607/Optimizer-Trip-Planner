@@ -21,7 +21,7 @@ import { stageStatus, type StageRoute } from "./stages";
  * stages when only six are. The order within each section is unchanged.
  */
 const sections = [
-  { key: "section_build", stages: ["setup", "places", "optimize"], completable: true },
+  { key: "section_build", stages: ["setup", "places", "stay", "optimize"], completable: true },
   { key: "section_use", stages: ["itinerary", "costs", "split"], completable: true },
   // `completable: false`, so no tick. These three are not steps you finish — evidence is
   // checked when something looks wrong, the readiness board is kept rather than

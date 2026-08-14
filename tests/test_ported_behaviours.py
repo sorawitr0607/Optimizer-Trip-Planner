@@ -304,9 +304,11 @@ class SetupConfirmationTest(unittest.TestCase):
 
         # A frozenset would give the form an arbitrary order on every run.
         self.assertEqual(["explore_first", "ready_to_schedule"], vocabulary["planning_modes"])
-        self.assertEqual(
-            ["unknown", "not_booked", "booked"], vocabulary["accommodation_statuses"]
-        )
+        # Two, not three, at the owner's asking. `unknown` planned identically to
+        # `not_booked` — `_optimizer_input` collapses everything that is not `booked` into
+        # `unbooked` — so it asked the owner to make a distinction the planner then threw
+        # away. A draft still holding it is folded, not refused.
+        self.assertEqual(["not_booked", "booked"], vocabulary["accommodation_statuses"])
         taiwan = next(c for c in vocabulary["countries"] if c["code"] == "Taiwan")
         self.assertEqual("ไต้หวัน", taiwan["label"]["th"])
         self.assertIn("Taipei", taiwan["cities"])

@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import { PlaceDeck } from "./PlaceDeck";
 import { Thinking } from "../shared/Thinking";
 import { PlacesTour } from "./PlacesTour";
-import { StayAreas } from "./StayAreas";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 
 import {
@@ -907,7 +906,9 @@ export function PlacesPage() {
           {/* `WF-040`, placed here by the owner: the ranking depends on the places
               chosen above, so it belongs under the deck rather than beside the
               timetable on `/optimize`. Below the whole row, not inside it. */}
-          {mode === "deck" ? <StayAreas language={language} tripId={tripId} /> : null}
+          {/* "Where to stay" moved to its own route, 2026-08-14. Under the deck it
+              competed with several hundred cards and was reported as a section with no
+              visible output. */}
         </>
       ) : null}
 

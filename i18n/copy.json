@@ -1399,7 +1399,15 @@
       "use_these_dates_hint": "Saves these dates, refreshes the places found for them without searching again, then builds three plan options. About a minute, and free.",
       "before_hours_choice": "How should the missing opening hours be filled?",
       "drop_to_must_do": "Must do",
-      "drop_to_interested": "Interested"
+      "drop_to_interested": "Interested",
+      "stage_stay": "Where to stay",
+      "stay_page_title": "Where to stay",
+      "stay_page_help": "Pick the neighbourhood first, then the address. Until you name a place, the planner works from the centre of the places you chose.",
+      "stay_current_base": "What the planner is using now",
+      "stay_using_centroid": "The centre of the places you chose. Nothing is booked, and nothing here books anything.",
+      "stay_type_a_place": "Type the name of your hotel or the area you booked.",
+      "accommodation_query_example": "e.g. Hotel Gracery Shinjuku",
+      "stay_base_ignored": "This saved address is more than 150 km from every place you chose, so the planner is not building from it. Replace it below if it is wrong. On file:"
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -2336,7 +2344,15 @@
       "use_these_dates_hint": "บันทึกวันที่นี้ รีเฟรชสถานที่ที่พบสำหรับวันดังกล่าวโดยไม่ค้นหาใหม่ แล้วสร้างตัวเลือกแผนสามแบบ ใช้เวลาราวหนึ่งนาที และไม่มีค่าใช้จ่าย",
       "before_hours_choice": "จะเติมเวลาเปิดทำการที่ขาดไปอย่างไร",
       "drop_to_must_do": "ต้องไป",
-      "drop_to_interested": "สนใจ"
+      "drop_to_interested": "สนใจ",
+      "stage_stay": "ที่พักย่านไหน",
+      "stay_page_title": "ที่พักย่านไหน",
+      "stay_page_help": "เลือกย่านก่อน แล้วค่อยเลือกที่อยู่ ถ้ายังไม่ระบุที่พัก ตัวจัดแผนจะใช้จุดกึ่งกลางของสถานที่ที่คุณเลือก",
+      "stay_current_base": "ตอนนี้ตัวจัดแผนใช้อะไรอยู่",
+      "stay_using_centroid": "จุดกึ่งกลางของสถานที่ที่คุณเลือก ยังไม่มีการจอง และหน้านี้ไม่ได้จองอะไรให้",
+      "stay_type_a_place": "พิมพ์ชื่อโรงแรมหรือย่านที่คุณจองไว้",
+      "accommodation_query_example": "เช่น Hotel Gracery Shinjuku",
+      "stay_base_ignored": "ที่อยู่ที่บันทึกไว้อยู่ห่างจากทุกสถานที่ที่คุณเลือกเกิน 150 กม. ตัวจัดแผนจึงไม่ได้ใช้ที่อยู่นี้ หากไม่ถูกต้องให้แก้ด้านล่าง ที่บันทึกไว้:"
     }
   }
 }

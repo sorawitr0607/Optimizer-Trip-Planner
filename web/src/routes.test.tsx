@@ -11,7 +11,8 @@ import { StageGate } from "./shared/StageGate";
  * with the POC — it changes subject, which is the reclassification artifact 029
  * names. What it asserted was "the app wires up", and that is now this table.
  *
- * Artifact 028 decided **9 stage routes resolving to 5 gate keys**. Both halves
+ * Artifact 028 decided 9 stage routes resolving to 5 gate keys; it is **10 routes to
+ * 5 keys** since `stay` landed. Both halves
  * are load-bearing and neither is visible from a screen: a dropped route is a
  * 404 nobody notices until they navigate there, and a gate key drifting to a
  * sixth value silently changes which stage blocks which.
@@ -21,6 +22,12 @@ import { StageGate } from "./shared/StageGate";
 const STAGE_ROUTES = [
   "setup",
   "places",
+  // Ten, not the nine artifact 028 decided. "Where to stay" became its own route at the
+  // owner's asking on 2026-08-14: the area ranking was a section under the deck on
+  // `/places` and the accommodation base was one card among five on `/evidence`, so the
+  // two halves of one decision were never on screen together and neither said that the
+  // planner was meanwhile working from the centre of the chosen places.
+  "stay",
   "evidence",
   "optimize",
   "itinerary",
@@ -45,7 +52,7 @@ describe("entry point", () => {
     for (const route of routes) expect(isValidElement(route.element)).toBe(true);
   });
 
-  it("resolves all nine stage routes in the decided order under one shell", () => {
+  it("resolves every stage route in the decided order under one shell", () => {
     expect(children.map((child) => child.path)).toEqual(STAGE_ROUTES);
     for (const child of children) expect(isValidElement(child.element)).toBe(true);
   });

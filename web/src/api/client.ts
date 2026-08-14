@@ -799,6 +799,11 @@ export interface AccommodationBase {
   address?: string | null;
   latitude: number;
   longitude: number;
+  /** True when the base sits further than `ACCOMMODATION_BASE_TOO_FAR_KM` from every
+   *  chosen place, which is a geocoding accident rather than a stay. */
+  implausible?: boolean;
+  /** False when `_optimizer_input` discarded it, so no screen calls it the plan's base. */
+  used_by_planner?: boolean;
 }
 
 export interface TimezoneEvidence {

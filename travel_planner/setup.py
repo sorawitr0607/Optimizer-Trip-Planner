@@ -39,7 +39,22 @@ COMFORT_TAGS = (
 ALL_PREFERENCE_TAGS = frozenset(
     MAIN_STYLE_TAGS + ALSO_ENJOY_TAGS + AVOID_TAGS + COMFORT_TAGS
 )
-ACCOMMODATION_STATUSES = frozenset({"unknown", "not_booked", "booked"})
+# Two answers, at the owner's asking: a stay is booked or it is not. `unknown` was a third
+# that the optimizer could not act on — `_optimizer_input` collapses everything that is not
+# `booked` into `unbooked`, so it planned identically to `not_booked` while asking the owner
+# to distinguish it. A question whose answers do not differ is a question worth deleting.
+ACCOMMODATION_STATUSES = frozenset({"not_booked", "booked"})
+
+# What a draft written before that change says. Folded rather than rejected: a setup is
+# re-validated on every save, so refusing the old value would strand any trip holding it
+# behind a form that cannot be submitted.
+LEGACY_ACCOMMODATION_STATUSES = {"unknown": "not_booked"}
+
+
+def normalise_accommodation_status(status: str) -> str:
+    """The stored value, in today's vocabulary."""
+
+    return LEGACY_ACCOMMODATION_STATUSES.get(status, status)
 
 
 def build_setup_payload(
@@ -58,7 +73,7 @@ def build_setup_payload(
     end_date: str | None = None,
     arrival_time: str | None = None,
     departure_time: str | None = None,
-    accommodation_status: str = "unknown",
+    accommodation_status: str = "not_booked",
     confirmed: bool = False,
 ) -> dict[str, Any]:
     if planning_mode not in {"explore_first", "ready_to_schedule"}:
@@ -66,6 +81,7 @@ def build_setup_payload(
     styles = _tags(main_style)
     if confirmed and not styles:
         raise ValueError("At least one main style is required before confirmation")
+    accommodation_status = normalise_accommodation_status(accommodation_status)
     if accommodation_status not in ACCOMMODATION_STATUSES:
         raise ValueError(f"Unsupported accommodation status: {accommodation_status}")
 

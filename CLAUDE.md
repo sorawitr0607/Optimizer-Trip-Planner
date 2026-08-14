@@ -671,6 +671,63 @@ does: ArrowRight wrote **`must_do` 0 → 1** and ArrowUp wrote **`interested` 9 
 way — the gesture uses `setPointerCapture`, and a synthetic `PointerEvent` carries no real
 pointer to capture — which is the same reason `deck.test.tsx` was built around the buttons.
 
+### "Where to stay" is its own route, and the count went nine to ten
+
+Artifact 028 decided nine stage routes. There are **ten** as of 2026-08-14, at the owner's
+asking: the area ranking was a section under the deck on `/places`, where it competed with
+several hundred cards and was reported as a section with no visible output, and the
+accommodation base was one card among five on `/evidence`, which is where evidence is
+*checked* rather than where a decision is made. The two halves of one question — which
+neighbourhood, then which address — were never on screen together. `/stay` owns both, and
+the old homes are removed rather than kept: two places to set a base is the duplication
+this consolidation exists to end. It gates on `places`, not on `evidence`, because
+choosing a neighbourhood is what you do *before* buying opening hours for the places in it.
+
+**The page's first card states what the planner is using right now**, which nothing did
+before. Without a confirmed base the optimizer plans from the centre of the chosen places
+— a reasonable default that was completely invisible, and the reason a hotel 286 km away
+could survive to plan an itinerary around itself.
+
+**`get_accommodation_base` now returns `used_by_planner`.** The page printed the stored
+address under "what the planner is using now", which the implausible-base guard had
+already made untrue — the same class of false statement the guard exists to stop. The
+verdict is computed on the server from the same helper `_optimizer_input` uses, and
+deliberately not re-derived on the screen: a second copy of that distance rule in
+TypeScript is exactly how the two would come to disagree. A discarded base is shown as
+what is on file, with a line saying the plan is not built from it.
+
+### Accommodation status is two answers, not three
+
+`unknown` is gone at the owner's asking. It was never a third planning outcome:
+`_optimizer_input` collapses everything that is not `booked` into `unbooked`, so `unknown`
+planned identically to `not_booked` while asking the owner to draw a distinction the
+planner then discarded. **A question whose answers do not differ is a question worth
+deleting.**
+
+A draft still holding it is **folded, not refused** — `setup.normalise_accommodation_status`
+maps it to `not_booked` before validation. That matters because a setup is re-validated on
+every save, so rejecting the old value would strand any trip holding it behind a form that
+can no longer be submitted. Both directions are tested, including that a genuinely
+unsupported status is still refused.
+
+### The loading card was small in the wrong dimension
+
+The placeholder shrank but the deck did not: `.place-deck-drag.pending` was
+`visibility: hidden`, which keeps an element's box, so the card still occupied its full
+height — **measured at 1526px on a real deck** — and the overlay centred its text some 900px
+down, below the fold. `display: none` takes it out of layout, so the deck is as tall as the
+**200px** placeholder and the loading state is genuinely small, with its text at the top.
+The card returning at full height is a jump, and a deliberate one: it is the answer to
+"make the loading card smaller", and it happens once per card.
+
+**A wrong diagnosis on the way there, worth recording.** `.place-deck` looked to be missing
+`position: relative`, which would have made the overlay resolve against the viewport — a
+tidy explanation for a full-screen loading state. It was wrong: the rule already existed
+340 lines further down the same stylesheet. `shell.css` has now yielded three duplicated or
+split rules in one session (`.places-map-reset`, `.evidence-verdict.settled`, and this),
+so **grep the whole file before concluding a rule is absent** — the second copy is the more
+likely explanation, and acting on the first reading adds a fourth duplicate.
+
 ### A kept card flies to the shortlist, 2026-08-14
 
 The swipe wrote the choice and the card vanished; a number in the corner changed. Those

@@ -6,7 +6,6 @@ import {
   type OpeningEvidenceOptions,
   ApiError,
   rpc,
-  type AccommodationBase,
   type CandidateChoice,
   type Journey,
   type OpeningIntervals,
@@ -78,15 +77,10 @@ export function EvidencePage() {
   const { language } = useLanguage();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [query, setQuery] = useState<string | null>(null);
   const [windows, setWindows] = useState<Record<string, { start: string; end: string }>>({});
   const [flash, setFlash] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
   const [cap, setCap] = useState<string | null>(null);
 
-  const base = useQuery({
-    queryKey: ["accommodation_base", tripId],
-    queryFn: () => rpc<AccommodationBase | null>("get_accommodation_base", { trip_id: tripId }),
-  });
   const zone = useQuery({
     queryKey: ["timezone_evidence", tripId],
     queryFn: () => rpc<TimezoneEvidence | null>("get_timezone_evidence", { trip_id: tripId }),
@@ -137,15 +131,6 @@ export function EvidencePage() {
     await refresh();
   };
 
-  const saveBase = useMutation({
-    mutationFn: () =>
-      rpc<AccommodationBase>("confirm_accommodation_base", {
-        trip_id: tripId,
-        query: query ?? base.data?.name ?? "",
-      }),
-    onSuccess: done(copy("accommodation_base_saved", language)),
-    onError: fail,
-  });
   const fetchZone = useMutation({
     mutationFn: () => rpc<{ timezone: string }>("refresh_timezone", { trip_id: tripId }),
     onSuccess: async (result) => {
@@ -378,28 +363,11 @@ export function EvidencePage() {
         </p>
       ) : null}
 
-      {/* Card 1 — accommodation base. Free: it geocodes through OpenStreetMap.
-          derives-from: element 36 .currency-info-box as .evidence-card, one card per action. */}
-      <div className="evidence-card">
-        <strong>{copy("accommodation_base_title", language)}</strong>
-        <span className="setup-hint">{copy("accommodation_base_help", language)}</span>
-        {base.data ? (
-          <span className="evidence-value">
-            {base.data.name}
-            {base.data.address ? ` · ${base.data.address}` : ""}
-          </span>
-        ) : null}
-        <label>
-          {copy("accommodation_query", language)}
-          <input
-            onChange={(event) => setQuery(event.target.value)}
-            value={query ?? base.data?.name ?? ""}
-          />
-        </label>
-        <button disabled={saveBase.isPending} onClick={() => saveBase.mutate()} type="button">
-          {copy("save_accommodation_base", language)}
-        </button>
-      </div>
+      {/* The accommodation base moved to its own "Where to stay" route, 2026-08-14. It
+          was one card among five on a screen about *checking* evidence, while the area
+          ranking that answers the same question lived under the deck on `/places` — so
+          the two halves of one decision were never on screen together. Two places to set
+          a base would be the duplication this consolidation exists to remove. */}
 
       {/* Card 2 — time zone. Paid, and it says so immediately before the button. */}
       <div className="evidence-card">

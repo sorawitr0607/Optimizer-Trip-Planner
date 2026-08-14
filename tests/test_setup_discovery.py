@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 
 from travel_planner import destinations
+from travel_planner import setup as setup_module
 from travel_planner.actions import PlannerActions
 from travel_planner.providers import OpenStreetMapProvider, ProviderUnavailable
 from travel_planner.store import SCHEMA_VERSION, SQLiteStore
@@ -700,3 +701,32 @@ class DestinationPickerTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LegacyAccommodationStatusTest(unittest.TestCase):
+    """A trip whose setup was written when there were three statuses still opens.
+
+    `unknown` was dropped at the owner's asking on 2026-08-14. A setup is re-validated on
+    every save, so refusing the old value would have stranded any trip holding it behind
+    a form that could no longer be submitted — which is the one outcome a vocabulary
+    change must not produce.
+    """
+
+    def test_a_stored_unknown_is_folded_into_not_booked(self) -> None:
+        payload = setup_module.build_setup_payload(
+            planning_mode="explore_first",
+            owner_age=30,
+            main_style=["sightseeing"],
+            accommodation_status="unknown",
+        )
+
+        self.assertEqual("not_booked", payload["trip_basics"]["accommodation_status"])
+
+    def test_an_unsupported_status_is_still_refused(self) -> None:
+        with self.assertRaises(ValueError):
+            setup_module.build_setup_payload(
+                planning_mode="explore_first",
+                owner_age=30,
+                main_style=["sightseeing"],
+                accommodation_status="maybe_booked",
+            )
