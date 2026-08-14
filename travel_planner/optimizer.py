@@ -407,6 +407,10 @@ def _solve_variant(
         for item in day["items"]
         if item["type"] == "visit"
     }
+    # Measured before the reconciliation rather than after it, because `_skip_reason`
+    # now names a threshold only where one was actually exceeded and needs the numbers
+    # to say so. Depends on nothing the loop produces.
+    metrics = _schedule_metrics(snapshot, schedules)
     reconciliation = []
     selected = _selected_candidates(snapshot)
     for candidate in sorted(selected, key=lambda item: _candidate_id(item)):
@@ -422,12 +426,11 @@ def _solve_variant(
                 _reconciliation(
                     candidate,
                     "cannot_currently_fit",
-                    _skip_reason(snapshot, candidate, skipped),
+                    _skip_reason(snapshot, candidate, skipped, metrics),
                     "kept_in_unscheduled_shortlist",
                 )
             )
 
-    metrics = _schedule_metrics(snapshot, schedules)
     objective = _objective(snapshot, selected, scheduled_ids, metrics, reconciliation)
     baseline = _greedy_baseline(snapshot, active, selected, config)
     variant = {
@@ -653,7 +656,7 @@ def _prepare_candidates(
                     continue
                 candidate["_activity_route"] = standalone
 
-        if candidate.get("requires_route_evidence") and not _has_incident_verified_route(
+        if candidate.get("requires_route_evidence") and not _has_incident_usable_route(
             snapshot, place_id
         ):
             reconciliation[place_id] = _reconciliation(
@@ -1706,10 +1709,11 @@ def _queue_breaks_meal_window(
 def _activity_route(
     snapshot: dict[str, Any], candidate: dict[str, Any], allowed_modes: list[str]
 ) -> dict[str, Any] | None:
+    usable = _usable_route_statuses(snapshot)
     routes = [
         route
         for route in snapshot.get("routes", [])
-        if route.get("status") == "verified" and route.get("mode") in set(allowed_modes)
+        if route.get("status") in usable and route.get("mode") in set(allowed_modes)
     ]
     if not routes:
         return None
@@ -1735,11 +1739,10 @@ def _activity_route(
 def _standalone_activity_route(
     snapshot: dict[str, Any], place_id: str
 ) -> dict[str, Any] | None:
-    if _has_incident_verified_route(snapshot, place_id):
+    if _has_incident_usable_route(snapshot, place_id):
         return None
-    routes = [
-        route for route in snapshot.get("routes", []) if route.get("status") == "verified"
-    ]
+    usable = _usable_route_statuses(snapshot)
+    routes = [route for route in snapshot.get("routes", []) if route.get("status") in usable]
     if not routes:
         return None
     allowed = [str(route.get("mode")) for route in routes]
@@ -1857,22 +1860,26 @@ def _routes_between(
     ]
 
 
-def _has_verified_route_between(snapshot: dict[str, Any], left: str, right: str) -> bool:
+def _has_usable_route_between(snapshot: dict[str, Any], left: str, right: str) -> bool:
     return bool(_routes_between(snapshot, left, right, symmetric=True))
 
 
 def _fallback_route_compatible(snapshot: dict[str, Any], left: str, right: str) -> bool:
-    if _has_verified_route_between(snapshot, left, right):
+    if _has_usable_route_between(snapshot, left, right):
         return True
+    # The same statuses the line above already allows, through `_routes_between`. These
+    # two sets read `"verified"` literally, so on an Explore trip the function contradicted
+    # its own first line: a pair joined by a shared transit origin was called incompatible.
+    usable = _usable_route_statuses(snapshot)
     left_origins = {
         route.get("origin_id")
         for route in snapshot.get("routes", [])
-        if route.get("status") == "verified" and route.get("destination_id") == left
+        if route.get("status") in usable and route.get("destination_id") == left
     }
     right_origins = {
         route.get("origin_id")
         for route in snapshot.get("routes", [])
-        if route.get("status") == "verified" and route.get("destination_id") == right
+        if route.get("status") in usable and route.get("destination_id") == right
     }
     return bool(left_origins & right_origins)
 
@@ -1882,10 +1889,14 @@ def _missing_route_edges(
 ) -> int:
     if not snapshot.get("routes"):
         return 0
+    # `_best_route` below already reads through `_routes_between`, so building the
+    # incident set on a literal `"verified"` counted a transit-only pair as having no
+    # edge to miss — the metric and the scheduler disagreeing about the same snapshot.
+    usable = _usable_route_statuses(snapshot)
     incident = {
         str(endpoint)
         for route in snapshot["routes"]
-        if route.get("status") == "verified"
+        if route.get("status") in usable
         for endpoint in (route.get("origin_id"), route.get("destination_id"))
         if endpoint
     }
@@ -1899,9 +1910,26 @@ def _missing_route_edges(
     )
 
 
-def _has_incident_verified_route(snapshot: dict[str, Any], place_id: str) -> bool:
+def _has_incident_usable_route(snapshot: dict[str, Any], place_id: str) -> bool:
+    """Is there any route this snapshot may plan with that touches this place?
+
+    Through `_usable_route_statuses` rather than a literal `"verified"`, which is the
+    fourth site `WF-038` needed and did not get. The other three — `validate_variant`,
+    `_routes_between` and `_best_inbound_route` — admit an `estimated` route on an
+    Explore trip, exactly as `_planning_fact` admits an assumed opening window; this one
+    did not, so `_prepare_candidates` threw a place out before any of them ran. A trip
+    holding 208 estimated transit legs still reported `ROUTE_UNVERIFIED` and
+    `collect_a_verified_route` for a place reachable only by train.
+
+    This admits a route the snapshot **has**. It does not invent one: a place with no
+    route at all is still refused, because a fabricated travel time makes the whole
+    day's chain of connections fiction and errs optimistic, which is the one direction
+    an assumption here must not err in.
+    """
+
+    usable = _usable_route_statuses(snapshot)
     return any(
-        route.get("status") == "verified"
+        route.get("status") in usable
         and place_id in {route.get("origin_id"), route.get("destination_id")}
         for route in snapshot.get("routes", [])
     )
@@ -2023,17 +2051,46 @@ def _reconciliation(
 
 
 def _skip_reason(
-    snapshot: dict[str, Any], candidate: dict[str, Any], skipped: set[str]
+    snapshot: dict[str, Any],
+    candidate: dict[str, Any],
+    skipped: set[str],
+    metrics: dict[str, Any],
 ) -> str:
+    """Why a chosen place is not on the plan.
+
+    Named from the **measurement**, not from the mere existence of a threshold. It used
+    to answer `PLAIN_WALK_THRESHOLD` for every skipped place whenever a plain-walking
+    cap was configured at all — and `balanced_pace` always configures one — so a
+    two-day trip that simply had no room for a fifth museum blamed the owner's walking
+    preference. Measured on the owner's Fukuoka trip: three places reported
+    `PLAIN_WALK_THRESHOLD` while `comfort_tradeoffs` reported **21 minutes against a
+    cap of 45 and nothing exceeded**. Two screens contradicting each other about one
+    plan, and the "smallest next step" pointing at a setting that would have changed
+    nothing.
+
+    `COMFORT_RULES` is the one table the validator, the soft count and the tradeoff
+    screen already read, so this reads it too rather than deriving a second opinion —
+    the same rule `WF-018` sets for rounding and `WF-039` for consent.
+    """
+
     if _candidate_id(candidate) not in skipped:
         return "NO_TIME_CAPACITY"
     thresholds = _thresholds(snapshot)
-    if thresholds.get("plain_walking_minutes_per_day") is not None:
-        return "PLAIN_WALK_THRESHOLD"
-    if thresholds.get("walking_minutes_per_leg") is not None:
-        if any(route.get("departure_time") for route in snapshot.get("routes", [])):
+    for rule in COMFORT_RULES:
+        measured = float(
+            metrics.get(rule["metric"], metrics.get(rule["fallback_metric"], 0) or 0)
+        )
+        if measured <= int(thresholds.get(rule["threshold"], 10**9)) or _accepts(
+            snapshot, rule["reason"], measured
+        ):
+            continue
+        # A timetabled leg makes a walking overage a scheduling conflict rather than a
+        # comfort one — the original distinction, kept, but now behind a real overage.
+        if rule["reason"] == "LONG_TRANSFER_WALK" and any(
+            route.get("departure_time") for route in snapshot.get("routes", [])
+        ):
             return "EFFORT_OR_TIME_CONFLICT"
-        return "LONG_TRANSFER_WALK"
+        return rule["reason"]
     return "NO_TIME_CAPACITY"
 
 

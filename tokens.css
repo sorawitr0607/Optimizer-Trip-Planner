@@ -164,16 +164,13 @@
   /* A dark accent is light, so what sits on it is ink. See the note in `:root`. */
   --color-on-accent: #1a1a1a;
 
-  --landing-ink: #10161a;
-  --landing-ink-soft: #1a2228;
-  --landing-haze: #93a5b3;
-  --landing-sand: #1f2a32;
-  --landing-amber: #e89547;
-  --landing-amber-soft: #f0a35e;
-  --landing-cream: #141b20;
-  --landing-on-ink: #f0f4f8;
-  --landing-scrim: rgb(16 22 26 / 85%);
-  --landing-glow: rgb(232 149 71 / 35%);
+  /* Only the two below-fold surfaces flip. The hero keeps its one palette in both
+     themes — it is a night scene by design, and inverting `--landing-cream` and
+     `--landing-sand` for the surfaces they also back made the headline and the lead
+     dark text on the dark hero. Same lesson as the accent: a token that fills a
+     surface *and* inks the text on another cannot be flipped by theme. */
+  --landing-page: #141b20;
+  --landing-step: #1f2a32;
 }
 
 /* D6: one country-to-accent mapping. Unknown countries keep the house red (D3).
@@ -416,6 +413,10 @@ button:disabled {
   --landing-amber-soft: #a05919;
   --landing-cream: #fdf6ee;
   --landing-on-ink: #f4ece2;
+  /* The working half below the hero, which is the one part of this page that does
+     follow the theme. Its own tokens so the hero's cream and sand stay ink-on-dark. */
+  --landing-page: #fdf6ee;
+  --landing-step: #fbe3cf;
   /* The tour scrim. Alpha has to live here: `rgba(` is a colour literal and the gate
      permits none outside this file, so a translucent overlay is only expressible as a
      token. Dark enough to push the screen back, sheer enough to keep it recognisable —

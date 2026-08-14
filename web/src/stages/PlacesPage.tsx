@@ -45,6 +45,13 @@ const PHOTO_LIMIT = 5;
  *  free and uncapped, but each place is several requests, so this stays a window
  *  that slides rather than a sweep of all 832 candidates. */
 const PREFETCH_AHEAD = 6;
+/** How much of a lane the deck offers before asking whether you want more.
+ *
+ *  Twenty is about a sitting: enough that the strongest of a lane are all in reach, few
+ *  enough that finishing it is a real event rather than a horizon. The lanes are score
+ *  ordered, so the first twenty of City Icons are its twenty best — on the owner's Hong
+ *  Kong catalogue that lane holds **431**, which is a catalogue, not a shortlist. */
+const LANE_PAGE = 20;
 /** How many audit rows to build at a time. The Taipei catalogue is 849 places, and
  *  the table listing them sits inside a `<details>` that is closed on arrival —
  *  which hides it without costing any less: React builds every row, the browser
@@ -93,6 +100,13 @@ export function PlacesPage() {
   // lane led with an RC model airplane runway; all 20 of City Icons' top 20 have one.
   // The queue is still one select away.
   const [lane, setLane] = useState<Lane>("city_icons");
+  /** How many of the current lane the deck may deal. Reset whenever the lane changes. */
+  const [shown, setShown] = useState(LANE_PAGE);
+  const pickLane = (next: Lane) => {
+    setLane(next);
+    setShown(LANE_PAGE);
+    setCardId("");
+  };
   // Deck first, because WF-005 designed this stage as a swipe queue and the list is
   // the fallback for comparing two places side by side. The list is one button away.
   //
@@ -190,7 +204,14 @@ export function PlacesPage() {
     enabled: catalog.length > 0,
   });
 
-  const entries = ranking.data ? laneEntries(ranking.data, lane) : [];
+  // The lane, capped. A 431-card City Icons list and a 662-card "For your trip" are not
+  // a shortlist to work through, they are a catalogue — and the deck deals them in score
+  // order, so the strongest are all at the front and everything after about the first
+  // page is diminishing returns. The cap is a *view* over the lane, never a filter on
+  // the ranking: nothing is dropped, and pressing for more is one press.
+  const allEntries = ranking.data ? laneEntries(ranking.data, lane) : [];
+  const entries = allEntries.slice(0, shown);
+  const laneRemaining = allEntries.length - entries.length;
   const selectedId = entries.some((entry) => entry.place_id === cardId)
     ? cardId
     : (entries[0]?.place_id ?? "");
@@ -298,7 +319,18 @@ export function PlacesPage() {
     );
     if (!wanted.length) return;
     for (const placeId of wanted) asked.current.add(placeId);
-    fetchSummary.mutate(wanted);
+    // Released again once the request settles. `asked` exists to stop the same place
+    // being requested twice at once — it was doing double duty as a permanent tombstone,
+    // so a place whose fetch **failed** was never asked for again and the only way to
+    // get its picture was the manual button. Wikimedia answers HTTP 429 on a burst and
+    // this screen prefetches in bursts, so that was not rare. A place that genuinely has
+    // nothing still gets an empty record stored, which `summaries.data` then filters on,
+    // so this retries real failures and not empty answers.
+    fetchSummary.mutate(wanted, {
+      onSettled: () => {
+        for (const placeId of wanted) asked.current.delete(placeId);
+      },
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [upcoming.join(","), summaries.data, fetchSummary.isPending]);
 
@@ -565,7 +597,7 @@ export function PlacesPage() {
                   aria-pressed={lane === value}
                   className={`lane-tab${lane === value ? " active" : ""}`}
                   key={value}
-                  onClick={() => { setLane(value); setCardId(""); }}
+                  onClick={() => pickLane(value)}
                   type="button"
                 >
                   {copy(value, language)}
@@ -599,6 +631,16 @@ export function PlacesPage() {
           {mode === "deck" ? (
             <>
               <p className="setup-hint">{copy("deck_help", language)}</p>
+              {/* The tab counts the whole lane and the deck deals a page of it, so
+                  without this the two numbers look like a bug. */}
+              {laneRemaining > 0 ? (
+                <p className="setup-hint">
+                  {copyFormat("lane_capped", language, {
+                    shown: entries.length,
+                    total: allEntries.length,
+                  })}
+                </p>
+              ) : null}
               <PlaceDeck
                 candidates={byId}
                 choices={choices.data ?? []}
@@ -630,6 +672,12 @@ export function PlacesPage() {
                 }
                 onCardChange={setCardId}
                 onWantSummary={(placeId) => fetchSummary.mutate([placeId])}
+                summaryLoading={fetchSummary.isPending && !summaries.data?.[selectedId]}
+                lane={lane}
+                laneRemaining={laneRemaining}
+                lanes={LANES}
+                onPickLane={(next) => pickLane(next as Lane)}
+                onShowMore={() => setShown((current) => current + LANE_PAGE)}
                 ranking={ranking.data}
                 summaries={summaries.data ?? {}}
               />
@@ -646,7 +694,13 @@ export function PlacesPage() {
               </header>
               {(() => {
                 const about = summaries.data?.[selectedId];
-                const prose = about?.text?.[language] ?? about?.text?.en ?? "";
+                const article = about?.text?.[language] ?? about?.text?.en ?? "";
+                // A place with a QID but no article is the common case, not the edge —
+                // Wikidata's own one-liner is what it has, and a phrase saying what the
+                // place *is* beats the mechanism sentence the card falls back to.
+                const shortDescription = about?.description?.[language] ?? about?.description?.en ?? "";
+                const prose = article || shortDescription;
+                const fromWikidata = !article && Boolean(shortDescription);
                 const onlyEnglish = language === "th" && !about?.text?.th && Boolean(about?.text?.en);
                 const asking = fetchSummary.isPending;
                 // OpenStreetMap's own tag counts as a picture: a place with no article
@@ -696,9 +750,11 @@ export function PlacesPage() {
                       {prose ? <p>{prose}</p> : null}
                       {onlyEnglish ? <p className="setup-hint">{copy("description_thai_missing", language)}</p> : null}
                       <p className="setup-hint">
-                        {about?.photos_are_nearby
-                          ? copy("photo_is_nearby", language)
-                          : copy("wikipedia_credit", language)}
+                        {fromWikidata
+                          ? copy("wikidata_credit", language)
+                          : about?.photos_are_nearby
+                            ? copy("photo_is_nearby", language)
+                            : copy("wikipedia_credit", language)}
                         {about?.source_urls?.[language] || about?.source_urls?.en ? (
                           <>
                             {" · "}
@@ -749,11 +805,19 @@ export function PlacesPage() {
                   <p className="setup-hint">{copy("live_details_session_only", language)}</p>
                 </div>
               ) : (
+                // Held back while the *free* summary is still arriving: offering to spend
+                // money on better pictures before the free ones have landed asks the owner
+                // to pay for something they cannot yet see they already have.
+                fetchSummary.isPending && !summaries.data?.[selectedId] ? (
+                <div aria-busy="true" className="place-paid-action">
+                  <p className="setup-hint">{copy("loading", language)}</p>
+                </div>
+              ) : (
                 <div className="place-paid-action">
                   <p className="setup-hint">{detailsCost.isPending || photosCost.isPending ? copy("loading", language) : paidCaption}</p>
                   <button disabled={!paidAllowed || enrich.isPending} onClick={() => enrich.mutate()} type="button">{copy("load_live_details", language)}</button>
                 </div>
-              )}
+              ))}
 
               {choice ? <p className="setup-hint">{copy("current_choice", language)}: {copy(choice.action, language)}{choice.reason ? ` · ${copyFrom("REJECTION_TEXT", choice.reason, language)}` : ""}</p> : null}
               <div className="place-choice-actions" hidden={mode === "deck"}>

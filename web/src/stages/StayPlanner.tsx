@@ -9,6 +9,7 @@ import {
   type SetupDraft,
 } from "../api/client";
 import { copy, copyFormat, type Language } from "../i18n/copy";
+import { Thinking } from "../shared/Thinking";
 
 /**
  * The way out of a trip with no dates.
@@ -138,7 +139,7 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
     const earlyStart = `${year}-${mm}-01`;
     optionsList.push({
       key: "early",
-      label: language === "th" ? "ต้นเดือน" : "Early Month",
+      label: copy("dates_early_month", language),
       start: earlyStart,
       end: addDays(earlyStart, defaultSpan),
     });
@@ -146,7 +147,7 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
     const midStart = `${year}-${mm}-15`;
     optionsList.push({
       key: "mid",
-      label: language === "th" ? "กลางเดือน" : "Mid Month",
+      label: copy("dates_mid_month", language),
       start: midStart,
       end: addDays(midStart, defaultSpan),
     });
@@ -164,6 +165,12 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
         ...wholeDraftWithDates(stored.data ?? null, start, end),
       });
       await rpc("discover_places", { trip_id: tripId, force_refresh: false });
+      // And build a plan against them, which is the only thing that takes this screen
+      // off the screen. Writing the dates alone left the stored preview as the dateless
+      // `stay_recommendation` it already was, so `/optimize` re-rendered this very date
+      // picker — pressing the button appeared to do nothing, and a manual reload did not
+      // help either, because the preview it re-read was the same stale one.
+      await rpc("generate_plan_preview", { trip_id: tripId });
       return draft;
     },
     onSuccess: async () => {
@@ -173,6 +180,7 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
         queryClient.invalidateQueries({ queryKey: ["journey", tripId] }),
         queryClient.invalidateQueries({ queryKey: ["discovery", tripId] }),
         queryClient.invalidateQueries({ queryKey: ["ranking", tripId] }),
+        queryClient.invalidateQueries({ queryKey: ["plan_preview", tripId] }),
       ]);
     },
   });
@@ -270,7 +278,7 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
       ) : null}
 
       <div className="stay-options-group">
-        <h4 className="money-eyebrow">{copy("recommend_dates", language) || "Recommended Date Ranges"}</h4>
+        <h4 className="money-eyebrow">{copy("recommend_dates", language)}</h4>
         <div className="stay-window-options">
           {dateOptions.map((opt) => {
             const isSelected = start === opt.start && end === opt.end;
@@ -308,6 +316,17 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
           <b aria-hidden="true">⚠</b>
           <span>{copy("provisional_dates_set", language)}</span>
         </p>
+      ) : null}
+      {/* The button now builds a plan as well as writing the dates, which is about a
+          minute of work — the same silence that had `/optimize` reported as broken. */}
+      {save.isPending ? (
+        <div className="optimize-working" aria-busy="true">
+          <Thinking
+            language={language}
+            lines={["think_windows", "think_routes", "think_packing", "think_variants", "think_checking", "think_almost"]}
+          />
+          <p className="setup-hint">{copy("optimizing_note", language)}</p>
+        </div>
       ) : null}
       <div className="optimize-actions">
         <button

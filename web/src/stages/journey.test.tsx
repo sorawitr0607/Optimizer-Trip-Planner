@@ -105,6 +105,7 @@ const PREVIEW = {
           warnings: ["OPENING_UNVERIFIED"],
           reconciliation: [
             {
+              place_id: "taipei_101",
               name: "Taipei 101",
               names: { en: "Taipei 101", th: "ตึกไทเป 101" },
               priority: "must_do",

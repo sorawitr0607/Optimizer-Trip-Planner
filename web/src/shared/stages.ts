@@ -43,7 +43,15 @@ export const STAGE_GATE: Record<StageRoute, StageKey> = {
   itinerary: "itinerary",
   readiness: "setup",
   costs: "setup",
-  split: "setup",
+  // Gated on an activated plan at the owner's request, 2026-08-14.
+  //
+  // **This reverses a recorded decision.** `WF-030`'s note in CLAUDE.md says `/split`
+  // deliberately needs only a confirmed setup, because "bills get paid before an
+  // itinerary is built" and a money file that refused until activation would be
+  // unavailable for exactly the stretch of a trip when people are paying for things.
+  // That reasoning still stands; the owner asked for the lock anyway. Reverting is this
+  // one word back to `setup`.
+  split: "itinerary",
   revise: "itinerary",
 };
 
@@ -69,10 +77,14 @@ export function stageStatus(journey: Journey | undefined, route: StageRoute): St
   if (!journey) return { state: "available", blockedBy: null };
   const gate = journey.stages.find((stage) => stage.key === STAGE_GATE[route]);
   if (gate?.blocked_by) return { state: "locked", blockedBy: gate.blocked_by };
-  if (journey.next === route) return { state: "next", blockedBy: null };
   // Only the five gate keys report `done`. The other four are always revisitable
   // and claim nothing, which is honest: nothing measures when costs are finished.
   const own = journey.stages.find((stage) => stage.key === route);
+  // Done beats next. With every stage finished, `journey.next` falls back to
+  // `itinerary` so that `/` still has somewhere to send a returning owner — but the
+  // sidebar was reading that fallback as a *instruction* and kept a NEXT badge on a
+  // screen with nothing left to do, which was reported as not knowing what to do next.
   if (own?.done) return { state: "complete", blockedBy: null };
+  if (journey.next === route) return { state: "next", blockedBy: null };
   return { state: "available", blockedBy: null };
 }

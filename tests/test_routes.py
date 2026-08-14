@@ -690,7 +690,85 @@ class PlaceSummaryTest(unittest.TestCase):
             provider.summary("Q1")
 
         self.assertIn("labels", asked[0])
+        self.assertIn("descriptions", asked[0])
         self.assertIn("languages=en|th", asked[0])
+
+    def test_a_disambiguation_page_is_not_a_description(self) -> None:
+        """OpenStreetMap's `wikidata` tag is sometimes wrong, and one way it is wrong is
+        pointing at a disambiguation page. Busan's 국립해양박물관 carries **Q1195337**,
+        which is "National Maritime Museum (disambiguation)" — so the card said "The
+        National Maritime Museum is in Greenwich, United Kingdom." about a museum in
+        Korea. Wikipedia labels these itself, so this reads upstream's marker rather
+        than guessing from the prose.
+        """
+
+        from travel_planner.providers import WikidataSummaryProvider
+
+        provider = WikidataSummaryProvider()
+
+        def answer(url: str):
+            if "wbgetentities" in url:
+                return {
+                    "entities": {
+                        "Q1": {
+                            "labels": {},
+                            "descriptions": {},
+                            "sitelinks": {"enwiki": {"title": "National Maritime Museum (disambiguation)"}},
+                            "claims": {},
+                        }
+                    }
+                }
+            if "rest_v1/page/summary" in url:
+                return {
+                    "type": "disambiguation",
+                    "extract": "The National Maritime Museum is in Greenwich, United Kingdom.",
+                }
+            return {}
+
+        provider._json = answer  # type: ignore[method-assign]
+
+        summary = provider.summary("Q1")
+
+        self.assertEqual({}, summary["text"])
+
+    def test_a_place_with_no_article_still_says_what_it_is(self) -> None:
+        """Measured on the owner's own file: 27 of 64 stored summaries carried a
+        photograph and no words at all, and every one of the 27 had a QID — they simply
+        have no Wikipedia article, which is the only thing `text` is filled from.
+        Wikidata's own description rides along in the request already being made.
+
+        Kept out of `text`: an extract is CC BY-SA prose and this is a CC0 phrase, so
+        the screen has to be able to credit the right one.
+        """
+
+        from travel_planner.providers import WikidataSummaryProvider
+
+        provider = WikidataSummaryProvider()
+        provider._json = lambda url: (  # type: ignore[method-assign]
+            {
+                "entities": {
+                    "Q1": {
+                        "labels": {"en": {"value": "Mount Tenno"}},
+                        "descriptions": {
+                            "en": {"value": "mountain in Oyamazaki, Kyoto, Japan"},
+                            "th": {"value": "ภูเขาในเกียวโต"},
+                        },
+                        "sitelinks": {},
+                        "claims": {},
+                    }
+                }
+            }
+            if "wbgetentities" in url
+            else {}
+        )
+
+        summary = provider.summary("Q1")
+
+        self.assertEqual({}, summary["text"])
+        self.assertEqual(
+            {"en": "mountain in Oyamazaki, Kyoto, Japan", "th": "ภูเขาในเกียวโต"},
+            summary["description"],
+        )
 
     def test_an_article_title_stands_in_where_there_is_no_label(self) -> None:
         from travel_planner.providers import WikidataSummaryProvider
@@ -788,6 +866,37 @@ class PlaceSummaryTest(unittest.TestCase):
         }
         self.assertTrue(expected, "the fake discovery must supply a wikidata id")
         self.assertEqual(expected, set(self.provider.asked))
+
+    def test_commons_photographs_join_the_gallery_rather_than_replacing_it(self) -> None:
+        """A card with one picture stayed a card with one picture.
+
+        `named_photos` finds Commons files whose title names the place and whose
+        coordinates agree — pictures *of* it, not merely near it — but it ran only where
+        the encyclopedia had produced nothing at all. So the places that do carry a
+        Wikidata id, which is 31 of the owner's 487 Kyoto candidates, got exactly what
+        Wikipedia held and no more.
+
+        Geosearch is deliberately not treated this way: it answers "what was
+        photographed at this spot", which is why it stays a substitute and is flagged.
+        """
+
+        self.provider.named_photos = lambda name, lat, lon: [  # type: ignore[attr-defined]
+            "https://commons.example/named-one.jpg",
+            "https://commons.example/named-two.jpg",
+        ]
+
+        self.actions.refresh_place_summaries(self.trip.trip_id, force=True)
+
+        stored = self.actions.list_place_summaries(self.trip.trip_id)
+        self.assertTrue(stored)
+        for value in stored.values():
+            gallery = value["image_urls"]
+            # The encyclopedia's own picture still leads.
+            self.assertTrue(gallery[0].startswith("https://commons.example/Q"))
+            self.assertIn("https://commons.example/named-one.jpg", gallery)
+            self.assertIn("https://commons.example/named-two.jpg", gallery)
+            # Named files are of the place, so the nearby caption must not be claimed.
+            self.assertFalse(value.get("photos_are_nearby"))
 
     def test_a_second_run_uses_the_cache_and_spends_nothing_new(self) -> None:
         first = self.actions.refresh_place_summaries(self.trip.trip_id)
@@ -990,6 +1099,45 @@ class TimeZoneTest(unittest.TestCase):
             {},
             {"status": "OK", "timeZoneId": ""},
         ):
+            with self.assertRaises(ProviderUnavailable):
+                provider.normalize(payload, latitude=25.0, longitude=121.0)
+
+    def test_the_free_provider_reads_the_zone_open_meteo_already_echoes(self) -> None:
+        """The zone is verified by default now, and by default it costs nothing.
+
+        `GoogleTimeZoneProvider` is US$0.005 and needs `GOOGLE_MAPS_SERVER_KEY`, so a
+        machine without one carried `DESTINATION_TIMEZONE_UNVERIFIED` for the whole life
+        of every trip. Open-Meteo returns the resolved zone whenever `timezone=auto` is
+        sent, which both weather providers already send — so the same evidence record
+        comes from a free, keyless service this app already calls.
+        """
+
+        from travel_planner.providers import OpenMeteoTimeZoneProvider
+
+        value = OpenMeteoTimeZoneProvider().normalize(
+            {
+                "timezone": "Asia/Tokyo",
+                "timezone_abbreviation": "GMT+9",
+                "utc_offset_seconds": 32400,
+            },
+            latitude=34.685,
+            longitude=135.833,
+        )
+
+        self.assertEqual("Asia/Tokyo", value["timezone"])
+        self.assertEqual("verified", value["status"])
+        self.assertEqual("open_meteo_timezone", value["provider"])
+        # Same kind as the paid provider, so either can satisfy the same gap.
+        self.assertEqual("destination_timezone", value["kind"])
+
+    def test_the_free_provider_never_invents_a_zone_either(self) -> None:
+        """`WF-002`: a zone is stated by a provider or it is unverified. `auto` coming
+        back is the service failing to resolve it, not an answer."""
+
+        from travel_planner.providers import OpenMeteoTimeZoneProvider
+
+        provider = OpenMeteoTimeZoneProvider()
+        for payload in ({}, {"timezone": ""}, {"timezone": "auto"}):
             with self.assertRaises(ProviderUnavailable):
                 provider.normalize(payload, latitude=25.0, longitude=121.0)
 

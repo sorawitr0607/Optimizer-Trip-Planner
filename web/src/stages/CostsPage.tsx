@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useParams } from "react-router";
 
-import { rpc, type CostItem, type CostTotals, type SetupDraft } from "../api/client";
+import { rpc, type CostItem, type CostTotals, type ExportSnapshot, type Frozen, type SetupDraft } from "../api/client";
 import { copy } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
 import { categoryName, type CostCategory, money, Note, signed, Tag, Tile } from "./money";
@@ -34,6 +34,18 @@ export function CostsPage() {
   const categoryList = useQuery({
     queryKey: ["cost_categories", tripId],
     queryFn: () => rpc<CostCategory[]>("cost_categories", { trip_id: tripId }),
+  });
+  // The activated plan, read through the same snapshot the itinerary and both workbooks
+  // read. Nothing new is exposed for this: `build_export_snapshot` is already the one
+  // shared derivation, and a second opinion about the same plan is how a screen starts
+  // disagreeing with the file it exports.
+  const plan = useQuery({
+    queryKey: ["export_snapshot", tripId],
+    // Wrapped in the `Frozen` envelope every snapshot crosses the boundary in — the
+    // hash travels beside the payload. The itinerary unwraps the same way.
+    queryFn: () =>
+      rpc<Frozen<ExportSnapshot> | null>("build_export_snapshot", { trip_id: tripId }),
+    retry: false,
   });
   const [newCategory, setNewCategory] = useState("");
   // This screen had no mutation at all: it told the owner to "add estimates" and gave
@@ -85,6 +97,55 @@ export function CostsPage() {
     },
   });
 
+  // What the plan commits you to paying *for*. Deliberately not an amount: nothing in
+  // this app knows the price of a museum entry, a bowl of noodles or a metro ride, and
+  // a number invented here would be indistinguishable on screen from one the owner
+  // entered. So it counts, and leaves the figures to them.
+  const shape = (() => {
+    const days = plan.data?.data?.days ?? [];
+    if (!days.length) return null;
+    const rows = days.flatMap((day) => day.items ?? []);
+    return {
+      nights: Math.max(0, days.length - 1),
+      meals: rows.filter((row) => row.type === "meal").length,
+      visits: rows.filter((row) => row.type === "visit").length,
+      legs: rows.filter((row) => row.type === "travel").length,
+    };
+  })();
+
+  const seedRows = useMutation({
+    mutationFn: async () => {
+      if (!shape) return;
+      const seeds: { label: string; category: string }[] = [
+        { label: `${copy("plan_shape_nights", language)} (${shape.nights})`, category: "accommodation" },
+        { label: `${copy("plan_shape_meals", language)} (${shape.meals})`, category: "food" },
+        { label: `${copy("plan_shape_visits", language)} (${shape.visits})`, category: "fees" },
+        { label: `${copy("plan_shape_legs", language)} (${shape.legs})`, category: "transport" },
+      ];
+      for (const seed of seeds) {
+        await rpc<CostItem>("save_cost_item", {
+          trip_id: tripId,
+          item: {
+            label: seed.label,
+            category: seed.category,
+            // Zero, not a guess. The row exists so there is somewhere to put the real
+            // figure; a plausible-looking placeholder would be read as a forecast.
+            original_amount: 0,
+            original_currency: draft.currency,
+            payment_state: "estimate",
+          },
+        });
+      }
+    },
+    onSuccess: async () => {
+      setFlash("plan_shape_seeded");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["cost_items", tripId] }),
+        queryClient.invalidateQueries({ queryKey: ["cost_totals", tripId] }),
+      ]);
+    },
+  });
+
   if (totals.isPending || items.isPending) return <p>{copy("loading", language)}</p>;
   if (totals.isError) return <p className="field-error">⚠ {totals.error.message}</p>;
   if (items.isError) return <p className="field-error">⚠ {items.error.message}</p>;
@@ -103,6 +164,32 @@ export function CostsPage() {
         <h1>{copy("costs_planned_title", language)}</h1>
         <p>{copy("costs_planned_help", language)}</p>
       </header>
+
+      {/* What the activated plan will cost money for. Counted, never priced. */}
+      <section className="money-plan-shape">
+        <h2 className="money-eyebrow">{copy("plan_shape_title", language)}</h2>
+        {shape ? (
+          <>
+            <ul className="money-shape-list">
+              <li><strong>{shape.nights}</strong> {copy("plan_shape_nights", language)}</li>
+              <li><strong>{shape.meals}</strong> {copy("plan_shape_meals", language)}</li>
+              <li><strong>{shape.visits}</strong> {copy("plan_shape_visits", language)}</li>
+              <li><strong>{shape.legs}</strong> {copy("plan_shape_legs", language)}</li>
+            </ul>
+            <p className="setup-hint">{copy("plan_shape_help", language)}</p>
+            <button
+              className="setup-primary"
+              disabled={seedRows.isPending}
+              onClick={() => seedRows.mutate()}
+              type="button"
+            >
+              {seedRows.isPending ? copy("loading", language) : copy("plan_shape_seed", language)}
+            </button>
+          </>
+        ) : (
+          <p className="setup-hint">{copy("plan_shape_none", language)}</p>
+        )}
+      </section>
 
       {/* Donor "Expense Categories". Artifact 023 fixed this vocabulary at seven,
           shared by both ledgers and both workbooks; a trip that hires skis had

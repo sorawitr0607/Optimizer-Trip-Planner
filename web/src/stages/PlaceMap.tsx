@@ -71,6 +71,17 @@ const SETTLE_MS = 1500;
  *  enough that streets and footprints are legible and the place can be recognised, wide
  *  enough to see what it sits next to. */
 const FOCUS_KM = 0.8;
+/** A *fixed* width, deliberately. Widening it where the surroundings looked empty was
+ *  tried and reverted: the only signal available at first paint is the basemap's major
+ *  roads, and that is a bad proxy for "is there anything to see". Nara National Museum
+ *  has **zero** major-road vertices within 0.8 km because it sits inside Nara Park, so
+ *  the test called the centre of a city empty and opened its card on 8 km — and the
+ *  basemap is fetched *after* the deck first paints, so on a new trip the test saw no
+ *  roads at all and widened every card to the ceiling.
+ *
+ *  A predictable window beats a heuristic that is wrong in the common case. The cost is
+ *  that a place with genuinely nothing around it — a wooded hill — opens on a frame of
+ *  trees; the map zooms and pans, and the scale note says how wide the view is. */
 /**
  * Snapping the window onto a shared grid was tried, so that neighbouring places would
  * ask for one window and the second would be a cache hit. **It made the map worse and
@@ -292,6 +303,11 @@ export function PlaceMap({
   // looks exactly like a bug — the owner could not tell "OpenStreetMap is busy" from
   // "this is broken", and reported the second.
   const [refused, setRefused] = useState(false);
+  // Tracing the day: a dot that walks the route the plan actually took, stop by stop.
+  // Off until asked for — an animation that starts itself is a thing to wait out, and a
+  // screen baseline photographs whatever frame it lands on. Never available under the
+  // capture flag for that second reason.
+  const [tracing, setTracing] = useState(false);
   // Which window has already been asked for, so panning inside it costs nothing.
   const asked = useRef<string>("");
   // Unique per instance, because two maps are on screen at once and a `textPath` points
@@ -384,6 +400,14 @@ export function PlaceMap({
     // The country, projected through the city's transform. It lands far outside the
     // frame, which is the point: zooming out is what brings it into view.
     const walked = paths.map((leg) => ({ points: path(leg.points), exact: leg.exact }));
+    // The whole day as one continuous path, so a dot can walk it end to end. Built from
+    // the same projected points the legs are drawn from — a second derivation could put
+    // the traveller somewhere the line is not.
+    const trace = walked.length
+      ? walked
+          .map((leg, index) => `${index ? "L" : "M"}${leg.points.replaceAll(" ", " L")}`)
+          .join(" ")
+      : "";
     const land = (outline?.rings ?? []).map(path);
     let landBox: { width: number; height: number } | null = null;
     if (projection && outline?.rings?.length) {
@@ -403,6 +427,7 @@ export function PlaceMap({
       projection,
       unitsPerKm,
       walked,
+      trace,
       land,
       landBox,
       lines,
@@ -416,7 +441,7 @@ export function PlaceMap({
     };
   }, [basemap, outline, places, detail, paths]);
   const { lines, linePoints, areas, buildings, roads, rails, markers } = geometry;
-  const { land, landBox, pinPoints, walked } = geometry;
+  const { land, landBox, pinPoints, walked, trace } = geometry;
   // How far out the map may be zoomed: far enough to hold the whole country, which is
   // what "where is this in the country" actually asks for. Without an outline there is
   // nothing out there to look at, so it stays at the fitted city.
@@ -451,12 +476,17 @@ export function PlaceMap({
     const minY = Math.min(...ys);
     const maxY = Math.max(...ys);
     // A single pin has no extent of its own, so it is given a neighbourhood rather than
-    // an infinite zoom.
+    // an infinite zoom — and a wider one where the neighbourhood is empty, so the frame
+    // always holds something the place can be located against.
     const least = FOCUS_KM * unitsPerKm;
     const width = Math.max(maxX - minX, least);
     const height = Math.max(maxY - minY, (least * FRAME.height) / FRAME.width);
+    // Clamped by the *measured* ceiling, not the `MAX_ZOOM` fallback. `maxZoom` was
+    // already computed from `MIN_VIEW_KM` for the same reason and this line was missed:
+    // in a city whose catalogue spans a wide region, 24x still leaves several kilometres
+    // on screen, so a card asking for `FOCUS_KM` opened on 4 km of Kyoto instead of 0.8.
     const zoom = Math.min(
-      MAX_ZOOM,
+      maxZoom,
       Math.max(MIN_ZOOM, Math.min(FRAME.width / (width * 1.3), FRAME.height / (height * 1.3))),
     );
     return {
@@ -464,7 +494,7 @@ export function PlaceMap({
       x: (minX + maxX) / 2 - FRAME.width / zoom / 2,
       y: (minY + maxY) / 2 - FRAME.height / zoom / 2,
     };
-  }, [geometry, focusId, pinPoints]);
+  }, [geometry, focusId, pinPoints, maxZoom]);
 
   // Adjusted during render rather than in an effect — React's own pattern for resetting
   // state when a prop changes, and it avoids the extra committed frame at the old view
@@ -844,6 +874,25 @@ export function PlaceMap({
               />
             ))
           : null}
+        {/* The traveller. `animateMotion` walks the day's own path rather than a
+            re-derived one, so the dot is on the line by construction and needs no
+            JavaScript frame loop — the browser owns the timing, and `repeatCount`
+            ends it rather than looping forever at the last stop.
+
+            Six seconds per leg reads as travelling rather than as a cursor jump; the
+            radius counter-scales like every other mark on this map. */}
+        {tracing && trace ? (
+          <g className="plan-map-traveller">
+            <circle r={7 / view.zoom}>
+              <animateMotion
+                dur={`${Math.max(4, walked.length * 2)}s`}
+                fill="freeze"
+                path={trace}
+                repeatCount="1"
+              />
+            </circle>
+          </g>
+        ) : null}
         {pinPoints.map((point) => {
           const isFocus = point.place_id === focusId;
           return (
@@ -860,6 +909,12 @@ export function PlaceMap({
           );
         })}
       </svg>
+      {/* Only where there is a route to trace, and never while a capture is running. */}
+      {route && trace && !(typeof document !== "undefined" && document.documentElement.dataset.capture) ? (
+        <button className="places-map-trace" onClick={() => setTracing((on) => !on)} type="button">
+          {copy(tracing ? "map_stop" : "map_play", language)}
+        </button>
+      ) : null}
       {/* Outside the svg, so panning does not carry the compass off the edge. */}
       <span aria-hidden="true" className="places-map-rose">N ↑</span>
       {homeKey === `${view.x.toFixed(1)},${view.y.toFixed(1)},${view.zoom.toFixed(3)}` ? null : (
@@ -871,11 +926,16 @@ export function PlaceMap({
         {/* Metres under a kilometre. Rounded up to a whole kilometre, every view from a
             single street to a district read "About 1 km across", which is no scale at
             all on the half of the range where the detail actually changes. */}
-        {!Number.isFinite(viewKm)
-          ? null
-          : viewKm < 1
-            ? copyFormat("map_span_metres", language, { m: Math.max(50, Math.round(viewKm * 1000 / 50) * 50) })
-            : copyFormat("map_span", language, { km: Math.round(viewKm) })}
+        {(() => {
+          if (!Number.isFinite(viewKm)) return null;
+          // Decided on the *rounded* value, not the raw one: rounding 0.98 km to the
+          // nearest 50 m gives 1000, and "About 1000 m across" is a kilometre spelled
+          // the long way.
+          const metres = Math.max(50, Math.round((viewKm * 1000) / 50) * 50);
+          return metres < 1000
+            ? copyFormat("map_span_metres", language, { m: metres })
+            : copyFormat("map_span", language, { km: Math.max(1, Math.round(viewKm)) });
+        })()}
         {focused ? ` · ${focused.label} · ${focused.name}` : null}
       </p>
       {withKey ? (

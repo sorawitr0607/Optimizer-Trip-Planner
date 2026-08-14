@@ -21,6 +21,7 @@ import {
 import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
 import { mapsLink, type MapPlace } from "../shared/map";
+import { PlanReady } from "./PlanReady";
 import { PlaceMap } from "./PlaceMap";
 
 const MAP_WIDTH = 420;
@@ -61,6 +62,14 @@ export interface PlottedPoint extends CoordinatePoint {
  * one transform, so changing it moved the streets, the buildings and the stops together
  * and none of them can disagree with the tiles or with each other.
  */
+/** Mean Earth radius, in kilometres. Only used to give a scale to a projection that has
+ *  no extent to fit — see `projectionOf`. */
+const EARTH_RADIUS_KM = 6371;
+/** How much ground the frame covers when every point is in the same place. A
+ *  neighbourhood, so a lone pin reads as a street corner rather than as a continent or a
+ *  doorstep; callers still zoom on top of it. */
+const DEGENERATE_SPAN_KM = 2;
+
 export function mercatorY(latitude: number): number {
   return Math.log(Math.tan(Math.PI / 4 + (latitude * Math.PI) / 360));
 }
@@ -89,7 +98,21 @@ export function projectionOf(
     spanX ? availableWidth / spanX : Number.POSITIVE_INFINITY,
     spanY ? availableHeight / spanY : Number.POSITIVE_INFINITY,
   );
-  const finiteScale = Number.isFinite(scale) ? scale : 1;
+  // One point has no extent, so there is no scale to *fit* — and falling back to 1 made
+  // the unit a radian. Measured in Nara: a kilometre became **0.00019 units** against
+  // 139 for the same points plus one more, a factor of 730,000. Everything downstream
+  // reasons in real distance — `FOCUS_KM`, `MIN_VIEW_KM`, the detail-fetch gate, the
+  // "about N km across" note, the tile zoom — so all of it was computed against a scale
+  // with no geographic meaning. That is the first swipe card, whose shortlist is still
+  // empty, and an itinerary day with a single stop: the two maps reported as bugged.
+  //
+  // So where there is nothing to fit, the scale comes from the geography instead: make
+  // the frame span `DEGENERATE_SPAN_KM` of real ground. Mercator is conformal, so one
+  // scale serves both axes, and `cos(latitude)` is the only correction it needs.
+  const finiteScale = Number.isFinite(scale)
+    ? scale
+    : (availableWidth * EARTH_RADIUS_KM * Math.cos((points[0].latitude * Math.PI) / 180)) /
+      DEGENERATE_SPAN_KM;
   const offsetX = MAP_PAD + (availableWidth - spanX * finiteScale) / 2;
   const offsetY = MAP_PAD + (availableHeight - spanY * finiteScale) / 2;
   return {
@@ -323,7 +346,7 @@ export function CoordinateMap({
             <i className={`recheck ${accommodationStatus === "booked" ? "confirmed" : ""}`} /><b>H</b>
             <span>{copy("hotel_anchor", language)} · {anchor.display_name}</span>
             {anchor.latitude != null && anchor.longitude != null ? (
-              <a className="plan-stop-maps" href={mapsLink(anchor.latitude, anchor.longitude, anchor.display_name ?? "")}>
+              <a className="plan-stop-maps" href={mapsLink(anchor.latitude, anchor.longitude)}>
                 {copy("open_in_maps", language)} ↗
               </a>
             ) : null}
@@ -337,7 +360,7 @@ export function CoordinateMap({
                 driver can be shown when no phone will cooperate. */}
             {stop.latitude != null && stop.longitude != null ? (
               <>
-                <a className="plan-stop-maps" href={mapsLink(stop.latitude, stop.longitude, stop.display_name)}>
+                <a className="plan-stop-maps" href={mapsLink(stop.latitude, stop.longitude)}>
                   {copy("open_in_maps", language)} ↗
                 </a>
                 <code>{stop.latitude.toFixed(5)}, {stop.longitude.toFixed(5)}</code>
@@ -458,6 +481,14 @@ export function ItineraryPage() {
 
   return (
     <section className="stage-card itinerary-screen">
+      {/* Said once per activated plan, and only where a plan actually is active. */}
+      {plan.stamp.is_active_plan ? (
+        <PlanReady
+          gaps={plan.readiness.capability_gaps}
+          language={language}
+          versionId={plan.stamp.plan_version_id}
+        />
+      ) : null}
       <header className="money-head">
         <h1>{copy("use_title", language)}</h1>
         <p>{copy("use_help", language)}</p>

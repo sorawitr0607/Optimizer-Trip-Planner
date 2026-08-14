@@ -285,7 +285,12 @@ describe("ItineraryPage", () => {
     expect(html).toContain(`/api/export/${TRIP}/checklist.ics`);
     const mapHtml = render(<ItineraryPage />, "en", undefined, "?view=map");
     expect(mapHtml).toContain('href="https://www.google.com/maps/search/?api=1&amp;query=');
-    expect((mapHtml.match(/href="https:\/\/www\.google\.com\/maps\/search\/\?api=1&amp;query=/g) ?? []).length).toBe(2);
+    expect((mapHtml.match(/https:\/\/www\.google\.com\/maps\/search\/\?api=1&amp;query=/g) ?? []).length).toBe(2);
+    // Coordinates and nothing else. A name in the query makes it a text search, which
+    // Google answers with whatever matches the words — a different temple, or none.
+    for (const query of mapHtml.matchAll(/api=1&amp;query=([^"]*)"/g)) {
+      expect(query[1]).toMatch(/^-?\d+\.\d+,-?\d+\.\d+$/);
+    }
     expectNoMissingCopy(html);
   });
 

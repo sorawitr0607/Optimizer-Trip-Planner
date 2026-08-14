@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from itertools import groupby
 import unittest
 from unittest.mock import patch
 
@@ -615,3 +616,43 @@ class CategoryVarietyTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class LaneVarietyTest(unittest.TestCase):
+    """Ten museums in a row.
+
+    `main_queue` has had `WF-005`'s 4:1 ranked-to-exploration rule since it was built,
+    but the deck deals from whichever lane is picked and defaults to **City Icons**,
+    which was plain score order. Museums score alike, so on the owner's 1108-place Hong
+    Kong catalogue City Icons opened with twelve museums and ran to **70 of the same
+    category** unbroken.
+    """
+
+    def _cards(self, families: list[str]) -> tuple[list[str], dict]:
+        ids = [f"p{index}" for index, _ in enumerate(families)]
+        cards = {
+            place_id: {
+                "candidate_tags": {family},
+                "total_score": 100.0 - index,
+            }
+            for index, (place_id, family) in enumerate(zip(ids, families))
+        }
+        return ids, cards
+
+    def test_a_run_of_one_family_is_broken_up(self) -> None:
+        ids, cards = self._cards(["culture"] * 5 + ["nature"] * 5)
+
+        spread = ranking._spread_families(ids, cards)
+        families = [ranking._family(cards[place_id]) for place_id in spread]
+
+        self.assertEqual(sorted(ids), sorted(spread), "every candidate must survive")
+        self.assertEqual(ids[0], spread[0], "the best-scoring card still leads")
+        longest = max(len(list(group)) for _, group in groupby(families))
+        self.assertLessEqual(longest, 2)
+
+    def test_a_catalogue_of_one_kind_degrades_to_score_order(self) -> None:
+        """Not to nothing, and not to an arbitrary order."""
+
+        ids, cards = self._cards(["culture"] * 6)
+
+        self.assertEqual(ids, ranking._spread_families(ids, cards))
+

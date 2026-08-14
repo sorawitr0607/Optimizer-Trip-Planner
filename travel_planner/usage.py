@@ -59,6 +59,9 @@ PRICES_USD = {
     # under-estimate spends past it.
     "google_places:search_text": 0.025,
     "google_routes:compute": 0.005,
+    # Free and keyless, from the provider the weather already uses. An unpriced
+    # operation raises rather than being assumed free, so zero is recorded, not omitted.
+    "open_meteo:timezone": 0.0,
     "google_timezone:lookup": 0.005,
     # One small structured-output call. Priced conservatively above the
     # token cost of a short request and reply.

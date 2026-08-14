@@ -74,6 +74,13 @@ class FullWorkflowTest(unittest.TestCase):
 
             version = actions.get_active_plan(trip.trip_id)
             self.assertIsNotNone(version)
+            # The board is populated by activation itself now. Pressing Apply on
+            # `/readiness` was the only way to fill it before, so an owner who never
+            # visited that screen exported a workbook with no readiness in it.
+            self.assertTrue(
+                actions.list_checklist_items(trip.trip_id),
+                "activating a plan must leave a readiness board behind",
+            )
             actions.apply_checklist_proposal(trip.trip_id)
             snapshot = actions.build_export_snapshot(trip.trip_id).as_dict()
 

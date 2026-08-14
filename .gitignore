@@ -31,3 +31,6 @@ graphify-out/failed-clustered.json
 # Transit feeds: large, perishable, and not ours to redistribute. The README
 # beside them is kept.
 data/gtfs/*.zip
+
+# A downloaded GTFS feed: gigabytes of someone else's data, and not ours to redistribute.
+/gtfs/

@@ -62,6 +62,98 @@ class OptimizerCoreTest(unittest.TestCase):
             self.assertGreaterEqual(int(visits[1]["start"][:2]), 10)
             self.assertGreaterEqual(int(visits[2]["start"][:2]), 16)
 
+    def _route_evidence_snapshot(self, *, provisional: bool) -> dict:
+        """Shibuya, but every route is `estimated` and every place demands evidence.
+
+        That is the real shape of a transit leg: `WF-038` states a route derived from a
+        timetable or from OSM topology is `estimated` by construction, never `verified`.
+        """
+
+        snapshot = json.loads(
+            json.dumps(fixture("ix-jp-shibuya-hours-view-walk")["planner_input"])
+        )
+        snapshot["trip"]["requires_route_evidence"] = True
+        snapshot["trip"]["allow_provisional_assumptions"] = provisional
+        for candidate in snapshot["candidates"]:
+            candidate["requires_route_evidence"] = True
+        for route in snapshot["routes"]:
+            route["status"] = "estimated"
+            route["mode"] = "transit"
+        return snapshot
+
+    def test_an_estimated_route_is_evidence_enough_for_an_explore_trip(self) -> None:
+        """The fourth site `WF-038` needed and did not get.
+
+        `validate_variant`, `_routes_between` and `_best_inbound_route` all admit an
+        `estimated` route under `allow_provisional_assumptions` — the same rule
+        `_planning_fact` applies to an assumed opening window. `_prepare_candidates`
+        did not, so a place reachable only by train was thrown out before any of them
+        ran, and reported `ROUTE_UNVERIFIED · collect_a_verified_route` on a trip
+        already holding a usable transit leg for it.
+        """
+
+        variant = optimize_trip(self._route_evidence_snapshot(provisional=True))["variants"][0]
+
+        self.assertEqual([], [
+            item for item in variant["reconciliation"] if item["reason"] == "ROUTE_UNVERIFIED"
+        ])
+        self.assertTrue(variant["metrics"]["scheduled_visits"])
+
+    def test_an_estimated_route_is_still_refused_when_the_trip_is_not_exploring(self) -> None:
+        """The other half, and the reason this is a status rule rather than a relaxation:
+        a `ready_to_schedule` trip is unaffected and `ROUTE_UNVERIFIED` stays fatal."""
+
+        variant = optimize_trip(self._route_evidence_snapshot(provisional=False))["variants"][0]
+
+        refused = [
+            item for item in variant["reconciliation"] if item["reason"] == "ROUTE_UNVERIFIED"
+        ]
+        self.assertTrue(refused)
+        self.assertEqual("cannot_currently_fit", refused[0]["status"])
+        self.assertEqual("collect_a_verified_route", refused[0]["consequence"])
+
+    def test_a_place_with_no_route_at_all_is_still_refused(self) -> None:
+        """It admits a route the snapshot *has*; it does not invent one. A fabricated
+        travel time errs optimistic, which is the one direction this must not err in."""
+
+        snapshot = self._route_evidence_snapshot(provisional=True)
+        snapshot["routes"] = []
+
+        variant = optimize_trip(snapshot)["variants"][0]
+
+        self.assertTrue([
+            item for item in variant["reconciliation"] if item["reason"] == "ROUTE_UNVERIFIED"
+        ])
+
+    def test_a_skipped_place_names_a_threshold_only_when_one_was_exceeded(self) -> None:
+        """`_skip_reason` blamed a comfort setting that was nowhere near its cap.
+
+        It answered `PLAIN_WALK_THRESHOLD` whenever a plain-walking threshold merely
+        *existed* — and `balanced_pace` always sets one — so a trip with no room for
+        another place blamed the owner's walking preference. Measured on the owner's
+        Fukuoka trip: three places reported that reason while `comfort_tradeoffs`
+        reported 21 minutes against a cap of 45 and nothing exceeded at all.
+        """
+
+        snapshot = json.loads(
+            json.dumps(fixture("ix-jp-shibuya-hours-view-walk")["planner_input"])
+        )
+        # A cap far above anything this plan can reach, so it exists and is not met.
+        snapshot.setdefault("thresholds", {})["plain_walking_minutes_per_day"] = 10_000
+        # Two hours for 225 minutes of visiting, so the room is what runs out.
+        snapshot["trip"]["usable_windows"] = [
+            {**snapshot["trip"]["usable_windows"][0], "start": "09:00", "end": "11:00"}
+        ]
+
+        variant = optimize_trip(snapshot)["variants"][0]
+        skipped = [
+            item for item in variant["reconciliation"] if item["status"] != "fits"
+        ]
+
+        self.assertTrue(skipped, "the fixture must skip something for this to test")
+        for item in skipped:
+            self.assertEqual("NO_TIME_CAPACITY", item["reason"])
+
     def test_safe_route_and_weather_fallback_are_selected(self) -> None:
         odaiba = optimize_trip(
             fixture("jp-teamlab-odaiba-long-walk")["planner_input"]

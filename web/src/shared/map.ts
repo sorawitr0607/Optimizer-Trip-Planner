@@ -49,12 +49,16 @@ export function mapPlaces(
  *
  * This app schedules a day; it does not do turn-by-turn, and should not try — the
  * routing it holds is a duration, not a path. What it can do is stop being a dead end at
- * the moment the owner is standing on a corner looking for a temple. `geo:` is the
- * platform-neutral scheme: Android opens the user's chosen map, iOS opens Apple Maps,
- * and a desktop browser falls back to whatever is registered, so no vendor is wired in.
- * The name rides along as the query label so the pin says what it is.
+ * the moment the owner is standing on a corner looking for a temple.
+ *
+ * **Coordinates only, and the name is deliberately not sent.** `query` is a *search*,
+ * so `Namba Yasaka Shrine 34.66,135.50` is answered by whatever Google's index thinks
+ * best matches the words — which is how a stop opened on a different shrine in another
+ * ward, and how a name it does not recognise opened on nothing at all. A bare
+ * `lat,lng` is not a search at all; it drops a pin exactly where the catalogue says the
+ * place is. Labelling that pin would need a Google place id, which this app has never
+ * held. The name is already on screen beside the link.
  */
-export function mapsLink(latitude: number, longitude: number, name: string): string {
-  const at = `${latitude.toFixed(6)},${longitude.toFixed(6)}`;
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name ? `${name} ` : "")}${at}`;
+export function mapsLink(latitude: number, longitude: number): string {
+  return `https://www.google.com/maps/search/?api=1&query=${latitude.toFixed(6)},${longitude.toFixed(6)}`;
 }

@@ -196,11 +196,23 @@ export function SplitPage() {
           it is the one export that cannot be shared, and until this existed the
           split ledger only came out inside it. No active plan is needed, which is
           the point -- bills get paid before an itinerary is built. */}
+      {/* Only once there is something in it. An empty workbook downloads perfectly
+          well and tells you nothing, so the link was an invitation to a blank file. */}
       <div className="money-export">
-        <a className="primary-link" download href={`/api/export/${encodeURIComponent(tripId)}/money.xlsx`}>
-          {copy("money_workbook", language)}
-        </a>
-        <span className="setup-hint">{copy("money_workbook_help", language)}</span>
+        {summary.data.rows > 0 ? (
+          <a className="primary-link" download href={`/api/export/${encodeURIComponent(tripId)}/money.xlsx`}>
+            {copy("money_workbook", language)}
+          </a>
+        ) : (
+          <span aria-disabled="true" className="primary-link disabled">
+            {copy("money_workbook", language)}
+          </span>
+        )}
+        <span className="setup-hint">
+          {summary.data.rows > 0
+            ? copy("money_workbook_help", language)
+            : copy("money_workbook_empty", language)}
+        </span>
       </div>
 
       <div className="money-tiles">

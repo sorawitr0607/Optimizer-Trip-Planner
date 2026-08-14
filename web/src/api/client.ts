@@ -21,6 +21,10 @@ export interface PlaceSummary {
    *  article, so `text` can be empty while this is not. */
   names?: Partial<Record<Language, string>>;
   text: Partial<Record<Language, string>>;
+  /** Wikidata's one-line description, which most places have and few have an article
+   *  for — 27 of the owner's 64 stored summaries were a photograph with no words. Kept
+   *  apart from `text` because it is CC0 rather than CC BY-SA, so the credit differs. */
+  description?: Partial<Record<Language, string>>;
   image_url: string | null;
   /** The curated image first, then article photographs. Free, capped at six. */
   image_urls?: string[];
@@ -368,6 +372,9 @@ export interface PlanDay {
 }
 
 export interface Reconciliation {
+  /** `optimizer._reconciliation` has always written this; the type simply never named
+   *  it, so nothing on screen could act on a row — only describe it. */
+  place_id: string;
   name: string;
   names?: Names;
   priority: string;

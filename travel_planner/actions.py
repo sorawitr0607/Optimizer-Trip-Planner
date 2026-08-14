@@ -47,7 +47,7 @@ from .providers import (
     OpenAIRevisionInterpreter,
     OpenMeteoClimateProvider,
     RevisionInterpretationUnavailable,
-    GoogleTimeZoneProvider,
+    OpenMeteoTimeZoneProvider,
     GtfsTransitProvider,
     OpenRouteServiceProvider,
     OsmAreaAmenitiesProvider,
@@ -1051,7 +1051,41 @@ class PlannerActions:
             cause=f"optimizer:{variant_id}",
         )
         self.store.delete_optimization_preview(trip_id)
+        # The readiness board, applied here rather than waiting to be pressed.
+        #
+        # `propose_items` is city-independent and derives entirely from setup, choices
+        # and verified facts, so at the moment a plan becomes real there is nothing left
+        # to decide about it — and until it was applied the board was empty, which meant
+        # the exported workbook carried no readiness sheet unless the owner happened to
+        # visit `/readiness` and press a button first.
+        #
+        # **Additions only.** `apply_checklist_proposal` also dismisses items the
+        # proposal no longer suggests, and doing that silently on activation would
+        # retire something the owner had been working through. Dismissal stays a
+        # deliberate press on `/readiness`.
+        #
+        # Never fatal: a plan is written and the preview deleted above, so a checklist
+        # that cannot be generated must not undo an activation that already succeeded.
+        try:
+            self._apply_checklist_additions(trip_id)
+        except (PlannerRefusal, ValueError):
+            pass
         return version
+
+    def _apply_checklist_additions(self, trip_id: str) -> int:
+        """Write the proposal's new items, leaving every existing one alone."""
+
+        preview = self.propose_checklist(trip_id)
+        for item in preview["additions"]:
+            self.store.upsert_checklist_item(
+                new_checklist_item(
+                    trip_id=trip_id,
+                    payload=checklist.validate_item(item),
+                    generated_key=item["generated_key"],
+                    origin="generated",
+                )
+            )
+        return len(preview["additions"])
 
     def _current_choice_inputs(
         self, trip_id: str
@@ -1909,7 +1943,12 @@ class PlannerActions:
         trip = self.store.get_trip(trip_id)
         if trip is None:
             raise PlannerRefusal("unknown_trip", trip_id=trip_id)
-        provider = self.timezone_provider or GoogleTimeZoneProvider()
+        # Free by default. The paid Google lookup is US$0.005 and needs a server key
+        # that is not configured everywhere, so a trip whose zone could not be verified
+        # carried `DESTINATION_TIMEZONE_UNVERIFIED` for its whole life over half a cent.
+        # Open-Meteo answers the same question for nothing, from a service this app
+        # already calls for weather, and writes the same evidence record.
+        provider = self.timezone_provider or OpenMeteoTimeZoneProvider()
         now = datetime.now(timezone.utc)
         existing = self.store.get_trip_evidence(trip_id, provider.kind)
         if not force and existing and existing["expires_at"] > now.isoformat():
@@ -1945,7 +1984,7 @@ class PlannerActions:
     def get_timezone_evidence(self, trip_id: str) -> dict[str, Any] | None:
         """Unexpired zone evidence, or None. An expired zone is not verified."""
 
-        evidence = self.store.get_trip_evidence(trip_id, GoogleTimeZoneProvider.kind)
+        evidence = self.store.get_trip_evidence(trip_id, OpenMeteoTimeZoneProvider.kind)
         if evidence is None:
             return None
         if evidence["expires_at"] <= datetime.now(timezone.utc).isoformat():
@@ -2429,6 +2468,25 @@ class PlannerActions:
                 if message not in errors:
                     errors.append(message)
                 continue
+            # Commons files that name this place, appended to whatever the encyclopedia
+            # had. These are pictures *of* the place — the title names it and the
+            # coordinates agree — so they are gallery, not fallback, and a card with one
+            # P18 photograph stops being a card with one photograph.
+            # Seeded from `image_urls` or, where a provider returned only the one, from
+            # `image_url` — otherwise appending to an empty list quietly drops the
+            # encyclopedia's own photograph out of the gallery it should be leading.
+            held = list(value.get("image_urls") or [])
+            if not held and value.get("image_url"):
+                held = [str(value["image_url"])]
+            named = [url for url in self._named_photos(provider, place) if url not in held]
+            if named:
+                gallery = [*held, *named]
+                limit = int(getattr(provider, "gallery_limit", len(gallery)))
+                value = {
+                    **value,
+                    "image_urls": gallery[:limit],
+                    "image_url": value.get("image_url") or gallery[0],
+                }
             # An article with no photograph is still a place with coordinates, so the
             # nearby fallback applies here too rather than only where the id is missing.
             if not value.get("image_urls") and not value.get("image_url"):
@@ -2484,9 +2542,33 @@ class PlannerActions:
         # photograph filed under the place's own name but geotagged from across the park
         # -- measured, it had nothing for Shilin Presidential Residence Park while four
         # files carry that exact name.
+        return PlannerActions._named_photos(provider, place)
+
+    @staticmethod
+    def _named_photos(provider: Any, place: dict[str, Any]) -> list[str]:
+        """Commons files whose *title* names this place and whose location agrees.
+
+        Split out of `_nearby_photos` so it can also be used the other way round. The
+        two are not the same kind of picture and that is the whole reason for the split:
+        geosearch answers "what was photographed at this spot", so it is a *substitute*
+        for a card that would otherwise be blank and is flagged `photos_are_nearby`;
+        a file that names the place **and** sits at the place is a picture *of* it, so
+        it belongs beside the encyclopedia's rather than only in its absence.
+
+        That absence is what "still only one picture" was. `WikidataSummaryProvider`
+        returns P18 and whatever the article carries, and this ran only when both came
+        back empty -- so a place with a Wikidata id got exactly what Wikipedia had and
+        no more, however many good photographs Commons held under its name.
+
+        Never raises: a place with no picture is the state it was already in.
+        """
+
+        latitude, longitude = place.get("latitude"), place.get("longitude")
         by_name = getattr(provider, "named_photos", None)
-        if by_name is None:
+        if latitude is None or longitude is None or by_name is None:
             return []
+        names = [str(place.get("name") or "")]
+        names.extend(str(value or "") for value in (place.get("names") or {}).values())
         for name in names:
             try:
                 found = list(by_name(name, float(latitude), float(longitude)))

@@ -12,10 +12,15 @@
   display: flex;
   flex-direction: column;
   gap: 18px;
-  max-height: calc(100vh - 40px);
-  overflow-y: auto;
-  overflow-x: hidden;
-  scrollbar-width: thin;
+  /* The pane runs as long as its content and the *page* scrolls, rather than the pane
+     scrolling inside itself. A nested scrollbar on a nine-item list is a second thing to
+     drive, and it clipped the theme and language controls at the foot on a short window.
+     `position: sticky` keeps it in view while the stage beside it scrolls. */
+  overflow: visible;
+  /* The three sections are separate groups of work, so they get separate frames rather
+     than one run of links under three headings — the heading alone left "Build the trip"
+     and "Use the trip" reading as labels in a single list. */
+  gap: 10px;
   margin: 20px;
   padding: 18px;
   position: sticky;
@@ -303,6 +308,16 @@
 .money-table th:first-child,
 .money-table td:first-child {
   text-align: left;
+}
+
+/* A gutter between columns. Every cell is right-aligned and carried no horizontal
+   padding, which is invisible on the two-column money tables — the value sits at the
+   right edge and the label at the left — and unreadable on the five-column
+   reconciliation table, where neighbours ran together as "InterestedCannot currently
+   fit". Left only, so the right edge and every existing baseline are untouched. */
+.money-table th + th,
+.money-table td + td {
+  padding-left: 14px;
 }
 
 .money-table tfoot td {
@@ -1199,6 +1214,21 @@
   background: var(--bg-secondary);
 }
 
+/* The placeholder sits over the picture rather than in place of it, so the image is
+   still fetched eagerly and the box does not resize when the bytes land. */
+.place-deck-photo-frame {
+  display: block;
+  min-height: 120px;
+  position: relative;
+}
+
+.place-deck-photo-frame .skeleton-photo {
+  height: 100%;
+  inset: 0;
+  position: absolute;
+  width: 100%;
+}
+
 .place-deck-photo span {
   display: block;
   padding: 4px 8px;
@@ -1656,6 +1686,38 @@
 .plan-row.meal .plan-row-kind {
   background: var(--color-warning-light);
   color: var(--color-warning);
+}
+
+/* The same five families as a standalone chip, for the validated timeline on
+   `/optimize` — a table rather than a stack of rows, so it has no `.plan-row` to hang
+   the colour on. Same vocabulary on purpose: the draft and the itinerary are the same
+   day, and a buffer that is grey in one place and green in the other is two pictures. */
+.plan-row-kind.travel {
+  background: var(--color-success-light);
+  color: var(--color-success);
+}
+
+.plan-row-kind.meal {
+  background: var(--color-warning-light);
+  color: var(--color-warning);
+}
+
+.plan-row-kind.visit {
+  background: var(--color-accent-light);
+  color: var(--color-accent);
+}
+
+/* A buffer is the one row that is not something you do, so it stays the quiet one. */
+.plan-row-kind.buffer {
+  color: var(--text-muted);
+}
+
+/* The day boundary. Rows within a day keep the dashed hairline they already had; only
+   where the date turns over does the rule go solid, so a day is a block you can find
+   without reading twenty repeated dates. */
+.money-table tr.timeline-day-start td {
+  border-top: 1.5px solid var(--bg-card-border);
+  padding-top: 12px;
 }
 
 .plan-row h3,
@@ -2621,7 +2683,7 @@
 /* The working half of the page, on sand rather than ink so the forms read as
    ordinary controls instead of as part of the picture. */
 .landing-columns {
-  background: var(--landing-cream);
+  background: var(--landing-page);
   display: grid;
   gap: 20px;
   grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
@@ -2648,7 +2710,7 @@
 
 .landing-steps li {
   align-items: flex-start;
-  background: var(--landing-sand);
+  background: var(--landing-step);
   border: 1px solid var(--landing-ink);
   border-radius: var(--radius);
   display: grid;
@@ -2994,6 +3056,181 @@
   padding: 5px 10px;
 }
 
+/* The way out of a blocked draft, given its own block under the warnings rather than
+   buried inside them. A control that resolves a list is not an item of that list. */
+.optimize-resolve {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+  margin: 12px 0 4px;
+}
+
+/* The card, held back until its first photograph has painted. `visibility` rather than
+   `display`, so the card keeps its size and nothing below it jumps when the bytes land —
+   and the image still loads, which is what we are waiting for. */
+.place-deck-drag.pending {
+  visibility: hidden;
+}
+
+.place-deck-pending {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.place-deck-pending .skeleton-photo {
+  height: 240px;
+}
+
+/* A link that is not a link yet: same shape, plainly unavailable. */
+.primary-link.disabled {
+  cursor: not-allowed;
+  opacity: var(--opacity-disabled);
+  text-decoration: none;
+}
+
+/* What the plan will cost money for: counted, never priced. */
+.money-plan-shape {
+  border-top: 1px solid var(--bg-card-border);
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  margin-top: 14px;
+  padding-top: 14px;
+}
+
+.money-shape-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.money-shape-list strong {
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+}
+
+/* Places that did not make the plan, each with its remedy on the same line. */
+.optimize-unfit {
+  border: 1px solid var(--bg-card-border);
+  border-left: 4px solid var(--color-warning);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  margin: 14px 0;
+  padding: 12px 14px;
+}
+
+.optimize-unfit-list {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+}
+
+.optimize-unfit-list li {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) auto;
+}
+
+.optimize-unfit-list small {
+  color: var(--text-secondary);
+}
+
+.optimize-unfit-name {
+  font-weight: var(--weight-secondary);
+}
+
+@media (max-width: 768px) {
+  .optimize-unfit-list li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The end-of-journey card. Same shell as the tour's, its own spacing. */
+.plan-ready {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+  max-width: 46ch;
+}
+
+.plan-ready h2 {
+  margin: 0;
+}
+
+.plan-ready-warn {
+  background: var(--color-warning-light);
+  border-left: 3px solid var(--color-warning);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+}
+
+.plan-ready-warn ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.deck-lane-suggest {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+/* One frame per section of the nav, so the three groups read as three groups. */
+.sidebar nav {
+  background: var(--bg-secondary);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 2px;
+  padding: 8px;
+}
+
+.sidebar nav .nav-section {
+  margin: 0 0 4px;
+}
+
+/* The traveller walking the day's route. Bright enough to follow across a street map,
+   with a soft ring so it reads as a moving thing rather than another pin. */
+.plan-map-traveller circle {
+  fill: var(--color-accent);
+  stroke: var(--bg-card);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Honouring a reduced-motion preference is not optional, and `animateMotion` ignores
+   CSS — so the element is removed from the flow entirely rather than slowed down. */
+@media (prefers-reduced-motion: reduce) {
+  .plan-map-traveller {
+    display: none;
+  }
+}
+
+.places-map-trace {
+  background: var(--bg-secondary);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  /* The map's container stretches its children, and a control that spans the whole
+     width reads as a banner rather than as something to press. */
+  justify-self: start;
+  margin-top: 6px;
+  padding: 4px 10px;
+  width: fit-content;
+}
+
 .place-deck-exhausted {
   grid-column: 1 / -1;
 }
@@ -3033,18 +3270,49 @@
 }
 
 .deck-reconsider-row {
-  align-items: center;
+  align-items: start;
   background: var(--bg-secondary);
   border: 1px solid var(--bg-card-border);
   border-radius: var(--radius);
   display: flex;
+  gap: 10px;
   justify-content: space-between;
   padding: 6px 10px;
 }
 
+/* The name takes the room, so opening a row does not push the button around. */
+.deck-reconsider-detail {
+  min-width: 0;
+}
+
 .deck-reconsider-name {
+  cursor: pointer;
   font-size: var(--text-sm);
   font-weight: var(--weight-secondary);
+}
+
+.deck-reconsider-about {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 72px minmax(0, 1fr);
+  margin-top: 8px;
+}
+
+.deck-reconsider-about:not(:has(img)) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.deck-reconsider-about img {
+  border-radius: var(--radius);
+  height: 72px;
+  object-fit: cover;
+  width: 72px;
+}
+
+.deck-reconsider-about p {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  margin: 0;
 }
 
 .deck-reconsider-btn {

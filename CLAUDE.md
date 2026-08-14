@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm --prefix web install                                             # first web run only
 uv run --locked python -m api                                        # production shell on 127.0.0.1:8765
 uv run --locked python scripts/check.py                              # every free Python + web gate
-uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 512 tests, ~11s
+uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 523 tests, ~12s
 uv run --locked python -m unittest tests.test_optimizer.OptimizerCoreTest.test_safe_route_and_weather_fallback_are_selected  # one test
 python3 scripts/validate_regression_fixtures.py                      # fixture catalog structure
 uv run --locked python scripts/run_optimizer_regressions.py          # 27 historic cases through the real optimizer
@@ -503,11 +503,169 @@ rule. Unknown stable codes render visibly as `⚠ CODE`; never prettify them int
 
 Python uses `unittest`; the webapp uses Vitest. No network, no paid API, no Python fixtures framework.
 **`AppTest` is gone** — S6 removed the 18 tests that used it, having first moved the 14 portable
-behaviours down to actions/core/exports. It was **311** at S6; it is **512** now, plus 86 Vitest cases in
+behaviours down to actions/core/exports. It was **311** at S6; it is **523** now, plus 95 Vitest cases in
 `web/`.
 `tests/fixtures/historic_regressions.json` encodes 20 atomic + 7 interaction failures from four real
 past trips; `scripts/run_optimizer_regressions.py` replays all of them through the real optimizer.
 Behavior changes to the optimizer should be expressed there.
+
+## Owner testing, 2026-08-13/14: what it found and what it changed
+
+Five rounds of the owner driving the real app. Everything below was reproduced against a
+copy of their own database before it was touched, and the 27 historic regressions came
+back **byte-identical** after every optimizer change.
+
+**A gap the owner cannot cross is worse than a gap the app admits to.** Three of these
+were dead ends — a button that promised work it did not do, a cap that could not be
+reached past, a threshold blamed for a limit it did not cause — and each read as the app
+refusing rather than as the app being unfinished.
+
+### The optimizer told the truth about the wrong thing
+
+`_skip_reason` answered `PLAIN_WALK_THRESHOLD` whenever a plain-walking threshold merely
+**existed**, and `balanced_pace` always sets one. So a two-day Fukuoka trip with no room
+for a fifth museum blamed the owner's walking preference, while `comfort_tradeoffs`
+reported **21 minutes against a cap of 45 and nothing exceeded** — two screens
+contradicting each other about one plan, and a "smallest next step" pointing at a setting
+that would have changed nothing. It now reads `COMFORT_RULES`, the same table the
+validator, the soft count and the tradeoff screen already share, and names a threshold
+only where one was measured past. The bug was old enough to be frozen into
+`ix-dali-hotel-whole-trip`, whose 60-minute cap is blamed for a plan that walks **10**;
+an export test was pinning that wrong answer.
+
+**An `estimated` route is evidence on an Explore trip, at six sites rather than three.**
+`WF-038` gave `validate_variant`, `_routes_between` and `_best_inbound_route` the
+`_usable_route_statuses` rule and missed `_prepare_candidates`, `_standalone_activity_route`,
+`_activity_route`, `_fallback_route_compatible` and `_missing_route_edges` — the first of
+which is the veto, so a place reachable only by train was thrown out before any of the
+others ran. The owner's Taipei trip held **208 estimated transit legs** while reporting
+`ROUTE_UNVERIFIED · collect_a_verified_route`. It admits a route the snapshot **has**; it
+does not invent one, because a fabricated travel time errs optimistic and that is the one
+direction this must not err in.
+
+### Free by default, and priced where it is not
+
+**The "Auto-Resolve" button was spending money without saying so** — `refresh_opening_hours`
+at US$0.025 a place and `refresh_timezone` at US$0.005, US$0.13 on one five-place press,
+from a control whose label promised only to resolve details. Both are out of both
+auto-resolve chains: the very next line already assumed the hours, so buying them bought
+nothing that button needed. The paid lookup stays on `/evidence` and in the verdict panel,
+with its price beside it.
+
+**`OpenMeteoTimeZoneProvider` verifies the zone for nothing.** Open-Meteo echoes the
+resolved IANA zone whenever `timezone=auto` is sent, which both weather providers already
+send — so the same `destination_timezone` record, same `verified` status, no key, US$0.00.
+`GoogleTimeZoneProvider` is kept for anyone who wants Google's answer specifically. It
+still never guesses from a country: an empty or `auto` reply raises.
+
+A whole trip now goes from nothing to an activatable plan at **US$0.0000**.
+
+**`refresh_routes` is asked until it is done.** It fetches at most `MAX_ROUTE_REQUESTS`
+new pairs a call and eleven places need 110, so one call left the rest fatally unverified.
+`web/src/shared/routeEvidence.ts` loops until nothing is outstanding or a pass fetches
+nothing; measured on Osaka, one pass left 30 pairs missing and the second fetched all 30.
+
+### The map's scale had no meaning for a single pin
+
+`projectionOf` fits its scale to the spread of the points it is given, and one point has
+no spread — the fallback was **1**, which makes the unit a radian. Measured in Nara: a
+kilometre was **0.00019 units** against 139 for the same map with a second pin, a factor
+of 730,000. Everything downstream reasons in real distance, so `FOCUS_KM`, `MIN_VIEW_KM`,
+the detail-fetch gate, the scale note and the tile zoom were all computed against nothing.
+That is exactly two screens: the first swipe card, whose shortlist is empty, and an
+itinerary day with one stop. A degenerate projection now takes its scale from the
+geography — `DEGENERATE_SPAN_KM` of real ground, `cos(latitude)` the only correction
+Mercator needs.
+
+**Widening the card map where the surroundings "looked empty" was tried and reverted.**
+The only signal available at first paint is the basemap's major roads, and it is a bad
+proxy: Nara National Museum has **zero** within 800 m because it sits inside Nara Park, so
+the test called the middle of a city empty and opened its card on 8 km. The basemap is
+also fetched *after* the deck first paints, so on a new trip every card widened to the
+ceiling. `FOCUS_KM` is fixed and predictable; a wooded hill opens on a frame of trees and
+the map zooms.
+
+### The deck dealt one category at a time
+
+`WF-005`'s 4:1 ranked-to-exploration rule only ever existed in `main_queue`, and the deck
+defaults to **City Icons** — plain score order. Museums score alike, so on the owner's
+1108-place Hong Kong catalogue City Icons opened with twelve museums and ran to **70 of
+one category** unbroken. `ranking._spread_families` reorders the dealt lanes by
+least-recently-used family: a reordering, never a rescoring, so the top scorer still leads
+and every candidate survives. Least-recently-used rather than a window, because with two
+families a window of two makes everything recent and emits runs of three. `browse_all`
+keeps strict score order — it is the audit list. First twelve now cycle museum, viewpoint,
+attraction, landmark; longest run 28, where the catalogue really has nothing else.
+
+Lanes are also **dealt a page at a time** (`LANE_PAGE`), because 431 City Icons is a
+catalogue rather than a shortlist. Running out of the page offers more; running out of the
+lane offers the other lanes.
+
+### Photographs, and what a card may claim
+
+**A card is withheld until its first photograph has painted**, not merely its photo box:
+the swipe decision is made on the picture, so showing the text first invites a decision on
+half the evidence. A cached image can finish before React attaches `onLoad`, so the `<img>`
+ref checks `complete` — without it the card hides for good.
+
+**The summaries prefetch released its own tombstone.** `asked` existed to stop one place
+being requested twice at once and was doubling as a permanent marker, so a place whose
+fetch *failed* was never asked again and the manual button was the only way. Wikimedia
+answers HTTP 429 on a burst and this screen prefetches in bursts.
+
+**Commons files that name a place join its gallery** rather than only substituting for an
+empty one, so a place with one P18 photograph stops being a card with one photograph.
+Geosearch stays a substitute and stays flagged, because "photographed at this spot" is not
+"of this place". **Wikidata's own one-line description fills `text`'s gap** — 27 of 64
+stored summaries were a photograph with no words, and every one had a QID but no article —
+kept in its own field because it is CC0 rather than CC BY-SA. And **a disambiguation page
+is not a description**: OpenStreetMap's `wikidata` tag on Busan's 국립해양박물관 is
+**Q1195337**, so the card read "The National Maritime Museum is in Greenwich, United
+Kingdom."
+
+### The end of the journey, and the things around it
+
+`journey.next` falls back to `itinerary` when every stage is done so `/` still has
+somewhere to send a returning owner — and the sidebar was reading that fallback as an
+instruction, keeping a NEXT badge on a screen with nothing left to do. Done now beats next,
+and `PlanReady` says so once per plan version, celebrating and listing the assumptions in
+the same card.
+
+**The readiness board is applied by activation**, additions only. `apply_checklist_proposal`
+also dismisses items the proposal no longer suggests, and doing that silently would retire
+something the owner was working through — dismissal stays a deliberate press. Before this,
+a workbook exported without visiting `/readiness` carried no readiness at all.
+
+**`/costs` counts what the plan will cost money for and refuses to price it.** Nothing in
+this app knows what a museum entry or a metro ride costs, and a plausible number on that
+screen would be indistinguishable from one the owner typed. It reads the same
+`build_export_snapshot` the itinerary and both workbooks read, reports nights, meals,
+entries and journeys, and seeds estimate rows at zero.
+
+**`/split` is gated on an activated plan at the owner's request, 2026-08-14 — and this
+reverses the note under `WF-030` above.** That note says split needs only a confirmed setup
+because bills get paid before an itinerary is built, and a money file that refuses until
+activation is unavailable during exactly the stretch of a trip when people are paying for
+things. The reasoning still stands; the owner asked for the lock anyway. Reverting is one
+word in `web/src/shared/stages.ts`.
+
+### The catalogue of codes was half empty
+
+**Twenty-six optimizer codes had no copy entry**, so the "consequence / smallest next step"
+column — the one that says what to do — printed `⚠ collect_a_verified_route` and
+`⚠ OPERATIONAL_DETAILS_REQUIRE_CONFIRMATION` verbatim in both languages.
+`OPTIMIZER_CODE_TEXT` went 95 → 133 entries each. `⚠ CODE` remains the correct rendering
+for a code that genuinely has no entry; it was never meant to be the common case.
+
+### Taiwan's GTFS feed is sourced
+
+`WF-038` parked TDX registration as disproportionate. The owner registered anyway. The
+national feed is **7.1 GB extracted**, of which `fare_leg_rules.txt` and `fare_products.txt`
+are 6.5 GB the reader never opens, and 6,198,885 `stop_times` rows of which **161,612
+(2.6%) are metro** — TRTC, NTMC, TYMC, TMRT and KRTC. `data/gtfs/transit.zip` is the metro
+subset at **3.7 MB**, loading in under a second, and 捷運西門站 → 捷運台北101 resolves to a
+25-minute journey with one transfer at `basis: "timetable"`. `/gtfs/` is gitignored: it is
+gigabytes of someone else's data and not this repository's to redistribute.
 
 ## Public release boundary
 

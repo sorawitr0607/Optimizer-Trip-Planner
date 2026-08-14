@@ -83,11 +83,15 @@ function render(
   summaries: Record<string, PlaceSummary>,
   choices: string[] = [],
   entries = RANKING.lanes.main_queue,
+  rejected: string[] = [],
 ) {
   return renderToStaticMarkup(
     <PlaceDeck
       candidates={CANDIDATES}
-      choices={choices.map((place_id) => ({ place_id, action: "must_do", reason: null }) as never)}
+      choices={[
+        ...choices.map((place_id) => ({ place_id, action: "must_do", reason: null }) as never),
+        ...rejected.map((place_id) => ({ place_id, action: "not_for_trip", reason: null }) as never),
+      ]}
       entries={entries}
       language="en"
       altNameOf={(placeId) => (placeId === "first" ? "台北101" : null)}
@@ -139,7 +143,9 @@ describe("PlaceDeck", () => {
     // action row, and `touch-action` lives on it so the browser cannot claim the
     // gesture for scrolling — the reason the swipe did nothing on a touchscreen.
     const html = render(SUMMARY);
-    expect(html).toContain('class="place-deck-drag"');
+    // Not an exact class match: the surface also carries `pending` until the card's
+    // first photograph has painted.
+    expect(html).toContain('class="place-deck-drag');
     // Colour, not five identical greys, and the class carries the action code so
     // the stylesheet and the handler cannot drift apart.
     for (const action of ["must_do", "interested", "maybe", "not_for_trip", "skip"]) {
@@ -200,6 +206,27 @@ describe("PlaceDeck", () => {
   it("says so when every unseen place has been decided", () => {
     const html = render(SUMMARY, ["first", "explore"]);
     expect(html).toContain("Every unseen place has had a decision");
+  });
+
+  it("counts the finished deck and offers every passed place back", () => {
+    // Reaching the end used to print one line and nothing else, so a place dropped in
+    // the first ten cards was unrecoverable without hunting the detailed list for it.
+    const html = render(SUMMARY, ["first"], RANKING.lanes.main_queue, ["explore"]);
+
+    expect(html).toContain("You have shortlisted 1 places and passed on 1.");
+    expect(html).toContain("Reconsider skipped places");
+    expect(html).toContain("A quiet park");
+    expect(html).toContain("Add to list");
+  });
+
+  it("opens a passed place to show what it was", () => {
+    // A name twenty cards later is not enough to change a mind on: the picture and the
+    // sentence are what the decision was made on, and both are already in hand.
+    const html = render(SUMMARY, ["explore"], RANKING.lanes.main_queue, ["first"]);
+
+    expect(html).toContain("<details");
+    expect(html).toContain("A landmark tower with an observation deck.");
+    expect(html).toContain("commons.example/one.jpg");
   });
 
   it("deals from whichever lane it is given, not always from main_queue", () => {

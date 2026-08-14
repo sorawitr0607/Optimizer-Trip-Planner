@@ -1808,7 +1808,7 @@ class WikidataSummaryProvider:
     # under, so bumping this refetches every place once and no further -- without it a
     # place cached before geosearch existed keeps its empty gallery for the 60-day TTL,
     # which is what left cards blank after the source was added.
-    cache_version = "wikidata-summary-v4"
+    cache_version = "wikidata-summary-v7"
     # An encyclopedia article changes slowly and a description is not a fact the
     # planner schedules against, so this can sit for a long time.
     cache_ttl_days = 60
@@ -2047,7 +2047,12 @@ class WikidataSummaryProvider:
             # `labels` rides along in the request already being made, so an English name
             # for a Chinese-only place costs nothing extra. 61% of the Taipei catalogue
             # has no `name:en` in OpenStreetMap at all.
-            f"&props=sitelinks|claims|labels&languages={codes}&sitefilter={sites}"
+            # `descriptions` rides along for the same reason `labels` does — no extra
+            # request, no extra money. Measured on the owner's own file: 27 of 64 stored
+            # summaries had a photograph and no words at all, and every one of the 27
+            # had a QID. They have no Wikipedia article, which is the only thing `text`
+            # was ever filled from; Wikidata's one-line description is what they do have.
+            f"&props=sitelinks|claims|labels|descriptions&languages={codes}&sitefilter={sites}"
             f"&format=json"
         )
         found = ((entity.get("entities") or {}).get(str(qid))) or {}
@@ -2086,7 +2091,14 @@ class WikidataSummaryProvider:
             except ProviderUnavailable:
                 continue  # one missing language must not lose the other
             extract = (page.get("extract") or "").strip()
-            if extract:
+            # A disambiguation page is a list of things sharing a name, never a
+            # description of one place. OpenStreetMap's `wikidata` tag on Busan's
+            # 국립해양박물관 is **Q1195337**, which is "National Maritime Museum
+            # (disambiguation)" — so the card read "The National Maritime Museum is in
+            # Greenwich, United Kingdom." about a museum in Korea. The REST summary
+            # labels these `type: "disambiguation"`, so this is upstream's own marker
+            # rather than a guess about the prose.
+            if extract and page.get("type") != "disambiguation":
                 text[code] = extract
             if image is None:
                 image = ((page.get("thumbnail") or {}).get("source")) or None
@@ -2108,10 +2120,23 @@ class WikidataSummaryProvider:
             if value:
                 names[code] = value
 
+        # Kept apart from `text` rather than merged into it. An article extract is a
+        # paragraph under CC BY-SA and a Wikidata description is a phrase under CC0, so
+        # merging them would make one credit line wrong for whichever it came from —
+        # and the screen has to be able to say which it is showing.
+        description: dict[str, str] = {}
+        for code in self.languages:
+            value = str(
+                ((found.get("descriptions") or {}).get(code) or {}).get("value") or ""
+            ).strip()
+            if value:
+                description[code] = value
+
         return {
             "qid": str(qid),
             "names": names,
             "text": text,
+            "description": description,
             "image_url": image or (gallery[0] if gallery else None),
             # First is the curated P18 where there is one, then article photographs.
             "image_urls": gallery[: self.gallery_limit],
@@ -2356,6 +2381,88 @@ def _point_key(point: dict[str, Any]) -> dict[str, Any]:
         "latitude": round(float(point["latitude"]), 5),
         "longitude": round(float(point["longitude"]), 5),
     }
+
+
+class OpenMeteoTimeZoneProvider:
+    """The destination's IANA time zone, from coordinates, for **nothing**.
+
+    Same answer as `GoogleTimeZoneProvider` and the same evidence record, from a
+    provider this app already calls twice for weather: Open-Meteo echoes the resolved
+    zone whenever `timezone=auto` is sent, which both weather providers already send.
+    So the zone costs one small free request rather than US$0.005, and needs no key —
+    `GOOGLE_MAPS_SERVER_KEY` is not configured on every machine, and a trip whose zone
+    could not be verified carried `DESTINATION_TIMEZONE_UNVERIFIED` for the whole of its
+    life for the sake of half a cent.
+
+    It is `verified` on the same terms as the paid one: a provider stated it for these
+    coordinates and the record keeps which provider, when, and what it was asked. It is
+    **never** guessed from a country — that is the rule `WF-002` sets and the reason
+    this raises rather than falling back.
+
+    The paid provider is not removed. It stays available for anyone who wants Google's
+    answer specifically, and the two write the same `destination_timezone` kind.
+    """
+
+    name = "open_meteo_timezone"
+    operation = "open_meteo:timezone"
+    cache_version = "open-meteo-tz-v1"
+    cache_ttl_days = 180
+    kind = "destination_timezone"
+
+    def __init__(self) -> None:
+        self.url = os.environ.get(
+            "TOURIST_FORECAST_URL", "https://api.open-meteo.com/v1/forecast"
+        )
+        self.user_agent = os.environ.get(
+            "TOURIST_USER_AGENT", "OptimizerTripPlanner/1.0 (local personal use)"
+        )
+
+    def lookup(self, *, latitude: float, longitude: float, timestamp: int) -> dict[str, Any]:
+        """`timestamp` is accepted and unused, so this is swappable with the paid one.
+
+        Open-Meteo reports the zone and its **current** offset rather than the offset at
+        a given instant. The planner reads the zone id, and `zoneinfo` resolves summer
+        time from that far better than a single cached number could.
+        """
+
+        query = urlencode(
+            {
+                "latitude": float(latitude),
+                "longitude": float(longitude),
+                # The smallest answer that still carries the zone: one day, one field.
+                "daily": "temperature_2m_max",
+                "forecast_days": 1,
+                "timezone": "auto",
+            }
+        )
+        request = Request(
+            f"{self.url}?{query}",
+            headers={"Accept": "application/json", "User-Agent": self.user_agent},
+        )
+        payload = _request_json_shared(request)
+        return self.normalize(payload, latitude=latitude, longitude=longitude)
+
+    def normalize(
+        self, payload: dict[str, Any], *, latitude: float, longitude: float
+    ) -> dict[str, Any]:
+        zone = str(payload.get("timezone") or "").strip()
+        # `auto` coming back means the service did not resolve it, which is not a zone.
+        if not zone or zone.casefold() == "auto":
+            raise ProviderUnavailable("Time zone lookup returned no zone id")
+        offset = int(payload.get("utc_offset_seconds") or 0)
+        return {
+            "kind": self.kind,
+            "timezone": zone,
+            "timezone_name": str(payload.get("timezone_abbreviation") or "") or None,
+            # Open-Meteo reports the offset in force now, not a base/DST split. Reported
+            # as the raw offset with no DST component invented for it.
+            "raw_offset_seconds": offset,
+            "dst_offset_seconds": 0,
+            "queried_latitude": round(float(latitude), 5),
+            "queried_longitude": round(float(longitude), 5),
+            "provider": self.name,
+            "status": "verified",
+        }
 
 
 class GoogleTimeZoneProvider:

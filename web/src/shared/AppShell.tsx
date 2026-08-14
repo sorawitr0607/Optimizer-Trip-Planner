@@ -10,9 +10,19 @@ import { useTheme } from "./ThemeProvider";
 import { DeleteTrip } from "./DeleteTrip";
 import { stageStatus, type StageRoute } from "./stages";
 
+/**
+ * Three sections, not two.
+ *
+ * `evidence` and `revise` are not steps you walk through — they are things you go and
+ * check or change when something is wrong — and `readiness` is a board you keep rather
+ * than a stage you finish. Sitting them in "Build" and "Use" put a detour in the middle
+ * of the path and a to-do list among the outputs, so the sidebar read as nine sequential
+ * stages when only six are. The order within each section is unchanged.
+ */
 const sections = [
-  { key: "section_build", stages: ["setup", "places", "evidence", "optimize"] },
-  { key: "section_use", stages: ["itinerary", "readiness", "costs", "split", "revise"] },
+  { key: "section_build", stages: ["setup", "places", "optimize"] },
+  { key: "section_use", stages: ["itinerary", "costs", "split"] },
+  { key: "section_check", stages: ["evidence", "readiness", "revise"] },
 ] as const;
 
 /**
@@ -127,7 +137,12 @@ export function AppShell() {
               return (
                 <NavLink
                   aria-label={spoken ? `${name} — ${spoken}` : undefined}
-                  className={({ isActive }) => `stage-link${isActive ? " active" : ""}`}
+                  // A locked stage points at `#`, which resolves to whatever page you
+                  // are on — so `isActive` was true for every locked link and they were
+                  // highlighted as if they were the screen you were reading.
+                  className={({ isActive }) =>
+                    `stage-link${isActive && status.state !== "locked" ? " active" : ""}`
+                  }
                   data-state={status.state}
                   key={stageRoute}
                   onClick={(event) => {

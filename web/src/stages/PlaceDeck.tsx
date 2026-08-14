@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { CandidateChoice, DiscoveryCandidate, PlaceSummary, Ranking } from "../api/client";
-import { copy, copyFrom, type Language } from "../i18n/copy";
+import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
 import { galleryFor } from "../shared/photos";
 
 /**
@@ -45,6 +45,9 @@ const HINT_FRACTION = 0.35;
  * Nothing is captured until the pointer has actually travelled, so a tap stays a tap.
  */
 const DRAG_SLOP = 6;
+/** How many more cards one press of "show more" reveals. Matches the page the screen
+ *  deals in, so the count on the button is the count you get. */
+const LANE_STEP = 20;
 
 type Intent = "interested" | "not_for_trip" | "skip" | "maybe" | null;
 
@@ -108,6 +111,19 @@ export interface PlaceDeckProps {
   onDecide: (placeId: string, action: string, reason: string | null) => void;
   /** Fetches the free description and photographs for one place. */
   onWantSummary: (placeId: string) => void;
+  /** True while this card's description and photographs are still on their way. The card
+   *  used to appear complete-but-empty in that window, with a "load them yourself" button
+   *  under it — indistinguishable from a place that genuinely has none. */
+  summaryLoading?: boolean;
+  /** How many more of this lane are held back by the cap, and how to ask for them. The
+   *  deck cannot tell "you have decided everything here" from "you have reached the end
+   *  of the page" without being told, and those want opposite things said. */
+  laneRemaining?: number;
+  onShowMore?: () => void;
+  /** Somewhere else to go once a lane really is finished. */
+  onPickLane?: (lane: string) => void;
+  lanes?: readonly string[];
+  lane?: string;
   /** The card now in front, so the detail panel beside the deck follows it instead of
    *  sitting on whichever place a select last pointed at. */
   onCardChange?: (placeId: string) => void;
@@ -124,10 +140,17 @@ export function PlaceDeck({
   altNameOf,
   onDecide,
   onWantSummary,
+  summaryLoading = false,
+  laneRemaining = 0,
+  onShowMore,
+  onPickLane,
+  lanes = [],
+  lane,
   onCardChange,
 }: PlaceDeckProps) {
   const [cursor, setCursor] = useState(0);
   const [photo, setPhoto] = useState(0);
+  const [photoLoaded, setPhotoLoaded] = useState<string | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
   const [leaving, setLeaving] = useState<Intent>(null);
   // A drag that ends over the photo used to advance the gallery as well as decide.
@@ -166,6 +189,16 @@ export function PlaceDeck({
   const nextEntry = queue[Math.min(cursor + 1, queue.length - 1)];
   const nextUrl = nextEntry ? summaries[nextEntry.place_id]?.image_url : null;
   const upcoming = gallery.length ? gallery[(photo + 1) % gallery.length] : null;
+  // Which photo is on screen, and which one has finished arriving. Held as the URL
+  // rather than a boolean so that tapping through a gallery shows the placeholder again
+  // for each new picture, and a cached one never flashes it at all.
+  const currentPhoto = gallery.length ? gallery[photo % gallery.length] : null;
+  // The card is *withheld* until its first picture has painted, not merely the picture
+  // box. A card that arrives complete-but-imageless and fills in a second later is the
+  // one thing the owner cannot un-see: the swipe decision is made on the photograph, so
+  // showing the text first invites a decision on half the evidence. Only the first
+  // photo gates the card — tapping through the gallery must not blank it again.
+  const cardPending = summaryLoading || (Boolean(currentPhoto) && photoLoaded !== currentPhoto && photo === 0);
   // Report the card in front, so the panel beside the deck tracks it.
   const currentId = entry?.place_id;
   useEffect(() => {
@@ -191,28 +224,74 @@ export function PlaceDeck({
         <div className="deck-finished-card">
           <p className="deck-finished-title">✓ {copy("deck_exhausted", language)}</p>
           <p className="setup-hint">
-            {language === "th"
-              ? `คุณได้เลือกเก็บไว้ ${shortlistedChoices.length} สถานที่ (ข้ามไป ${rejectedChoices.length} แห่ง)`
-              : `You have shortlisted ${shortlistedChoices.length} places and passed on ${rejectedChoices.length}.`}
+            {copyFormat("deck_kept_and_passed", language, {
+              kept: shortlistedChoices.length,
+              passed: rejectedChoices.length,
+            })}
           </p>
-          {rejectedChoices.length > 0 ? (
-            <div className="deck-reconsider">
-              <h4 className="money-eyebrow">
-                {language === "th" ? "เปลี่ยนใจ? นำสถานที่ที่ข้ามกลับเข้าแผน" : "Reconsider skipped places"}
-              </h4>
-              <ul className="deck-reconsider-list">
-                {rejectedChoices.map((c) => (
-                  <li className="deck-reconsider-row" key={c.place_id}>
-                    <span className="deck-reconsider-name">{nameOf(c.place_id)}</span>
+          {/* Two different endings, said differently. Reaching the cap is "there is more
+              if you want it"; reaching the end of a lane is "this list is spent, here is
+              another". They used to be the same blank wall. */}
+          {laneRemaining > 0 && onShowMore ? (
+            <button className="setup-primary" onClick={onShowMore} type="button">
+              {copyFormat("lane_more", language, {
+                count: Math.min(laneRemaining, LANE_STEP),
+              })}
+            </button>
+          ) : onPickLane && lanes.length ? (
+            <div className="deck-lane-suggest">
+              <p className="setup-hint">{copy("lane_seen_all", language)}</p>
+              <div className="lane-tabs">
+                {lanes
+                  .filter((value) => value !== lane)
+                  .map((value) => (
                     <button
-                      className="deck-reconsider-btn"
-                      onClick={() => onDecide(c.place_id, "interested", null)}
+                      className="lane-tab"
+                      key={value}
+                      onClick={() => onPickLane(value)}
                       type="button"
                     >
-                      + {language === "th" ? "เก็บไว้" : "Add to list"}
+                      {copy(value, language)}
                     </button>
-                  </li>
-                ))}
+                  ))}
+              </div>
+            </div>
+          ) : null}
+          {rejectedChoices.length > 0 ? (
+            <div className="deck-reconsider">
+              <h4 className="money-eyebrow">{copy("deck_reconsider", language)}</h4>
+              {/* Each row opens. Changing your mind about a place you passed on twenty
+                  cards ago means remembering what it was, and the name alone is not
+                  enough — the picture and the sentence are what the decision was made
+                  on. Everything here is already in hand: no fetch, and a `<details>`
+                  so the platform owns the open/close and the keyboard. */}
+              <ul className="deck-reconsider-list">
+                {rejectedChoices.map((c) => {
+                  const about = summaries[c.place_id];
+                  const photo = galleryFor(about, candidates[c.place_id])[0] ?? null;
+                  const prose = about?.text?.[language] ?? about?.text?.en
+                    ?? about?.description?.[language] ?? about?.description?.en ?? "";
+                  return (
+                    <li className="deck-reconsider-row" key={c.place_id}>
+                      <details className="deck-reconsider-detail">
+                        <summary className="deck-reconsider-name">{nameOf(c.place_id)}</summary>
+                        <div className="deck-reconsider-about">
+                          {photo ? (
+                            <img alt={nameOf(c.place_id)} decoding="async" loading="lazy" src={photo} />
+                          ) : null}
+                          <p>{prose || copy("no_description_yet", language)}</p>
+                        </div>
+                      </details>
+                      <button
+                        className="deck-reconsider-btn"
+                        onClick={() => onDecide(c.place_id, "interested", null)}
+                        type="button"
+                      >
+                        + {copy("deck_add_back", language)}
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           ) : null}
@@ -290,7 +369,7 @@ export function PlaceDeck({
       {/* The drag surface stops above the action row, so pressing a button never
           starts a gesture and a gesture never ends in a click. */}
       <div
-        className={`place-deck-drag${drag ? " dragging" : ""}`}
+        className={`place-deck-drag${drag ? " dragging" : ""}${cardPending ? " pending" : ""}`}
         onPointerCancel={() => setDrag(null)}
         onPointerDown={(event) => {
           if (event.button !== 0) return;
@@ -333,7 +412,15 @@ export function PlaceDeck({
           </strong>
         </header>
 
-        {/* What the release will do, named while the card is still in hand. */}
+        {cardPending ? (
+        <div aria-busy="true" className="place-deck-pending">
+          <span aria-hidden="true" className="skeleton skeleton-photo" />
+          <span aria-hidden="true" className="skeleton skeleton-line wide" />
+          <span aria-hidden="true" className="skeleton skeleton-line" />
+          <p className="setup-hint">{copy("loading", language)}</p>
+        </div>
+      ) : null}
+      {/* What the release will do, named while the card is still in hand. */}
         {intent ? (
           <p className={`place-deck-intent intent-${intent}`} aria-hidden="true">
             {copy(
@@ -360,23 +447,53 @@ export function PlaceDeck({
             }}
             type="button"
           >
-            <img
-              alt={name}
-              // Eager and high priority: this image is the card, always above the
-              // fold, and `loading="lazy"` was actively delaying the one photo the
-              // owner is waiting on.
-              decoding="async"
-              draggable={false}
-              fetchPriority="high"
-              loading="eager"
-              src={gallery[photo % gallery.length]}
-            />
+            {/* A pulsing placeholder over the image until it is actually painted.
+                Wikimedia serves these through a redirect and re-encodes the thumbnail,
+                so on a slow link the card sat with an empty box where the picture goes
+                — indistinguishable from a place that has no picture at all. It covers
+                rather than replaces, so the image is still fetched eagerly and nothing
+                below it moves when the bytes land. */}
+            <span className="place-deck-photo-frame">
+              {photoLoaded === currentPhoto ? null : (
+                <span aria-hidden="true" className="skeleton skeleton-photo" />
+              )}
+              <img
+                alt={name}
+                // Eager and high priority: this image is the card, always above the
+                // fold, and `loading="lazy"` was actively delaying the one photo the
+                // owner is waiting on.
+                decoding="async"
+                draggable={false}
+                fetchPriority="high"
+                loading="eager"
+                onError={() => setPhotoLoaded(currentPhoto)}
+                onLoad={() => setPhotoLoaded(currentPhoto)}
+                // A photograph already in the browser cache can finish before React
+                // attaches `onLoad`, and that handler then never fires — which would
+                // leave the card hidden behind its own placeholder for good. `complete`
+                // is the browser's own answer to "has this already arrived".
+                ref={(element) => {
+                  if (element?.complete && element.naturalWidth > 0) {
+                    setPhotoLoaded(currentPhoto);
+                  }
+                }}
+                src={currentPhoto ?? undefined}
+              />
+            </span>
             <span className="setup-hint">
               {copy("photo_of", language)
                 .replace("{current}", String((photo % gallery.length) + 1))
                 .replace("{total}", String(gallery.length))}
             </span>
           </button>
+        ) : summaryLoading ? (
+          // Still arriving. The card used to render its "load them yourself" button in
+          // this window — a control for work that is already running — so a card whose
+          // photographs were seconds away looked exactly like one that had none.
+          <div aria-busy="true" className="place-deck-photo place-deck-photo-empty">
+            <span aria-hidden="true" className="skeleton skeleton-photo" />
+            <p className="setup-hint">{copy("loading", language)}</p>
+          </div>
         ) : entry.place_id in summaries ? (
           // Asked and answered with nothing — a great many of these places have no
           // Wikidata entry at all. Offering the fetch button again would be a control

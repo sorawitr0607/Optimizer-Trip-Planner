@@ -185,13 +185,18 @@ def build_ranking(
             place_id,
         ),
     )
-    icon_ids = [place_id for place_id in ordered_ids if cards[place_id]["is_city_icon"]]
+    # Spread, not re-scored. The deck deals from whichever lane is picked and City Icons
+    # is the default, so a lane in plain score order is what produced ten museums in a
+    # row. `browse_all` deliberately keeps strict score order: it is the audit list.
+    icon_ids = _spread_families(
+        [place_id for place_id in ordered_ids if cards[place_id]["is_city_icon"]], cards
+    )
     unseen_normal = [
         place_id
         for place_id in ordered_ids
         if place_id not in choice_by_id and place_id not in set(icon_ids)
     ]
-    main_queue = _protected_queue(unseen_normal, cards)
+    main_queue = _protected_queue(_spread_families(unseen_normal, cards), cards)
     for entry in main_queue:
         cards[entry["place_id"]]["queue_role"] = entry["role"]
         if entry["role"] == "protected_exploration":
@@ -207,6 +212,7 @@ def build_ranking(
             or "possible_duplicate" in cards[place_id]["cons"]
         )
     ]
+    worth_it_if = _spread_families(worth_it_if, cards)
     local_alternatives = _local_alternatives(icon_ids, ordered_ids, cards)
     reconciliation = _reconciliation(choices, cards)
 
@@ -609,6 +615,49 @@ def _redundant_near_selection(
         and _distance_metres(candidate, item) <= 300
         for item in selected
     )
+
+
+def _spread_families(
+    ordered_ids: list[str], cards: dict[str, dict[str, Any]]
+) -> list[str]:
+    """Score order, minus the runs.
+
+    `main_queue` has had `WF-005`'s 4:1 ranked-to-exploration rule since it was built,
+    but the *other* lanes are plain score order — and the deck deals from whichever lane
+    is picked, defaulting to City Icons. Museums score alike, so on the owner's
+    1108-place Hong Kong catalogue City Icons opened with **twelve museums** and ran to
+    **70 of one category** unbroken. The deck read as one long category.
+
+    Least-recently-used, not "not in the last N": with only two families a window of two
+    makes every remaining candidate recent, so it falls back and emits runs of three.
+    Taking the family whose turn is oldest round-robins whatever families exist — three
+    of them cycle three ways — and needs no window constant to tune.
+
+    A reordering, never a rescoring. Every candidate survives, the highest scorer still
+    leads, and a catalogue of one kind of thing degrades to plain score order rather
+    than to something arbitrary.
+    """
+
+    remaining = list(ordered_ids)
+    result: list[str] = []
+    last_used: dict[str, int] = {}
+    while remaining:
+        # `remaining` is score-ordered, so scanning forward and keeping the oldest turn
+        # seen so far picks the most varied *and* best-scoring card available. A family
+        # never used yet cannot be beaten, so that ends the scan — which is what keeps
+        # this near-linear instead of the O(n^3) a `remaining.index()` lookup inside the
+        # comparison made it: 1.38s on the owner's 1108-place Hong Kong catalogue.
+        best_at, best_turn = 0, None
+        for position, item in enumerate(remaining):
+            turn = last_used.get(_family(cards[item]), -1)
+            if best_turn is None or turn < best_turn:
+                best_at, best_turn = position, turn
+                if turn == -1:
+                    break
+        pick = remaining.pop(best_at)
+        last_used[_family(cards[pick])] = len(result)
+        result.append(pick)
+    return result
 
 
 def _protected_queue(

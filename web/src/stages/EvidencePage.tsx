@@ -19,6 +19,7 @@ import {
 import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
 import { placeNameFrom } from "../shared/names";
+import { collectRouteEvidence } from "../shared/routeEvidence";
 
 const code = (value: string, language: Language) =>
   copyFrom("OPTIMIZER_CODE_TEXT", value, language);
@@ -223,30 +224,26 @@ export function EvidencePage() {
 
   const autoResolveAll = useMutation({
     mutationFn: async () => {
+      // Free. The paid opening-hours lookup and the paid timezone lookup are their own
+      // buttons on this screen, each stating its price — spending from this one meant
+      // the cheap path and the expensive path were the same press.
       if (!base.data) {
         await rpc("confirm_accommodation_base", { trip_id: tripId, query: "" });
       }
-      if (!zone.data) {
-        await rpc("refresh_timezone", { trip_id: tripId });
-      }
+      // Free now: the zone comes from Open-Meteo rather than the paid Google lookup,
+      // so there is no reason to leave the trip permanently unverified.
       try {
-        await rpc("refresh_opening_hours", { trip_id: tripId });
+        await rpc("refresh_timezone", { trip_id: tripId });
       } catch (err) {
         void err;
       }
       await rpc("confirm_default_opening_windows", { trip_id: tripId, start: "09:00", end: "18:00" });
-      try {
-        await rpc("refresh_routes", { trip_id: tripId });
-      } catch (err) {
-        void err;
-      }
+      await collectRouteEvidence(tripId);
     },
     onSuccess: async () => {
       setFlash({
         tone: "ok",
-        text: language === "th"
-          ? "✓ เตรียมความพร้อมหลักฐานและตารางเวลาสำเร็จ พร้อมสร้างแผนได้ทันที!"
-          : "✓ All evidence, bases, hours & routes auto-resolved! Ready to optimize.",
+        text: copy("auto_resolve_note", language),
       });
       await refresh();
     },
@@ -285,10 +282,9 @@ export function EvidencePage() {
           >
             {autoResolveAll.isPending
               ? copy("loading", language)
-              : language === "th"
-                ? "⚡ เตรียมหลักฐานและแก้ปัญหาทั้งหมดอัตโนมัติ (1-Click Safe Resolve)"
-                : "⚡ Auto-Resolve & Fill Safe Defaults (1-Click Setup)"}
+              : copy("auto_resolve_free", language)}
           </button>
+          <small className="setup-hint">{copy("auto_resolve_note", language)}</small>
         </div>
       </header>
 

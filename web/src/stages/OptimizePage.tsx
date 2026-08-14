@@ -20,6 +20,7 @@ import {
 import { copy, copyFormat, copyFrom } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
 import { placeName } from "../shared/names";
+import { collectRouteEvidence } from "../shared/routeEvidence";
 
 // Three per row, not five: at a fifth of a centred page these labels clipped.
 const METRICS = [
@@ -124,23 +125,28 @@ export function OptimizePage() {
 
   const autoResolveAndGenerate = useMutation({
     mutationFn: async () => {
+      // Free, all of it. This used to call `refresh_opening_hours` and
+      // `refresh_timezone` — **US$0.025 a place** and US$0.005 — from a button whose
+      // label promised only to resolve details, with no price anywhere near it. On the
+      // owner's five-place Fukuoka trip one press spent US$0.13 without saying so,
+      // which breaks this repo's rule that a paid action states its estimate
+      // immediately before its button. The very next line already assumes the hours, so
+      // buying them here bought nothing this button needed.
+      //
+      // The paid lookup is not removed from the app — it stays on `/evidence` and in
+      // the verdict panel above, priced, where choosing it is the point.
       await rpc("confirm_accommodation_base", { trip_id: tripId, query: "" });
+      // Free now: the zone comes from Open-Meteo rather than the paid Google lookup,
+      // so there is no reason to leave the trip permanently unverified.
       try {
         await rpc("refresh_timezone", { trip_id: tripId });
       } catch (err) {
         void err;
       }
-      try {
-        await rpc("refresh_opening_hours", { trip_id: tripId });
-      } catch (err) {
-        void err;
-      }
       await rpc("confirm_default_opening_windows", { trip_id: tripId, start: "09:00", end: "18:00" });
-      try {
-        await rpc("refresh_routes", { trip_id: tripId });
-      } catch (err) {
-        void err;
-      }
+      // Until every pair is measured, not once: one call covers sixty new pairs and
+      // eleven places need 110, so a single pass left the rest fatally unverified.
+      await collectRouteEvidence(tripId);
       return rpc<PlanPreview>("generate_plan_preview", { trip_id: tripId });
     },
     onSuccess: async () => {
@@ -148,6 +154,31 @@ export function OptimizePage() {
       await queryClient.invalidateQueries({ queryKey: ["plan_preview", tripId] });
       await queryClient.invalidateQueries({ queryKey: ["opening_options", tripId] });
       await queryClient.invalidateQueries({ queryKey: ["journey", tripId] });
+    },
+    onError: (error) => setRefusal(error instanceof ApiError ? error.code : String(error)),
+  });
+
+  // Drop one place and rebuild without it. `save_candidate_choice` with `not_for_trip`
+  // is the same write the deck makes, so this is the owner changing their mind rather
+  // than a new kind of state — and the plan is regenerated immediately, because a
+  // reconciliation table describing a plan that no longer exists is worse than none.
+  const dropAndRebuild = useMutation({
+    mutationFn: async (placeId: string) => {
+      await rpc("save_candidate_choice", {
+        trip_id: tripId,
+        place_id: placeId,
+        action: "not_for_trip",
+        reason: null,
+      });
+      return rpc<PlanPreview>("generate_plan_preview", { trip_id: tripId });
+    },
+    onSuccess: async () => {
+      setRefusal(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["plan_preview", tripId] }),
+        queryClient.invalidateQueries({ queryKey: ["candidate_choices", tripId] }),
+        queryClient.invalidateQueries({ queryKey: ["journey", tripId] }),
+      ]);
     },
     onError: (error) => setRefusal(error instanceof ApiError ? error.code : String(error)),
   });
@@ -192,6 +223,10 @@ export function OptimizePage() {
   );
   const assumptions = assumptionsOf(preview.data ?? null, proposal);
   const gaps = optimizerInput?.capability_gaps ?? [];
+  // One label, two dead ends — the refusal card and an unusable variant's warnings.
+  // It says "free" because it now is, and says what it assumes, because a button that
+  // fills a gap has to name the value it filled it with.
+  const autoResolveLabel = copy("auto_resolve_free", language);
 
   return (
     <section className="stage-card optimize-screen">
@@ -211,12 +246,9 @@ export function OptimizePage() {
             disabled={autoResolveAndGenerate.isPending}
             onClick={() => autoResolveAndGenerate.mutate()}
           >
-            {autoResolveAndGenerate.isPending
-              ? copy("loading", language)
-              : language === "th"
-                ? "⚡ แก้ไขข้อมูลที่ขาดและสร้างแผนทันที (Auto-Fix & Build)"
-                : "⚡ Auto-Resolve Missing Details & Build Plan"}
+            {autoResolveAndGenerate.isPending ? copy("loading", language) : autoResolveLabel}
           </button>
+          <small className="setup-hint">{copy("auto_resolve_note", language)}</small>
         </div>
       ) : null}
 
@@ -233,15 +265,22 @@ export function OptimizePage() {
           </p>
           {evidence.data.needing_hours ? (
             <div className="optimize-actions">
+              {/* The *same* work the ⚡ button does, because it makes the same promise.
+                  It used to call plain `generate`, which assumes nothing and fetches
+                  nothing — so the draft came back blocked and the owner had to find a
+                  second button, worded almost identically, to actually assume the hours
+                  and measure the routes. One press now finishes the job. */}
               <button
-                disabled={generate.isPending || buyHours.isPending}
-                onClick={() => generate.mutate()}
+                disabled={autoResolveAndGenerate.isPending || buyHours.isPending}
+                onClick={() => autoResolveAndGenerate.mutate()}
                 type="button"
               >
-                {copy("before_use_assumptions", language)}
+                {autoResolveAndGenerate.isPending
+                  ? copy("loading", language)
+                  : copy("before_use_assumptions", language)}
               </button>
               <button
-                disabled={buyHours.isPending || generate.isPending}
+                disabled={buyHours.isPending || autoResolveAndGenerate.isPending}
                 onClick={() => buyHours.mutate()}
                 type="button"
               >
@@ -276,7 +315,7 @@ export function OptimizePage() {
       {/* This screen showed a disabled button and nothing else for the ~52s a full
           optimize takes, and was reported as "I still can't build a plan" — the work
           was succeeding every time and the screen never said so. */}
-      {generate.isPending ? (
+      {generate.isPending || autoResolveAndGenerate.isPending ? (
         <div className="optimize-working" aria-busy="true">
           <Thinking
             language={language}
@@ -429,9 +468,85 @@ export function OptimizePage() {
                   <li key={code}>{copyFrom("OPTIMIZER_CODE_TEXT", code, language)}</li>
                 ))}
               </ul>
+              {/* The way out, beside the list of what is wrong. This lived only on the
+                  refusal card, which is a different failure: a refusal is the request
+                  being rejected, while these warnings come back *with* a variant that
+                  simply cannot be activated. So a plan that built and could not be used
+                  named six blockers and offered nothing to press — reported as being
+                  stuck here having already supplied everything. */}
             </details>
           ) : null}
 
+          {/* Outside the warnings box, not inside it. A control that resolves the list
+              is not one of the list's items, and buried in a `<details>` it read as part
+              of the problem rather than the way out. */}
+          {!activationAllowed ? (
+            <div className="optimize-resolve">
+              <button
+                className="setup-primary auto-resolve-retry-btn"
+                disabled={autoResolveAndGenerate.isPending}
+                onClick={() => autoResolveAndGenerate.mutate()}
+                type="button"
+              >
+                {autoResolveAndGenerate.isPending ? copy("loading", language) : autoResolveLabel}
+              </button>
+              <small className="setup-hint">{copy("auto_resolve_note", language)}</small>
+            </div>
+          ) : null}
+
+          {/* Every place that did not make it, with the way out beside it. The table
+              below says *what* happened; this says what to do about it, which is what
+              was missing — a row reading "cannot currently fit" and nothing to press. */}
+          {(() => {
+            const unfit = (variant.reconciliation ?? []).filter(
+              (item) => item.status === "cannot_currently_fit",
+            );
+            if (!unfit.length) return null;
+            const needsRoutes = unfit.some((item) => item.reason === "ROUTE_UNVERIFIED");
+            return (
+              <section className="optimize-unfit">
+                <h2 className="money-eyebrow">{copy("unfit_title", language)}</h2>
+                <p className="setup-hint">{copy("unfit_help", language)}</p>
+                {needsRoutes ? (
+                  <button
+                    className="setup-primary"
+                    disabled={autoResolveAndGenerate.isPending}
+                    onClick={() => autoResolveAndGenerate.mutate()}
+                    type="button"
+                  >
+                    {autoResolveAndGenerate.isPending
+                      ? copy("loading", language)
+                      : copy("unfit_fix_routes", language)}
+                  </button>
+                ) : null}
+                <ul className="optimize-unfit-list">
+                  {unfit.map((item) => (
+                    <li key={item.place_id}>
+                      <span className="optimize-unfit-name">
+                        {placeName(item, language, item.name)}
+                      </span>
+                      <small>{copyFrom("OPTIMIZER_CODE_TEXT", item.reason, language)}</small>
+                      <button
+                        disabled={dropAndRebuild.isPending}
+                        onClick={() => dropAndRebuild.mutate(item.place_id)}
+                        type="button"
+                      >
+                        {copy("unfit_drop", language)}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            );
+          })()}
+
+          {/* Only once the draft is usable. Before the evidence is settled every row
+              said "cannot currently fit" about a plan that had not really been attempted
+              yet — a wall of failure describing a state the owner had not reached, and
+              read as the app having decided against their places. The button above is
+              the thing to look at until then. */}
+          {activationAllowed ? (
+          <>
           <h2 className="money-eyebrow">{copy("optimizer_reconciliation", language)}</h2>
           <div className="money-table-scroll">
             <table className="money-table">
@@ -457,6 +572,8 @@ export function OptimizePage() {
               </tbody>
             </table>
           </div>
+          </>
+          ) : null}
 
           {variant.days.some((day) => day.items.length > 0) ? (
             <>
@@ -473,15 +590,31 @@ export function OptimizePage() {
                       <th>{copy("duration", language)}</th>
                     </tr>
                   </thead>
+                  {/* Sixty identical grey rows repeating the same date twenty times was
+                      the "hard to read and distinguish" report. Three changes, no new
+                      data: the date is printed once per day and a rule marks where the
+                      day turns over, the kind is a coloured chip in the same five
+                      families the itinerary's own rows use, and the kind is finally
+                      translated — it was the raw `visit` / `buffer` code in both
+                      languages. */}
                   <tbody>
                     {variant.days.flatMap((day) =>
                       day.items.map((item, index) => (
-                        <tr key={`${day.date}-${index}`}>
-                          <td>{day.date}</td>
+                        <tr
+                          className={index === 0 ? "timeline-day-start" : undefined}
+                          key={`${day.date}-${index}`}
+                        >
+                          <td>{index === 0 ? day.date : ""}</td>
                           <td className="money-num">{item.start}</td>
                           <td className="money-num">{item.end}</td>
-                          <td>{item.type}</td>
-                          <td>{placeName(item, language, item.name ?? item.type)}</td>
+                          <td>
+                            <span className={`plan-row-kind ${item.type}`}>
+                              {copy(`type_${item.type}`, language)}
+                            </span>
+                          </td>
+                          {/* Empty rather than the raw `buffer` / `travel` code it used
+                              to repeat: the chip beside it already says which it is. */}
+                          <td>{item.name ? placeName(item, language, item.name) : ""}</td>
                           <td className="money-num">
                             {item.duration_minutes} {copy("minutes", language)}
                           </td>
