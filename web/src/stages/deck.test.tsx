@@ -206,10 +206,13 @@ describe("PlaceDeck", () => {
   });
 
   it("names all four directions, up included", () => {
-    // Up is `maybe`: a decision, unlike skip, and the opposite gesture because they are
-    // the two ways of not answering yet.
+    // Right is `must_do` and up is `interested`, at the owner's asking. Up used to be
+    // `maybe` — paired with `skip` as the two ways of not answering yet, a tidy symmetry
+    // that spent the deck's second-strongest gesture on its weakest answer. `maybe` keeps
+    // its button; the legend and the arrow keys move with the gestures or the three stop
+    // agreeing about what a swipe does.
     const html = render(SUMMARY);
-    for (const label of ["Keep", "Not for trip", "Maybe", "Skip"]) {
+    for (const label of ["Must do", "Interested", "Not for trip", "Skip"]) {
       expect(html).toContain(label);
     }
     expect(html).toContain("Tap the photo");

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { CandidateChoice, DiscoveryCandidate, PlaceSummary, Ranking } from "../api/client";
 import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
+import { flyToShortlist } from "../shared/flyToShortlist";
 import { galleryFor } from "../shared/photos";
 
 /**
@@ -49,7 +50,7 @@ const DRAG_SLOP = 6;
  *  deals in, so the count on the button is the count you get. */
 const LANE_STEP = 20;
 
-type Intent = "interested" | "not_for_trip" | "skip" | "maybe" | null;
+type Intent = "must_do" | "interested" | "not_for_trip" | "skip" | "maybe" | null;
 
 /** The same normalisation `discovery.py` dedupes on, so the two agree about what
  *  counts as the same name: case folded, punctuation and spacing dropped. */
@@ -72,12 +73,14 @@ function intentOf(drag: Drag | null): Intent {
   const reach = COMMIT_DISTANCE * HINT_FRACTION;
   if (Math.abs(drag.y) > Math.abs(drag.x)) {
     if (drag.y > reach) return "skip";
-    // Up is `maybe`: a real decision, unlike skip, and the two are opposite gestures
-    // because they are the two ways of not answering yet.
-    if (drag.y < -reach) return "maybe";
+    // Up is `interested`, at the owner's asking. It used to be `maybe`, paired with
+    // `skip` as the two ways of not answering yet — a tidy symmetry that spent the
+    // deck's second-strongest gesture on its weakest answer. `maybe` keeps its button.
+    if (drag.y < -reach) return "interested";
     return null;
   }
-  if (drag.x > reach) return "interested";
+  // Right is the strongest keep, which is what the legend beside it says.
+  if (drag.x > reach) return "must_do";
   if (drag.x < -reach) return "not_for_trip";
   return null;
 }
@@ -155,6 +158,8 @@ export function PlaceDeck({
   const [leaving, setLeaving] = useState<Intent>(null);
   // A drag that ends over the photo used to advance the gallery as well as decide.
   const travelled = useRef(0);
+  /** The card being decided, so the flight can be cut from its photograph. */
+  const cardRef = useRef<HTMLDivElement | null>(null);
 
   const decided = new Set(choices.map((choice) => choice.place_id));
   // And by name, not only by id. Discovery merges two records of one place when the
@@ -305,6 +310,17 @@ export function PlaceDeck({
   const intent = leaving ?? intentOf(drag);
 
   function decide(action: string, reason: string | null = null) {
+    // Every keep flies. Written as "not the rejection" rather than as a list of the
+    // keeps, because the list was wrong on its first draft — `must_do` is a keep and is
+    // dispatched only from the button row, so naming them one by one silently omitted the
+    // strongest one. `not_for_trip` is the single action that does not join the shortlist,
+    // and sending it there would say the opposite of what happened.
+    if (action !== "not_for_trip") {
+      flyToShortlist(
+        cardRef.current,
+        document.querySelector(".shortlist-handle"),
+      );
+    }
     onDecide(entry!.place_id, action, reason);
     setPhoto(0);
     // Do not advance the cursor: the decided card leaves the queue on refetch, so
@@ -319,6 +335,7 @@ export function PlaceDeck({
   /** Commit whatever the gesture, an arrow key or a button asked for. */
   function act(action: Intent) {
     if (action === "skip") advance(1);
+    else if (action === "must_do") decide("must_do");
     else if (action === "interested") decide("interested");
     else if (action === "maybe") decide("maybe");
     else if (action === "not_for_trip") decide("not_for_trip", null);
@@ -356,10 +373,11 @@ export function PlaceDeck({
       className="place-deck"
       onKeyDown={(event) => {
         // The same four directions the drag uses, so one mental model covers both.
-        if (event.key === "ArrowRight") act("interested");
+        // The arrows are the gestures, so they move together or the two stop agreeing.
+        if (event.key === "ArrowRight") act("must_do");
         else if (event.key === "ArrowLeft") act("not_for_trip");
         else if (event.key === "ArrowDown") act("skip");
-        else if (event.key === "ArrowUp") act("maybe");
+        else if (event.key === "ArrowUp") act("interested");
         else return;
         event.preventDefault();
       }}
@@ -375,16 +393,18 @@ export function PlaceDeck({
           card's height and nothing jumps when the photograph lands. */}
       {cardPending ? (
         <div aria-busy="true" className="place-deck-pending">
+          {/* A small block that says what it is, rather than a full-height grey copy of
+              the card. The card's own height is still held by the element underneath, so
+              nothing jumps when the photograph lands — only the placeholder shrank. */}
+          <p className="place-deck-pending-text">{copy("loading_card", language)}</p>
           <span aria-hidden="true" className="skeleton skeleton-photo" />
-          <span aria-hidden="true" className="skeleton skeleton-line wide" />
           <span aria-hidden="true" className="skeleton skeleton-line" />
-          <span aria-hidden="true" className="skeleton skeleton-line short" />
-          <p className="setup-hint">{copy("loading", language)}</p>
         </div>
       ) : null}
       <div
         className={`place-deck-drag${drag ? " dragging" : ""}${cardPending ? " pending" : ""}`}
         onPointerCancel={() => setDrag(null)}
+        ref={cardRef}
         onPointerDown={(event) => {
           if (event.button !== 0) return;
           // No capture yet. Capturing here retargets every later event at this element,
@@ -430,13 +450,15 @@ export function PlaceDeck({
         {intent ? (
           <p className={`place-deck-intent intent-${intent}`} aria-hidden="true">
             {copy(
-              intent === "interested"
-                ? "drop_to_keep"
-                : intent === "not_for_trip"
-                  ? "drop_to_reject"
-                  : intent === "maybe"
-                    ? "drop_to_maybe"
-                    : "drop_to_skip",
+              intent === "must_do"
+                ? "drop_to_must_do"
+                : intent === "interested"
+                  ? "drop_to_interested"
+                  : intent === "not_for_trip"
+                    ? "drop_to_reject"
+                    : intent === "maybe"
+                      ? "drop_to_maybe"
+                      : "drop_to_skip",
               language,
             )}
           </p>
@@ -569,8 +591,8 @@ export function PlaceDeck({
           each way you can throw the card, beside what it means. */}
       <ul className="place-deck-legend">
         <li><b aria-hidden="true">←</b> {copy("drop_to_reject", language)}</li>
-        <li><b aria-hidden="true">→</b> {copy("drop_to_keep", language)}</li>
-        <li><b aria-hidden="true">↑</b> {copy("drop_to_maybe", language)}</li>
+        <li><b aria-hidden="true">→</b> {copy("drop_to_must_do", language)}</li>
+        <li><b aria-hidden="true">↑</b> {copy("drop_to_interested", language)}</li>
         <li><b aria-hidden="true">↓</b> {copy("drop_to_skip", language)}</li>
       </ul>
       <p className="setup-hint">{copy("drag_hint", language)}</p>

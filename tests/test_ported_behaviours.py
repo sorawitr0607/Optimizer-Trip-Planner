@@ -60,6 +60,7 @@ import unittest
 
 from unittest.mock import patch
 
+from tests.test_routes import FakePlaceProvider
 from travel_planner import destinations
 from travel_planner.actions import PlannerActions, PlannerRefusal
 from travel_planner.core import new_optimization_preview
@@ -82,7 +83,13 @@ class SetupConfirmationTest(unittest.TestCase):
     def setUp(self) -> None:
         self.directory = TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
-        self.actions = PlannerActions(Path(self.directory.name) / "ported.sqlite3")
+        # A fake place provider, because two of these tests discover places and the
+        # suite's rule is no network: without it they reached Overpass, and they passed
+        # only for as long as the machine running them happened to have a connection.
+        self.actions = PlannerActions(
+            Path(self.directory.name) / "ported.sqlite3",
+            place_provider=FakePlaceProvider(),
+        )
 
     def confirmed_taipei(self) -> str:
         trip = self.actions.create_trip(

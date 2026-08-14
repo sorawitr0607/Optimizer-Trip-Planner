@@ -161,6 +161,7 @@
       "LOCK_REMOVED": "A stop is no longer pinned",
       "PLACE_DROPPED_FROM_THIS_REVISION": "This change drops the place from the plan",
       "REOPTIMIZED_WITH_UNCHANGED_CONSTRAINTS": "Rebuilt with the same constraints as before",
+      "ACCOMMODATION_BASE_IMPLAUSIBLE": "The saved accommodation is far from every place you chose, so the plan ignored it and used the centre of your places instead",
       "ACCESS_UNVERIFIED": "Access rules are not verified",
       "ACCOMMODATION_BASE_UNCONFIRMED": "The accommodation base is not confirmed",
       "CLOSED_AT_AVAILABLE_TIME": "The place is closed during the available time",
@@ -296,6 +297,7 @@
       "LOCK_REMOVED": "ยกเลิกการปักหมุดจุดนี้แล้ว",
       "PLACE_DROPPED_FROM_THIS_REVISION": "การแก้ไขนี้จะตัดสถานที่นี้ออกจากแผน",
       "REOPTIMIZED_WITH_UNCHANGED_CONSTRAINTS": "สร้างแผนใหม่ด้วยเงื่อนไขเดิม",
+      "ACCOMMODATION_BASE_IMPLAUSIBLE": "ที่พักที่บันทึกไว้อยู่ไกลจากทุกสถานที่ที่คุณเลือก แผนจึงไม่ใช้ที่พักนั้น และใช้จุดกึ่งกลางของสถานที่ที่เลือกแทน",
       "ACCESS_UNVERIFIED": "ยังไม่ยืนยันทางเข้าและกฎการเข้าถึง",
       "ACCOMMODATION_BASE_UNCONFIRMED": "ยังไม่มีฐานที่พักที่ยืนยันแล้ว",
       "CLOSED_AT_AVAILABLE_TIME": "สถานที่ปิดในช่วงเวลาที่ใช้ได้",
@@ -1212,7 +1214,6 @@
       "days_unknown": "No dates set",
       "hours_short": "h",
       "drag_hint": "Drag the card — right to keep, left to drop, down to skip. The buttons do the same thing.",
-      "drop_to_keep": "Keep",
       "drop_to_reject": "Not for trip",
       "drop_to_skip": "Skip",
       "loading_photos": "Loading free photos and descriptions…",
@@ -1241,7 +1242,7 @@
       "stay_pace_capacity": "about {hours} h of visiting a day",
       "pick_month": "When, roughly?",
       "pick_month_help": "Any month works — this only sets a starting point. The exact dates are yours to edit in setup afterwards.",
-      "use_these_dates": "Use these dates",
+      "use_these_dates": "Use these dates and build the plan",
       "provisional_dates_set": "Dates saved, and the places you already chose were re-linked to them — nothing to redo. Generate the plan below.",
       "month_1": "January",
       "month_2": "February",
@@ -1391,7 +1392,14 @@
       "map_attribution": "© OpenStreetMap contributors",
       "map_offline": "Drawn offline — map tiles could not be reached",
       "open_in_maps": "Open in Maps",
-      "forecast_day": "Forecast {low}–{high}°C · rain {rain}%"
+      "forecast_day": "Forecast {low}–{high}°C · rain {rain}%",
+      "areas_none_ranked": "No station neighbourhood scored high enough to shortlist.",
+      "thinking_elapsed": "{seconds}s",
+      "loading_card": "Loading this place…",
+      "use_these_dates_hint": "Saves these dates, refreshes the places found for them without searching again, then builds three plan options. About a minute, and free.",
+      "before_hours_choice": "How should the missing opening hours be filled?",
+      "drop_to_must_do": "Must do",
+      "drop_to_interested": "Interested"
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -2143,7 +2151,6 @@
       "days_unknown": "ยังไม่ได้ระบุวันที่",
       "hours_short": "ชม.",
       "drag_hint": "ลากการ์ดได้ — ขวาคือเก็บ ซ้ายคือไม่เอา ลงคือข้ามไว้ก่อน ปุ่มด้านล่างทำงานเหมือนกัน",
-      "drop_to_keep": "เก็บไว้",
       "drop_to_reject": "ไม่เอาทริปนี้",
       "drop_to_skip": "ข้ามไว้ก่อน",
       "loading_photos": "กำลังโหลดรูปและคำอธิบายฟรี…",
@@ -2172,7 +2179,7 @@
       "stay_pace_capacity": "เที่ยวประมาณวันละ {hours} ชม.",
       "pick_month": "ประมาณช่วงไหน",
       "pick_month_help": "เลือกเดือนไหนก็ได้ นี่เป็นเพียงจุดเริ่มต้น วันที่จริงคุณแก้เองได้ในหน้าตั้งค่า",
-      "use_these_dates": "ใช้วันที่นี้",
+      "use_these_dates": "ใช้วันที่นี้และสร้างแผน",
       "provisional_dates_set": "บันทึกวันที่แล้ว และเชื่อมสถานที่ที่คุณเลือกไว้เข้ากับวันที่ใหม่ให้เรียบร้อย ไม่ต้องทำอะไรซ้ำ กดสร้างแผนด้านล่างได้เลย",
       "month_1": "มกราคม",
       "month_2": "กุมภาพันธ์",
@@ -2322,7 +2329,14 @@
       "map_attribution": "© ผู้ร่วมสร้าง OpenStreetMap",
       "map_offline": "วาดแบบออฟไลน์ — เข้าถึงไทล์แผนที่ไม่ได้",
       "open_in_maps": "เปิดในแผนที่",
-      "forecast_day": "พยากรณ์ {low}–{high}°C · ฝน {rain}%"
+      "forecast_day": "พยากรณ์ {low}–{high}°C · ฝน {rain}%",
+      "areas_none_ranked": "ไม่มีย่านสถานีใดได้คะแนนสูงพอที่จะเข้ารอบ",
+      "thinking_elapsed": "{seconds} วิ",
+      "loading_card": "กำลังโหลดสถานที่นี้…",
+      "use_these_dates_hint": "บันทึกวันที่นี้ รีเฟรชสถานที่ที่พบสำหรับวันดังกล่าวโดยไม่ค้นหาใหม่ แล้วสร้างตัวเลือกแผนสามแบบ ใช้เวลาราวหนึ่งนาที และไม่มีค่าใช้จ่าย",
+      "before_hours_choice": "จะเติมเวลาเปิดทำการที่ขาดไปอย่างไร",
+      "drop_to_must_do": "ต้องไป",
+      "drop_to_interested": "สนใจ"
     }
   }
 }

@@ -606,6 +606,9 @@ export function PlacesPage() {
       {busy ? (
             <>
             <Thinking
+              /* Discovery is two Overpass blocks and runs 30-90s; paced at the low end so
+                 the lines are not still arriving after the places are. */
+              expectSeconds={40}
               language={language}
               lines={["think_reading_setup", "think_searching", "think_dedup", "think_scoring", "think_lanes", "think_photos", "think_almost"]}
             />

@@ -649,6 +649,157 @@ activation is unavailable during exactly the stretch of a trip when people are p
 things. The reasoning still stands; the owner asked for the lock anyway. Reverting is one
 word in `web/src/shared/stages.ts`.
 
+### Right is `must_do` and up is `interested`, 2026-08-14
+
+Right was `interested` and up was `maybe`, with `maybe` paired against `skip` as "the two
+ways of not answering yet" — a tidy symmetry that spent the deck's two strongest gestures
+on its second- and weakest answers, while `must_do`, the answer the whole plan is built
+around, was reachable only from the button row. At the owner's asking right is now the
+strongest keep and up is the ordinary one; `maybe` keeps its button, and left and down are
+unchanged.
+
+**Four things move together or they stop agreeing about what a swipe does**: `intentOf`,
+the arrow keys, the in-hand label, and the legend under the card. The legend is the
+contract — it is the only place the owner is told — so the label copy was renamed rather
+than reused: `drop_to_keep` ("Keep") meant right, and leaving it in place would have put
+"Keep" beside a button that says "Interested". It is `drop_to_must_do` and
+`drop_to_interested` now, named for what they name.
+
+Verified through the keyboard against a copy, which reaches the same `act()` the gesture
+does: ArrowRight wrote **`must_do` 0 → 1** and ArrowUp wrote **`interested` 9 → 10** in
+`candidate_choices`, both with the flight playing. The pointer path cannot be driven this
+way — the gesture uses `setPointerCapture`, and a synthetic `PointerEvent` carries no real
+pointer to capture — which is the same reason `deck.test.tsx` was built around the buttons.
+
+### A kept card flies to the shortlist, 2026-08-14
+
+The swipe wrote the choice and the card vanished; a number in the corner changed. Those
+two events are only connected if you happen to be watching both, so the deck read as
+cards disappearing rather than as a shortlist being built. `shared/flyToShortlist.ts`
+cuts a ghost from the card's own photograph and animates it to the shortlist tab —
+add-to-cart motion, at the owner's asking — and the tab scales once as it lands, so the
+number is *seen* to change rather than found to have changed.
+
+It is decoration and behaves like it: it never blocks, never delays the decision, and
+does nothing at all when anything it needs is missing — no tab on screen, no Web
+Animations API, a zero-sized rect. Two suppressions, both standing rules rather than
+taste: motion sits behind `prefers-reduced-motion: no-preference`, and a **capture runs
+with none of it**, because an element mid-flight is a different image on every run for no
+code reason — the drift the summaries prefetch and the first-visit tour were already
+fixed for.
+
+Three details. The ghost is appended to `<body>`, not to the deck, because a card leaving
+its own container would be clipped by it, and it is `position: fixed` because both rects
+come from `getBoundingClientRect`, which is viewport-relative. The path **arcs** — it
+rises before it falls — since a straight line reads as a UI element being moved where an
+arc reads as something being tossed into a container. And a **cancelled** animation still
+removes its ghost, or navigating mid-flight leaves an orphan pinned over the next screen.
+
+**The condition is written as "not the rejection", not as a list of the keeps.** The list
+was wrong on its first draft: `must_do` is a keep, it is dispatched only from the button
+row rather than through `act()`, and naming the keeps one by one silently omitted the
+strongest one. `not_for_trip` is the single action that does not join the shortlist.
+
+Measured in a browser: 31 frames, the ghost shrinking 320px → 51px and travelling from
+the card at y≈1098 to the tab at y≈100, with the counter moving on each keep. There is no
+unit test — `web/`'s Vitest environment is `node`, and this is entirely DOM, so testing it
+would mean adding jsdom as a dependency for one decorative function.
+
+### A message describing a partial success was shown for a total failure, 2026-08-14
+
+`/places`'s "Where to stay" panel printed **"Nearby counts are unavailable right now, so
+only travel time and metro access are scored"** on *every* error — a sentence about a
+result that half-worked, rendered where there was no result at all. So a call that died
+outright (`no_transit_graph_for_areas`, reproduced when Overpass was unreachable) read as
+a call that succeeded quietly, and the owner's report was the honest reading of it: "what
+is this section do, didn't see the output". The refusal's own words are shown now, and
+they already had bilingual copy — the screen simply never asked for them. An empty
+ranking with no reason also says so rather than rendering an empty `<ol>`.
+
+**The general shape: an error branch that hardcodes one message is a lie the moment a
+second failure exists.** Render the code the server sent.
+
+### A hotel 286 km from the trip is not a hotel, 2026-08-14
+
+`confirm_accommodation_base` defaults its query to `f"{destination} Station"`, and for a
+trip named `New York, United States` the geocoder answered with a station in **upstate New
+York** — 42.796, −76.119, which is **286 km from all eleven places the owner had chosen**.
+It was stored as a booked base, so `hotel_recommendation.basis` read
+`booked_accommodation` and the whole itinerary was built around it.
+
+Two halves, because either alone leaves owners broken. **The call is out of both
+auto-resolve chains** — neither `/optimize` nor `/evidence` invents a base from a
+destination string any more. And `_optimizer_input` **drops a base further than
+`ACCOMMODATION_BASE_TOO_FAR_KM` (150) from the nearest chosen place**, naming
+`ACCOMMODATION_BASE_IMPLAUSIBLE` in `capability_gaps`, so trips that *already* hold a bad
+one are rescued rather than needing the owner to notice. Verified on a copy of the owner's
+own trip: the base becomes the selected-place centroid at 40.767, −73.973 — Manhattan —
+**0.9 to 3.0 km** from the places it serves. The guard is negative-tested: a real hotel
+inside the city is untouched.
+
+### The loading text was not stuck; it had run out of things to say
+
+`Thinking` advanced its lines every 2.6 s, so six lines covered **16 seconds of a
+52-second optimize** and then held for the remaining 36 — reported as the text being
+stuck. It now takes an `expectSeconds` and paces the lines across the real duration, and
+carries an **elapsed-seconds counter**, which is the one thing actually known: the server
+reports no milestones, so this claims none, but a number that ticks can never read as a
+hang. Measured on a real build: line 1 at 4 s, line 4 at 30 s.
+
+**And the build button cannot be pressed twice.** `isPending` flips on the *next* render,
+so two clicks inside one frame both passed the disabled check and started two 52-second
+optimizes, the second replacing the first's result — which looked exactly like the wait
+being twice as long as advertised. A ref set synchronously in `mutationFn` is what closes
+that window; the disabled attribute alone cannot.
+
+### One action, and a choice about how to pay for it, 2026-08-14
+
+`/optimize` offered **two buttons** — assume the hours free, or buy them — and hid its own
+named action, "Build three plan options", whenever that question was open. So the screen's
+one button disappeared exactly when the owner went looking for it, and working out that
+*either* button built the plan meant reading both labels. At the owner's asking the choice
+is now a **radio group** (free pre-selected, and it stays pre-selected — a control that
+spends money is never the default) and "Build three plan options" is the only press. The
+paid path is buy-**then**-build: the purchase is only ever made in order to build, so
+leaving the owner to press again was the "back and forth" report in miniature.
+
+"More evidence controls" is gone from that panel for the same reason: a third link beside
+a decision is a third thing to weigh, and Check trip facts is in the sidebar.
+
+**"Use these dates" now says what it does.** It saves the dates, rebuilds discovery from
+cache and generates a preview — three things and about a minute — and the label named only
+the first, so it read as saving a date and then appeared to hang.
+
+### Two rules that could not be seen, and one duplicated block that hid them
+
+**`.places-map-reset` was declared twice, verbatim**, so the two copies could have drifted
+apart with nothing to notice. It sat at `top: 30px`, across the map's own `<h4>` at y
+11–35 — the reported overlap. There is no free corner to move it to: the compass owns the
+top-right, and the bottom holds the scale note and the **ODbL attribution, which must stay
+legible** — moving it there would have been a worse overlap than the one being fixed. So
+it is in the flow beside the trace control now. A control that cannot overlap is one that
+is not overlaid.
+
+**The sidebar paid its padding twice.** The section frames put a second border inside the
+pane, so `padding: 18px` plus the frame plus each link's own padding read as a deep gutter
+down the left of every stage link — 30px from pane edge to text. Now 8 + 4 + 6 = 18. The
+`.sidebar` rule also carried **two `gap` declarations**, only the second of which ever
+applied.
+
+**The loading card is a small block that says "Loading this place…"**, not a full-height
+grey copy of the card it waits for: the placeholder still overlays at the card's height so
+nothing jumps when the photograph lands, but a full-size grey rectangle reads as a card
+that failed rather than one still arriving.
+
+### Two tests passed only because the machine had a network
+
+`test_ported_behaviours.SetupConfirmationTest` built its `PlannerActions` with **no fake
+place provider**, so the two tests that discover places reached Overpass — against a suite
+whose stated rule is no network and no paid API. They passed for as long as the connection
+held and failed as `discovery_empty` the moment it did not. Injecting the fake the suite
+already has fixed both and took the file from 11.9 s to 1.2 s. **A test that needs a socket
+is a test that reports the network, not the code.**
+
 ### The catalogue of codes was half empty
 
 **Twenty-six optimizer codes had no copy entry**, so the "consequence / smallest next step"

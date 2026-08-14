@@ -224,12 +224,11 @@ export function EvidencePage() {
 
   const autoResolveAll = useMutation({
     mutationFn: async () => {
-      // Free. The paid opening-hours lookup and the paid timezone lookup are their own
-      // buttons on this screen, each stating its price — spending from this one meant
-      // the cheap path and the expensive path were the same press.
-      if (!base.data) {
-        await rpc("confirm_accommodation_base", { trip_id: tripId, query: "" });
-      }
+      // Free, and it invents no accommodation. `confirm_accommodation_base("")` geocodes
+      // `"{destination} Station"`, which for "New York, United States" returned a station
+      // 286 km upstate; the optimizer's own provisional base is the centre of the chosen
+      // places, which is near them by construction. The paid opening-hours and timezone
+      // lookups are their own buttons on this screen, each stating its price.
       // Free now: the zone comes from Open-Meteo rather than the paid Google lookup,
       // so there is no reason to leave the trip permanently unverified.
       try {

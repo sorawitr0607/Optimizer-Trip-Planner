@@ -560,6 +560,60 @@ class ExploreFirstEvidenceTest(unittest.TestCase):
     def tearDown(self) -> None:
         self.directory.cleanup()
 
+    def test_a_base_hundreds_of_kilometres_away_is_not_used_as_a_base(self) -> None:
+        """The owner's New York trip, reproduced.
+
+        `confirm_accommodation_base` defaults its query to ``f"{destination} Station"``,
+        and the geocoder answered "New York, United States Station" with a station in
+        **upstate New York** — 42.796, -76.119, which is **286 km** from every one of the
+        eleven places the owner had chosen. It was stored as a booked base, so
+        `hotel_recommendation.basis` read `booked_accommodation` and the whole itinerary
+        was built around a hotel a four-hour drive from the trip.
+
+        A base that far from everything it is meant to serve is not a base, whatever the
+        geocoder called it. It is dropped and the gap is named, so the plan falls back to
+        the selected-place centroid rather than being quietly wrong.
+        """
+
+        far_away = {
+            "name": "Upstate Station",
+            "latitude": 25.045 + 3.0,  # ~333 km north of the Taipei fixture's places.
+            "longitude": 121.515,
+            "status": "owner_confirmed",
+            "provider": "test",
+        }
+        self.actions.store.upsert_trip_evidence(
+            trip_id=self.trip.trip_id,
+            kind="accommodation_base",
+            value=far_away,
+            provider="test",
+            retrieved_at="2026-08-14T00:00:00+00:00",
+            expires_at="2036-08-14T00:00:00+00:00",
+        )
+
+        snapshot = self.actions._optimizer_input(self.trip.trip_id)
+        ids = {item["id"] for item in snapshot["candidates"]}
+
+        self.assertIn(
+            "ACCOMMODATION_BASE_IMPLAUSIBLE", snapshot["trip"]["capability_gaps"]
+        )
+        self.assertNotIn("booked_accommodation_base", ids)
+        self.assertIn("provisional_accommodation_base", ids)
+
+    def test_a_base_inside_the_city_is_left_alone(self) -> None:
+        """The negative case: the guard must not drop a real hotel."""
+
+        self.actions.confirm_accommodation_base(self.trip.trip_id, "Test Hotel")
+        snapshot = self.actions._optimizer_input(self.trip.trip_id)
+
+        self.assertNotIn(
+            "ACCOMMODATION_BASE_IMPLAUSIBLE", snapshot["trip"]["capability_gaps"]
+        )
+        self.assertIn(
+            "booked_accommodation_base",
+            {item["id"] for item in snapshot["candidates"]},
+        )
+
     def test_a_booked_base_replaces_the_hypothesis_and_routes_from_it(self) -> None:
         saved = self.actions.confirm_accommodation_base(
             self.trip.trip_id, "Test Hotel"

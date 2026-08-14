@@ -11,7 +11,6 @@
   box-shadow: var(--shadow-md);
   display: flex;
   flex-direction: column;
-  gap: 18px;
   /* The pane runs as long as its content and the *page* scrolls, rather than the pane
      scrolling inside itself. A nested scrollbar on a nine-item list is a second thing to
      drive, and it clipped the theme and language controls at the foot on a short window.
@@ -19,10 +18,13 @@
   overflow: visible;
   /* The three sections are separate groups of work, so they get separate frames rather
      than one run of links under three headings — the heading alone left "Build the trip"
-     and "Use the trip" reading as labels in a single list. */
+     and "Use the trip" reading as labels in a single list. (The 18px `gap` that used to
+     sit above this was dead — declared twice, so only this one ever applied.) */
   gap: 10px;
   margin: 20px;
-  padding: 18px;
+  /* 8px, not 18. The frames put a second border inside this one, so the old figure was
+     being paid twice and read as a deep gutter down the left of every stage link. */
+  padding: 8px;
   position: sticky;
   top: 20px;
 }
@@ -2933,6 +2935,10 @@
   z-index: 1;
 }
 
+/* Right is `must_do` and up is `interested`, and both are keeps — so both are green.
+   The button row already reads solid green through amber to a red outline; these are the
+   same ladder seen from the gesture. */
+.place-deck-intent.intent-must_do,
 .place-deck-intent.intent-interested {
   background: var(--color-success-light);
   color: var(--color-success);
@@ -2998,6 +3004,45 @@
    --------------------------------------------------------------------------- */
 /* The drawer, and the tab that opens it. Fixed to the right edge so what has been
    kept is one glance away while swiping, instead of at the foot of a long page. */
+/* The kept card's ghost, in flight to the shortlist tab. Appended to `<body>` rather than
+   to the deck, because a card leaving its own container would be clipped by it. Pinned to
+   the viewport for the same reason the measurement is: both rects come from
+   `getBoundingClientRect`, which is viewport-relative. */
+.shortlist-flight {
+  background-color: var(--bg-card);
+  background-position: center;
+  background-size: cover;
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-hard-sm);
+  /* Above everything, and unpressable: it is a picture of a decision already taken. */
+  pointer-events: none;
+  position: fixed;
+  z-index: 60;
+}
+
+/* The tab's own acknowledgement as the ghost lands, so the number is seen to change
+   rather than found to have changed. */
+@media (prefers-reduced-motion: no-preference) {
+  .shortlist-handle-bumped {
+    animation: shortlist-bump 260ms ease-out;
+  }
+}
+
+@keyframes shortlist-bump {
+  0% {
+    transform: scale(1);
+  }
+
+  40% {
+    transform: scale(1.14);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
 .shortlist-handle {
   align-items: center;
   background: var(--color-accent);
@@ -3098,17 +3143,34 @@
 }
 
 .place-deck-pending {
+  align-content: center;
   display: grid;
   gap: 10px;
-  /* Over the card it stands in for, so the deck keeps one card's height. */
+  /* Over the card it stands in for, so the deck keeps one card's height — but centred and
+     narrow rather than filling it, because a full-size grey rectangle reads as a card that
+     failed rather than one still arriving. */
   inset: 0;
+  justify-items: center;
   padding: 14px;
   position: absolute;
   z-index: 1;
 }
 
 .place-deck-pending .skeleton-photo {
-  height: 240px;
+  /* 96px, down from 240. The placeholder says "loading"; it does not need to be the size
+     of the thing it is waiting for. */
+  height: 96px;
+  width: 60%;
+}
+
+.place-deck-pending .skeleton-line {
+  width: 40%;
+}
+
+.place-deck-pending-text {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  margin: 0;
 }
 
 /* A link that is not a link yet: same shape, plainly unavailable. */
@@ -3225,7 +3287,10 @@
   border-radius: var(--radius);
   display: grid;
   gap: 2px;
-  padding: 6px;
+  /* 4px sideways, not 6. The frame's own inset plus each link's padding was reading as a
+     deep indent against the section heading above it, and the width it costs is width a
+     long stage name wants. */
+  padding: 6px 4px;
 }
 
 .sidebar nav .nav-section {
@@ -4395,19 +4460,6 @@
   top: 30px;
 }
 
-.places-map-reset {
-  background: var(--bg-card);
-  border: 1px solid var(--bg-card-border);
-  border-radius: var(--radius);
-  color: var(--text-primary);
-  cursor: pointer;
-  font-size: var(--text-2xs);
-  left: 8px;
-  padding: 2px 8px;
-  position: absolute;
-  top: 30px;
-}
-
 /* The recommended range inside the chosen month. */
 .stay-window {
   background: var(--color-success-light);
@@ -4456,6 +4508,30 @@
   gap: 8px;
   margin: 12px 0;
   padding: 14px 16px;
+}
+
+/* The opening-hours choice. A fieldset because these are two answers to one question,
+   which is what a radio group means and what two buttons did not say. */
+.evidence-choice {
+  border: 0;
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+}
+
+.evidence-choice legend {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-selected);
+  padding: 0 0 4px;
+}
+
+.evidence-choice label {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  font-size: var(--text-sm);
+  gap: 8px;
 }
 
 .evidence-verdict.settled {
@@ -4693,6 +4769,13 @@
   top: 30px;
 }
 
+/* In the flow beside the other map control, not absolutely positioned.
+   `top: 30px; left: 8px` laid it across the map's own `<h4>`, which occupies y 11-35 —
+   measured. Every free corner is taken: the compass owns the top-right, and the bottom
+   holds the scale note and the ODbL attribution, which must stay legible. So there is no
+   corner to move it to, and a control that cannot overlap is one that is not overlaid.
+   It appears only after the view is panned, so the row it adds is a response to a press.
+   This rule was also duplicated verbatim twice, so the copies could have drifted apart. */
 .places-map-reset {
   background: var(--bg-card);
   border: 1px solid var(--bg-card-border);
@@ -4700,10 +4783,10 @@
   color: var(--text-primary);
   cursor: pointer;
   font-size: var(--text-2xs);
-  left: 8px;
+  justify-self: start;
+  margin-top: 6px;
   padding: 2px 8px;
-  position: absolute;
-  top: 30px;
+  width: fit-content;
 }
 
 /* The recommended range inside the chosen month. */

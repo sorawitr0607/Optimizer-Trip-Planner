@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 
 import { Thinking } from "../shared/Thinking";
@@ -75,6 +75,9 @@ export function OptimizePage() {
   const queryClient = useQueryClient();
   const [variantId, setVariantId] = useState<string | null>(null);
   const [refusal, setRefusal] = useState<string | null>(null);
+  // Free is the default, and stays the default: this app's rule is that a control which
+  // spends money says so before it is pressed, never that it is pressed by accident.
+  const [hoursChoice, setHoursChoice] = useState<"assume" | "verified">("assume");
 
   const trips = useQuery({ queryKey: ["trips"], queryFn: () => rpc<Trip[]>("list_trips") });
   const choices = useQuery({
@@ -104,13 +107,26 @@ export function OptimizePage() {
     queryKey: ["opening_options", tripId],
     queryFn: () => rpc<OpeningEvidenceOptions>("opening_evidence_options", { trip_id: tripId }),
   });
-  const buyHours = useMutation({
-    mutationFn: () => rpc<unknown>("refresh_opening_hours", { trip_id: tripId }),
-    onSuccess: async () => {
+  // The paid path is buy-then-build, not buy-and-stop. Buying the hours and leaving the
+  // owner to press again was the "back and forth" report: the purchase is only ever made
+  // *in order to* build, so the two are one press.
+  const buyThenGenerate = useMutation({
+    mutationFn: async () => {
+      if (buildingRef.current) return null;
+      buildingRef.current = true;
+      await rpc<unknown>("refresh_opening_hours", { trip_id: tripId });
       await queryClient.invalidateQueries({ queryKey: ["opening_options", tripId] });
       await queryClient.invalidateQueries({ queryKey: ["paid_usage"] });
+      return rpc<PlanPreview>("generate_plan_preview", { trip_id: tripId });
+    },
+    onSuccess: async () => {
+      setRefusal(null);
+      await queryClient.invalidateQueries({ queryKey: ["plan_preview", tripId] });
     },
     onError: (error) => setRefusal(error instanceof ApiError ? error.code : String(error)),
+    onSettled: () => {
+      buildingRef.current = false;
+    },
   });
 
   const generate = useMutation({
@@ -123,8 +139,22 @@ export function OptimizePage() {
       setRefusal(error instanceof ApiError ? error.code : String(error)),
   });
 
+  // `isPending` flips on the *next* render, so two clicks inside one frame both pass the
+  // disabled check and start two 52-second optimizes — which is what "loading is stuck"
+  // looked like: the second run's result replacing the first's, twice as slowly. A ref
+  // is set synchronously, so the second click has nothing to do.
+  const buildingRef = useRef(false);
   const autoResolveAndGenerate = useMutation({
     mutationFn: async () => {
+      if (buildingRef.current) return null;
+      buildingRef.current = true;
+      // No invented hotel. This used to call `confirm_accommodation_base("")`, which
+      // geocodes `"{destination} Station"` — and for "New York, United States" that
+      // returned a station in upstate New York State, 286 km from Manhattan and from all
+      // eleven chosen places. The optimizer already has an honest answer for an
+      // unconfirmed stay: a provisional base at the centre of the places themselves,
+      // which is near them by construction and says on screen that it is a hypothesis.
+      //
       // Free, all of it. This used to call `refresh_opening_hours` and
       // `refresh_timezone` — **US$0.025 a place** and US$0.005 — from a button whose
       // label promised only to resolve details, with no price anywhere near it. On the
@@ -135,7 +165,6 @@ export function OptimizePage() {
       //
       // The paid lookup is not removed from the app — it stays on `/evidence` and in
       // the verdict panel above, priced, where choosing it is the point.
-      await rpc("confirm_accommodation_base", { trip_id: tripId, query: "" });
       // Free now: the zone comes from Open-Meteo rather than the paid Google lookup,
       // so there is no reason to leave the trip permanently unverified.
       try {
@@ -181,7 +210,13 @@ export function OptimizePage() {
       ]);
     },
     onError: (error) => setRefusal(error instanceof ApiError ? error.code : String(error)),
+    onSettled: () => {
+      buildingRef.current = false;
+    },
   });
+
+  const building =
+    generate.isPending || autoResolveAndGenerate.isPending || buyThenGenerate.isPending;
 
   const activate = useMutation({
     mutationFn: (variant: string) =>
@@ -263,59 +298,65 @@ export function OptimizePage() {
                 })
               : copy("before_all_covered", language)}
           </p>
+          {/* Two buttons here were two *actions*, and they are not: they are one action
+              and a choice about how to pay for it. Presented as buttons the owner had to
+              read both labels to work out that either one builds the plan — so the choice
+              is a radio group and "Build three plan options" below is the only press.
+              "More evidence controls" is gone for the same reason: a third link beside a
+              decision is a third thing to weigh. */}
           {evidence.data.needing_hours ? (
-            <div className="optimize-actions">
-              {/* The one free button on this screen. Making the two identical in *work*
-                  left them identical in *wording* too, so the journey carried two
-                  "assume and build, free" controls — the fix for one confusion caused
-                  another. This is the free path; the warnings block below no longer
-                  repeats it, because by then the answer to "what do I press" is this. */}
-              <button
-                className="setup-primary"
-                disabled={autoResolveAndGenerate.isPending || buyHours.isPending}
-                onClick={() => autoResolveAndGenerate.mutate()}
-                type="button"
-              >
-                {autoResolveAndGenerate.isPending
-                  ? copy("loading", language)
-                  : copy("auto_resolve_free", language)}
-              </button>
-              <button
-                disabled={buyHours.isPending || autoResolveAndGenerate.isPending}
-                onClick={() => buyHours.mutate()}
-                type="button"
-              >
-                {buyHours.isPending
-                  ? copy("before_buying", language)
-                  : copyFormat("before_buy_hours", language, {
-                      cost: evidence.data.verified.estimate_usd.toFixed(3),
-                    })}
-              </button>
-              <Link className="primary-link" to={`/trips/${tripId}/evidence`}>
-                {copy("open_evidence_detail", language)}
-              </Link>
-            </div>
+            <fieldset className="evidence-choice">
+              <legend>{copy("before_hours_choice", language)}</legend>
+              <label>
+                <input
+                  checked={hoursChoice === "assume"}
+                  name="hours-choice"
+                  onChange={() => setHoursChoice("assume")}
+                  type="radio"
+                  value="assume"
+                />
+                <span>{copy("auto_resolve_free", language)}</span>
+              </label>
+              <label>
+                <input
+                  checked={hoursChoice === "verified"}
+                  name="hours-choice"
+                  onChange={() => setHoursChoice("verified")}
+                  type="radio"
+                  value="verified"
+                />
+                <span>
+                  {copyFormat("before_buy_hours", language, {
+                    cost: evidence.data.verified.estimate_usd.toFixed(3),
+                  })}
+                </span>
+              </label>
+            </fieldset>
           ) : null}
         </section>
       ) : null}
 
-      {/* Hidden until the opening-hours question above has been answered. "Build three
-          plan options" sitting under an unanswered choice invites a press that builds a
-          draft the answer would have changed — and the panel above already carries the
-          two buttons that build it *with* an answer. It comes back once there is nothing
-          left to decide, because then it is the plain "build it again" control. */}
-      {evidence.data?.needing_hours ? null : (
-        <div className="optimize-actions">
-          <button
-            className="setup-primary"
-            disabled={considered.length === 0 || generate.isPending}
-            onClick={() => generate.mutate()}
-            type="button"
-          >
-            {generate.isPending ? copy("optimizing", language) : copy("generate_plan", language)}
-          </button>
-        </div>
-      )}
+      {/* The one action on this screen, always present. It used to be hidden whenever the
+          opening-hours question was open, because the two buttons up there built the plan
+          instead — which meant the screen's named action disappeared exactly when the
+          owner was looking for it. The radio above now decides *how* it builds; this
+          decides *that* it builds. */}
+      <div className="optimize-actions">
+        <button
+          className="setup-primary"
+          disabled={considered.length === 0 || building}
+          onClick={() => {
+            if (!evidence.data?.needing_hours) return generate.mutate();
+            if (hoursChoice === "verified") return buyThenGenerate.mutate();
+            return autoResolveAndGenerate.mutate();
+          }}
+          type="button"
+        >
+          {building
+            ? copy(buyThenGenerate.isPending ? "before_buying" : "optimizing", language)
+            : copy("generate_plan", language)}
+        </button>
+      </div>
       {/* A disabled primary action always says why. */}
       {considered.length === 0 ? (
         <p className="setup-hint">{copy("choose_before_plan", language)}</p>
@@ -326,6 +367,9 @@ export function OptimizePage() {
       {generate.isPending || autoResolveAndGenerate.isPending ? (
         <div className="optimize-working" aria-busy="true">
           <Thinking
+            /* Three variants, each with its own time budget since `WF-043` — measured at
+               about 52s end to end, which is what the six lines are paced across. */
+            expectSeconds={52}
             language={language}
             lines={["think_windows", "think_routes", "think_packing", "think_variants", "think_checking", "think_almost"]}
           />

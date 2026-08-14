@@ -337,6 +337,10 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
         >
           {copy("use_these_dates", language)}
         </button>
+        {/* The press does three things and takes about a minute, and the label named only
+            the first — so it read as saving a date and then appeared to hang. Naming all
+            three is what makes the wait legible as work rather than as a fault. */}
+        <p className="setup-hint">{copy("use_these_dates_hint", language)}</p>
       </div>
     </section>
   );

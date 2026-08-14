@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 
-import { rpc, type StayAreaReport } from "../api/client";
+import { ApiError, rpc, type StayAreaReport } from "../api/client";
 import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
 import { placeAltName, placeName } from "../shared/names";
 
@@ -42,8 +42,18 @@ export function StayAreas({ tripId, language }: StayAreasProps) {
         {copy("rank_areas", language)}
       </button>
 
+      {/* The refusal's own words. This printed `areas_amenities_unavailable` for *every*
+          failure — the message for a partial success, where travel time and metro access
+          scored and only the counts were missing. So a call that died outright
+          (`no_transit_graph_for_areas`, measured against the owner's New York trip when
+          Overpass was unreachable) read as a call that half-worked, and the owner saw that
+          sentence above an empty section with no output and no reason. */}
       {recommend.isError ? (
-        <p className="setup-hint">{copy("areas_amenities_unavailable", language)}</p>
+        <p className="setup-hint">
+          {recommend.error instanceof ApiError
+            ? copyFrom("OPTIMIZER_CODE_TEXT", recommend.error.code, language)
+            : String(recommend.error)}
+        </p>
       ) : null}
 
       {report ? (
@@ -59,6 +69,10 @@ export function StayAreas({ tripId, language }: StayAreasProps) {
           )}
           {report.reason ? (
             <p className="setup-hint">{copyFrom("OPTIMIZER_CODE_TEXT", report.reason, language)}</p>
+          ) : null}
+
+          {report.areas.length === 0 && !report.reason ? (
+            <p className="setup-hint">{copy("areas_none_ranked", language)}</p>
           ) : null}
 
           <ol className="stay-area-list">

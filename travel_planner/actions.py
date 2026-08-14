@@ -1302,6 +1302,20 @@ class PlannerActions:
                     )
 
         accommodation_base = self.get_accommodation_base(trip_id)
+        # A base 286 km from every place it is meant to serve is not a base.
+        #
+        # `confirm_accommodation_base("")` geocodes `"{destination} Station"`, and for
+        # "New York, United States" Nominatim answered with a station in upstate New York
+        # *State* — 286 km from Manhattan and from all eleven chosen places. The plan
+        # built, the itinerary was nonsense, and nothing said so. The guard lives here
+        # rather than only at the geocoder because a base stored before this still has to
+        # stop poisoning the plan; a trip whose owner really is staying two hours out
+        # keeps it, because `ACCOMMODATION_BASE_TOO_FAR_KM` is far beyond any city.
+        base_implausible = bool(accommodation_base) and self._base_is_implausible(
+            accommodation_base, candidates
+        )
+        if base_implausible:
+            accommodation_base = None
         if accommodation_base:
             candidates.append(
                 {
@@ -1411,6 +1425,8 @@ class PlannerActions:
             capability_gaps.append("ROUTE_SNAPSHOT_MISSING")
         if not accommodation_confirmed:
             capability_gaps.append("ACCOMMODATION_BASE_UNCONFIRMED")
+        if base_implausible:
+            capability_gaps.append("ACCOMMODATION_BASE_IMPLAUSIBLE")
         if opening_missing:
             capability_gaps.append("OPENING_EVIDENCE_MISSING")
         if any(person.get("constraints") for person in travellers):
@@ -1902,6 +1918,35 @@ class PlannerActions:
 
     def get_accommodation_base(self, trip_id: str) -> dict[str, Any] | None:
         return self.store.get_trip_evidence(trip_id, "accommodation_base")
+
+    #: How far a confirmed base may sit from the places it serves before it is treated
+    #: as a geocoding accident rather than a stay. Generous on purpose: someone really
+    #: can stay an hour outside a city, and this is not a comfort rule. It is the
+    #: distance at which "this is the wrong New York" becomes the only explanation.
+    ACCOMMODATION_BASE_TOO_FAR_KM = 150.0
+
+    def _base_is_implausible(
+        self, base: dict[str, Any], candidates: list[dict[str, Any]]
+    ) -> bool:
+        """Is this base impossibly far from every place the trip has chosen?"""
+
+        chosen = [
+            candidate
+            for candidate in candidates
+            if candidate.get("latitude") is not None
+            and candidate.get("longitude") is not None
+        ]
+        if not chosen:
+            return False
+        try:
+            here = {
+                "latitude": float(base["latitude"]),
+                "longitude": float(base["longitude"]),
+            }
+        except (KeyError, TypeError, ValueError):
+            return False
+        nearest = min(_distance_metres(here, candidate) for candidate in chosen)
+        return nearest > self.ACCOMMODATION_BASE_TOO_FAR_KM * 1000
 
     def confirm_accommodation_base(
         self, trip_id: str, query: str = ""
