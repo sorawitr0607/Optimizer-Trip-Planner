@@ -42,6 +42,7 @@ def main() -> int:
         )
 
     started = monotonic()
+    skipped: list[str] = []
     for number, (label, command) in enumerate(stages, 1):
         stage_started = monotonic()
         print(f"[{number}/{len(stages)}] {label}", flush=True)
@@ -50,12 +51,23 @@ def main() -> int:
         except FileNotFoundError as error:
             print(f"FAILED: {error}", file=sys.stderr)
             return 1
+        # 2 is a stage reporting that it could not run — currently only the screen
+        # baselines, which need a captured set to compare against. It is not a failure
+        # and must not be a `PASS`: a gate that compared nothing claiming to have passed
+        # is how two mobile layout defects shipped under a green suite.
+        if result.returncode == 2:
+            skipped.append(label)
+            print(f"DID NOT RUN: {label} ({monotonic() - stage_started:.1f}s)", flush=True)
+            continue
         if result.returncode:
             print(f"FAILED: {label} ({result.returncode})", file=sys.stderr)
             return result.returncode
         print(f"PASS: {label} ({monotonic() - stage_started:.1f}s)", flush=True)
 
-    print(f"All {len(stages)} stages passed in {monotonic() - started:.1f}s.")
+    ran = len(stages) - len(skipped)
+    print(f"{ran} of {len(stages)} stages passed in {monotonic() - started:.1f}s.")
+    for label in skipped:
+        print(f"  DID NOT RUN: {label}")
     return 0
 
 

@@ -667,6 +667,76 @@ subset at **3.7 MB**, loading in under a second, and 捷運西門站 → 捷運�
 25-minute journey with one transfer at `basis: "timetable"`. `/gtfs/` is gitignored: it is
 gigabytes of someone else's data and not this repository's to redistribute.
 
+### External audit, 2026-08-14: nine of eleven findings closed
+
+An outside audit scored the app 7.8/10 and raised eleven confirmed problems. Nine are
+fixed; two are recorded below as open, because both are larger than the audit's framing
+and doing them badly would be worse than not doing them.
+
+**A rule that is declared is not a rule that applies.** `min-height: 44px` had been on
+`select` at the phone breakpoint since the touch-target work and had *never done
+anything*: measured in WebKit at 390px, a native `<select>` stays **23px** under both a
+44px `min-height` and 12px of padding, and only an explicit `height` moves it. The rule
+looked right, passed review and shipped a control a thumb cannot hit. Twelve of them on
+`/readiness` alone. This is the general lesson worth keeping: for natively-rendered form
+controls, assert the **computed box**, not the declared CSS.
+
+**Exactly one element may claim to be the current page**, and three did — the brand, the
+real stage and "New trip slot", because `/trips` matches every `/trips/:id/*` descendant
+without `end`. On a fresh Places route it was **eight**, because a locked stage pointed at
+`#`, which resolves to whatever page you are on: every locked stage announced itself as a
+link to the page already open. Locked stages are now `<span aria-disabled>` rather than
+links, `navSemantics.test.tsx` pins the count at one, and it is negative-tested.
+
+**A failed discovery said "Discovery result saved" beside "No places came back"**, over a
+raw `<urlopen error [Errno 61] Connection refused>`, with three equivalent retry buttons —
+the app congratulating itself for storing a failure, in developer vocabulary, at its main
+conversion point. A run that returns nothing no longer flashes success, and the provider's
+own words are folded behind a disclosure rather than being the headline.
+
+**A wrong address reached React Router's development error page**, and a deleted or
+mistyped trip id rendered the whole setup wizard before admitting `unknown_trip` after the
+owner had re-entered their answers. `shared/Recovery.tsx` is one branded recovery state
+behind a catch-all route, an `errorElement` on every route, and a trip check in `AppShell`
+before any stage draws.
+
+**The two floating `/places` controls shared a corner at 390px** — the shortlist sat on
+"How this works" and its focus ring between roughly y=97 and y=132. They are one container
+now, positioned once, and in the document flow on a phone.
+
+Also closed: the Revise horizontal overflow (a flex item's default `min-width: auto` is
+its content's width); `US$3.2655` rounded to two places, because that is money and the
+figure is an estimate from a price table; and "plan slice" replaced with what it means.
+
+**A gate that compared nothing was reporting `PASS`.** `check_screen_baselines.py` now
+exits 2 for "did not run", `check.py` prints `DID NOT RUN` and summarises `11 of 12`, and
+the run is no longer describable as green when the visual comparison never happened. Two
+real mobile defects shipped under the old wording. Capturing still cannot be a hard local
+failure — it needs a running server and headless Chrome — but it may no longer be silent.
+
+**The entry chunk was inspected rather than split further.** 533 kB raw / **159 kB gzip**,
+and it holds react-dom, react-router, TanStack Query, `i18n/copy.json` at 137 kB and the
+landing hero — no stage code, no map styles, no tour art, so route splitting is working.
+`chunkSizeWarningLimit` is a measured budget of 560 rather than Vite's default guess, so a
+warning now means a stage has escaped a lazy boundary. Splitting the catalogue by language
+would halve it and is deliberately not done: artifact 027 requires both languages in one
+payload so a language switch never refetches.
+
+#### Open, and why
+
+**`/places` still decodes ~2.7 MB of JSON** — `rank_candidates` is 1.52 MB (1108 cards at
+1279 bytes) and `get_latest_discovery` 1.17 MB, against a deck that now deals twenty. The
+fix is a new lightweight read, not a narrower old one: `candidates` is a `Frozen` snapshot
+and the client is handed its `sha256`, so trimming at the transport boundary would put a
+hash on the wire that does not describe its payload. That is a new allowlisted method, new
+types and a rework of the busiest screen — worth doing deliberately, not at the end of a
+session.
+
+**The 390px states have no visual baselines.** The 58 approved images are desktop and the
+documented 500px phone set; the audit's overlap and overflow both sat outside them. Adding
+390px states means re-approving on this machine, and baselines are machine-specific by
+decision (`WF-025`) — so it is the owner's call, not a silent re-approval.
+
 ## Public release boundary
 
 The current application is local-only and single-owner. Do not make `PlannerHandler`, the SQLite

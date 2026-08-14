@@ -67,13 +67,18 @@ def stale_sources() -> list[str]:
 
 
 def main() -> int:
+    # Exit 2 means "this gate did not run", which is neither a pass nor drift. An audit
+    # on 2026-08-14 found `check.py` printing `PASS: Screen baselines` over a stage that
+    # had compared nothing — two real mobile layout defects shipped under that green.
+    # The comparison still cannot be a hard failure locally, because capturing needs a
+    # running server and headless Chrome; it simply may no longer claim to have passed.
     if not BASELINES.is_dir() or not any(BASELINES.glob("*.png")):
         print("SKIP: no approved baselines yet — run capture_screen_baselines.py --approve",
               flush=True)
-        return 0
+        return 2
     if not CURRENT.is_dir() or not any(CURRENT.glob("*.png")):
         print("SKIP: no current captures to compare — run capture_screen_baselines.py", flush=True)
-        return 0
+        return 2
 
     stale = stale_sources()
     if stale:

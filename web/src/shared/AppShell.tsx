@@ -8,6 +8,7 @@ import { copy, copyFormat } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
 import { useTheme } from "./ThemeProvider";
 import { DeleteTrip } from "./DeleteTrip";
+import { Recovery } from "./Recovery";
 import { stageStatus, type StageRoute } from "./stages";
 
 /**
@@ -90,6 +91,20 @@ export function AppShell() {
     }
   }
 
+  // The trip is checked before its stages are drawn. A deleted, mistyped or stale-bookmark
+  // id rendered the whole setup wizard and only admitted `unknown_trip` after the owner
+  // had re-entered their answers into a trip that does not exist. `trips` is already
+  // fetched here for the switcher, so this costs no request.
+  if (trips.data && tripId && !trip) {
+    return (
+      <Recovery
+        body={copy("unknown_trip_body", language)}
+        detail={tripId}
+        title={copy("unknown_trip_title", language)}
+      />
+    );
+  }
+
   return (
     <div className="app-shell">
       {/* derives-from: element 17 .sidebar as .sidebar. Auto-Bill has no phone precedent
@@ -106,7 +121,11 @@ export function AppShell() {
         {trip?.name || copy("stage_setup", language)}
       </button>
       <aside className={`sidebar${navOpen ? " open" : ""}`} id="stage-nav">
-        <NavLink className="brand" to="/trips">
+        {/* `end`, or `/trips` matches every `/trips/:id/*` descendant and both of these
+            links claim `aria-current="page"` on every stage screen. Three elements
+            claiming to be the current page is three contradictory answers to a screen
+            reader's only question about where it is. */}
+        <NavLink className="brand" end to="/trips">
           <Compass aria-hidden="true" size={22} />
           <span>{copy("app_name", language)}</span>
         </NavLink>
@@ -134,37 +153,20 @@ export function AppShell() {
                   : status.state === "available"
                     ? ""
                     : copy(`stage_state_${status.state}`, language);
-              return (
-                <NavLink
-                  aria-label={spoken ? `${name} — ${spoken}` : undefined}
-                  // A locked stage points at `#`, which resolves to whatever page you
-                  // are on — so `isActive` was true for every locked link and they were
-                  // highlighted as if they were the screen you were reading.
-                  className={({ isActive }) =>
-                    `stage-link${isActive && status.state !== "locked" ? " active" : ""}`
-                  }
-                  data-state={status.state}
-                  key={stageRoute}
-                  onClick={(event) => {
-                    if (status.state === "locked") {
-                      event.preventDefault();
-                      return;
-                    }
-                    setNavOpen(false);
-                  }}
-                  aria-disabled={status.state === "locked"}
-                  to={status.state === "locked" ? "#" : `/trips/${tripId}/${stageRoute}`}
-                >
+              // A locked stage is not a link. It pointed at `#`, which resolves to
+              // whatever page you are on — so it was announced as a link to the page
+              // already open *and* claimed `aria-current="page"` alongside the real
+              // one. Eight elements claimed to be current on a fresh Places route.
+              // `<span>` states the prerequisite instead of offering a destination.
+              const body = (
+                <>
                   <span className="stage-link-name">{name}</span>
                   {status.state === "complete" ? <Check aria-hidden="true" size={14} /> : null}
                   {status.state === "locked" ? <Lock aria-hidden="true" size={13} /> : null}
                   {status.state === "next" ? (
                     <span className="stage-link-badge">{copy("stage_state_next", language)}</span>
                   ) : null}
-                  {/* Named before navigation rather than after it. A locked stage is
-                      still a link — `<StageGate>` explains in place and a completed
-                      stage stays open for revision — but the prerequisite is on
-                      screen now instead of being learned by clicking. */}
+                  {/* Named before navigation rather than after it. */}
                   {status.state === "locked" ? (
                     <small className="stage-link-blocker">
                       {copyFormat("stage_state_locked", language, {
@@ -172,6 +174,31 @@ export function AppShell() {
                       })}
                     </small>
                   ) : null}
+                </>
+              );
+              if (status.state === "locked") {
+                return (
+                  <span
+                    aria-disabled="true"
+                    aria-label={spoken ? `${name} — ${spoken}` : undefined}
+                    className="stage-link"
+                    data-state="locked"
+                    key={stageRoute}
+                  >
+                    {body}
+                  </span>
+                );
+              }
+              return (
+                <NavLink
+                  aria-label={spoken ? `${name} — ${spoken}` : undefined}
+                  className={({ isActive }) => `stage-link${isActive ? " active" : ""}`}
+                  data-state={status.state}
+                  key={stageRoute}
+                  onClick={() => setNavOpen(false)}
+                  to={`/trips/${tripId}/${stageRoute}`}
+                >
+                  {body}
                 </NavLink>
               );
             })}
@@ -192,7 +219,7 @@ export function AppShell() {
             </select>
           </label>
           {trip ? <span className="trip-destination">{trip.destination}</span> : null}
-          <NavLink className="trip-new" onClick={() => setNavOpen(false)} to="/trips">
+          <NavLink className="trip-new" end onClick={() => setNavOpen(false)} to="/trips">
             <Plus aria-hidden="true" size={15} /> {copy("new_trip_slot", language)}
           </NavLink>
           {/* The active slot, deletable from wherever you are. It first landed only on

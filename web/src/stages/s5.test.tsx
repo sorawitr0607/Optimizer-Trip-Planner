@@ -292,7 +292,9 @@ describe("RevisePage", () => {
     expect(html).toContain("<textarea");
     expect(html).toContain("disabled");
     expect(html).toContain("About US$0.002 per interpretation");
-    expect(html).toContain("Only the plan slice and your request are sent");
+    // "plan slice" was internal vocabulary in the one sentence that has to be understood
+    // before money and data leave the machine.
+    expect(html).toContain("Only the part of your itinerary the request is about");
     expect(html).toContain("never sets an opening time, route, fare or closure");
     expectNoMissingCopy(html);
   });

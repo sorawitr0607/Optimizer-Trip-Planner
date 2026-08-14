@@ -39,7 +39,9 @@ const children = shell?.children ?? [];
 
 describe("entry point", () => {
   it("mounts the landing redirect and the trip list above the shell", () => {
-    expect(routes.map((route) => route.path)).toEqual(["/", "/trips", "/trips/:tripId"]);
+    // `*` is the branded catch-all: a mistyped address used to reach React
+    // Router's own "Unexpected Application Error!" development page.
+    expect(routes.map((route) => route.path)).toEqual(["/", "/trips", "*", "/trips/:tripId"]);
     for (const route of routes) expect(isValidElement(route.element)).toBe(true);
   });
 

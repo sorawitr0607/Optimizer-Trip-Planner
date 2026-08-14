@@ -4,6 +4,27 @@ import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  build: {
+    /**
+     * A budget, not Vite's default guess.
+     *
+     * The default 500 kB fired on every build and so meant nothing. Measured
+     * 2026-08-14: the entry chunk is 533 kB raw / **159 kB gzip**, and it was inspected
+     * rather than assumed — no stage code, no map styles, no tour art are in it, which
+     * is route splitting working. What *is* in it is react-dom, react-router and
+     * TanStack Query, plus `i18n/copy.json` at 137 kB and the landing hero, both of
+     * which the entry route genuinely needs.
+     *
+     * 560 is therefore "roughly what the framework plus the catalogue costs, and no
+     * room for a stage to leak back in". If this warns, something has escaped a lazy
+     * boundary — which is a signal worth reading, unlike the default.
+     *
+     * Splitting the copy catalogue by language would halve it, and is deliberately not
+     * done: `artifact 027` requires both languages in one payload so a language switch
+     * never refetches, and importing it `as const` is what type-checks the keys.
+     */
+    chunkSizeWarningLimit: 560,
+  },
   server: {
     fs: { allow: [".."] },
     proxy: {

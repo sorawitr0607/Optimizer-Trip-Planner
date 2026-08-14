@@ -133,10 +133,12 @@ describe("EvidencePage", () => {
   it("shows the spend meter against the cap before any paid card", () => {
     const html = render("en");
 
-    expect(html).toContain("US$0.2290");
+    // Two decimal places: this is money, and US$0.2290 of US$10.00 claims a precision
+    // an estimate from a price table does not have. The ledger keeps the full value.
+    expect(html).toContain("US$0.23");
     expect(html).toContain("US$10.00");
     expect(html).toContain("50");
-    expect(html.indexOf("US$0.2290")).toBeLessThan(html.indexOf("evidence-cost"));
+    expect(html.indexOf("US$0.23")).toBeLessThan(html.indexOf("evidence-cost"));
   });
 
   it("stops the paid buttons when the cap is reached", () => {

@@ -7,6 +7,7 @@ import { rpc, type Journey, type Trip } from "./api/client";
 import { copy } from "./i18n/copy";
 import { useLanguage } from "./i18n/LanguageProvider";
 import { AppShell } from "./shared/AppShell";
+import { Recovery, RouteError } from "./shared/Recovery";
 import { StageGate } from "./shared/StageGate";
 import { STAGE_GATE, STAGE_ROUTES, type StageRoute } from "./shared/stages";
 import { TripsPage } from "./stages/TripsPage";
@@ -64,12 +65,28 @@ const PAGES: Record<StageRoute, React.LazyExoticComponent<() => React.ReactNode>
 // The children are generated from `shared/stages.ts` rather than written out, so
 // the gate a route waits on and the state the sidebar reports for it are the same
 // fact rather than two literals that agree until one is edited.
+/** The catch-all. A component rather than an inline element so it reads the language
+ *  the same way every other screen does. */
+function Recovery404() {
+  const { language } = useLanguage();
+  return (
+    <Recovery
+      body={copy("not_found_body", language)}
+      title={copy("not_found_title", language)}
+    />
+  );
+}
+
 export const routes = [
-  { path: "/", element: <Landing /> },
-  { path: "/trips", element: <TripsPage /> },
+  { path: "/", element: <Landing />, errorElement: <RouteError /> },
+  { path: "/trips", element: <TripsPage />, errorElement: <RouteError /> },
+  // A mistyped address or a stale bookmark used to reach React Router's own development
+  // error page — "Unexpected Application Error!" with no branding and nothing to press.
+  { path: "*", element: <Recovery404 /> },
   {
     path: "/trips/:tripId",
     element: <AppShell />,
+    errorElement: <RouteError />,
     children: STAGE_ROUTES.map((route) => {
       const Page = PAGES[route];
       const page = (
@@ -79,6 +96,7 @@ export const routes = [
       );
       return {
         path: route,
+        errorElement: <RouteError />,
         // Setup is the one ungated route: it is what every gate checks for.
         element: route === "setup" ? page : <StageGate stage={STAGE_GATE[route]}>{page}</StageGate>,
       };

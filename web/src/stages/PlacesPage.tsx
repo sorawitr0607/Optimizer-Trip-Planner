@@ -251,7 +251,11 @@ export function PlacesPage() {
       rpc<DiscoveryRun>("discover_places", { trip_id: tripId, force_refresh }),
     onSuccess: async (value) => {
       queryClient.setQueryData(["discovery", tripId], value);
-      setFlash("discovery_saved");
+      // "Discovery result saved" beside "No places came back" is the app congratulating
+      // itself for storing a failure. A run that found nothing is reported by the empty
+      // state below and nowhere else.
+      const found = (value.candidates?.data?.candidates ?? []).length;
+      setFlash(found ? "discovery_saved" : "");
       setCardId("");
       await refreshReads();
     },
@@ -398,7 +402,23 @@ export function PlacesPage() {
 
   return (
     <section className="stage-card places-screen">
-      <PlacesTour language={language} tripId={tripId} />
+      {/* Both floating controls in one container. They were positioned independently and
+          at 390px shared a corner — the shortlist sat on top of "How this works" and its
+          focus ring, between roughly y=97 and y=132. Together they can be laid out as a
+          pair on every width instead of colliding on one. */}
+      <div className="places-actions">
+        <PlacesTour language={language} tripId={tripId} />
+        <button
+          aria-controls="shortlist-pane"
+          aria-expanded={shortlistOpen}
+          className="shortlist-handle"
+          onClick={() => setShortlistOpen(!shortlistOpen)}
+          type="button"
+        >
+          {copy("your_shortlist", language)}
+          <span className="shortlist-handle-count">{selectedChoices.length}</span>
+        </button>
+      </div>
       <header className="money-head">
         <h1>{copy("discover_title", language)}</h1>
         <p>{copy("discover_help", language)}</p>
@@ -458,10 +478,19 @@ export function PlacesPage() {
                   the empty state look nested inside a section that does not exist. */}
               <h2>{copy("catalog_empty_title", language)}</h2>
               <p>{copy("catalog_empty_help", language)}</p>
+              {/* One sentence in the app's voice, and the provider's own words folded
+                  away behind it. `<urlopen error [Errno 61] Connection refused>` as the
+                  headline makes the product look unfinished at its main conversion
+                  point — but it is the thing worth quoting in a bug report, so it is
+                  kept rather than swallowed. */}
               {report?.provider_error ? (
-                <p className="setup-hint">
-                  <b>{copy("catalog_empty_reason", language)}:</b> {String(report.provider_error)}
-                </p>
+                <>
+                  <p>{copy("discovery_unreachable", language)}</p>
+                  <details className="catalog-empty-detail">
+                    <summary>{copy("discovery_technical", language)}</summary>
+                    <p className="setup-hint">{String(report.provider_error)}</p>
+                  </details>
+                </>
               ) : null}
               <button
                 className="setup-primary"
@@ -857,16 +886,6 @@ export function PlacesPage() {
           A drawer rather than a block at the foot of the page: while swiping, what you
           have kept is the thing you want to glance at without losing your place, and at
           the bottom of a long screen it was neither visible nor reachable. */}
-      <button
-        aria-controls="shortlist-pane"
-        aria-expanded={shortlistOpen}
-        className="shortlist-handle"
-        onClick={() => setShortlistOpen(!shortlistOpen)}
-        type="button"
-      >
-        {copy("your_shortlist", language)}
-        <span className="shortlist-handle-count">{selectedChoices.length}</span>
-      </button>
       <section
         className={`shortlist${shortlistOpen ? " open" : ""}`}
         id="shortlist-pane"

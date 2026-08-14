@@ -365,7 +365,10 @@ export function EvidencePage() {
             {/* Moves with the ledger, not the code: any paid call anywhere changes both
                 numbers, so this screen drifted past the gate's tolerance on its own. */}
             <span data-volatile="ledger">
-              US${spend.estimated_usd.toFixed(4)} / US${spend.cap_usd.toFixed(2)}
+              {/* Two decimal places: this is money, and US$3.2655 of US$10.00 reads as a
+                  precision the figure does not have — it is an *estimate* from a price
+                  table. The ledger keeps its full value; only the display rounds. */}
+              US${spend.estimated_usd.toFixed(2)} / US${spend.cap_usd.toFixed(2)}
             </span>{" "}
             {copy("paid_cap", language)} ·{" "}
             <span data-volatile="ledger">{spend.requests}</span>{" "}
