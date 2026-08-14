@@ -64,6 +64,19 @@ describe("sidebar navigation semantics", () => {
     expect(html.match(/aria-current="page"/g) ?? []).toHaveLength(1);
   });
 
+  it("never ticks a stage in Check and adjust", () => {
+    // Evidence, readiness and revise are not steps you finish — evidence is checked when
+    // something looks wrong, the board is kept rather than completed, and a revision is
+    // made whenever the plan needs one. A tick claims a thing is behind you that you may
+    // come back to twice more. The *announcement* goes with the mark: dropping the glyph
+    // while still saying "Done" would give a screen reader a claim nobody else gets.
+    const html = render(`/trips/${TRIP}/places`);
+    const check = html.slice(html.indexOf("Check and adjust"));
+
+    expect(check).toContain("Check trip facts");
+    expect(check).not.toContain("— Done");
+  });
+
   it("does not offer a locked stage as a link", () => {
     const html = render(`/trips/${TRIP}/places`);
 

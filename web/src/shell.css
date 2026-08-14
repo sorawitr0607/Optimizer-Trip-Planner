@@ -56,12 +56,21 @@
   font-size: var(--text-md);
   font-weight: var(--weight-unselected);
   gap: 6px;
-  padding: 6px 8px;
+  padding: 6px;
   text-decoration: none;
+}
+
+/* The padlock and the tick belong to the name, not to the row: `flex-wrap` is here so
+   the blocker sentence can drop to its own line, and without this the *icon* took that
+   line instead whenever a name ran long — "Change the plan" showed its lock stranded
+   underneath it. */
+.stage-link > svg {
+  flex: none;
 }
 
 .stage-link-name {
   flex: 1 1 auto;
+  min-width: 0;
 }
 
 .stage-link:hover,
@@ -3205,14 +3214,18 @@
   justify-items: start;
 }
 
-/* One frame per section of the nav, so the three groups read as three groups. */
+/* One frame per section of the nav, so the three groups read as three groups.
+
+   Padded 6px, not 8. The frames cost each link 16px of width and "Change the plan" was
+   three pixels over what was left — so its padlock wrapped to a line of its own, and
+   letting the name shrink instead just wrapped the name. The room is simply given back. */
 .sidebar nav {
   background: var(--bg-secondary);
   border: 1px solid var(--bg-card-border);
   border-radius: var(--radius);
   display: grid;
   gap: 2px;
-  padding: 8px;
+  padding: 6px;
 }
 
 .sidebar nav .nav-section {

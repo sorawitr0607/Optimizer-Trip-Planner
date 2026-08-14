@@ -21,9 +21,14 @@ import { stageStatus, type StageRoute } from "./stages";
  * stages when only six are. The order within each section is unchanged.
  */
 const sections = [
-  { key: "section_build", stages: ["setup", "places", "optimize"] },
-  { key: "section_use", stages: ["itinerary", "costs", "split"] },
-  { key: "section_check", stages: ["evidence", "readiness", "revise"] },
+  { key: "section_build", stages: ["setup", "places", "optimize"], completable: true },
+  { key: "section_use", stages: ["itinerary", "costs", "split"], completable: true },
+  // `completable: false`, so no tick. These three are not steps you finish — evidence is
+  // checked when something looks wrong, the readiness board is kept rather than
+  // completed, and a revision is made whenever the plan needs one. A tick on any of them
+  // claims a thing is behind you that you may well come back to twice more, which is the
+  // same reason they were moved out of "Build" and "Use" in the first place.
+  { key: "section_check", stages: ["evidence", "readiness", "revise"], completable: false },
 ] as const;
 
 /**
@@ -145,12 +150,13 @@ export function AppShell() {
               // decoration that a screen reader would read as nothing at all, and
               // colour alone cannot carry a state — so the sentence goes in the
               // accessible name and the glyph is `aria-hidden`.
+              const complete = status.state === "complete" && section.completable;
               const spoken =
                 status.state === "locked"
                   ? copyFormat("stage_state_locked", language, {
                       stage: copy(`stage_${status.blockedBy}`, language),
                     })
-                  : status.state === "available"
+                  : status.state === "available" || (status.state === "complete" && !complete)
                     ? ""
                     : copy(`stage_state_${status.state}`, language);
               // A locked stage is not a link. It pointed at `#`, which resolves to
@@ -161,7 +167,7 @@ export function AppShell() {
               const body = (
                 <>
                   <span className="stage-link-name">{name}</span>
-                  {status.state === "complete" ? <Check aria-hidden="true" size={14} /> : null}
+                  {complete ? <Check aria-hidden="true" size={14} /> : null}
                   {status.state === "locked" ? <Lock aria-hidden="true" size={13} /> : null}
                   {status.state === "next" ? (
                     <span className="stage-link-badge">{copy("stage_state_next", language)}</span>
