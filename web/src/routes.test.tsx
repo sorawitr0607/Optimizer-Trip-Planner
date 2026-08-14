@@ -63,6 +63,11 @@ describe("entry point", () => {
     for (const [path, stage] of gated) {
       expect(GATE_KEYS.has(stage), `${path} gates on unknown stage ${stage}`).toBe(true);
     }
-    expect(new Set(gated.values()).size).toBe(5);
+    // Four distinct gates, not five. `setup` was a gate that never blocked anything —
+    // the journey's setup stage carries no `blocked_by` — so `readiness`, `costs` and
+    // `split` gating on it meant "reachable and empty" before a plan existed. They gate
+    // on `itinerary` now, which leaves `setup` used by no route. What matters is that
+    // every gate is one of the five decided keys, asserted above.
+    expect(new Set(gated.values()).size).toBeGreaterThanOrEqual(4);
   });
 });

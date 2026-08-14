@@ -402,26 +402,28 @@ export function PlacesPage() {
 
   return (
     <section className="stage-card places-screen">
-      {/* Both floating controls in one container. They were positioned independently and
-          at 390px shared a corner — the shortlist sat on top of "How this works" and its
-          focus ring, between roughly y=97 and y=132. Together they can be laid out as a
-          pair on every width instead of colliding on one. */}
-      <div className="places-actions">
+      {/* The shortlist tab floats, because it is a drawer you want to reach while
+          swiping. "How this works" does not: it is read once, at the start, and pinning
+          it to the same corner meant two unrelated controls fighting for one spot — the
+          drawer sat on the tour button and its focus ring at 390px. Grouping them fixed
+          the overlap and kept the wrong idea; the tour now sits with the page's own
+          heading, which is where it is looked for. */}
+      <button
+        aria-controls="shortlist-pane"
+        aria-expanded={shortlistOpen}
+        className="shortlist-handle"
+        onClick={() => setShortlistOpen(!shortlistOpen)}
+        type="button"
+      >
+        {copy("your_shortlist", language)}
+        <span className="shortlist-handle-count">{selectedChoices.length}</span>
+      </button>
+      <header className="money-head places-head">
+        <div>
+          <h1>{copy("discover_title", language)}</h1>
+          <p>{copy("discover_help", language)}</p>
+        </div>
         <PlacesTour language={language} tripId={tripId} />
-        <button
-          aria-controls="shortlist-pane"
-          aria-expanded={shortlistOpen}
-          className="shortlist-handle"
-          onClick={() => setShortlistOpen(!shortlistOpen)}
-          type="button"
-        >
-          {copy("your_shortlist", language)}
-          <span className="shortlist-handle-count">{selectedChoices.length}</span>
-        </button>
-      </div>
-      <header className="money-head">
-        <h1>{copy("discover_title", language)}</h1>
-        <p>{copy("discover_help", language)}</p>
       </header>
       <p className="setup-hint">{copy("osm_notice", language)}</p>
       {flash ? <p className="setup-flash" aria-live="polite">{copy(flash, language)}</p> : null}
@@ -429,14 +431,27 @@ export function PlacesPage() {
         <p className="field-error" aria-live="polite">⚠ {errorText(mutationError, language)}</p>
       ) : null}
 
+      {/* Find places is a *first* search, and pressing it again once places are found
+          buys nothing: `discover_places` keys its cache on the destination, so the repeat
+          either rebuilds the same catalogue from disk or spends another 30-90s of a free
+          public service's Overpass budget on an answer already held. "Search again" is
+          the deliberate re-run and stays. */}
       <div className="optimize-actions">
-        <button className="setup-primary" disabled={discover.isPending} onClick={() => discover.mutate(false)} type="button">
+        <button
+          className="setup-primary"
+          disabled={Boolean(discovery.data) || discover.isPending}
+          onClick={() => discover.mutate(false)}
+          type="button"
+        >
           {discover.isPending ? copy("discovering", language) : copy("discover", language)}
         </button>
         <button disabled={!discovery.data || discover.isPending} onClick={() => discover.mutate(true)} type="button">
           {copy("refresh", language)}
         </button>
       </div>
+      {discovery.data && !discover.isPending ? (
+        <p className="setup-hint">{copy("discover_done", language)}</p>
+      ) : null}
       {!discovery.data ? <p className="setup-hint">{copy("ranking_wait", language)}</p> : null}
 
       {discovery.data && report ? (

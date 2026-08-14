@@ -19,12 +19,14 @@ describe("collectRouteEvidence", () => {
     const rpc = vi
       .spyOn(client, "rpc")
       .mockResolvedValueOnce({ pairs_needed: 110, fetched: 60 })
-      .mockResolvedValueOnce({ pairs_needed: 50, fetched: 50 });
+      .mockResolvedValueOnce({ pairs_needed: 50, fetched: 50 })
+      .mockResolvedValueOnce({ pairs_needed: 0, fetched: 0 });
 
     await collectRouteEvidence("trip_1");
 
-    expect(rpc).toHaveBeenCalledTimes(2);
-    expect(rpc).toHaveBeenLastCalledWith("refresh_routes", { trip_id: "trip_1" });
+    // Two walking passes, then transit — which is asked for once whatever walking did.
+    expect(rpc).toHaveBeenCalledTimes(3);
+    expect(rpc).toHaveBeenLastCalledWith("refresh_transit_routes", { trip_id: "trip_1" });
   });
 
   it("stops after one call when the first pass covered everything", async () => {
@@ -32,7 +34,8 @@ describe("collectRouteEvidence", () => {
 
     await collectRouteEvidence("trip_1");
 
-    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledTimes(2);
+    expect(rpc).toHaveBeenNthCalledWith(1, "refresh_routes", { trip_id: "trip_1" });
   });
 
   it("stops rather than looping when a pass fetches nothing", async () => {
@@ -43,14 +46,32 @@ describe("collectRouteEvidence", () => {
 
     await collectRouteEvidence("trip_1");
 
-    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledTimes(2);
   });
 
   it("never throws, so a failed pass keeps what earlier passes stored", async () => {
     vi.spyOn(client, "rpc")
       .mockResolvedValueOnce({ pairs_needed: 110, fetched: 60 })
+      .mockRejectedValueOnce(new Error("Provider HTTP 504"))
       .mockRejectedValueOnce(new Error("Provider HTTP 504"));
 
-    await expect(collectRouteEvidence("trip_1")).resolves.toBeUndefined();
+    // Resolves with whatever was stored — 60 walking legs survive both failures.
+    await expect(collectRouteEvidence("trip_1")).resolves.toBe(60);
+  });
+});
+
+describe("collectRouteEvidence transit fallback", () => {
+  it("rescues a trip whose walking router is unreachable", async () => {
+    // OpenRouteService went down on the owner's London trip — 60 of 60 attempts — which
+    // left every place ROUTE_UNVERIFIED and the plan unbuildable. Transit topology is
+    // free, from a different service, and produces `estimated` routes the optimizer
+    // accepts on an Explore trip. Measured: 0 walking, then 24 transit legs.
+    const rpc = vi
+      .spyOn(client, "rpc")
+      .mockRejectedValueOnce(new Error("OpenRouteService is unreachable: URLError"))
+      .mockResolvedValueOnce({ pairs_needed: 110, fetched: 24 });
+
+    await expect(collectRouteEvidence("trip_1")).resolves.toBe(24);
+    expect(rpc).toHaveBeenLastCalledWith("refresh_transit_routes", { trip_id: "trip_1" });
   });
 });

@@ -368,6 +368,20 @@ export function PlaceDeck({
     >
       {/* The drag surface stops above the action row, so pressing a button never
           starts a gesture and a gesture never ends in a click. */}
+      {/* The placeholder sits *outside* the surface it stands in for. It was inside, and
+          `visibility: hidden` on the card hid the placeholder with it — so a loading card
+          was simply a blank space, which is what "the card is hidden but I want a
+          skeleton" was reporting. Overlaid rather than stacked, so the deck keeps one
+          card's height and nothing jumps when the photograph lands. */}
+      {cardPending ? (
+        <div aria-busy="true" className="place-deck-pending">
+          <span aria-hidden="true" className="skeleton skeleton-photo" />
+          <span aria-hidden="true" className="skeleton skeleton-line wide" />
+          <span aria-hidden="true" className="skeleton skeleton-line" />
+          <span aria-hidden="true" className="skeleton skeleton-line short" />
+          <p className="setup-hint">{copy("loading", language)}</p>
+        </div>
+      ) : null}
       <div
         className={`place-deck-drag${drag ? " dragging" : ""}${cardPending ? " pending" : ""}`}
         onPointerCancel={() => setDrag(null)}
@@ -412,14 +426,6 @@ export function PlaceDeck({
           </strong>
         </header>
 
-        {cardPending ? (
-        <div aria-busy="true" className="place-deck-pending">
-          <span aria-hidden="true" className="skeleton skeleton-photo" />
-          <span aria-hidden="true" className="skeleton skeleton-line wide" />
-          <span aria-hidden="true" className="skeleton skeleton-line" />
-          <p className="setup-hint">{copy("loading", language)}</p>
-        </div>
-      ) : null}
       {/* What the release will do, named while the card is still in hand. */}
         {intent ? (
           <p className={`place-deck-intent intent-${intent}`} aria-hidden="true">

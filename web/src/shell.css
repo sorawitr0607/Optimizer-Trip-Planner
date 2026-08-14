@@ -3001,7 +3001,6 @@
   font-weight: var(--weight-secondary);
   gap: 8px;
   padding: 9px 14px;
-  /* Positioned by `.places-actions`, which owns both floating controls as one pair. */
 }
 
 .shortlist-handle-count {
@@ -3085,10 +3084,18 @@
   visibility: hidden;
 }
 
+.place-deck {
+  position: relative;
+}
+
 .place-deck-pending {
   display: grid;
   gap: 10px;
+  /* Over the card it stands in for, so the deck keeps one card's height. */
+  inset: 0;
   padding: 14px;
+  position: absolute;
+  z-index: 1;
 }
 
 .place-deck-pending .skeleton-photo {
@@ -3272,32 +3279,42 @@
    overlapped between roughly y=97 and y=132 — the shortlist sat on top of "How this
    works" and its focus ring. They are stacked into one column rather than positioned
    independently, so neither can land on the other however the copy grows. */
-.places-actions {
+/* The tour sits beside the page's own title: read once, at the start, and looked for
+   next to the heading it explains. Only the shortlist floats, because only the shortlist
+   is wanted mid-swipe. */
+.places-head {
   align-items: start;
   display: flex;
-  gap: 8px;
-  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.places-head > div {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.shortlist-handle {
+  /* Bottom right, not top right. The top corner is where the page's own heading and its
+     "How this works" live, and a fixed tab there lands on them however they are laid out
+     — measured overlapping again even after the tour moved into the header. The bottom
+     corner belongs to nothing, and a drawer tab is *more* reachable there while swiping,
+     not less. */
+  bottom: 24px;
+  box-shadow: var(--shadow-hard-md);
   position: fixed;
   right: 26px;
-  top: 88px;
   z-index: 3;
 }
 
-/* In the flow on a phone, where two floating controls over a 390px screen obscure the
-   thing being read — and stacked, so neither can land on the other however the copy
-   grows in either language. */
+/* In the flow on a phone: one floating control over a 390px screen is one too many, and
+   the drawer it opens covers the whole width anyway. */
 @media (max-width: 768px) {
-  .places-actions {
-    display: grid;
-    justify-content: stretch;
+  .shortlist-handle {
+    justify-content: center;
     margin-bottom: 12px;
     position: static;
-  }
-
-  .places-actions .tour-reopen,
-  .places-actions .shortlist-handle {
-    justify-content: center;
-    min-height: 44px;
     width: 100%;
   }
 }

@@ -737,6 +737,40 @@ documented 500px phone set; the audit's overlap and overflow both sat outside th
 390px states means re-approving on this machine, and baselines are machine-specific by
 decision (`WF-025`) — so it is the owner's call, not a silent re-approval.
 
+### A feed existing is not a feed covering, 2026-08-14
+
+The owner could not build a plan at all. `_default_transit_provider` chose GTFS on
+`feed.is_file()` alone, so the moment a **Taiwan** metro feed was placed at the default
+`TOURIST_GTFS_PATH`, a **London** trip was routed against a Taipei timetable and every
+pair came back "no transit connection within walking reach of both places" — which reads
+as the city having no transit rather than as the app holding the wrong country's
+timetable. Adding the feed broke every non-Taiwan trip. The feed is now asked whether it
+has a stop within `GTFS_COVERAGE_KM` of the destination before it is preferred.
+
+**And walking is the preferred route evidence, not the only kind.** OpenRouteService was
+unreachable for that trip — 60 of 60 attempts, `URLError` — which left all ten places
+`ROUTE_UNVERIFIED`, the variants `unavailable`, and nothing on screen to press.
+`collectRouteEvidence` now asks `refresh_transit_routes` after the walking passes: free,
+a different service, and `estimated` routes the optimizer accepts on an Explore trip.
+Measured on London: **0 walking routes → 24 transit legs**, and the plan went from
+`unavailable` with 0 visits to `provisional`, valid, with **5 scheduled**.
+
+Two smaller things from the same round. `readiness` and `costs` gate on `itinerary`
+rather than `setup`, which was a gate that never blocked anything — they were reachable
+and empty before there was a plan to be ready for or to pay for, and `setup` is now the
+gate of no route. And **`Find places` is a one-press control**: `discover_places` keys its
+cache on the destination, so a second press either rebuilds the same catalogue from disk
+or spends another 30-90s of a free public service's budget on an answer already held.
+"Search again" remains the deliberate re-run.
+
+**Fixing one confusion caused another, twice.** Making the verdict panel's free button do
+the same work as the ⚡ button left the journey carrying two identically-worded "assume
+and build, free" controls; there is one now. And grouping the two floating `/places`
+controls to stop them overlapping kept the wrong idea — "How this works" is read once, at
+the start, and belongs beside the heading it explains, while only the shortlist wants to
+float. Moved apart, the shortlist floats bottom-right, where nothing else lives; measured
+non-overlapping at 1440 and 390.
+
 ## Public release boundary
 
 The current application is local-only and single-owner. Do not make `PlannerHandler`, the SQLite

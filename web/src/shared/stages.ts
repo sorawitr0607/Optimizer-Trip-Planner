@@ -41,8 +41,11 @@ export const STAGE_GATE: Record<StageRoute, StageKey> = {
   evidence: "evidence",
   optimize: "optimize",
   itinerary: "itinerary",
-  readiness: "setup",
-  costs: "setup",
+  // Both describe a plan: a readiness board is generated from one and the cost screen
+  // counts what one commits you to. Gated on `setup` they were reachable — and empty —
+  // before there was anything to be ready for or to pay for.
+  readiness: "itinerary",
+  costs: "itinerary",
   // Gated on an activated plan at the owner's request, 2026-08-14.
   //
   // **This reverses a recorded decision.** `WF-030`'s note in CLAUDE.md says `/split`

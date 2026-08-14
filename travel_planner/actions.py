@@ -38,6 +38,7 @@ from .optimizer import (
     optimize_trip,
     validate_variant,
 )
+from .gtfs import GtfsUnavailable
 from .providers import (
     OpenMeteoForecastProvider,
     CARD_PHOTO_LIMIT,
@@ -2635,8 +2636,13 @@ class PlannerActions:
             force=force,
         )
 
+    #: How far a GTFS stop may be from the trip's centre for the feed to count as
+    #: covering it. Generous — a metropolitan feed's centroid is not the tourist centre —
+    #: but far short of the next country.
+    GTFS_COVERAGE_KM = 120.0
+
     def _default_transit_provider(self, trip_id: str) -> Any:
-        """A real timetable when one is on disk, otherwise OSM metro topology.
+        """A real timetable when one covers *this* trip, otherwise OSM metro topology.
 
         Preference, not equivalence. GTFS states ride times and lets headway be
         measured; OSM states only which stations a line joins, so its times come
@@ -2645,13 +2651,40 @@ class PlannerActions:
         the truth than the walking route it replaces, which is what
         `artifacts/validation/2026-08-05-gate-1/` measured as a 45-minute walk
         between districts.
+
+        **A feed existing is not a feed covering.** This chose GTFS on `is_file()`
+        alone, so the moment a Taiwan metro feed was dropped at the default path, a
+        London trip was routed against a Taipei timetable and every pair came back "no
+        transit connection within walking reach of both places" — which reads as the
+        city having no transit rather than as the app holding the wrong country's
+        timetable. It cost the owner a plan they could not build. The feed is now asked
+        whether it has a stop anywhere near the destination before it is preferred.
         """
 
         feed = Path(os.environ.get("TOURIST_GTFS_PATH", "data/gtfs/transit.zip"))
-        if feed.is_file():
-            return GtfsTransitProvider()
         trip = self.store.get_trip(trip_id)
-        return OsmMetroProvider(destination=str(trip.destination) if trip else "")
+        osm = OsmMetroProvider(destination=str(trip.destination) if trip else "")
+        if not feed.is_file():
+            return osm
+        gtfs = GtfsTransitProvider()
+        try:
+            centre = self._destination_centre(trip_id)
+            stops = gtfs.feed.stops.values()
+        except (PlannerRefusal, GtfsUnavailable, OSError, ValueError):
+            return osm
+        nearest = min(
+            (
+                _distance_metres(
+                    {"latitude": centre["latitude"], "longitude": centre["longitude"]},
+                    {"latitude": stop.latitude, "longitude": stop.longitude},
+                )
+                for stop in stops
+            ),
+            default=None,
+        )
+        if nearest is None or nearest > self.GTFS_COVERAGE_KM * 1000:
+            return osm
+        return gtfs
 
     # How many areas survive the free travel-time ranking and go on to be counted. One
     # Overpass request whatever this is -- 12 areas is 36 statements.

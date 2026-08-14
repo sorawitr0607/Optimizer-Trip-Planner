@@ -169,6 +169,18 @@ describe("PlaceDeck", () => {
     expect(html).toContain("52.0");
   });
 
+  it("shows a placeholder outside the card it stands in for", () => {
+    // The skeleton was rendered *inside* `.place-deck-drag`, which is hidden while the
+    // first photograph loads — so it was hidden along with the card and a loading card
+    // was simply a blank space. It has to be a sibling to be visible at all.
+    const html = render(SUMMARY);
+
+    expect(html).toContain("place-deck-pending");
+    expect(html).toContain("place-deck-drag");
+    // The placeholder opens before the hidden surface does, so it cannot be inside it.
+    expect(html.indexOf("place-deck-pending")).toBeLessThan(html.indexOf("place-deck-drag"));
+  });
+
   it("counts the gallery and makes the photo itself the control", () => {
     const html = render(SUMMARY);
     expect(html).toContain("Photo 1 of 2");

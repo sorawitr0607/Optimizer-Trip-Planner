@@ -265,19 +265,20 @@ export function OptimizePage() {
           </p>
           {evidence.data.needing_hours ? (
             <div className="optimize-actions">
-              {/* The *same* work the ⚡ button does, because it makes the same promise.
-                  It used to call plain `generate`, which assumes nothing and fetches
-                  nothing — so the draft came back blocked and the owner had to find a
-                  second button, worded almost identically, to actually assume the hours
-                  and measure the routes. One press now finishes the job. */}
+              {/* The one free button on this screen. Making the two identical in *work*
+                  left them identical in *wording* too, so the journey carried two
+                  "assume and build, free" controls — the fix for one confusion caused
+                  another. This is the free path; the warnings block below no longer
+                  repeats it, because by then the answer to "what do I press" is this. */}
               <button
+                className="setup-primary"
                 disabled={autoResolveAndGenerate.isPending || buyHours.isPending}
                 onClick={() => autoResolveAndGenerate.mutate()}
                 type="button"
               >
                 {autoResolveAndGenerate.isPending
                   ? copy("loading", language)
-                  : copy("before_use_assumptions", language)}
+                  : copy("auto_resolve_free", language)}
               </button>
               <button
                 disabled={buyHours.isPending || autoResolveAndGenerate.isPending}
@@ -298,16 +299,23 @@ export function OptimizePage() {
         </section>
       ) : null}
 
-      <div className="optimize-actions">
-        <button
-          className="setup-primary"
-          disabled={considered.length === 0 || generate.isPending}
-          onClick={() => generate.mutate()}
-          type="button"
-        >
-          {generate.isPending ? copy("optimizing", language) : copy("generate_plan", language)}
-        </button>
-      </div>
+      {/* Hidden until the opening-hours question above has been answered. "Build three
+          plan options" sitting under an unanswered choice invites a press that builds a
+          draft the answer would have changed — and the panel above already carries the
+          two buttons that build it *with* an answer. It comes back once there is nothing
+          left to decide, because then it is the plain "build it again" control. */}
+      {evidence.data?.needing_hours ? null : (
+        <div className="optimize-actions">
+          <button
+            className="setup-primary"
+            disabled={considered.length === 0 || generate.isPending}
+            onClick={() => generate.mutate()}
+            type="button"
+          >
+            {generate.isPending ? copy("optimizing", language) : copy("generate_plan", language)}
+          </button>
+        </div>
+      )}
       {/* A disabled primary action always says why. */}
       {considered.length === 0 ? (
         <p className="setup-hint">{copy("choose_before_plan", language)}</p>
@@ -480,7 +488,7 @@ export function OptimizePage() {
           {/* Outside the warnings box, not inside it. A control that resolves the list
               is not one of the list's items, and buried in a `<details>` it read as part
               of the problem rather than the way out. */}
-          {!activationAllowed ? (
+          {!activationAllowed && !evidence.data?.needing_hours ? (
             <div className="optimize-resolve">
               <button
                 className="setup-primary auto-resolve-retry-btn"
