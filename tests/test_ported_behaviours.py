@@ -129,6 +129,55 @@ class SetupConfirmationTest(unittest.TestCase):
         self.assertTrue(stages["setup"]["done"])
         self.assertIsNone(stages["places"]["blocked_by"])
 
+    def test_keeping_one_place_does_not_open_the_later_stages(self) -> None:
+        """"Check trip facts" and "Build the plan" waited on a single keep.
+
+        The deck deals hundreds of cards, so one keep is the *start* of choosing, not the
+        end of it — and the sidebar offered both later stages while the owner was still
+        swiping, which was reported as confusing. They now wait for the deliberate press
+        of "Build the plan" on `/places`, which is the only moment the app is told the
+        choosing is over.
+        """
+
+        trip_id = self.confirmed_taipei()
+        self.actions.discover_places(trip_id=trip_id)
+        place_id = self.actions.get_latest_discovery(trip_id).candidates.as_dict()[
+            "candidates"
+        ][0]["place_id"]
+        self.actions.save_candidate_choice(
+            trip_id=trip_id, place_id=place_id, action="interested"
+        )
+
+        stages = {s["key"]: s for s in self.actions.journey(trip_id)["stages"]}
+        self.assertEqual("places", stages["evidence"]["blocked_by"])
+        self.assertEqual("places", stages["optimize"]["blocked_by"])
+        self.assertFalse(stages["places"]["done"])
+
+        self.actions.confirm_places_selection(trip_id)
+
+        stages = {s["key"]: s for s in self.actions.journey(trip_id)["stages"]}
+        self.assertIsNone(stages["evidence"]["blocked_by"])
+        self.assertIsNone(stages["optimize"]["blocked_by"])
+        self.assertTrue(stages["places"]["done"])
+
+    def test_a_trip_that_already_has_a_draft_is_not_relocked(self) -> None:
+        """Owners mid-flight had no way to press a button that did not exist when they
+        chose. A trip holding a preview or an activated plan is confirmed by
+        construction."""
+
+        trip_id = self.confirmed_taipei()
+        self.actions.discover_places(trip_id=trip_id)
+        for candidate in self.actions.get_latest_discovery(trip_id).candidates.as_dict()[
+            "candidates"
+        ][:2]:
+            self.actions.save_candidate_choice(
+                trip_id=trip_id, place_id=candidate["place_id"], action="must_do"
+            )
+        self.actions.generate_plan_preview(trip_id)
+
+        stages = {s["key"]: s for s in self.actions.journey(trip_id)["stages"]}
+        self.assertIsNone(stages["optimize"]["blocked_by"])
+
     def test_an_unconfirmed_draft_keeps_the_journey_on_setup(self) -> None:
         trip = self.actions.create_trip(name="Kyoto ideas", destination="Kyoto, Japan")
         self.actions.save_setup(trip_id=trip.trip_id, main_style=["nature"])

@@ -260,6 +260,19 @@ export function PlacesPage() {
       await refreshReads();
     },
   });
+  // "Build the plan" is the only moment the app is told the choosing is over, so it is
+  // what unlocks Check trip facts and Build the plan in the sidebar. Recorded server-side
+  // rather than in `localStorage`: a journey stage that relocks on another machine is not
+  // a journey stage. Navigation happens either way — a trip that cannot record the mark
+  // must not be trapped on this screen by it.
+  const finishChoosing = useMutation({
+    mutationFn: () => rpc<unknown>("confirm_places_selection", { trip_id: tripId }),
+    onSettled: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["journey", tripId] });
+      navigate(`/trips/${tripId}/optimize`);
+    },
+  });
+
   const saveChoice = useMutation({
     // `placeId` defaults to the list's selection; the deck passes its own, because
     // the card in the deck is not the card in the select.
@@ -911,8 +924,8 @@ export function PlacesPage() {
           <div className="shortlist-head-actions">
             <button
               className="setup-primary shortlist-build-btn"
-              disabled={!selectedChoices.length}
-              onClick={() => navigate(`/trips/${tripId}/optimize`)}
+              disabled={!selectedChoices.length || finishChoosing.isPending}
+              onClick={() => finishChoosing.mutate()}
               type="button"
             >
               {copy("stage_optimize", language)} →
@@ -1025,7 +1038,7 @@ export function PlacesPage() {
       </section>
 
       <div className="optimize-actions">
-        <button className="setup-primary" disabled={!selectedChoices.length} onClick={() => navigate(`/trips/${tripId}/optimize`)} type="button">{copy("stage_optimize", language)}</button>
+        <button className="setup-primary" disabled={!selectedChoices.length || finishChoosing.isPending} onClick={() => finishChoosing.mutate()} type="button">{copy("stage_optimize", language)}</button>
       </div>
       {!selectedChoices.length ? <p className="setup-hint">{copyFrom("OPTIMIZER_CODE_TEXT", "no_places_chosen", language)}</p> : null}
     </section>

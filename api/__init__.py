@@ -87,6 +87,7 @@ ACTIONS = (
     "opening_intervals",
     "confirm_opening_window",
     "confirm_default_opening_windows",
+    "confirm_places_selection",
     "get_accommodation_base",
     "confirm_accommodation_base",
     "refresh_timezone",

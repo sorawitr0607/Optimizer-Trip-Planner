@@ -771,6 +771,26 @@ the start, and belongs beside the heading it explains, while only the shortlist 
 float. Moved apart, the shortlist floats bottom-right, where nothing else lives; measured
 non-overlapping at 1440 and 390.
 
+### Choosing ends when the owner says it does, 2026-08-14
+
+`/evidence` and `/optimize` unlocked the moment a **single** place was kept. The deck
+deals hundreds of cards, so one keep is the *start* of choosing — and the sidebar offered
+"Check trip facts" and "Build the plan" while the owner was still swiping, which was
+reported twice as confusing.
+
+They now wait for the deliberate press of **"Build the plan" on `/places`**, which is the
+only moment the app is told the choosing is over. `confirm_places_selection` is the 89th
+allowlisted method and writes a `places_confirmed` marker through the existing
+`trip_evidence` table — **server-side, not `localStorage`**, because a journey stage that
+relocks on another machine is not a journey stage. It is idempotent: it records a decision,
+not a transition.
+
+Two things that keep it from being a trap. `_places_confirmed` also returns true for a
+trip already holding a **draft or an activated plan**, so owners mid-flight are not
+relocked behind a button that did not exist when they chose. And the button navigates
+whether or not the mark is written — `onSettled`, not `onSuccess` — because a trip that
+cannot record the mark must not be stranded on the screen by it.
+
 ## Public release boundary
 
 The current application is local-only and single-owner. Do not make `PlannerHandler`, the SQLite

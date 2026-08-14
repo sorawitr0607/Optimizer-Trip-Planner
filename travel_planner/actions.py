@@ -168,6 +168,56 @@ class PlannerActions:
     def get_trip(self, trip_id: str) -> Trip | None:
         return self.store.get_trip(trip_id)
 
+    #: The owner's own "I have finished choosing" mark, stored so it survives a reload
+    #: and a different browser. A journey stage is server-owned state; a flag in
+    #: `localStorage` would relock the trip on the next machine.
+    PLACES_CONFIRMED_KIND = "places_confirmed"
+
+    def confirm_places_selection(self, trip_id: str) -> dict[str, Any]:
+        """Record that the owner has finished choosing places.
+
+        `/evidence` and `/optimize` used to open the moment a *single* place was kept,
+        so the sidebar offered "Check trip facts" and "Build the plan" while the deck was
+        still being worked through — two stages inviting a press before there was
+        anything to check or build. The owner asked for them to wait for the deliberate
+        press of "Build the plan" on `/places`, which is the only moment the app is told
+        the choosing is over.
+
+        Idempotent, and never a refusal for being pressed twice: it records a decision,
+        not a transition.
+        """
+
+        if self.store.get_trip(trip_id) is None:
+            raise PlannerRefusal("unknown_trip", trip_id=trip_id)
+        now = datetime.now(timezone.utc)
+        value = {"kind": self.PLACES_CONFIRMED_KIND, "confirmed_at": now.isoformat()}
+        self.store.upsert_trip_evidence(
+            trip_id=trip_id,
+            kind=self.PLACES_CONFIRMED_KIND,
+            value=value,
+            provider="owner",
+            retrieved_at=now.isoformat(),
+            # A decision does not go stale. Far enough out to be effectively permanent
+            # without inventing a "never expires" branch in the evidence reader.
+            expires_at=(now + timedelta(days=3650)).isoformat(),
+        )
+        return value
+
+    def _places_confirmed(self, trip_id: str) -> bool:
+        """Has the owner pressed "Build the plan", or already moved past needing to?
+
+        A trip that already holds a draft or an activated plan is confirmed by
+        construction — asking those owners to press a button they had no way of pressing
+        would relock a stage they are already using.
+        """
+
+        if self.store.get_trip_evidence(trip_id, self.PLACES_CONFIRMED_KIND):
+            return True
+        return bool(
+            self.store.get_active_plan(trip_id)
+            or self.store.get_optimization_preview(trip_id)
+        )
+
     def journey(self, trip_id: str) -> dict[str, Any]:
         """Return the server-owned stage gates and attention stage for one trip."""
 
@@ -182,6 +232,8 @@ class PlannerActions:
             if choice.action in {"must_do", "interested", "maybe"}
         ]
         active = self.store.get_active_plan(trip_id)
+        # "I have finished choosing", pressed on `/places`. Both later stages wait for it.
+        chosen = bool(choices) and self._places_confirmed(trip_id)
         gaps: list[str] = []
         if setup is not None and setup.confirmed and discovery is not None and choices:
             try:
@@ -192,18 +244,20 @@ class PlannerActions:
             {"key": "setup", "done": bool(setup and setup.confirmed), "blocked_by": None},
             {
                 "key": "places",
-                "done": bool(discovery is not None and choices),
+                # Done when the owner says so, not when the first place is kept. The
+                # deck deals hundreds of cards; one keep is the start of choosing.
+                "done": bool(discovery is not None and chosen),
                 "blocked_by": None if setup and setup.confirmed else "setup",
             },
             {
                 "key": "evidence",
                 "done": bool(choices and (not gaps or trip.planning_mode == "explore_first")),
-                "blocked_by": None if discovery is not None and choices else "places",
+                "blocked_by": None if discovery is not None and chosen else "places",
             },
             {
                 "key": "optimize",
                 "done": active is not None,
-                "blocked_by": None if choices else "places",
+                "blocked_by": None if chosen else "places",
             },
             {
                 "key": "itinerary",
