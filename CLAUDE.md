@@ -430,8 +430,12 @@ a QID, and 61% of the Taipei catalogue has none — those places were `skipped` 
 `refresh_place_summaries`, which is why so many cards had no picture. Wikimedia Commons **geosearch**
 works from the coordinates every candidate has. It answers "what is photographed at this spot", **not**
 "photographs of this place" — 300 m around Taipei 101 returns a sunset and a street in Keelung — so the
-radius is 150 m, it is used only where nothing better exists, and it is stored `photos_are_nearby:
-true` so the screen can say which it is showing. It returns direct thumbnail URLs rather than
+radius is small, it is used only where nothing better exists, and it is stored `photos_are_nearby:
+true` so the screen can say which it is showing. *(**The radius is 400 m since 2026-08-17**, not the
+150 m this paragraph was written against: 150 m is the building rather than the site, and a citadel or
+a park is routinely photographed from a corner of its own grounds. That was affordable only because the
+name filter had by then become much stronger — see "The photo filter got looser in one direction" below.
+The Keelung street is still refused, by the name, not by the radius.)* It returns direct thumbnail URLs rather than
 `Special:FilePath` redirects, so these load in one round trip instead of two. `web/src/shared/photos.ts`
 is the one place a gallery is assembled, and it also reads OpenStreetMap's own `wikimedia_commons` /
 `image` tag, stored as `photo_reference` since discovery was written and never read until now.
@@ -453,7 +457,10 @@ is a gap rather than a boundary. Strip the wrapper or the rule inverts — count
 Three costs, all measured and all accepted. **The whole name must appear, not one of its words**:
 `Herbarium 植物園蠟業館` really is the Herbarium of Taipei Botanical Garden and is rejected, because
 matching single words instead would accept any `Taipei` street scene for the majority of a catalogue
-whose names begin with the city. **A verbose file name loses its place** — a title reciting country,
+whose names begin with the city. *(**Softened on 2026-08-17**, and only in one direction: the same words
+in **any order** now match, so `Thành cổ Điện Hải` is accepted for `Thành Điện Hải`. **Every** word must
+still appear — the any-word rule this paragraph rejects is still rejected, and for the reason it gives.
+The Herbarium is still lost. See "The photo filter got looser in one direction" below.)* **A verbose file name loses its place** — a title reciting country,
 city and district before naming the park scores 0.14 — though such places generally carry a plainer file
 too. And **a name under `PHOTO_NAME_MIN_CHARACTERS` matches nothing**: 圓山 is two characters and a
 substring of 圓山站, 圓山公園 and 圓山大飯店, three different places. Verified against the live API on
@@ -741,6 +748,33 @@ buying the limiter never being triggered, and that is worth more than it costs.
 
 Do not try a fourth time without a way to learn the limit *without* crossing it. The
 lever that remains is asking less, not waiting less.
+
+## Where a photograph comes from, in order
+
+Assembled across five rounds and written down in five places, so here it is once. Each
+step runs only when the ones above it found nothing, except where noted.
+
+1. **Wikidata image properties** — `P18` first because it is the curated one, then
+   `P8592`, `P5252`, `P4291`, `P3451`, `P2716`. All mean "an image of this item", so none
+   can put another place's photograph on a card.
+2. **The article's own images**, from whichever Wikipedia exists, cheapest language first.
+3. **The subject's Commons category** (`P373`) — a file in a category is about that
+   category's subject by definition, so this needs neither coordinates nor a name match.
+   Skipped when a curated `P18` was already found: the round trip would only append to a
+   gallery the better picture already leads.
+4. **OpenStreetMap's own `wikimedia_commons` / `image` tag**, read by
+   `web/src/shared/photos.ts` when the gallery is assembled.
+5. **Commons geosearch**, 400 m, every file gated by `photo_depicts_place`. Flagged
+   `photos_are_nearby`, because "photographed at this spot" is not "of this place".
+6. **Commons search by name**, gated by the same filter *and* by coordinates — the file
+   must carry a location and sit within `named_radius_metres`. The coordinate half is not
+   redundant: dropping it admitted a Michigan store for a Da Nang shop.
+7. **The venue's own `og:image` / `og:description`**, flagged `photo_from_own_site`.
+
+And then nothing. A place past step 7 has no free photograph, the card says so, shows
+where the place is, and offers Google's at its price. Roughly two thirds of a real
+catalogue's blanks are shops and gyms with no encyclopedic presence anywhere — that
+number is not a bug to be driven to zero.
 
 ## A place's own website is the last free source, and the only honest "anywhere" one
 
