@@ -123,18 +123,27 @@ export function PlacesPage() {
     else updated.delete("shortlist");
     setParams(updated, { replace: true });
   };
-  const setMode = (next: "deck" | "list") => {
-    const updated = new URLSearchParams(params);
-    if (next === "list") updated.set("view", "list");
-    else updated.delete("view");
-    setParams(updated, { replace: true });
-  };
+  // No `setMode`: the control that called it is gone. `?view=list` still resolves, so a
+  // bookmark or a hand-typed URL reaches the catalogue view; nothing in the app offers it.
   // Free descriptions and photos: Wikidata plus Wikipedia, no key and no charge.
   // This is what answers "the summary tells me nothing about the place" -- the
   // templated sentence below is built from the same codes for every card.
   const fetchSummary = useMutation({
     mutationFn: (placeIds: string[]) =>
       rpc("refresh_place_summaries", { trip_id: tripId, place_ids: placeIds }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["place_summaries", tripId] }),
+  });
+  // The card on screen, fetched **on its own**, in its own request.
+  //
+  // It used to lead the look-ahead batch — first in the list, but in the same call — so
+  // the visible card was withheld until all seven places had been through Wikidata,
+  // Wikipedia and Commons. One slow neighbour held up the only card anybody was looking
+  // at, which is the "some swipe cards load so long" report: the wait was real and it was
+  // mostly other people's places. A separate mutation, because `isPending` is per
+  // mutation and sharing one would make each wait for the other again.
+  const fetchCard = useMutation({
+    mutationFn: (placeId: string) =>
+      rpc("refresh_place_summaries", { trip_id: tripId, place_ids: [placeId] }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["place_summaries", tripId] }),
   });
   // Which places have already been asked for, so the effect below cannot re-fire on
@@ -334,16 +343,23 @@ export function PlacesPage() {
   const decided = new Set((choices.data ?? []).map((item) => item.place_id));
   // The selected lane, not `main_queue`: the deck deals from whichever lane is picked,
   // so prefetching the other one would warm cards nobody is about to see.
-  const upcoming = [
-    // The card being looked at right now comes first. Prefetching only the head of the
-    // lane left the list view blank for any card chosen further down a 500-entry
-    // select, which read as "the Wikipedia pictures do not work".
-    ...(selectedId ? [selectedId] : []),
-    ...entries
-      .filter((item) => !decided.has(item.place_id))
-      .slice(0, PREFETCH_AHEAD)
-      .map((item) => item.place_id),
-  ];
+  // The look-ahead only. The visible card has its own request above — leading this list
+  // with it put it behind six strangers.
+  const upcoming = entries
+    .filter((item) => !decided.has(item.place_id) && item.place_id !== selectedId)
+    .slice(0, PREFETCH_AHEAD)
+    .map((item) => item.place_id);
+  useEffect(() => {
+    if (typeof document !== "undefined" && document.documentElement.dataset.capture) return;
+    if (!selectedId || !summaries.data || fetchCard.isPending) return;
+    if (selectedId in summaries.data || asked.current.has(selectedId)) return;
+    asked.current.add(selectedId);
+    fetchCard.mutate(selectedId, {
+      onSettled: () => asked.current.delete(selectedId),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, summaries.data, fetchCard.isPending]);
+
   useEffect(() => {
     // Never during a capture. The prefetch *writes* — it stores a summary per place —
     // so photographing this screen changed what the next photograph would show, and the
@@ -411,8 +427,20 @@ export function PlacesPage() {
   // work through 300 cards on a screen that clears itself between them. A photograph
   // arriving late lands in a fixed-size box and moves nothing, which is why it can be
   // allowed to arrive late.
+  //
+  // It also holds until the **first card is genuinely ready**, at the owner's asking.
+  // Without that last clause the wait ended twice: the discovery skeleton cleared, the
+  // workspace appeared, and the deck immediately showed its own placeholder while the
+  // first card's summary and photograph arrived — two loading states back to back for
+  // one press, which reads as the app having finished and then stalled. `firstCardWait`
+  // is scoped to a discovery that actually ran in this session — `discover.isSuccess` —
+  // so it covers the press it was asked for and nothing else. Keyed on the choices being
+  // empty as well, because the busy block says "searching for places", and showing that
+  // to someone returning to a half-swiped deck would be a lie about what is happening.
+  const firstCardWait = discover.isSuccess && cardPending && !(choices.data ?? []).length;
   const busy =
-    discover.isPending || (catalog.length > 0 && (!ranking.data || summaries.isPending));
+    discover.isPending ||
+    (catalog.length > 0 && (!ranking.data || summaries.isPending || firstCardWait));
   const basics = setup.data?.snapshot.data.trip_basics;
   const tripDays = daysBetween(basics?.start_date, basics?.end_date);
   // Numbered in the order they were kept, so the map's label and the list's label are
@@ -437,10 +465,7 @@ export function PlacesPage() {
   //
   // This is the second time the shared prefetch has been mistaken for the card's own
   // request; the first blanked the whole workspace on every swipe.
-  const summaryPendingForCard =
-    fetchSummary.isPending &&
-    (fetchSummary.variables ?? []).includes(selectedId) &&
-    !summaries.data?.[selectedId];
+  const summaryPendingForCard = fetchCard.isPending && !summaries.data?.[selectedId];
   const paidAllowed = Boolean(detailsCost.data?.allowed && photosCost.data?.allowed);
   const paidEstimate = (detailsCost.data?.estimate_usd ?? 0) + (photosCost.data?.estimate_usd ?? 0);
   const paidCaption = copy("live_details_cost", language)
@@ -685,11 +710,13 @@ export function PlacesPage() {
 
       {ranking.data ? (
         <>
-          <div className="setup-actions">
-            <button onClick={() => setMode(mode === "deck" ? "list" : "deck")} type="button">
-              {copy(mode === "deck" ? "list_mode" : "deck_mode", language)}
-            </button>
-          </div>
+          {/* "Detailed list" removed at the owner's asking. The deck is how this stage is
+              worked, and the list was a second way to do the same job that had to be kept
+              in step with it — `hidden={mode === "deck"}` on the choice row, a different
+              paging constant, its own empty state. The full catalogue is still readable
+              in the report below, which is what the list was actually being used for.
+              `mode` stays because the report and the deck still read it; deleting it is a
+              separate tidy-up. */}
           {/* The lane picker drives both modes now. In deck mode it was hidden, so the
               deck always dealt from `main_queue` while the list opened on City Icons —
               and the queue's top 20 have no Wikidata id, so the deck showed twenty
@@ -782,8 +809,8 @@ export function PlacesPage() {
                   saveChoice.mutate({ action, reason, placeId });
                 }}
                 onCardChange={setCardId}
-                onWantSummary={(placeId) => fetchSummary.mutate([placeId])}
-                summaryLoading={fetchSummary.isPending && !summaries.data?.[selectedId]}
+                onWantSummary={(placeId) => fetchCard.mutate(placeId)}
+                summaryLoading={fetchCard.isPending && !summaries.data?.[selectedId]}
                 lane={lane}
                 laneRemaining={laneRemaining}
                 lanes={LANES}

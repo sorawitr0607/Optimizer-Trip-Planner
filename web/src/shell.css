@@ -3611,14 +3611,23 @@
    you are in is then readable without opening a select.
    --------------------------------------------------------------------------- */
 /* The lane alternatives are a real offer, not a footnote: at the end of a page of cards
-   "look at a different list" is one of only two things to do, and it read as disabled
-   chrome beside the primary. Same shape as before, given the weight of a control. */
+   "look at a different list" is one of only two things to do. A tinted outline was still
+   read as chrome, so these are filled — the same weight as the primary beside them,
+   because they are the same kind of thing: the two ways forward from a spent page. */
 .deck-lane-suggest .lane-tab {
-  background: var(--bg-card);
+  background: var(--color-accent);
   border-color: var(--color-accent);
-  color: var(--color-accent);
+  box-shadow: var(--shadow-hard-sm);
+  color: var(--color-on-accent);
+  font-size: var(--text-sm);
   font-weight: var(--weight-selected);
-  padding: 8px 14px;
+  padding: 10px 16px;
+}
+
+.deck-lane-suggest {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
 }
 
 .plan-assumptions > summary {

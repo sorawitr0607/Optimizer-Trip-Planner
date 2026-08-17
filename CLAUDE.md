@@ -712,6 +712,51 @@ Worth knowing for the next time a mirror is evaluated: **`overpass.osm.ch` is re
 and useless** — it serves a Switzerland-only extract, so it answers 200 with zero
 elements for anywhere else, which looks exactly like a city having nothing in it.
 
+## A tab left open across a rebuild runs the old app, and that cost several rounds
+
+`Failed to fetch dynamically imported module: .../OptimizePage-D8dLZlyq.js`, reported from
+the owner's browser. Every build gives each chunk a new content hash and Vite empties
+`dist`, so the file a **running** page was told to fetch stops existing. Two symptoms, and
+the second is far worse than the first: a navigation to a not-yet-loaded route dies with
+that error, and every screen the tab had already loaded keeps running the old code —
+looking like the app, answering like the app, and missing whatever was just fixed.
+
+That is the explanation for a run of "this still is not fixed" reports on changes that
+were verified working in a browser minutes earlier. **A rejected fix now warrants asking
+which build was looked at before the fix is applied again.**
+
+`lazyPage()` treats a failed dynamic import as "this page is out of date" and reloads,
+which fetches a fresh `index.html` — already served `no-cache` — and with it the current
+chunk names. **Once per session**, recorded in `sessionStorage`: if the second attempt
+fails too, the chunk is genuinely missing and the error belongs on screen rather than in a
+reload loop. The catch resolves a promise that never settles, because rendering an error
+behind an in-flight reload flashes a failure the owner is about to leave anyway.
+
+This does not detect the silently-stale tab that never navigates. A reload after a rebuild
+is still the answer there, and a build-version endpoint is the obvious next step if it
+keeps happening.
+
+## The visible card is fetched on its own
+
+It led the look-ahead batch — first in the list, but in the *same* request — so the card on
+screen was withheld until all seven places had been through Wikidata, Wikipedia and
+Commons. One slow neighbour held up the only card anyone was looking at, which is what
+"some swipe cards load so long" was. A separate mutation, because `isPending` is per
+mutation and sharing one would put them back in each other's way.
+
+**And the "Find places" skeleton now holds until the first card is genuinely ready.** The
+wait used to end twice: the discovery skeleton cleared, the workspace appeared, and the
+deck immediately showed its own placeholder — two loading states back to back for one
+press, which reads as the app finishing and then stalling. Scoped to
+`discover.isSuccess` and an empty shortlist, so it covers the press it was asked for and
+never a revisit, where the busy block's "searching for places" wording would be a lie.
+
+**"Detailed list" is gone**, at the owner's asking. It was a second way to do the deck's
+job that had to be kept in step with it — a hidden choice row, its own paging constant,
+its own empty state — and the full catalogue is still readable in the report below, which
+is what it was actually used for. `?view=list` still resolves for a bookmark; nothing in
+the app offers it.
+
 ## The deck's decisions are disabled while a card arrives
 
 The card is withheld until its first photograph has painted, for a reason — the swipe

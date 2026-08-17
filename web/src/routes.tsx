@@ -44,17 +44,51 @@ function Landing() {
  * once. `TripsPage` stays eager because it is the landing screen, so lazy-loading
  * it would only add a round trip to the one route that has nothing to wait for.
  */
+/** Sessions that have already reloaded once, so a genuine failure cannot loop. */
+const RELOADED = "chunk-reload-attempted";
+
+/**
+ * `lazy`, plus the one recovery a code-split app owes an open tab.
+ *
+ * A build replaces every chunk's content hash and Vite empties `dist`, so the file the
+ * *running* page was told to fetch no longer exists. A tab left open across a rebuild
+ * therefore dies on its next navigation with `Failed to fetch dynamically imported
+ * module: .../OptimizePage-D8dLZlyq.js` — reported from the owner's own browser — and
+ * every screen it had already loaded keeps running the old code, which is worse: it looks
+ * like the app, it answers like the app, and it is a build old enough to be missing
+ * whatever was just fixed. That reads as "still not fixed" rather than as "stale tab",
+ * and it cost several rounds of testing to recognise.
+ *
+ * A failed import is therefore treated as "this page is out of date" and the page is
+ * reloaded, which fetches a fresh `index.html` — the server already sends that
+ * `no-cache` — and with it the current chunk names. Once per session, recorded in
+ * `sessionStorage`: if the second attempt fails too, the chunk is genuinely missing and
+ * the error belongs on screen rather than in a reload loop.
+ */
+function lazyPage(load: () => Promise<{ default: () => React.ReactNode }>) {
+  return lazy(() =>
+    load().catch((error: unknown) => {
+      if (sessionStorage.getItem(RELOADED)) throw error;
+      sessionStorage.setItem(RELOADED, "1");
+      window.location.reload();
+      // Never resolves: the reload is already under way and rendering an error state
+      // behind it would flash a failure the owner is about to leave anyway.
+      return new Promise<{ default: () => React.ReactNode }>(() => {});
+    }),
+  );
+}
+
 const PAGES: Record<StageRoute, React.LazyExoticComponent<() => React.ReactNode>> = {
-  setup: lazy(() => import("./stages/SetupPage").then((m) => ({ default: m.SetupPage }))),
-  places: lazy(() => import("./stages/PlacesPage").then((m) => ({ default: m.PlacesPage }))),
-  stay: lazy(() => import("./stages/StayPage").then((m) => ({ default: m.StayPage }))),
-  evidence: lazy(() => import("./stages/EvidencePage").then((m) => ({ default: m.EvidencePage }))),
-  optimize: lazy(() => import("./stages/OptimizePage").then((m) => ({ default: m.OptimizePage }))),
-  itinerary: lazy(() => import("./stages/ItineraryPage").then((m) => ({ default: m.ItineraryPage }))),
-  readiness: lazy(() => import("./stages/ReadinessPage").then((m) => ({ default: m.ReadinessPage }))),
-  costs: lazy(() => import("./stages/CostsPage").then((m) => ({ default: m.CostsPage }))),
-  split: lazy(() => import("./stages/SplitPage").then((m) => ({ default: m.SplitPage }))),
-  revise: lazy(() => import("./stages/RevisePage").then((m) => ({ default: m.RevisePage }))),
+  setup: lazyPage(() => import("./stages/SetupPage").then((m) => ({ default: m.SetupPage }))),
+  places: lazyPage(() => import("./stages/PlacesPage").then((m) => ({ default: m.PlacesPage }))),
+  stay: lazyPage(() => import("./stages/StayPage").then((m) => ({ default: m.StayPage }))),
+  evidence: lazyPage(() => import("./stages/EvidencePage").then((m) => ({ default: m.EvidencePage }))),
+  optimize: lazyPage(() => import("./stages/OptimizePage").then((m) => ({ default: m.OptimizePage }))),
+  itinerary: lazyPage(() => import("./stages/ItineraryPage").then((m) => ({ default: m.ItineraryPage }))),
+  readiness: lazyPage(() => import("./stages/ReadinessPage").then((m) => ({ default: m.ReadinessPage }))),
+  costs: lazyPage(() => import("./stages/CostsPage").then((m) => ({ default: m.CostsPage }))),
+  split: lazyPage(() => import("./stages/SplitPage").then((m) => ({ default: m.SplitPage }))),
+  revise: lazyPage(() => import("./stages/RevisePage").then((m) => ({ default: m.RevisePage }))),
 };
 
 // The table is data; `main.tsx` builds the router from it. That split is what
