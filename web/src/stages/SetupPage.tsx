@@ -135,18 +135,6 @@ export function SetupPage() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [flash, setFlash] = useState<{ tone: "ok" | "bad"; code: string } | null>(null);
 
-  // Each step starts at the top. The wizard's steps are component state, not routes, so
-  // the shell's scroll reset — which keys on `pathname` — cannot see this move at all:
-  // pressing "Save & continue" at the foot of a long step left the next one scrolled past
-  // its own question, showing whatever happened to sit at that offset.
-  //
-  // Above the three loading/error returns below, and keyed on `chosenStep` rather than on
-  // the derived `step`, because hooks must run in the same order on every render and that
-  // value is not computed until after them. Moving backwards from the step indicator gets
-  // the same treatment, which is why this is an effect and not a line in the handler.
-  useEffect(() => {
-    window.scrollTo({ top: 0, left: 0 });
-  }, [chosenStep]);
 
   const trips = useQuery({ queryKey: ["trips"], queryFn: () => rpc<Trip[]>("list_trips") });
   const stored = useQuery({
@@ -176,6 +164,22 @@ export function SetupPage() {
     },
   });
 
+  // Each step starts at the top. The wizard's steps are component state, not routes, so
+  // the shell's scroll reset — which keys on `pathname` — cannot see this move at all:
+  // pressing "Save & continue" at the foot of a long step left the next one scrolled past
+  // its own question, showing whatever happened to sit at that offset.
+  //
+  // Above the three loading/error returns below, because hooks must run in the same order
+  // on every render. Keyed on the **derived** step, not on `chosenStep`: the opening step
+  // depends on whether a stored draft exists, so an owner returning to a trip moves 1 → 2
+  // when that query lands without `chosenStep` changing at all, and keying on the raw
+  // state missed exactly that move. Moving backwards from the step indicator gets the same
+  // treatment, which is why this is an effect and not a line in the handler.
+  const currentStep = chosenStep ?? (stored.data ? 2 : 1);
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0 });
+  }, [currentStep]);
+
   if (stored.isPending || vocabulary.isPending) return <p>{copy("loading", language)}</p>;
   if (stored.isError) return <p className="field-error">⚠ {stored.error.message}</p>;
   if (vocabulary.isError) return <p className="field-error">⚠ {vocabulary.error.message}</p>;
@@ -187,7 +191,7 @@ export function SetupPage() {
   // Step 1 explains the wizard, so it is for a first run. An owner returning to a
   // trip they have already answered for opens on the first question instead — the
   // intro stays reachable by walking back, because the indicator goes backwards.
-  const step = chosenStep ?? (stored.data ? 2 : 1);
+  const step = currentStep;
 
 
   function edit(patch: Partial<Draft>) {

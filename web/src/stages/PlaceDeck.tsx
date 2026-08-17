@@ -697,24 +697,52 @@ export function PlaceDeck({
       {/* Colour separates keep from drop from defer. Before this the five actions
           were five identical grey buttons and the destructive one sat between two
           keeps. */}
+      {/* Disabled while the card is still arriving, for the reason the card itself is
+          withheld: the swipe decision is made on the photograph, so a row of live
+          decision buttons above a placeholder invites answering before there is anything
+          to answer about — and the answer lands on whichever place the deck settles on.
+          Skip is disabled too: it is a decision about *this* card, not a way past the
+          wait. Same treatment as "Search again", which is a press that cannot be undone
+          cheaply. */}
       <div className="place-choice-actions place-deck-actions">
-        <button className="choice-must_do" onClick={() => decide("must_do")} type="button">
+        <button
+          className="choice-must_do"
+          disabled={cardPending}
+          onClick={() => decide("must_do")}
+          type="button"
+        >
           {copy("must_do", language)}
         </button>
-        <button className="choice-interested" onClick={() => decide("interested")} type="button">
+        <button
+          className="choice-interested"
+          disabled={cardPending}
+          onClick={() => decide("interested")}
+          type="button"
+        >
           {copy("interested", language)}
         </button>
-        <button className="choice-maybe" onClick={() => decide("maybe")} type="button">
+        <button
+          className="choice-maybe"
+          disabled={cardPending}
+          onClick={() => decide("maybe")}
+          type="button"
+        >
           {copy("maybe", language)}
         </button>
         <button
           className="choice-not_for_trip"
+          disabled={cardPending}
           onClick={() => decide("not_for_trip", null)}
           type="button"
         >
           {copy("not_for_trip", language)}
         </button>
-        <button className="choice-skip" onClick={() => advance(1)} type="button">
+        <button
+          className="choice-skip"
+          disabled={cardPending}
+          onClick={() => advance(1)}
+          type="button"
+        >
           {copy("deck_skip", language)}
         </button>
       </div>

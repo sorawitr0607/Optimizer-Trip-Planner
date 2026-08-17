@@ -681,6 +681,13 @@ machine: DNS resolved every host, and `nominatim.openstreetmap.org` (200),
 `overpass-api.de` and three of its mirrors did not connect. The internet was fine; that
 one service was not reachable from that network.
 
+**And it was intermittent.** The same host answered **200** from the same machine a few
+hours later, and a full discovery ran through the app — 715 places for Seoul in 56s. So
+this is not a standing block to be routed around permanently; it is a service that
+sometimes cannot be reached from here, which is exactly the case a fallback list is worth
+having and exactly the case where "wait a minute and press again" is *sometimes* right.
+Both messages stay, chosen by what the provider actually said.
+
 Three consequences.
 
 **`TOURIST_OVERPASS_URL` takes a comma-separated list**, tried in order, and **only a
@@ -704,6 +711,22 @@ two are told apart by the provider's own words, since only one of them can be.
 Worth knowing for the next time a mirror is evaluated: **`overpass.osm.ch` is reachable
 and useless** — it serves a Switzerland-only extract, so it answers 200 with zero
 elements for anywhere else, which looks exactly like a city having nothing in it.
+
+## The deck's decisions are disabled while a card arrives
+
+The card is withheld until its first photograph has painted, for a reason — the swipe
+decision is made on the picture. A live row of decision buttons above the placeholder
+undoes that: it invites answering before there is anything to answer about, and the answer
+lands on whichever place the deck settles on. All five are disabled while the card is
+pending, **Skip included**, because skip is a decision about *this* card rather than a way
+past the wait.
+
+Verified on a genuinely cold deck for the first time, which needed a trip whose summaries
+had never been fetched: 715 places discovered live for Seoul, then the deck opened with
+all five buttons disabled, no detail card, and the loading line cycling "Getting the
+pictures ready…" → "Just a moment for this one…" → "Loading this place…". Every earlier
+round had to take those three on trust because every photograph on the test trips was
+already cached.
 
 ## The wizard's steps start at the top too
 
