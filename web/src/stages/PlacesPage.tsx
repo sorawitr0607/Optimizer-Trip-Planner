@@ -483,7 +483,15 @@ export function PlacesPage() {
   //
   // This is the second time the shared prefetch has been mistaken for the card's own
   // request; the first blanked the whole workspace on every swipe.
-  const summaryPendingForCard = fetchCard.isPending && !summaries.data?.[selectedId];
+  // Missing means waiting even before the request starts. A lane change can select a
+  // card already queued behind the look-ahead fetch; gating only on `isPending` left it
+  // fully swipeable for several seconds before that queued request became the active one.
+  const summaryPendingForCard = Boolean(
+    selectedId &&
+      summaries.data &&
+      !(selectedId in summaries.data) &&
+      !(fetchCard.isError && fetchCard.variables === selectedId),
+  );
   const paidAllowed = Boolean(detailsCost.data?.allowed && photosCost.data?.allowed);
   const paidEstimate = (detailsCost.data?.estimate_usd ?? 0) + (photosCost.data?.estimate_usd ?? 0);
   const paidCaption = copy("live_details_cost", language)
@@ -841,7 +849,7 @@ export function PlacesPage() {
                 onWantPhotos={() => enrich.mutate()}
                 onWantSummary={(placeId) => fetchCard.mutate(placeId)}
                 paidPhotoUsd={paidAllowed ? paidEstimate : null}
-                summaryLoading={fetchCard.isPending && !summaries.data?.[selectedId]}
+                summaryLoading={summaryPendingForCard}
                 lane={lane}
                 laneRemaining={laneRemaining}
                 lanes={LANES}
@@ -852,7 +860,7 @@ export function PlacesPage() {
               />
             </>
           ) : null}
-          {!entries.length ? <p>{copy("no_lane_cards", language)}</p> : null}
+          {mode === "list" && !entries.length ? <p>{copy("no_lane_cards", language)}</p> : null}
 
           {/* The whole right-hand card waits, not just its explanations block. Hiding the
               `<details>` alone left the name, the score, the photograph and every button

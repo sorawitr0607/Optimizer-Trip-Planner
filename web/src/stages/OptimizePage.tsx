@@ -295,6 +295,11 @@ export function OptimizePage() {
   const variants = proposal?.variants ?? [];
   const variant: PlanVariant | undefined =
     variants.find((item) => item.variant_id === variantId) ?? variants[0];
+  const routeBlocked = variants.some((item) =>
+    (item.reconciliation ?? []).some(
+      (entry) => entry.status === "cannot_currently_fit" && entry.reason === "ROUTE_UNVERIFIED",
+    ),
+  );
 
   const provisionalAllowed = Boolean(
     trip?.planning_mode === "explore_first" &&
@@ -520,6 +525,26 @@ export function OptimizePage() {
         </>
       ) : null}
 
+      {/* All variants share one route snapshot, so its acceptance sits at draft level
+          instead of being buried inside whichever variant happens to be selected. */}
+      {routeBlocked ? (
+        <div className="optimizer-resolve">
+          <p className="field-error">
+            ⚠ {copyFrom("OPTIMIZER_CODE_TEXT", "ROUTE_UNVERIFIED", language)}
+          </p>
+          <button
+            className="setup-primary"
+            disabled={acceptRoutes.isPending}
+            onClick={() => acceptRoutes.mutate()}
+            type="button"
+          >
+            {acceptRoutes.isPending
+              ? copy("loading", language)
+              : copy("accept_route_estimates", language)}
+          </button>
+        </div>
+      ) : null}
+
       {/* A trip with no dates used to end here, at a table of how many days its places
           want and no way to act on it. The recommendation is now the input to choosing
           dates, which is the one thing that unlocks a timetable. */}
@@ -714,17 +739,6 @@ export function OptimizePage() {
                     can mistake it for something a router said. */}
                 {needsRoutes ? (
                   <button
-                    disabled={acceptRoutes.isPending}
-                    onClick={() => acceptRoutes.mutate()}
-                    type="button"
-                  >
-                    {acceptRoutes.isPending
-                      ? copy("loading", language)
-                      : copy("accept_route_estimates", language)}
-                  </button>
-                ) : null}
-                {needsRoutes ? (
-                  <button
                     className="setup-primary"
                     disabled={autoResolveAndGenerate.isPending}
                     onClick={() => autoResolveAndGenerate.mutate()}
@@ -825,7 +839,10 @@ export function OptimizePage() {
                           <td className="money-num">{item.end}</td>
                           <td>
                             <span className={`plan-row-kind ${item.type}`}>
-                              {copy(`type_${item.type}`, language)}
+                              {item.type === "buffer" &&
+                              (item.reason === "free_time_or_rest" || item.reason === "day_ends_free")
+                                ? copyFrom("OPTIMIZER_CODE_TEXT", item.reason, language)
+                                : copy(`type_${item.type}`, language)}
                             </span>
                           </td>
                           {/* Empty rather than the raw `buffer` / `travel` code it used

@@ -208,6 +208,7 @@ describe("CostsPage", () => {
     expect(html).toContain("What is it for");
     expect(html).toContain("Amount");
     expect(html).toContain('type="submit"');
+    expect(html).toContain("Edit");
     expectNoMissingCopy(html);
   });
 

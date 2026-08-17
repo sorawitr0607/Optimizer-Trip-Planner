@@ -364,6 +364,7 @@ export interface PlanItem {
   duration_minutes: number;
   name?: string;
   names?: Names;
+  reason?: string;
 }
 
 export interface PlanDay {

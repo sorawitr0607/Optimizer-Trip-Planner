@@ -15,7 +15,7 @@ from time import monotonic
 from typing import Any
 
 
-OPTIMIZER_VERSION = "whole-trip-v2"
+OPTIMIZER_VERSION = "whole-trip-v3"
 
 # What the departure day owes before the flight: pack and check out, reach the
 # terminal, be at the airport. Exported because the *usable window* for that day has
@@ -755,11 +755,10 @@ def _build_schedules(
 ) -> dict[str, Any]:
     days = []
     hard_errors: list[dict[str, Any]] = []
-    candidate_ids = {_candidate_id(item) for values in sequences.values() for item in values}
     if snapshot["trip"].get("include_operational_timeline"):
         days.append(_pre_trip_day(snapshot))
     for day, sequence in sequences.items():
-        built = _build_day(snapshot, day, sequence, candidate_ids, config)
+        built = _build_day(snapshot, day, sequence, config)
         hard_errors.extend(built["hard_errors"])
         days.append(built["day"])
     return {"days": days, "hard_errors": hard_errors}
@@ -769,7 +768,6 @@ def _build_day(
     snapshot: dict[str, Any],
     day: str,
     sequence: list[dict[str, Any]],
-    candidate_ids: set[str],
     config: dict[str, Any],
 ) -> dict[str, Any]:
     window = _window_for(snapshot, day)
@@ -809,7 +807,6 @@ def _build_day(
                 day,
                 candidate,
                 previous,
-                candidate_ids,
                 config,
                 current,
             )
@@ -874,7 +871,6 @@ def _candidate_segment(
     day: str,
     candidate: dict[str, Any],
     previous: str | None,
-    candidate_ids: set[str],
     config: dict[str, Any],
     current: int,
 ) -> dict[str, Any]:
@@ -884,7 +880,7 @@ def _candidate_segment(
     cursor = current
     segment: list[dict[str, Any]] = []
     route = (
-        _best_inbound_route(snapshot, place_id, candidate_ids)
+        _best_inbound_route(snapshot, place_id)
         if previous is None
         else _best_route(snapshot, previous, place_id)
     )
@@ -1137,7 +1133,13 @@ def _schedule_metrics(
 ) -> dict[str, Any]:
     visits = [item for day in days for item in day["items"] if item["type"] == "visit"]
     travel = [item for day in days for item in day["items"] if item["type"] == "travel"]
-    buffers = [item for day in days for item in day["items"] if item["type"] == "buffer"]
+    buffers = [
+        item
+        for day in days
+        for item in day["items"]
+        if item["type"] == "buffer"
+        and item.get("reason") not in {"free_time_or_rest", "day_ends_free"}
+    ]
     meals = [item for day in days for item in day["items"] if item["type"] == "meal"]
     preparation = [
         item for day in days for item in day["items"] if item["type"] == "preparation"
@@ -1819,16 +1821,26 @@ def _best_route(snapshot: dict[str, Any], origin: str, destination: str) -> dict
     )
 
 
-def _best_inbound_route(
-    snapshot: dict[str, Any], destination: str, candidate_ids: set[str]
-) -> dict[str, Any] | None:
+def _best_inbound_route(snapshot: dict[str, Any], destination: str) -> dict[str, Any] | None:
     usable = _usable_route_statuses(snapshot)
+    candidate_ids = {_candidate_id(candidate) for candidate in snapshot.get("candidates", [])}
+    base_ids = {
+        _candidate_id(candidate)
+        for candidate in snapshot.get("candidates", [])
+        if candidate.get("kind") == "hotel_area"
+    }
+    if not base_ids:
+        base_ids = {
+            str(route.get("origin_id"))
+            for route in snapshot.get("routes", [])
+            if route.get("origin_id") not in candidate_ids
+        }
     routes = [
         route
         for route in snapshot.get("routes", [])
         if route.get("status") in usable
         and route.get("destination_id") == destination
-        and route.get("origin_id") not in candidate_ids
+        and route.get("origin_id") in base_ids
     ]
     return deepcopy(min(routes, key=lambda item: int(item.get("duration_minutes", 0)))) if routes else None
 

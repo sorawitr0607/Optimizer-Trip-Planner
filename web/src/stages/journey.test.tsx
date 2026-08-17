@@ -141,7 +141,7 @@ const PREVIEW = {
   created_at: "now",
 } satisfies PlanPreview;
 
-function render(page: ReactNode, language: Language): string {
+function render(page: ReactNode, language: Language, plan: PlanPreview = PREVIEW): string {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   client.setQueryData(["trips"], TRIPS);
   client.setQueryData(["setup", TRIP], SETUP);
@@ -149,7 +149,7 @@ function render(page: ReactNode, language: Language): string {
   client.setQueryData(["candidate_choices", TRIP], [
     { trip_id: TRIP, place_id: "p1", action: "must_do", reason: null },
   ]);
-  client.setQueryData(["plan_preview", TRIP], PREVIEW);
+  client.setQueryData(["plan_preview", TRIP], plan);
   return renderToStaticMarkup(
     <QueryClientProvider client={client}>
       <ThemeProvider>
@@ -285,6 +285,19 @@ describe("OptimizePage", () => {
     expect(html).toContain("optimize-warnings");
     // A stable code must never surface raw to the owner.
     expect(html).not.toContain("OPENING_UNVERIFIED");
+  });
+
+  it("shows route-estimate acceptance at draft level when any variant is blocked", () => {
+    const blocked = structuredClone(PREVIEW) as PlanPreview;
+    blocked.proposal.data.variants![0].reconciliation[0] = {
+      ...blocked.proposal.data.variants![0].reconciliation[0],
+      status: "cannot_currently_fit",
+      reason: "ROUTE_UNVERIFIED",
+    };
+
+    const html = render(<OptimizePage />, "en", blocked);
+
+    expect(html).toContain("Accept a walking estimate and rebuild");
   });
 });
 

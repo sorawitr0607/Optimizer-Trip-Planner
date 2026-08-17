@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link, useParams } from "react-router";
 
 import {
@@ -68,6 +68,8 @@ export function CostsPage() {
     paid: false,
   });
   const [flash, setFlash] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const formRef = useRef<HTMLFormElement | null>(null);
   const saveCategories = useMutation({
     mutationFn: (categories: CostCategory[]) =>
       rpc<CostCategory[]>("set_cost_categories", {
@@ -87,6 +89,7 @@ export function CostsPage() {
     mutationFn: () =>
       rpc<CostItem>("save_cost_item", {
         trip_id: tripId,
+        cost_id: editingId,
         item: {
           label: draft.label,
           category: draft.category,
@@ -97,6 +100,7 @@ export function CostsPage() {
       }),
     onSuccess: async () => {
       setFlash("estimate_saved");
+      setEditingId(null);
       setDraft((current) => ({ ...current, label: "", amount: "" }));
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["cost_items", tripId] }),
@@ -120,30 +124,46 @@ export function CostsPage() {
       legs: rows.filter((row) => row.type === "travel").length,
     };
   })();
-
-  const seedRows = useMutation({
-    mutationFn: async () => {
-      if (!shape) return;
-      const seeds: { label: string; category: string }[] = [
+  const planSeeds: { label: string; category: string }[] = shape
+    ? [
         { label: `${copy("plan_shape_nights", language)} (${shape.nights})`, category: "accommodation" },
         { label: `${copy("plan_shape_meals", language)} (${shape.meals})`, category: "food" },
         { label: `${copy("plan_shape_visits", language)} (${shape.visits})`, category: "fees" },
         { label: `${copy("plan_shape_legs", language)} (${shape.legs})`, category: "transport" },
-      ];
-      for (const seed of seeds) {
-        await rpc<CostItem>("save_cost_item", {
-          trip_id: tripId,
-          item: {
-            label: seed.label,
-            category: seed.category,
-            // Zero, not a guess. The row exists so there is somewhere to put the real
-            // figure; a plausible-looking placeholder would be read as a forecast.
-            original_amount: 0,
-            original_currency: draft.currency,
-            payment_state: "estimate",
-          },
-        });
-      }
+      ]
+    : [];
+  const allSeedsExist = Boolean(
+    planSeeds.length &&
+      planSeeds.every((seed) =>
+        (items.data ?? []).some(
+          (item) => item.label === seed.label && item.category === seed.category,
+        ),
+      ),
+  );
+
+  const seedRows = useMutation({
+    mutationFn: async () => {
+      const existing = new Set(
+        (items.data ?? []).map((item) => `${item.category}\u0000${item.label}`),
+      );
+      return Promise.all(
+        planSeeds
+          .filter((seed) => !existing.has(`${seed.category}\u0000${seed.label}`))
+          .map((seed) =>
+            rpc<CostItem>("save_cost_item", {
+              trip_id: tripId,
+              item: {
+                label: seed.label,
+                category: seed.category,
+                // Zero, not a guess. The row exists so there is somewhere to put the real
+                // figure; a plausible-looking placeholder would be read as a forecast.
+                original_amount: 0,
+                original_currency: draft.currency,
+                payment_state: "estimate",
+              },
+            }),
+          ),
+      );
     },
     onSuccess: async () => {
       setFlash("plan_shape_seeded");
@@ -193,7 +213,7 @@ export function CostsPage() {
             <button
               aria-describedby="plan-shape-help"
               className="setup-primary"
-              disabled={seedRows.isPending}
+              disabled={seedRows.isPending || allSeedsExist}
               onClick={() => seedRows.mutate()}
               type="button"
             >
@@ -202,7 +222,7 @@ export function CostsPage() {
             {/* Beside the button, not only in the flash further down. The rows this adds
                 land below the fold, so the page changed and nothing near the press did —
                 which reads as a button that did nothing. */}
-            {seedRows.isSuccess ? (
+            {seedRows.isSuccess || allSeedsExist ? (
               <p className="setup-hint" aria-live="polite">
                 ✓ {copy("plan_shape_seeded", language)}
               </p>
@@ -400,6 +420,26 @@ export function CostsPage() {
                 {paid && item.converted_thb !== null && item.converted_thb !== item.reported_thb ? (
                   <s className="money-num money-was">{money(item.converted_thb)}</s>
                 ) : null}
+                {item.payment_state === "estimate" ? (
+                  <button
+                    onClick={() => {
+                      setEditingId(item.cost_id);
+                      setDraft({
+                        label: item.label,
+                        amount: String(item.original_amount),
+                        currency: item.original_currency,
+                        category: item.category,
+                        paid: false,
+                      });
+                      requestAnimationFrame(() =>
+                        formRef.current?.scrollIntoView({ behavior: "smooth" }),
+                      );
+                    }}
+                    type="button"
+                  >
+                    {copy("edit", language)}
+                  </button>
+                ) : null}
               </span>
             </li>
           );
@@ -410,12 +450,15 @@ export function CostsPage() {
       {/* derives-from: element 36 .currency-info-box as .cost-record */}
       <form
         className="cost-record"
+        ref={formRef}
         onSubmit={(event) => {
           event.preventDefault();
           saveCost.mutate();
         }}
       >
-        <h2 className="money-eyebrow">{copy("record_estimate", language)}</h2>
+        <h2 className="money-eyebrow">
+          {editingId ? copy("edit", language) : copy("record_estimate", language)}
+        </h2>
         {flash ? <p className="setup-flash" aria-live="polite">{copy(flash, language)}</p> : null}
         {saveCost.isError ? (
           <p className="field-error" aria-live="polite">⚠ {saveCost.error.message}</p>
@@ -479,9 +522,22 @@ export function CostsPage() {
             {copy("paid", language)}
           </label>
         </div>
-        <button className="setup-primary" disabled={saveCost.isPending} type="submit">
-          {copy("record_estimate", language)}
-        </button>
+        <div className="setup-actions">
+          <button className="setup-primary" disabled={saveCost.isPending} type="submit">
+            {editingId ? copy("split_save", language) : copy("record_estimate", language)}
+          </button>
+          {editingId ? (
+            <button
+              onClick={() => {
+                setEditingId(null);
+                setDraft((current) => ({ ...current, label: "", amount: "" }));
+              }}
+              type="button"
+            >
+              {copy("cancel", language)}
+            </button>
+          ) : null}
+        </div>
       </form>
 
       <Link className="primary-link" to={`/trips/${tripId}/split`}>

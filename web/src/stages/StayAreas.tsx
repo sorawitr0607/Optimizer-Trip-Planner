@@ -43,17 +43,20 @@ export function StayAreas({ tripId, language, onOutcome, onChosen }: StayAreasPr
   });
   const chooseArea = useMutation({
     mutationFn: (area: { name: string; latitude: number; longitude: number }) =>
-      rpc("confirm_accommodation_base", { trip_id: tripId, query: area.name, ...area }),
-    onSuccess: async () => {
-      await Promise.all(
+      rpc("confirm_accommodation_base", {
+        trip_id: tripId,
+        query: area.name,
+        latitude: area.latitude,
+        longitude: area.longitude,
+      }),
+    onSuccess: () => {
+      // The write is complete. Cache refreshes must not hold navigation hostage.
+      onChosen?.();
+      void Promise.all(
         ["accommodation_base", "journey", "plan_preview"].map((key) =>
           queryClient.invalidateQueries({ queryKey: [key, tripId] }),
         ),
       );
-      // On to the plan. Picking an area *is* the answer to this page, and leaving the
-      // owner on the ranked list afterwards was read as the button not working — the
-      // base was written and the stage completed, with nothing on screen saying so.
-      onChosen?.();
     },
   });
   const report = recommend.data;
@@ -82,6 +85,13 @@ export function StayAreas({ tripId, language, onOutcome, onChosen }: StayAreasPr
           {recommend.error instanceof ApiError
             ? copyFrom("OPTIMIZER_CODE_TEXT", recommend.error.code, language)
             : String(recommend.error)}
+        </p>
+      ) : null}
+      {chooseArea.isError ? (
+        <p className="field-error" aria-live="polite">
+          ⚠ {chooseArea.error instanceof ApiError
+            ? copyFrom("OPTIMIZER_CODE_TEXT", chooseArea.error.code, language)
+            : String(chooseArea.error)}
         </p>
       ) : null}
 

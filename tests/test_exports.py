@@ -82,7 +82,7 @@ class ExportSnapshotTest(unittest.TestCase):
         self.assertEqual(version.version_id, export["stamp"]["plan_version_id"])
         self.assertTrue(export["stamp"]["is_active_plan"])
         self.assertEqual("THB", export["stamp"]["base_currency"])
-        self.assertEqual("whole-trip-v2", export["stamp"]["optimizer_version"])
+        self.assertEqual("whole-trip-v3", export["stamp"]["optimizer_version"])
 
         # Every optimizer item appears exactly once, in chronological order.
         exported = [item for day in export["days"] for item in day["items"]]
@@ -168,6 +168,31 @@ class ExportSnapshotTest(unittest.TestCase):
                 language="en",
                 exported_at="2030-01-01T00:00:00+00:00",
             )
+
+    def test_a_v2_plan_keeps_its_legacy_free_time_buffer_total(self) -> None:
+        plan = plan_payload(planner_input())
+        free = next(
+            item
+            for day in plan["variant"]["days"]
+            for item in day["items"]
+            if item["type"] == "buffer" and item["reason"] == "timing_window"
+        )
+        free["reason"] = "day_ends_free"
+        plan["optimizer_version"] = "whole-trip-v2"
+
+        export = build_export_snapshot(
+            trip={"trip_id": "t1", "name": "Trip", "destination": "Tokyo"},
+            plan=plan,
+            version_id="plan_1",
+            active_version_id="plan_1",
+            language="en",
+            exported_at="2030-01-01T00:00:00+00:00",
+        )
+
+        self.assertEqual(
+            plan["variant"]["metrics"]["buffer_minutes"],
+            export["totals"]["buffer_minutes"],
+        )
 
     def test_unsupported_language_and_non_optimizer_plan_are_rejected(self) -> None:
         plan = plan_payload(planner_input())

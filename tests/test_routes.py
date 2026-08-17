@@ -1036,6 +1036,22 @@ class NearbyPhotoMatchTest(unittest.TestCase):
         self.assertFalse(photo_depicts_place("File:圓山大飯店.jpg", ["圓山"]))
         self.assertFalse(photo_depicts_place("File:Park bench.jpg", ["Ark"]))
 
+    def test_an_osm_commons_category_becomes_a_gallery(self) -> None:
+        provider = WikidataSummaryProvider()
+        provider._json = lambda url: {  # type: ignore[method-assign]
+            "query": {
+                "categorymembers": [
+                    {"title": "File:Temple front.jpg"},
+                    {"title": "File:Temple plan.svg"},
+                ]
+            }
+        }
+
+        found = provider.category_photos("Category:Example Temple")
+
+        self.assertEqual(1, len(found))
+        self.assertIn("Temple_front.jpg", found[0])
+
     def test_geosearch_returns_only_the_files_that_name_the_place(self) -> None:
         provider = WikidataSummaryProvider()
         provider._json = lambda url: {  # type: ignore[method-assign]
@@ -1263,5 +1279,4 @@ class TimeZoneTest(unittest.TestCase):
         with self.assertRaises(ProviderBudgetExceeded):
             self.actions.refresh_timezone(self.trip.trip_id)
         self.assertEqual([], self.provider.calls)
-
 

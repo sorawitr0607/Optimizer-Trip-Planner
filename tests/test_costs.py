@@ -143,6 +143,22 @@ class ConversionTest(unittest.TestCase):
         self.assertTrue(resolved["rate_missing"])
         self.assertIsNone(resolved["reported_thb"])
 
+    def test_baht_needs_no_rate_snapshot(self) -> None:
+        item = costs.validate_cost(
+            {
+                "label": "Plan placeholder",
+                "category": "transport",
+                "original_amount": 0,
+                "original_currency": "THB",
+                "payment_state": "estimate",
+            }
+        )
+
+        resolved = costs.apply_rates([item], None)[0]
+
+        self.assertFalse(resolved["rate_missing"])
+        self.assertEqual(0.0, resolved["reported_thb"])
+
     def test_totals_split_estimated_from_paid(self) -> None:
         rows = [
             costs.validate_cost(

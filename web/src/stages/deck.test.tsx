@@ -84,6 +84,7 @@ function render(
   choices: string[] = [],
   entries = RANKING.lanes.main_queue,
   rejected: string[] = [],
+  summaryLoading = false,
 ) {
   return renderToStaticMarkup(
     <PlaceDeck
@@ -99,6 +100,7 @@ function render(
       onDecide={() => {}}
       onWantSummary={() => {}}
       ranking={RANKING}
+      summaryLoading={summaryLoading}
       summaries={summaries}
     />,
   );
@@ -179,6 +181,13 @@ describe("PlaceDeck", () => {
     expect(html).toContain("place-deck-drag");
     // The placeholder opens before the hidden surface does, so it cannot be inside it.
     expect(html.indexOf("place-deck-pending")).toBeLessThan(html.indexOf("place-deck-drag"));
+  });
+
+  it("locks every decision while the selected card summary is loading", () => {
+    const html = render({}, [], RANKING.lanes.main_queue, [], true);
+
+    expect(html).toContain('aria-busy="true"');
+    expect((html.match(/disabled=""/g) ?? [])).toHaveLength(5);
   });
 
   it("counts the gallery and makes the photo itself the control", () => {

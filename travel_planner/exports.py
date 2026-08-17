@@ -79,7 +79,14 @@ def build_export_snapshot(
     context["reconciliation_by_id"] = {
         item["place_id"]: item for item in variant.get("reconciliation", [])
     }
-    days = [_day(day, context) for day in variant["days"]]
+    days = [
+        _day(
+            day,
+            context,
+            legacy_free_time_buffer=plan.get("optimizer_version") == "whole-trip-v2",
+        )
+        for day in variant["days"]
+    ]
     fallbacks = _fallbacks(variant, days, context)
     board = [item for item in (checklist_items or []) if not item.get("dismissed")]
     for day in days:
@@ -286,7 +293,12 @@ def _fallbacks(
     return records
 
 
-def _day(day: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+def _day(
+    day: dict[str, Any],
+    context: dict[str, Any],
+    *,
+    legacy_free_time_buffer: bool = False,
+) -> dict[str, Any]:
     items: list[dict[str, Any]] = []
     stop_number = 0
     for order, item in enumerate(day["items"], start=1):
@@ -313,7 +325,7 @@ def _day(day: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
         "end": items[-1]["end"] if items else day["window"]["start"],
         "items": items,
         "stops": stops,
-        "totals": _day_totals(items),
+        "totals": _day_totals(items, legacy_free_time_buffer=legacy_free_time_buffer),
         "highest_risk": _highest_risk(items),
         "statuses": sorted({item["status"] for item in items}),
     }
@@ -445,10 +457,20 @@ def _highest_risk(items: list[dict[str, Any]]) -> dict[str, Any] | None:
     return None
 
 
-def _day_totals(items: list[dict[str, Any]]) -> dict[str, int]:
+def _day_totals(
+    items: list[dict[str, Any]], *, legacy_free_time_buffer: bool = False
+) -> dict[str, int]:
     visits = [item for item in items if item["type"] == "visit"]
     travel = [item for item in items if item["type"] == "travel"]
-    buffers = [item for item in items if item["type"] == "buffer"]
+    buffers = [
+        item
+        for item in items
+        if item["type"] == "buffer"
+        and (
+            legacy_free_time_buffer
+            or item.get("reason") not in {"free_time_or_rest", "day_ends_free"}
+        )
+    ]
     meals = [item for item in items if item["type"] == "meal"]
     preparation = [item for item in items if item["type"] == "preparation"]
     logistics = [item for item in items if item["type"] == "logistics"]

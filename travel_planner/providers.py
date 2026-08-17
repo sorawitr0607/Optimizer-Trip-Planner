@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from difflib import SequenceMatcher
+from html import unescape
 from time import monotonic, sleep
 import json
 import re
@@ -12,7 +13,7 @@ from pathlib import Path
 from collections.abc import Iterable
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote, urlencode, urlsplit
+from urllib.parse import quote, urlencode, urljoin, urlsplit
 from urllib.request import Request, urlopen
 
 from . import interpret
@@ -903,7 +904,14 @@ class VenueNoticeProvider:
             ) from None
         head = raw.decode(charset, errors="replace")
         found: dict[str, Any] = {}
-        for prop, key in (("og:image", "image"), ("og:description", "text")):
+        for prop, key in (
+            ("og:image", "image"),
+            ("og:image:url", "image"),
+            ("twitter:image", "image"),
+            ("twitter:image:src", "image"),
+            ("og:description", "text"),
+            ("twitter:description", "text"),
+        ):
             # Both attribute orders, because half the web writes `content` first.
             match = re.search(
                 rf'<meta[^>]+(?:property|name)=["\']{prop}["\'][^>]*content=["\']([^"\']+)',
@@ -915,13 +923,21 @@ class VenueNoticeProvider:
                 re.IGNORECASE,
             )
             if match:
-                found[key] = match.group(1).strip()
+                found.setdefault(key, match.group(1).strip())
+        if not found.get("image"):
+            match = re.search(
+                r'<link[^>]+rel=["\']image_src["\'][^>]*href=["\']([^"\']+)',
+                head,
+                re.IGNORECASE,
+            ) or re.search(
+                r'<link[^>]+href=["\']([^"\']+)["\'][^>]*rel=["\']image_src["\']',
+                head,
+                re.IGNORECASE,
+            )
+            if match:
+                found["image"] = match.group(1).strip()
         image = found.get("image") or ""
-        if image.startswith("//"):
-            image = "https:" + image
-        elif image.startswith("/"):
-            parts = urlsplit(website)
-            image = f"{parts.scheme}://{parts.netloc}{image}"
+        image = urljoin(website, unescape(image)) if image else ""
         return {
             "image_url": image if image.startswith("http") else "",
             "text": found.get("text", ""),
@@ -1930,7 +1946,7 @@ class WikidataSummaryProvider:
     # storing a blank, and the blank is cached for 60 days — so they must be asked again.
     # v11: the venue's own `og:` preview as a last resort, so places every free
     # encyclopedic source is silent about get asked once more.
-    cache_version = "wikidata-summary-v11"
+    cache_version = "wikidata-summary-v12"
     # An encyclopedia article changes slowly and a description is not a fact the
     # planner schedules against, so this can sit for a long time.
     cache_ttl_days = 60
@@ -1962,6 +1978,31 @@ class WikidataSummaryProvider:
     #: matching the same words in any order.
     nearby_radius_metres = 400
     nearby_limit = 6
+
+    def category_photos(self, reference: str) -> list[str]:
+        """Files from a Commons category named directly by OpenStreetMap or Wikidata."""
+
+        category = re.sub(r"^category:", "", str(reference or "").strip(), flags=re.I)
+        if not category:
+            return []
+        try:
+            listing = self._json(
+                "https://commons.wikimedia.org/w/api.php?action=query&format=json"
+                "&list=categorymembers&cmtype=file&cmlimit="
+                f"{self.category_file_limit}&cmtitle="
+                + quote(f"Category:{category}")
+            )
+        except ProviderUnavailable:
+            return []
+        return [
+            "https://commons.wikimedia.org/wiki/Special:FilePath/"
+            + quote(str(member.get("title") or "").split(":", 1)[-1].replace(" ", "_"))
+            + "?width=640"
+            for member in (listing.get("query") or {}).get("categorymembers") or []
+            if str(member.get("title") or "").lower().endswith(
+                (".jpg", ".jpeg", ".png", ".webp")
+            )
+        ]
 
     def __init__(self) -> None:
         self.wikidata_url = os.environ.get(
@@ -2302,25 +2343,7 @@ class WikidataSummaryProvider:
         # already had a curated `P18` — paying a round trip to append to a gallery that
         # was already led by the better picture.
         if category and image is None:
-            try:
-                listing = self._json(
-                    "https://commons.wikimedia.org/w/api.php?action=query&format=json"
-                    "&list=categorymembers&cmtype=file&cmlimit="
-                    f"{self.category_file_limit}&cmtitle="
-                    + quote(f"Category:{category}")
-                )
-                for member in (listing.get("query") or {}).get("categorymembers") or []:
-                    title = str(member.get("title") or "")
-                    if not title.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
-                        continue
-                    category_files.append(
-                        "https://commons.wikimedia.org/wiki/Special:FilePath/"
-                        + quote(title.split(":", 1)[-1].replace(" ", "_"))
-                        + "?width=640"
-                    )
-            except ProviderUnavailable:
-                # A gallery is not worth failing a summary over.
-                category_files = []
+            category_files = self.category_photos(str(category))
         if image is None and category_files:
             image = category_files[0]
 

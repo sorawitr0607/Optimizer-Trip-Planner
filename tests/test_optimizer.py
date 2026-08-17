@@ -34,6 +34,49 @@ def fixture(fixture_id: str) -> dict:
 
 
 class OptimizerCoreTest(unittest.TestCase):
+    def test_first_leg_starts_at_the_accommodation_not_an_unselected_place(self) -> None:
+        snapshot = {
+            "candidates": [
+                {"id": "base", "kind": "hotel_area"},
+                {"id": "visit", "kind": "museum"},
+            ],
+            "routes": [
+                {
+                    "origin_id": "unselected-neighbour",
+                    "destination_id": "visit",
+                    "duration_minutes": 5,
+                    "status": "verified",
+                },
+                {
+                    "origin_id": "base",
+                    "destination_id": "visit",
+                    "duration_minutes": 20,
+                    "status": "verified",
+                },
+            ],
+            "trip": {},
+        }
+
+        route = optimizer_module._best_inbound_route(snapshot, "visit")
+
+        self.assertEqual("base", route["origin_id"])
+
+    def test_free_time_is_not_counted_as_contingency_buffer(self) -> None:
+        days = [
+            {
+                "items": [
+                    {"type": "buffer", "duration_minutes": 180, "reason": "free_time_or_rest"},
+                    {"type": "buffer", "duration_minutes": 10, "reason": "transfer_contingency"},
+                ]
+            }
+        ]
+
+        metrics = optimizer_module._schedule_metrics(
+            {"trip": {}, "facts": [], "thresholds": {}}, days
+        )
+
+        self.assertEqual(10, metrics["buffer_minutes"])
+
     def test_three_variants_are_deterministic_valid_and_not_worse_than_greedy(self) -> None:
         snapshot = fixture("ix-jp-shibuya-hours-view-walk")["planner_input"]
 

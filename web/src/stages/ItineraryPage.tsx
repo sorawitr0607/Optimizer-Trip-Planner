@@ -163,10 +163,16 @@ function PlanRow({ item, language }: { item: ExportPlanItem; language: Language 
   const clock = `${item.start}–${item.end}`;
   const length = `${item.duration_minutes} ${copy("minutes", language)}`;
   if (item.type === "buffer") {
+    const freeTime = item.reason === "free_time_or_rest" || item.reason === "day_ends_free";
     return (
       <article className="plan-row buffer">
         <time>{clock}<small>{length}</small></time>
-        <div><span className="plan-row-kind">{copy("buffer_minutes", language)}</span><p>{codeText(item.reason, language)}</p></div>
+        <div>
+          <span className="plan-row-kind">
+            {freeTime ? codeText(item.reason, language) : copy("buffer_minutes", language)}
+          </span>
+          {freeTime ? null : <p>{codeText(item.reason, language)}</p>}
+        </div>
       </article>
     );
   }

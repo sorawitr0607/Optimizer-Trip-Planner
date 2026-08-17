@@ -3678,6 +3678,12 @@
   grid-column: 1 / -1;
 }
 
+/* Once reconsidering opens the shared detail card, the finished list owns the left
+   column and that detail owns the right. Spanning both columns forced it underneath. */
+.places-workspace:has(> .place-card) > .place-deck-exhausted {
+  grid-column: auto;
+}
+
 .deck-finished-card {
   background: var(--bg-card);
   border: 1px solid var(--bg-card-border);

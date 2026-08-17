@@ -2718,7 +2718,8 @@ class PlannerActions:
                 # from the coordinates every candidate has, and answers "what is
                 # photographed here" rather than "photographs of this place" -- stored
                 # flagged as nearby so the screen says which it is showing.
-                photos = self._nearby_photos(provider, place)
+                catalogue = self._catalogue_photos(provider, place)
+                photos = catalogue or self._nearby_photos(provider, place)
                 # Nothing on Commons either. These places — a tailor, a mini-golf, a
                 # martial arts club — are exactly the ones with no encyclopedic presence
                 # anywhere, and their own website is the only thing that is about them.
@@ -2741,7 +2742,7 @@ class PlannerActions:
                         "text": {"en": own["text"]} if own.get("text") else {},
                         "image_url": photos[0] if photos else (own.get("image_url") or None),
                         "image_urls": photos or ([own["image_url"]] if own.get("image_url") else []),
-                        "photos_are_nearby": bool(photos),
+                        "photos_are_nearby": bool(photos and not catalogue),
                         "photo_from_own_site": bool(not photos and own.get("image_url")),
                         "licence": "CC BY-SA or compatible, Wikimedia Commons",
                         "source_urls": {},
@@ -2787,8 +2788,10 @@ class PlannerActions:
             held = list(value.get("image_urls") or [])
             if not held and value.get("image_url"):
                 held = [str(value["image_url"])]
+            catalogue = self._catalogue_photos(provider, place)
+            held.extend(url for url in catalogue if url not in held)
             named = [url for url in self._named_photos(provider, place) if url not in held]
-            if named:
+            if catalogue or named:
                 gallery = [*held, *named]
                 limit = int(getattr(provider, "gallery_limit", len(gallery)))
                 value = {
@@ -2837,6 +2840,19 @@ class PlannerActions:
             "failed": failed,
             "provider_errors": errors,
         }
+
+    @staticmethod
+    def _catalogue_photos(provider: Any, place: dict[str, Any]) -> list[str]:
+        """Resolve an OpenStreetMap `wikimedia_commons=Category:...` photo gallery."""
+
+        reference = str(place.get("photo_reference") or "").strip()
+        finder = getattr(provider, "category_photos", None)
+        if not reference.lower().startswith("category:") or finder is None:
+            return []
+        try:
+            return list(finder(reference))
+        except (ProviderUnavailable, TypeError, ValueError):
+            return []
 
     @staticmethod
     def _nearby_photos(provider: Any, place: dict[str, Any]) -> list[str]:

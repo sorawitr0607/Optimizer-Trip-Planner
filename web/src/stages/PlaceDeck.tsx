@@ -253,6 +253,11 @@ export function PlaceDeck({
   );
   const entry = queue[Math.min(cursor, Math.max(0, queue.length - 1))];
   const card = entry ? ranking.cards[entry.place_id] : undefined;
+  const currentId = entry?.place_id;
+  const [shownCard, setShownCard] = useState<string | undefined>(currentId);
+  // Synchronous with the prop change: the previous card's gallery index must never
+  // make the next card look loaded before React commits the reset below.
+  const photoIndex = currentId === shownCard ? photo : 0;
 
   const about = entry ? summaries[entry.place_id] : undefined;
   // Encyclopedia photographs plus OpenStreetMap's own tag, which costs no extra request
@@ -268,15 +273,14 @@ export function PlaceDeck({
   // Which photo is on screen, and which one has finished arriving. Held as the URL
   // rather than a boolean so that tapping through a gallery shows the placeholder again
   // for each new picture, and a cached one never flashes it at all.
-  const currentPhoto = gallery.length ? gallery[photo % gallery.length] : null;
+  const currentPhoto = gallery.length ? gallery[photoIndex % gallery.length] : null;
   // The card is *withheld* until its first picture has painted, not merely the picture
   // box. A card that arrives complete-but-imageless and fills in a second later is the
   // one thing the owner cannot un-see: the swipe decision is made on the photograph, so
   // showing the text first invites a decision on half the evidence. Only the first
   // photo gates the card — tapping through the gallery must not blank it again.
-  const cardPending = summaryLoading || (Boolean(currentPhoto) && photoLoaded !== currentPhoto && photo === 0);
+  const cardPending = summaryLoading || (Boolean(currentPhoto) && photoLoaded !== currentPhoto && photoIndex === 0);
   // Report the card in front, so the panel beside the deck tracks it.
-  const currentId = entry?.place_id;
 
   // The gallery index belongs to the card, so it resets with the card.
   //
@@ -291,7 +295,6 @@ export function PlaceDeck({
   // Adjusted during render rather than in an effect: this is state derived from a prop
   // that changed, which is the shape React sanctions for it, and an effect would paint
   // one frame of the wrong card's gallery first.
-  const [shownCard, setShownCard] = useState<string | undefined>(currentId);
   if (currentId !== shownCard) {
     setShownCard(currentId);
     setPhoto(0);
@@ -704,7 +707,7 @@ export function PlaceDeck({
             </span>
             <span className="setup-hint">
               {copy("photo_of", language)
-                .replace("{current}", String((photo % gallery.length) + 1))
+                .replace("{current}", String((photoIndex % gallery.length) + 1))
                 .replace("{total}", String(gallery.length))}
             </span>
           </button>

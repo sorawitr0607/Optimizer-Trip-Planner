@@ -138,7 +138,8 @@ def apply_rates(
 ) -> list[dict[str, Any]]:
     """Resolve each row's THB value against one rate snapshot."""
 
-    rates = (snapshot or {}).get("rates") or {}
+    # THB is already the reporting currency; it never needs an exchange-rate snapshot.
+    rates = {BASE_CURRENCY: 1.0, **((snapshot or {}).get("rates") or {})}
     buffer_percent = float((snapshot or {}).get("buffer_percent") or 0.0)
     resolved = []
     for item in items:

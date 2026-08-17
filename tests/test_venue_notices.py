@@ -49,6 +49,35 @@ class QuoteGuardTest(unittest.TestCase):
         self.assertIn("never paraphrase", prompt)
         self.assertIn("Never state regular weekly hours", prompt)
 
+    def test_preview_accepts_twitter_metadata_and_relative_images(self) -> None:
+        page = (
+            b'<meta content="/media/card.jpg" name="twitter:image">'
+            b'<meta name="twitter:description" content="The venue garden.">'
+        )
+
+        class Response:
+            class Headers:
+                @staticmethod
+                def get_content_charset():
+                    return "utf-8"
+
+            headers = Headers()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self, limit):
+                return page[:limit]
+
+        with unittest.mock.patch("travel_planner.providers.urlopen", return_value=Response()):
+            preview = VenueNoticeProvider().preview("https://venue.example/about")
+
+        self.assertEqual("https://venue.example/media/card.jpg", preview["image_url"])
+        self.assertEqual("The venue garden.", preview["text"])
+
 
 class NoticeWiringTest(unittest.TestCase):
     """`notice()` end to end with a stubbed transport.
