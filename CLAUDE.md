@@ -8,14 +8,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm --prefix web install                                             # first web run only
 uv run --locked python -m api                                        # production shell on 127.0.0.1:8765
 uv run --locked python scripts/check.py                              # every free Python + web gate
-uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 523 tests, ~12s
+uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 536 tests, ~14s
 uv run --locked python -m unittest tests.test_optimizer.OptimizerCoreTest.test_safe_route_and_weather_fallback_are_selected  # one test
 python3 scripts/validate_regression_fixtures.py                      # fixture catalog structure
 uv run --locked python scripts/run_optimizer_regressions.py          # 27 historic cases through the real optimizer
 uv run --locked python -m compileall -q api travel_planner scripts tests
 python3 scripts/build_project_graph.py --check                       # graph integrity (free)
 python3 scripts/check_provider_access.py --self-test                 # redaction check, no network
-uv run --locked python scripts/check_design_tokens.py                 # token gate: 13 accent triples, no literals, ancestors, 3:1 contrast
+uv run --locked python scripts/check_design_tokens.py                 # token gate: 13 accent triples, no literals, ancestors, 4.5:1 contrast
 uv run --locked python scripts/check_reference_coverage.py             # structural coverage of the four reference workbooks
 ```
 
@@ -24,6 +24,14 @@ packages via cwd on `sys.path`. Python has no linter or formatter; `web/` uses E
 no formatter.
 
 `scripts/check_provider_access.py --live-paid` makes billable Google requests. Don't run it unasked.
+
+**To run what you just changed: restart the server, then hard-reload the browser.**
+`ensure_web_build()` runs **only at startup**, and only rebuilds when a source is newer
+than `web/dist/index.html` — so a server left running never picks anything up, and a tab
+left open holds the old JavaScript even after it does. Six rounds of owner testing produced
+reports of fixes "not working" that had been verified working minutes earlier, and every
+one was this. The sidebar prints `build <timestamp>` for exactly this reason: if it does
+not match the build just made, nothing about behaviour is worth discussing yet.
 
 ## Architecture
 
@@ -503,7 +511,7 @@ rule. Unknown stable codes render visibly as `⚠ CODE`; never prettify them int
 
 Python uses `unittest`; the webapp uses Vitest. No network, no paid API, no Python fixtures framework.
 **`AppTest` is gone** — S6 removed the 18 tests that used it, having first moved the 14 portable
-behaviours down to actions/core/exports. It was **311** at S6; it is **523** now, plus 95 Vitest cases in
+behaviours down to actions/core/exports. It was **311** at S6; it is **536** now, plus 100 Vitest cases in
 `web/`.
 `tests/fixtures/historic_regressions.json` encodes 20 atomic + 7 interaction failures from four real
 past trips; `scripts/run_optimizer_regressions.py` replays all of them through the real optimizer.
@@ -1387,7 +1395,7 @@ is a test that reports the network, not the code.**
 **Twenty-six optimizer codes had no copy entry**, so the "consequence / smallest next step"
 column — the one that says what to do — printed `⚠ collect_a_verified_route` and
 `⚠ OPERATIONAL_DETAILS_REQUIRE_CONFIRMATION` verbatim in both languages.
-`OPTIMIZER_CODE_TEXT` went 95 → 133 entries each. `⚠ CODE` remains the correct rendering
+`OPTIMIZER_CODE_TEXT` went 95 → 135 entries each. `⚠ CODE` remains the correct rendering
 for a code that genuinely has no entry; it was never meant to be the common case.
 
 ### Taiwan's GTFS feed is sourced
@@ -1713,11 +1721,13 @@ THB so a later rate cannot rewrite it, and a missing rate stays a visible gap ra
 routes and in-place `StageGate`, and `scripts/check.py` is the one free green command. The allowlist was
 **61 methods** at S5 — 51 at S1, five split-ledger ones at S2, `setup_vocabulary` at S3, the paid-call
 preflight and export-snapshot reads at S4, then `checklist_vocabulary` at S5, and `refresh_transit_routes`
-for `WF-038` — and is **87** now, the additions being `WF-039`'s comfort tradeoffs, `WF-040`'s
+for `WF-038` — and is **90** now, the additions being `WF-039`'s comfort tradeoffs, `WF-040`'s
 `recommend_areas`, `WF-048`'s month guide, basemap pair, map detail, country-outline pair, route shapes
-and trip forecast, and `WF-049`'s split-cardholder pair, `build_money_snapshot` and category pair.
-**38 refusal codes.** `tests/test_api.py` asserts the count, so it cannot drift silently. **All nine routes are
-real screens** as of 2026-08-04 — `/setup`, `/places`, `/evidence`, `/optimize`, `/itinerary`, `/readiness`,
+and trip forecast, `WF-049`'s split-cardholder pair, `build_money_snapshot` and category pair, and
+the owner-testing rounds' `confirm_default_opening_windows`, `confirm_places_selection` and
+`accept_provisional_base`.
+**38 refusal codes.** `tests/test_api.py` asserts the count, so it cannot drift silently. **All ten routes are
+real screens** — nine as of 2026-08-04, plus `/stay` — `/setup`, `/places`, `/evidence`, `/optimize`, `/itinerary`, `/readiness`,
 `/costs`, `/split` and `/revise`. There is no `StagePage`, no `gated()` wrapper and no `stage_stub` copy key;
 they went with the last stub. `/evidence` was built between S5 and S6 because **no slice row owned it** and
 S6 has since deleted the POC — see `artifacts/validation/2026-08-04-evidence-screen/notes.md`. It is the screen a
@@ -2564,6 +2574,8 @@ Already decided, and binding on any future implementation:
   defaulting to empty, so a partial payload silently erases what it omits** — the setup form holds one
   draft object and always sends it whole.
 - The webapp's IA: **9 stage routes under `/trips/:tripId/`** resolving to **5 gate keys**, in the same two
+  *(**10 routes** since `/stay` landed on 2026-08-14 at the owner's asking; still 5 gate keys, and
+  `stay` borrows the `optimize` key. The decision below is otherwise unchanged.)*
   BUILD/USE sections, with the eight ported slugs unchanged. The trip id lives in the **path** because all
   51 methods take `trip_id` and TanStack keys must include it. One `<StageGate>` wrapper renders the blocked
   explanation **in place** — `require()` never redirected, and only `/` does, to `journey["next"]`. Setup is
