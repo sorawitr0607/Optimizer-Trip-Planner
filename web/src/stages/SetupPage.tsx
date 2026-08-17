@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 
 import {
@@ -135,6 +135,19 @@ export function SetupPage() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [flash, setFlash] = useState<{ tone: "ok" | "bad"; code: string } | null>(null);
 
+  // Each step starts at the top. The wizard's steps are component state, not routes, so
+  // the shell's scroll reset — which keys on `pathname` — cannot see this move at all:
+  // pressing "Save & continue" at the foot of a long step left the next one scrolled past
+  // its own question, showing whatever happened to sit at that offset.
+  //
+  // Above the three loading/error returns below, and keyed on `chosenStep` rather than on
+  // the derived `step`, because hooks must run in the same order on every render and that
+  // value is not computed until after them. Moving backwards from the step indicator gets
+  // the same treatment, which is why this is an effect and not a line in the handler.
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0 });
+  }, [chosenStep]);
+
   const trips = useQuery({ queryKey: ["trips"], queryFn: () => rpc<Trip[]>("list_trips") });
   const stored = useQuery({
     queryKey: ["setup", tripId],
@@ -175,6 +188,7 @@ export function SetupPage() {
   // trip they have already answered for opens on the first question instead — the
   // intro stays reachable by walking back, because the indicator goes backwards.
   const step = chosenStep ?? (stored.data ? 2 : 1);
+
 
   function edit(patch: Partial<Draft>) {
     setDraft({ ...values, ...patch });

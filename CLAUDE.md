@@ -705,6 +705,17 @@ Worth knowing for the next time a mirror is evaluated: **`overpass.osm.ch` is re
 and useless** — it serves a Switzerland-only extract, so it answers 200 with zero
 elements for anywhere else, which looks exactly like a city having nothing in it.
 
+## The wizard's steps start at the top too
+
+The shell's scroll reset keys on `pathname`, and the setup wizard's six steps are
+component state rather than routes — so it could not see that move at all, and pressing
+"Save & continue" at the foot of a long step left the next one scrolled past its own
+question. `SetupPage` resets on its own step change, **above the three loading and error
+returns** and keyed on `chosenStep` rather than on the derived `step`, because hooks must
+run in the same order on every render and that value is not computed until after them.
+An effect rather than a line in the handler, because the indicator also walks backwards
+and both directions want the same thing.
+
 ## Every route change starts at the top
 
 A client-side navigation keeps the browser's scroll offset, because as far as the browser
