@@ -305,11 +305,27 @@ export function CoordinateMap({
   for (let at = 1; at < route.length; at += 1) {
     const from = route[at - 1];
     const to = route[at];
-    const leg = shapes.find(
-      (shape) =>
-        (shape.origin_id === from.place_id && shape.destination_id === to.place_id)
-        || (shape.origin_id === to.place_id && shape.destination_id === from.place_id),
+    // A route is stored once per ordered pair the router was asked about, so the shape
+    // for B→A is reused when the day walks A→B. **Its points then have to be reversed.**
+    // Without that the leg was drawn from its stored end to its stored start — the line
+    // ran backwards, the next leg began where this one should have ended, and the day
+    // came out as a zig-zag between places that are next door to each other. That is the
+    // "back and forth route" report, and it is a drawing fault rather than a planning
+    // one: measured, the visit order these days are given is already within 20 m of the
+    // shortest possible round of their own stops.
+    const forward = shapes.find(
+      (shape) => shape.origin_id === from.place_id && shape.destination_id === to.place_id,
     );
+    const backward = forward
+      ? undefined
+      : shapes.find(
+          (shape) => shape.origin_id === to.place_id && shape.destination_id === from.place_id,
+        );
+    const leg = forward
+      ? { ...forward, points: forward.points }
+      : backward
+        ? { ...backward, points: [...backward.points].reverse() }
+        : undefined;
     // Every leg is drawn, whether or not a path is held: a day with one routed leg and
     // one unrouted one used to show a single line and no hint that anything was missing.
     walked.push(

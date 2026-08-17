@@ -749,6 +749,45 @@ buying the limiter never being triggered, and that is worth more than it costs.
 Do not try a fourth time without a way to learn the limit *without* crossing it. The
 lever that remains is asking less, not waiting less.
 
+## The back-and-forth day was a drawing fault, not a planning one
+
+Reported as the plan sending the owner back and forth. It was not: measured across every
+day with enough stops to test, a 2-opt pass over the visit order found **20 metres** of
+improvement on 5.4 km — the order given is already essentially the shortest round of its
+own stops.
+
+The line was drawn wrong. A route is stored once per *ordered* pair, so the shape for B→A
+is reused when the day walks A→B, and its points were used **in their stored order** —
+the leg ran backwards, the next leg began where this one should have ended, and the day
+came out as a zig-zag between places next door to each other. A leg matched in reverse now
+has its points reversed. Verified in a browser: every junction joins at a gap of **0**,
+and the ring closes at **0** now that the walk home is drawn too.
+
+**Worth generalising: "the plan is wrong" and "the picture of the plan is wrong" look
+identical on screen.** Measuring the order before touching the solver is what kept a
+correct optimizer from being "fixed".
+
+## There is no further free source of photographs, measured three ways
+
+Asked again for more sources, with licensing explicitly set aside. The answer is not a
+licence problem and not a filter problem — the pictures do not exist in the free web:
+
+| Source | Yield on the owner's blanks |
+|---|---|
+| **Openverse** (CC aggregator, Flickr + more) | **0 of 6** probed |
+| Commons geosearch at 500 m, name filter **off** | 6 of 61, all one city, all of *neighbouring* buildings |
+| Commons category, words rule, 400 m radius | already shipped, a handful recovered |
+| The venue's own `og:` preview | already shipped, 3 recovered |
+
+The remaining blanks are a Da Nang tailor, a Chengdu 礼堂 — literally the generic word
+"auditorium" — a mini-golf, a martial arts club. Dropping the name filter to reach the six
+would put a photograph of the building next door on the card, which is the failure already
+measured twice (a Michigan store for a Da Nang shop, Lego for `Jurassic World`).
+
+**The honest lever left is the paid one**, already on the card at its price. Some of these
+places are also arguably discovery noise rather than places to visit, which is a different
+question from photographs.
+
 ## Where a photograph comes from, in order
 
 Assembled across five rounds and written down in five places, so here it is once. Each
