@@ -1803,10 +1803,35 @@ def photo_depicts_place(title: str, names: Iterable[str]) -> bool:
     if not haystack:
         return False
     for name in names:
-        key = photo_key(name or "")
-        if len(key) < PHOTO_NAME_MIN_CHARACTERS or key not in haystack:
+        # A parenthetical is an alias, not part of the name. "Trieu Chau (Chaozhou)
+        # Assembly Hall" is filed on Commons as "Trieu Chau Assembly Hall", and carrying
+        # the alias into the match made the place's own photographs unmatchable.
+        plain = re.sub(r"\([^)]*\)", " ", name or "")
+        key = photo_key(plain)
+        if len(key) < PHOTO_NAME_MIN_CHARACTERS:
             continue
-        if len(key) / len(haystack) >= PHOTO_NAME_MIN_COVERAGE:
+        # Contiguous first: unchanged, and still the strongest signal.
+        matched = key if key in haystack else ""
+        if not matched:
+            # Then the same words in the same file, in any order and with anything
+            # between them. `Thành Điện Hải` is filed as `Thành cổ Điện Hải` — one word
+            # inserted mid-name — and containment cannot see past it; measured on the
+            # owner's Da Nang catalogue, Commons held **nine** files within 150 m of that
+            # citadel and every one was rejected.
+            #
+            # **Every** word must appear, which is what keeps this from being the loose
+            # rule this filter exists to avoid: matching *any* word would accept a photo
+            # of any `Taipei` street for the majority of a catalogue whose names begin
+            # with the city. The coverage test below still applies to the sum of them, so
+            # a long unrelated title cannot be carried by a short name buried in it.
+            words = [word for word in re.split(r"[^\w]+", plain.casefold()) if word]
+            keys = [photo_key(word) for word in words]
+            keys = [item for item in keys if item]
+            if keys and all(item in haystack for item in keys):
+                matched = "".join(keys)
+        if not matched:
+            continue
+        if len(matched) / len(haystack) >= PHOTO_NAME_MIN_COVERAGE:
             return True
     return False
 
@@ -1844,7 +1869,9 @@ class WikidataSummaryProvider:
     # winter or panoramic view stops showing as a card with no picture.
     # v9: the subject's own Commons category, for places whose photographs exist but
     # are not geotagged and so were invisible to both the geosearch and the name search.
-    cache_version = "wikidata-summary-v9"
+    # v10: the words rule. Places whose Commons files insert or omit a word were
+    # storing a blank, and the blank is cached for 60 days — so they must be asked again.
+    cache_version = "wikidata-summary-v10"
     # An encyclopedia article changes slowly and a description is not a fact the
     # planner schedules against, so this can sit for a long time.
     cache_ttl_days = 60
@@ -2054,6 +2081,28 @@ class WikidataSummaryProvider:
                 continue
             if not photo_depicts_place(title, [wanted]):
                 continue
+            # No location, no photograph. **Tried without this and reverted the same
+            # hour**, because the measurement was unambiguous.
+            #
+            # The argument for dropping it looked sound: this search is global, its known
+            # failure was *Central Park in Vinnytsya* answering `Central Art Park`, and
+            # the words rule rejects all eight of those on the name alone — the file has
+            # no "art". So the coordinate check appeared to be standing in for a name
+            # test that could finally do the job. It was not.
+            #
+            # Run against the owner's real catalogues it admitted, in one pass: a 1906
+            # heraldic engraving for `Dragon's Head`, a Shopko store in Standish,
+            # Michigan for a Da Nang shop, **Lego** sets for `Jurassic World`, and a Horus
+            # canister for `Ancient Egypt`. Four wrong photographs out of five new
+            # matches. The words rule only helps where a name has words worth matching;
+            # for a name that is *entirely* generic every word matches a subject on the
+            # other side of the world, and locality is the only thing left that can tell
+            # them apart.
+            #
+            # The cost is real and is accepted: Commons holds `Thành cổ Điện Hải.jpeg`
+            # for the Da Nang citadel, neither copy carries a location, and that place
+            # keeps a blank card. A blank card is recoverable — the owner can buy the
+            # photograph — and a confidently wrong one is not.
             spot = (page.get("coordinates") or [None])[0]
             if not spot:
                 continue

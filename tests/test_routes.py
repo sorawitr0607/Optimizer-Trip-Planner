@@ -960,6 +960,52 @@ class NearbyPhotoMatchTest(unittest.TestCase):
             with self.subTest(title=title):
                 self.assertEqual(expected, photo_depicts_place(title, names))
 
+    def test_the_same_words_in_the_file_match_even_when_something_sits_between_them(
+        self,
+    ) -> None:
+        """Measured on the owner's Da Nang catalogue, 2026-08-17.
+
+        Commons held **nine** files within 150 m of Thành Điện Hải and every one was
+        rejected, because the citadel is filed as `Thành cổ Điện Hải` — one word inserted
+        into the middle of the name — and a contiguous containment test cannot see past
+        it. Requiring every word, in any order, catches it; requiring *any* word would be
+        the loose rule this filter exists to avoid.
+        """
+
+        self.assertTrue(
+            photo_depicts_place("File:Thành cổ Điện Hải 2.jpeg", ["Thành Điện Hải"])
+        )
+
+    def test_a_parenthetical_alias_is_not_part_of_the_name(self) -> None:
+        """`Trieu Chau (Chaozhou) Assembly Hall` is filed on Commons without the alias,
+        so carrying it into the match made the hall's own photographs unmatchable."""
+
+        self.assertTrue(
+            photo_depicts_place(
+                "File:Hội An, Trieu Chau Assembly Hall, 2020-01 CN-02.jpg",
+                ["Trieu Chau (Chaozhou) Assembly Hall"],
+            )
+        )
+
+    def test_the_bus_is_still_refused_after_the_words_rule(self) -> None:
+        """The case the whole filter was written for, re-pinned against the looser rule.
+        `Yuanshan` is one word and appears in the file, so an any-word test would accept
+        a city bus as the photograph of a hill."""
+
+        self.assertFalse(
+            photo_depicts_place(
+                "File:KKMT_470-FY_right_side_at_Yuanshan_Bus_Station.jpg", ["Yuanshan"]
+            )
+        )
+
+    def test_a_one_word_place_name_cannot_sweep_a_city(self) -> None:
+        """The stated danger of matching by words: a catalogue whose names begin with the
+        city must not accept every street scene. The coverage rule is what stops it."""
+
+        self.assertFalse(
+            photo_depicts_place("File:Taipei 101 from Elephant Mountain.jpg", ["Taipei"])
+        )
+
     def test_a_real_photograph_is_lost_where_only_part_of_the_name_is_in_the_file(self) -> None:
         """The documented cost of requiring the whole name, pinned so it stays a
         decision rather than becoming a surprise. This photograph really is of the

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 
 import { ApiError, rpc, type AccommodationBase } from "../api/client";
 import { copy } from "../i18n/copy";
@@ -28,6 +28,7 @@ import { StayAreas } from "./StayAreas";
 
 export function StayPage() {
   const { tripId = "" } = useParams();
+  const navigate = useNavigate();
   const { language } = useLanguage();
   const queryClient = useQueryClient();
   const [query, setQuery] = useState<string | null>(null);
@@ -66,6 +67,11 @@ export function StayPage() {
     onSuccess: async () => {
       setFlash("stay_accepted");
       await queryClient.invalidateQueries({ queryKey: ["journey", tripId] });
+      // On to the plan. This is the terminal answer to the question the page asks — "I
+      // am not booking anything, use the middle of my places" — and leaving the owner on
+      // the screen afterwards was reported as "the build plan not show": the stage was
+      // complete, the sidebar had unlocked, and nothing said where that had happened.
+      navigate(`/trips/${tripId}/optimize`);
     },
     onError: (error) => setFlash(error instanceof ApiError ? error.code : String(error)),
   });
@@ -157,6 +163,17 @@ export function StayPage() {
       </div>
 
       <StayAreas language={language} onOutcome={setOutcome} tripId={tripId} />
+
+      {/* Picking an area answers this page too, but unlike accepting the centre it is not
+          obviously terminal — an owner may want to compare two before moving on — so this
+          waits to be pressed rather than navigating under them. */}
+      {base.data ? (
+        <div className="optimize-actions">
+          <Link className="setup-primary" to={`/trips/${tripId}/optimize`}>
+            {copy("stage_optimize", language)} →
+          </Link>
+        </div>
+      ) : null}
     </section>
   );
 }

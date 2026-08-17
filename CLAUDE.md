@@ -712,6 +712,54 @@ Worth knowing for the next time a mirror is evaluated: **`overpass.osm.ch` is re
 and useless** — it serves a Switzerland-only extract, so it answers 200 with zero
 elements for anywhere else, which looks exactly like a city having nothing in it.
 
+## The photo filter got looser in one direction and was pushed back in the other
+
+Two changes to `photo_depicts_place`, one kept and one reverted the same hour. Worth
+recording together, because the second is the more useful lesson.
+
+**Kept: the same words, in any order.** Containment required the whole normalised name as
+one contiguous run, so a single inserted word broke it. Measured on the owner's Da Nang
+catalogue: Commons holds **nine** files within 150 m of Thành Điện Hải, filed as
+`Thành cổ Điện Hải` — one word in the middle — and every one was rejected. A parenthetical
+alias did the same to `Trieu Chau (Chaozhou) Assembly Hall`, which Commons files without
+the alias. Every word must appear, which is not the any-word rule this filter exists to
+avoid, and the coverage test still applies to their sum. Trieu Chau goes **0 → 2**.
+
+**Reverted: accepting a file with no coordinates.** The argument looked sound — this
+search is global, its known failure is *Central Park in Vinnytsya* answering
+`Central Art Park`, and the words rule rejects all eight of those on the name alone, so
+the coordinate check appeared to be standing in for a name test that could finally do the
+job. Run against the owner's real catalogues it admitted, in **one pass**: a 1906 heraldic
+engraving for `Dragon's Head`, a **Shopko store in Standish, Michigan** for a Da Nang
+shop, **Lego** sets for `Jurassic World`, and a Horus canister for `Ancient Egypt`. Four
+wrong photographs out of five new matches.
+
+The words rule only helps where a name has words worth matching. For a name that is
+*entirely* generic, every word matches a subject on the other side of the world, and
+**locality is the only thing left that can tell them apart**. The cost stands and is
+accepted: the citadel keeps a blank card, because a blank card is recoverable — the owner
+can buy the photograph — and a confidently wrong one is not.
+
+**The general point: a guard that looks redundant against the case it was written for may
+be carrying a different case entirely.** The only way that showed up was running it over
+real catalogues instead of the example in the comment.
+
+## Two of the three "remaining" were not bugs
+
+**The skeleton stops after the first two cards** because by then there is nothing to wait
+for. Instrumented across eight distinct cards and several hundred samples: not one frame
+showed a card displayed with an unloaded image, and cards three onward arrive
+`complete: true, naturalWidth: 960` — the gallery prefetch has already fetched them. The
+absence of a skeleton is the prefetch working. `act()` refuses while pending regardless,
+so a decision cannot land on a card the owner never saw whatever route it arrives by.
+
+**"Plan from the centre of my places" did unlock the plan** — `journey()` returns
+`optimize` unblocked and `next` immediately after it is pressed. What it did not do was
+say so or take the owner anywhere, which is indistinguishable from nothing happening. It
+navigates to `/optimize` now, and picking a ranked area leaves a standing "Build the plan
+→" instead, because that one is not obviously terminal: an owner may want to compare two
+areas before moving on.
+
 ## A finished plan was being withheld over five minutes of walking
 
 "After drop and rebuild, still can't create plan." Measured on the owner's Singapore
