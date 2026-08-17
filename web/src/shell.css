@@ -644,19 +644,27 @@
   margin: 0;
 }
 
-/* Setup wizard. The donor's step-indicator class family hardcodes four steps
-   (.wizard-progress-4, .progress-step-4, .step-num-4, .step-label-4); the
-   planner has five, so the family is generalised rather than renamed to -5. */
+/* Setup wizard. */
 .setup-screen {
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
 
+.setup-step-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.setup-step-title {
+  margin: 0;
+}
+
 .wizard-steps {
   display: grid;
   gap: 6px;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   list-style: none;
   margin: 0;
   padding: 0;

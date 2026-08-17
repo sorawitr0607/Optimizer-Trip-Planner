@@ -351,14 +351,20 @@ export function TripsPage() {
           </p>
 
           <label>
-            {copy("country", language)}
+            <span>
+              {copy("country", language)}
+              <span aria-hidden="true" className="setup-required">*</span>
+              <span className="setup-hint"> {copy("required_field", language)}</span>
+            </span>
             <select
               aria-describedby="destination-help"
+              name="country"
               onChange={(event) => {
                 setCountry(event.target.value);
                 setCity("");
                 setTypedCity("");
               }}
+              required
               value={country}
             >
               <option value="">{copy("choose_country", language)}</option>
@@ -372,21 +378,38 @@ export function TripsPage() {
           </label>
           {country === TYPE_IT ? (
             <label>
-              {copy("country", language)}
+              <span>
+                {copy("country", language)}
+                <span aria-hidden="true" className="setup-required">*</span>
+                <span className="setup-hint"> {copy("required_field", language)}</span>
+              </span>
               <input
+                autoCapitalize="words"
+                autoComplete="country-name"
+                autoCorrect="off"
+                name="country-custom"
                 onChange={(event) => setTypedCountry(event.target.value)}
                 placeholder={copy("country_placeholder", language)}
+                required
+                spellCheck={false}
+                type="text"
                 value={typedCountry}
               />
             </label>
           ) : null}
 
           <label>
-            {copy("city", language)}
+            <span>
+              {copy("city", language)}
+              <span aria-hidden="true" className="setup-required">*</span>
+              <span className="setup-hint"> {copy("required_field", language)}</span>
+            </span>
             {country && country !== TYPE_IT ? (
               <select
                 aria-describedby="destination-help"
+                name="city"
                 onChange={(event) => setCity(event.target.value)}
+                required
                 value={city}
               >
                 <option value="">{copy("choose_city", language)}</option>
@@ -399,30 +422,52 @@ export function TripsPage() {
               </select>
             ) : (
               <input
+                autoCapitalize="words"
+                autoComplete="off"
+                autoCorrect="off"
                 disabled={!country}
+                name="city-custom"
                 onChange={(event) => setTypedCity(event.target.value)}
                 placeholder={copy("city_placeholder", language)}
+                required={Boolean(country)}
+                spellCheck={false}
+                type="text"
                 value={typedCity}
               />
             )}
           </label>
           {country && country !== TYPE_IT && city === TYPE_IT ? (
             <label>
-              {copy("city", language)}
+              <span>
+                {copy("city", language)}
+                <span aria-hidden="true" className="setup-required">*</span>
+                <span className="setup-hint"> {copy("required_field", language)}</span>
+              </span>
               <input
+                autoCapitalize="words"
+                autoComplete="off"
+                autoCorrect="off"
+                name="city-custom"
                 onChange={(event) => setTypedCity(event.target.value)}
                 placeholder={copy("city_placeholder", language)}
+                required
+                spellCheck={false}
+                type="text"
                 value={typedCity}
               />
             </label>
           ) : null}
 
           <label>
-            {copy("name", language)}
+            {copy("trip_name", language)}
             <input
               aria-describedby="trip-name-help"
+              autoCapitalize="sentences"
+              autoComplete="off"
+              name="trip-name"
               onChange={(event) => setName(event.target.value)}
               placeholder={resolvedCity || copy("trip_name_placeholder", language)}
+              type="text"
               value={name}
             />
           </label>

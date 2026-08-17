@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 
 import {
@@ -27,6 +27,10 @@ const STEP_TITLES = [
 ];
 // A POC view convention, not a core rule: setup.py accepts any number.
 const MAX_MEMBERS = 8;
+
+function invalidAge(value: number | null): boolean {
+  return value !== null && (!Number.isInteger(value) || value < 0 || value > 120);
+}
 
 /** Where the trip-style tags live, so a refusal can take the owner to them. */
 const MAIN_STYLE_STEP = 3;
@@ -137,6 +141,9 @@ export function SetupPage() {
   const [chosenStep, setChosenStep] = useState<number | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [flash, setFlash] = useState<{ tone: "ok" | "bad"; code: string } | null>(null);
+  const focusTarget = useRef<string | null>(null);
+  const stepHeading = useRef<HTMLHeadingElement>(null);
+  const previousStep = useRef(1);
 
 
   const trips = useQuery({ queryKey: ["trips"], queryFn: () => rpc<Trip[]>("list_trips") });
@@ -182,6 +189,16 @@ export function SetupPage() {
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0 });
   }, [currentStep]);
+  useEffect(() => {
+    const changed = previousStep.current !== currentStep;
+    previousStep.current = currentStep;
+    if (focusTarget.current) {
+      document.getElementById(focusTarget.current)?.focus();
+      focusTarget.current = null;
+    } else if (changed) {
+      stepHeading.current?.focus();
+    }
+  });
 
   if (stored.isPending || vocabulary.isPending) return <p>{copy("loading", language)}</p>;
   if (stored.isError) return <p className="field-error">⚠ {stored.error.message}</p>;
@@ -194,6 +211,15 @@ export function SetupPage() {
   // rather than `draft`, which is null until the first edit — reading `draft` would have
   // called a stored, perfectly valid setup empty.
   const mainStyleMissing = flash?.code === "main_required" && !values.main_style.length;
+  const datesIncomplete =
+    values.start_date !== null && (!values.start_date || !values.end_date);
+  const datesReversed = Boolean(
+    values.start_date && values.end_date && values.end_date < values.start_date,
+  );
+  const arrivalIncomplete = values.arrival_time === "";
+  const departureIncomplete = values.departure_time === "";
+  const ownerAgeInvalid = invalidAge(values.owner_age);
+  const invalidMemberIndex = values.travellers.findIndex((member) => invalidAge(member.age));
   const confirmed = Boolean(stored.data?.confirmed);
   const trip = trips.data?.find((item) => item.trip_id === tripId);
   const words = vocabulary.data;
@@ -219,6 +245,27 @@ export function SetupPage() {
 
   // Nothing typed is lost by navigating: every move saves the open step first.
   async function go(target: number, options: { confirm?: boolean } = {}) {
+    const issue = target > step || options.confirm
+      ? datesIncomplete
+        ? { step: 2, field: values.start_date ? "end-date" : "start-date" }
+        : datesReversed
+          ? { step: 2, field: "end-date" }
+          : arrivalIncomplete
+            ? { step: 2, field: "arrival-time" }
+            : departureIncomplete
+              ? { step: 2, field: "departure-time" }
+              : ownerAgeInvalid
+                ? { step: 3, field: "owner-age" }
+                : invalidMemberIndex >= 0
+                  ? { step: 4, field: `member-${invalidMemberIndex}-age` }
+                  : null
+      : null;
+    if (issue) {
+      setFlash({ tone: "bad", code: "setup_fix_fields" });
+      focusTarget.current = issue.field;
+      setChosenStep(issue.step);
+      return;
+    }
     if (options.confirm && values.main_style.length === 0) {
       setFlash({ tone: "bad", code: "main_required" });
       // **And go to the field.** Confirm lives on the review step and the styles are on
@@ -227,6 +274,7 @@ export function SetupPage() {
       // cannot be satisfied by the message alone when the field is two steps away. The
       // error and the tags are then together, and `MAIN_STYLE_STEP` names the coupling
       // rather than leaving a bare 3 to drift when a step is inserted.
+      focusTarget.current = "main-style-first";
       setChosenStep(MAIN_STYLE_STEP);
       return;
     }
@@ -276,9 +324,8 @@ export function SetupPage() {
         <p>{copy("setup_help", language)}</p>
       </header>
 
-      {/* derives-from: element 7 .wizard-progress-4 as .wizard-steps, generalised to five steps
-          because the donor's class family hardcodes four. */}
-      <ol className="wizard-steps">
+      {/* derives-from: element 7 .wizard-progress-4 as .wizard-steps (six steps) */}
+      <ol aria-label={copy("setup_progress", language)} className="wizard-steps">
         {STEP_TITLES.map((title, index) => {
           const number = index + 1;
           const reached = number <= step;
@@ -292,6 +339,7 @@ export function SetupPage() {
               {/* Backwards only. Later steps depend on earlier answers, so this
                   suits the wizard rather than being a limitation to fix. */}
               <button
+                aria-current={number === step ? "step" : undefined}
                 disabled={number >= step}
                 onClick={() => go(number)}
                 type="button"
@@ -305,14 +353,27 @@ export function SetupPage() {
       </ol>
       <p className="wizard-count">
         {copyFormat("step_of", language, { current: step, total: STEP_COUNT })}
+        {` · ${copy(STEP_TITLES[step - 1], language)}`}
         {confirmed ? ` · ${copy("confirmed", language)}` : ` · ${copy("draft", language)}`}
       </p>
 
+      <form
+        className="setup-step-form"
+        noValidate
+        onSubmit={(event) => {
+          event.preventDefault();
+          void go(step < STEP_COUNT ? step + 1 : step, { confirm: step === STEP_COUNT });
+        }}
+      >
       {flash ? (
         <p className={flash.tone === "ok" ? "setup-flash" : "field-error"} aria-live="polite">
           {copy(flash.code, language)}
         </p>
       ) : null}
+
+      <h2 className="setup-step-title" ref={stepHeading} tabIndex={-1}>
+        {copy(STEP_TITLES[step - 1], language)}
+      </h2>
 
       {/* Nothing is asked here. The wizard used to open on a date checkbox, so a
           first-time owner met a form before ever being told what the form is for
@@ -336,10 +397,15 @@ export function SetupPage() {
 
       {step === 2 ? (
         <div className="setup-fields">
-          <p className="setup-hint setup-wide">{copy("setup_basics_help", language)}</p>
+          <p className="setup-hint setup-wide" id="setup-basics-help">
+            {copy("setup_basics_help", language)}
+          </p>
           <label className="setup-check">
             <input
+              aria-controls={values.start_date !== null ? "start-date end-date" : undefined}
+              aria-describedby="setup-basics-help"
               checked={values.start_date !== null}
+              name="dates-known"
               onChange={(event) =>
                 edit(
                   event.target.checked
@@ -356,26 +422,56 @@ export function SetupPage() {
           ) : (
             <>
               <label>
-                {copy("start_date", language)}
+                <span>
+                  {copy("start_date", language)}
+                  <span aria-hidden="true" className="setup-required">*</span>
+                  <span className="setup-hint"> {copy("required_field", language)}</span>
+                </span>
                 <input
+                  aria-describedby={datesIncomplete || datesReversed ? "trip-dates-error" : undefined}
+                  aria-invalid={datesIncomplete || datesReversed || undefined}
+                  autoComplete="off"
+                  id="start-date"
+                  max={values.end_date || undefined}
+                  name="start-date"
                   onChange={(event) => edit({ start_date: event.target.value })}
+                  required
                   type="date"
                   value={values.start_date}
                 />
               </label>
               <label>
-                {copy("end_date", language)}
+                <span>
+                  {copy("end_date", language)}
+                  <span aria-hidden="true" className="setup-required">*</span>
+                  <span className="setup-hint"> {copy("required_field", language)}</span>
+                </span>
                 <input
+                  aria-describedby={datesIncomplete || datesReversed ? "trip-dates-error" : undefined}
+                  aria-invalid={datesIncomplete || datesReversed || undefined}
+                  autoComplete="off"
+                  id="end-date"
+                  min={values.start_date || undefined}
+                  name="end-date"
                   onChange={(event) => edit({ end_date: event.target.value })}
+                  required
                   type="date"
                   value={values.end_date ?? ""}
                 />
               </label>
+              {datesIncomplete || datesReversed ? (
+                <p className="setup-field-error" id="trip-dates-error" role="alert">
+                  ⚠ {copy(datesReversed ? "date_order_invalid" : "date_range_required", language)}
+                </p>
+              ) : null}
             </>
           )}
           <label className="setup-check">
             <input
+              aria-controls={values.arrival_time !== null ? "arrival-time" : undefined}
+              aria-describedby="setup-basics-help"
               checked={values.arrival_time !== null}
+              name="arrival-known"
               onChange={(event) =>
                 edit({ arrival_time: event.target.checked ? "17:00" : null })
               }
@@ -384,18 +480,38 @@ export function SetupPage() {
             {copy("arrival_known", language)}
           </label>
           {values.arrival_time === null ? null : (
-            <label>
-              {copy("arrival_time", language)}
-              <input
-                onChange={(event) => edit({ arrival_time: event.target.value })}
-                type="time"
-                value={values.arrival_time}
-              />
-            </label>
+            <>
+              <label>
+                <span>
+                  {copy("arrival_time", language)}
+                  <span aria-hidden="true" className="setup-required">*</span>
+                  <span className="setup-hint"> {copy("required_field", language)}</span>
+                </span>
+                <input
+                  aria-describedby={arrivalIncomplete ? "arrival-time-error" : undefined}
+                  aria-invalid={arrivalIncomplete || undefined}
+                  autoComplete="off"
+                  id="arrival-time"
+                  name="arrival-time"
+                  onChange={(event) => edit({ arrival_time: event.target.value })}
+                  required
+                  type="time"
+                  value={values.arrival_time}
+                />
+              </label>
+              {arrivalIncomplete ? (
+                <p className="setup-field-error" id="arrival-time-error" role="alert">
+                  ⚠ {copy("time_required", language)}
+                </p>
+              ) : null}
+            </>
           )}
           <label className="setup-check">
             <input
+              aria-controls={values.departure_time !== null ? "departure-time" : undefined}
+              aria-describedby="setup-basics-help"
               checked={values.departure_time !== null}
+              name="departure-known"
               onChange={(event) =>
                 edit({ departure_time: event.target.checked ? "11:00" : null })
               }
@@ -404,18 +520,37 @@ export function SetupPage() {
             {copy("departure_known", language)}
           </label>
           {values.departure_time === null ? null : (
-            <label>
-              {copy("departure_time", language)}
-              <input
-                onChange={(event) => edit({ departure_time: event.target.value })}
-                type="time"
-                value={values.departure_time}
-              />
-            </label>
+            <>
+              <label>
+                <span>
+                  {copy("departure_time", language)}
+                  <span aria-hidden="true" className="setup-required">*</span>
+                  <span className="setup-hint"> {copy("required_field", language)}</span>
+                </span>
+                <input
+                  aria-describedby={departureIncomplete ? "departure-time-error" : undefined}
+                  aria-invalid={departureIncomplete || undefined}
+                  autoComplete="off"
+                  id="departure-time"
+                  name="departure-time"
+                  onChange={(event) => edit({ departure_time: event.target.value })}
+                  required
+                  type="time"
+                  value={values.departure_time}
+                />
+              </label>
+              {departureIncomplete ? (
+                <p className="setup-field-error" id="departure-time-error" role="alert">
+                  ⚠ {copy("time_required", language)}
+                </p>
+              ) : null}
+            </>
           )}
           <label>
             {copy("accommodation", language)}
             <select
+              aria-describedby="accommodation-help"
+              name="accommodation-status"
               onChange={(event) => edit({ accommodation_status: event.target.value })}
               value={values.accommodation_status}
             >
@@ -429,7 +564,7 @@ export function SetupPage() {
           {/* Three one-word options that change what the optimizer anchors every day
               on, with nothing anywhere saying so. The consequence belongs beside the
               control, not in a ticket. */}
-          <p className="setup-hint setup-wide">
+          <p className="setup-hint setup-wide" id="accommodation-help">
             {copy(`accommodation_help_${values.accommodation_status}`, language)}
           </p>
         </div>
@@ -437,7 +572,9 @@ export function SetupPage() {
 
       {step === 3 ? (
         <div className="setup-fields">
-          <p className="setup-hint setup-wide">{copy("setup_style_help", language)}</p>
+          <p className="setup-hint setup-wide" id="setup-style-help">
+            {copy("setup_style_help", language)}
+          </p>
           {/* The error next to the thing that caused it. It was raised only as a flash at
               the head of the form, so on a long step the owner was told "choose a main
               style" with the styles scrolled off screen — the article's point about
@@ -454,7 +591,9 @@ export function SetupPage() {
           )}
           {(["main_style", "also_enjoy", "avoid", "comfort"] as const).map((group) => (
             <fieldset
-              aria-describedby={group === "main_style" ? "main-style-help" : undefined}
+              aria-describedby={
+                group === "main_style" ? "setup-style-help main-style-help" : "setup-style-help"
+              }
               aria-invalid={group === "main_style" && mainStyleMissing ? true : undefined}
               className="setup-tags"
               key={group}
@@ -475,6 +614,9 @@ export function SetupPage() {
                 <button
                   aria-pressed={values[group].includes(code)}
                   className="money-chip"
+                  id={group === "main_style" && code === words.tag_groups[group][0]
+                    ? "main-style-first"
+                    : undefined}
                   key={code}
                   onClick={() => toggle(group, code)}
                   type="button"
@@ -487,19 +629,29 @@ export function SetupPage() {
           <label>
             {copy("owner_age", language)}
             <input
-              aria-describedby="owner-age-help"
+              aria-describedby={ownerAgeInvalid ? "owner-age-error owner-age-help" : "owner-age-help"}
+              aria-invalid={ownerAgeInvalid || undefined}
+              autoComplete="off"
               // `numeric`, so a phone offers digits rather than a full keyboard for a
               // field that can only ever hold digits.
               inputMode="numeric"
+              id="owner-age"
               max={120}
               min={0}
+              name="owner-age"
               onChange={(event) =>
                 edit({ owner_age: event.target.value ? Number(event.target.value) : null })
               }
+              step={1}
               type="number"
               value={values.owner_age ?? ""}
             />
           </label>
+          {ownerAgeInvalid ? (
+            <p className="setup-field-error" id="owner-age-error" role="alert">
+              ⚠ {copy("age_invalid", language)}
+            </p>
+          ) : null}
           {/* The hint is *named* and pointed at by the field above, so a screen reader
               reads the guidance with the field instead of stranding it as loose text
               after it. Every hint on this form was unattached; a sighted user could see
@@ -513,13 +665,17 @@ export function SetupPage() {
           <label className="setup-wide">
             {copy("description", language)}
             <textarea
+              aria-describedby="owner-words-help"
+              name="owner-description"
               onChange={(event) => edit({ owner_description: event.target.value })}
               placeholder={copy("owner_description_placeholder", language)}
               rows={3}
               value={values.owner_description}
             />
           </label>
-          <p className="setup-hint setup-wide">{copy("own_words_help", language)}</p>
+          <p className="setup-hint setup-wide" id="owner-words-help">
+            {copy("own_words_help", language)}
+          </p>
         </div>
       ) : null}
 
@@ -533,9 +689,11 @@ export function SetupPage() {
               inputMode="numeric"
               max={MAX_MEMBERS}
               min={0}
+              name="member-count"
               onChange={(event) =>
                 setMemberCount(Math.min(Number(event.target.value || 0), MAX_MEMBERS))
               }
+              step={1}
               type="number"
               value={values.travellers.length}
             />
@@ -549,27 +707,52 @@ export function SetupPage() {
               <label>
                 {copy("member_name", language)}
                 <input
+                  autoCapitalize="words"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  name={`member-${index}-name`}
                   onChange={(event) => editMember(index, { label: event.target.value })}
+                  spellCheck={false}
+                  type="text"
                   value={member.label}
                 />
               </label>
               <label>
                 {copy("member_age", language)}
                 <input
+                  aria-describedby={
+                    invalidMemberIndex === index ? `member-${index}-age-error` : undefined
+                  }
+                  aria-invalid={invalidMemberIndex === index || undefined}
+                  autoComplete="off"
+                  id={`member-${index}-age`}
+                  inputMode="numeric"
                   max={120}
                   min={0}
+                  name={`member-${index}-age`}
                   onChange={(event) =>
                     editMember(index, {
                       age: event.target.value ? Number(event.target.value) : null,
                     })
                   }
+                  step={1}
                   type="number"
                   value={member.age ?? ""}
                 />
+                {invalidMemberIndex === index ? (
+                  <span className="setup-field-error" id={`member-${index}-age-error`} role="alert">
+                    ⚠ {copy("age_invalid", language)}
+                  </span>
+                ) : null}
               </label>
-              <div className="setup-tags">
-                <span className="setup-legend">{copy("member_tags", language)}</span>
-                <p className="setup-hint setup-wide">{copy("member_tags_help", language)}</p>
+              <fieldset
+                aria-describedby={`member-${index}-tags-help`}
+                className="setup-tags setup-wide"
+              >
+                <legend className="setup-legend">{copy("member_tags", language)}</legend>
+                <p className="setup-hint setup-wide" id={`member-${index}-tags-help`}>
+                  {copy("member_tags_help", language)}
+                </p>
                 {words.tag_groups.also_enjoy.concat(words.tag_groups.comfort).map((code) => (
                   <button
                     aria-pressed={member.tags.includes(code)}
@@ -587,10 +770,11 @@ export function SetupPage() {
                     {copyFrom("TAG_TEXT", code, language)}
                   </button>
                 ))}
-              </div>
+              </fieldset>
               <label className="setup-wide">
                 {copy("member_notes", language)}
                 <textarea
+                  name={`member-${index}-notes`}
                   onChange={(event) => editMember(index, { description: event.target.value })}
                   placeholder={copy("member_notes_placeholder", language)}
                   rows={2}
@@ -600,6 +784,7 @@ export function SetupPage() {
               <label className="setup-wide">
                 {copy("member_must", language)}
                 <textarea
+                  name={`member-${index}-requirements`}
                   onChange={(event) =>
                     editMember(index, { must_respect: event.target.value.split("\n") })
                   }
@@ -619,13 +804,17 @@ export function SetupPage() {
           <label className="setup-wide">
             {copy("owner_must", language)}
             <textarea
+              aria-describedby="owner-must-help"
+              name="owner-requirements"
               onChange={(event) => edit({ owner_must_respect: event.target.value })}
               placeholder={copy("owner_must_placeholder", language)}
               rows={4}
               value={values.owner_must_respect}
             />
           </label>
-          <p className="setup-hint setup-wide">{copy("owner_must_help", language)}</p>
+          <p className="setup-hint setup-wide" id="owner-must-help">
+            {copy("owner_must_help", language)}
+          </p>
         </div>
       ) : null}
 
@@ -674,8 +863,7 @@ export function SetupPage() {
           <button
             className="setup-primary"
             disabled={save.isPending}
-            onClick={() => go(step + 1)}
-            type="button"
+            type="submit"
           >
             {copy(step === 1 ? "continue_trip" : "save_continue", language)}
           </button>
@@ -683,8 +871,7 @@ export function SetupPage() {
           <button
             className="setup-primary"
             disabled={save.isPending}
-            onClick={() => go(step, { confirm: true })}
-            type="button"
+            type="submit"
           >
             {copy("confirm", language)}
           </button>
@@ -694,6 +881,7 @@ export function SetupPage() {
       {step === STEP_COUNT && values.main_style.length === 0 ? (
         <p className="setup-hint">{copy("main_required", language)}</p>
       ) : null}
+      </form>
     </section>
   );
 }

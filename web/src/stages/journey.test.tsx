@@ -141,10 +141,15 @@ const PREVIEW = {
   created_at: "now",
 } satisfies PlanPreview;
 
-function render(page: ReactNode, language: Language, plan: PlanPreview = PREVIEW): string {
+function render(
+  page: ReactNode,
+  language: Language,
+  plan: PlanPreview = PREVIEW,
+  setup: SetupDraft = SETUP,
+): string {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   client.setQueryData(["trips"], TRIPS);
-  client.setQueryData(["setup", TRIP], SETUP);
+  client.setQueryData(["setup", TRIP], setup);
   client.setQueryData(["setup_vocabulary"], VOCABULARY);
   client.setQueryData(["candidate_choices", TRIP], [
     { trip_id: TRIP, place_id: "p1", action: "must_do", reason: null },
@@ -203,6 +208,16 @@ describe("TripsPage", () => {
     expect(html).not.toContain("ไม่มีการอัปโหลด");
     expectNoMissingCopy(html);
   });
+
+  it("uses explicit native controls for the trip-creation fields", () => {
+    const html = render(<TripsPage />, "en");
+
+    expect(html).toMatch(/<select[^>]*name="country"[^>]*required/);
+    expect(html).toContain('type="text" name="city-custom"');
+    expect(html).toContain('type="text" name="trip-name"');
+    expect(html).toContain("Trip name (optional)");
+    expectNoMissingCopy(html);
+  });
 });
 
 describe("SetupPage", () => {
@@ -217,6 +232,10 @@ describe("SetupPage", () => {
     // The saved draft is what the form opens on, not an empty one.
     expect(html).toContain("2026-12-29");
     expect(html).toContain("value=\"17:00\"");
+    expect((html.match(/type="date"/g) ?? []).length).toBe(2);
+    expect((html.match(/type="time"/g) ?? []).length).toBe(2);
+    expect((html.match(/type="checkbox"/g) ?? []).length).toBe(3);
+    expect(html).toContain('name="accommodation-status"');
     expectNoMissingCopy(html);
   });
 
@@ -228,6 +247,9 @@ describe("SetupPage", () => {
     expect(html).toContain("Step 1 of 6");
     expect(html).toContain("What you will be asked");
     expect(html).toContain("about five minutes");
+    expect(html).toContain('aria-label="Setup progress"');
+    expect(html).toContain('aria-current="step"');
+    expect(html).toContain("<form");
     // Nothing is asked here, so there is no draft to save.
     expect(html).not.toContain("Save draft");
     expectNoMissingCopy(html);
@@ -248,6 +270,31 @@ describe("SetupPage", () => {
     // depend on earlier answers.
     expect((html.match(/disabled=""/g) ?? []).length).toBeGreaterThanOrEqual(5);
     expect(html).toContain("wizard-step current reached");
+  });
+
+  it("puts an invalid date range beside the date fields in plain language", () => {
+    const invalid = {
+      ...SETUP,
+      snapshot: {
+        ...SETUP.snapshot,
+        data: {
+          ...SETUP.snapshot.data,
+          trip_basics: {
+            ...SETUP.snapshot.data.trip_basics,
+            start_date: "2030-05-10",
+            end_date: "2030-05-05",
+          },
+        },
+      },
+    } satisfies SetupDraft;
+    const html = render(<SetupPage />, "en", PREVIEW, invalid);
+
+    expect(html).toContain("End date must be the same as or later than the start date.");
+    expect(html).toContain('id="trip-dates-error"');
+    expect(html).toContain('aria-invalid="true"');
+    expect(html).toContain('aria-describedby="accommodation-help"');
+    expect(html).not.toContain("bad_request");
+    expectNoMissingCopy(html);
   });
 });
 
