@@ -13,7 +13,7 @@ import {
 } from "../api/client";
 import { copy } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
-import { categoryName, type CostCategory, money, Note, signed, Tag, Tile } from "./money";
+import { categoryName, money, Note, Required, signed, Tag, Tile, type CostCategory } from "./money";
 
 /**
  * The overview screen, and the one place the two ledgers are read together.
@@ -420,6 +420,7 @@ export function CostsPage() {
         <div className="setup-fields">
           <label>
             {copy("what_for", language)}
+            <Required language={language} />
             <input
               onChange={(event) => setDraft({ ...draft, label: event.target.value })}
               required
@@ -428,6 +429,7 @@ export function CostsPage() {
           </label>
           <label>
             {copy("split_amount", language)}
+            <Required language={language} />
             <input
               inputMode="decimal"
               onChange={(event) => setDraft({ ...draft, amount: event.target.value })}

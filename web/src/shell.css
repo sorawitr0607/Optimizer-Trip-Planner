@@ -573,10 +573,14 @@
   padding: 2px 8px;
 }
 
+/* One column, like the setup form and for the same measured reason: `auto-fit` gave the
+   setup wizard six columns at 1440px, and this form is built the same way. A row of short
+   money fields is exactly the case the single-column guidance is about — the eye should
+   run down one list, not across four. */
 .money-form {
   display: grid;
   gap: 10px;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: minmax(0, 34rem);
 }
 
 .money-form label,
@@ -764,19 +768,26 @@
   padding: 6px 8px;
 }
 
-/* The states the article's anatomy list names — inactive, hover, disabled, error — of
-   which this form had exactly one. A field that does not change under the pointer reads
-   as static text until it is clicked, and a disabled one that looks identical to an
-   enabled one is the worse half of that. */
-.setup-fields input:hover:not(:disabled),
-.setup-fields select:hover:not(:disabled),
-.setup-fields textarea:hover:not(:disabled) {
+/* The states the anatomy list names — inactive, hover, disabled, error — for **every**
+   form control in the app rather than one form's worth.
+   
+   Written once here instead of six times, because six containers already carry their own
+   near-identical `input { background; border; radius; padding }` block — `.trip-form`,
+   `.money-form`, `.setup-fields`, `.evidence-card`, `.readiness-item-controls`,
+   `.revise-pick` — and duplicating the states into each is how they drift apart. The
+   article's own words: incorporate the styles into a design system for scalability.
+   
+   Scoped to `.app-shell` so the landing page, which has its own palette by decision, is
+   untouched. `:focus-visible` is deliberately absent: `tokens.css` owns the house ring. */
+.app-shell input:hover:not(:disabled),
+.app-shell select:hover:not(:disabled),
+.app-shell textarea:hover:not(:disabled) {
   border-color: var(--text-secondary);
 }
 
-.setup-fields input:disabled,
-.setup-fields select:disabled,
-.setup-fields textarea:disabled {
+.app-shell input:disabled,
+.app-shell select:disabled,
+.app-shell textarea:disabled {
   background: var(--bg-secondary);
   color: var(--text-muted);
   cursor: not-allowed;
@@ -784,9 +795,19 @@
 
 /* The error state on the field itself, not only in the sentence beneath it. Colour is
    never the only carrier — the message says what is wrong and `aria-invalid` says it to a
-   screen reader — but the border is what makes the right field findable on a long step. */
-.setup-fields [aria-invalid="true"] {
+   screen reader — but the border is what makes the right field findable on a long form. */
+.app-shell [aria-invalid="true"] {
   border-color: var(--color-danger);
+}
+
+/* An input as wide as what goes in it, everywhere. A date is not an address. */
+.app-shell input[type="number"] {
+  max-width: 10ch;
+}
+
+.app-shell input[type="date"],
+.app-shell input[type="time"] {
+  max-width: 18ch;
 }
 
 /* No focus rule here on purpose. `tokens.css` already ships a house one —
@@ -797,17 +818,9 @@
    style rather than the stylesheet: grepping `shell.css` and concluding the app had no
    focus ring was the mistake. */
 
-/* An input as wide as what goes in it. An age is three characters and was being given a
-   whole column, which reads as a field expecting something longer — the article's point
-   about sizing relating to expected content, and the reason a date box does not need to
-   be as wide as an address. */
+/* Tighter than the app-wide 10ch: every number on this form is an age or a headcount. */
 .setup-fields input[type="number"] {
   max-width: 8ch;
-}
-
-.setup-fields input[type="date"],
-.setup-fields input[type="time"] {
-  max-width: 18ch;
 }
 
 /* Required, said in more than colour. The asterisk is decorative — the field carries

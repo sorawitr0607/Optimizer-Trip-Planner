@@ -69,6 +69,26 @@ export function Note({
 }
 
 // derives-from: element 26 .category-badge as .money-tag
+/**
+ * "* (required)", beside a label.
+ *
+ * `required` on its own is invisible until a submit is refused, which is the article's
+ * "provide clear messaging when required fields are missed" arriving after the miss. The
+ * asterisk is `aria-hidden` because the word beside it already says the same thing, and a
+ * screen reader announcing "star required" reads as noise.
+ *
+ * Here rather than in each page: `CostsPage` and `SplitPage` already share this module,
+ * and two copies of a convention is how the two forms come to disagree about it.
+ */
+export function Required({ language }: { language: Language }) {
+  return (
+    <>
+      <span aria-hidden="true" className="setup-required">*</span>
+      <span className="setup-hint"> {copy("required_field", language)}</span>
+    </>
+  );
+}
+
 export function Tag({ children }: PropsWithChildren) {
   return <span className="money-tag">{children}</span>;
 }

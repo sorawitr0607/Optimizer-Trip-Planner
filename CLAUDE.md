@@ -749,6 +749,33 @@ buying the limiter never being triggered, and that is worth more than it costs.
 Do not try a fourth time without a way to learn the limit *without* crossing it. The
 lever that remains is asking less, not waiting less.
 
+## The same practice across every other form, 2026-08-18
+
+Six containers each carried their own near-identical `input { background; border; radius;
+padding }` block — `.trip-form`, `.money-form`, `.setup-fields`, `.evidence-card`,
+`.readiness-item-controls`, `.revise-pick` — so the states were written **once**, against
+`.app-shell`, rather than copied into six places that would then drift. That is the
+article's own instruction: incorporate the styles into a design system for scalability.
+Scoped to the shell so the landing page, which has its own palette by decision, is
+untouched, and with no `:focus-visible` of its own because `tokens.css` owns the house
+ring.
+
+Verified on all five stage forms — costs, split, readiness, revise, evidence — that the
+error border and the disabled cursor now actually apply.
+
+**`.money-form` was multi-column for the same reason the setup wizard was.**
+`repeat(auto-fit, minmax(160px, 1fr))`, built the same way and measuring the same fault. A
+row of short money fields is precisely the case the single-column guidance is about: the
+eye should run down one list, not across four. Both money forms now measure **544px, one
+column**, with the amount field at 100px rather than a full column's width.
+
+**Required was invisible on the money forms too.** Four fields across Costs and Split
+carried the `required` attribute with nothing on screen saying so, which means the message
+arrives only after a refused submit — the article asks for it before. `Required` lives in
+`money.tsx`, which both pages already share, because two copies of a convention is how two
+forms come to disagree about it. Split's amount also gained `inputMode="decimal"`; Costs
+already had it, which is what made the omission visible.
+
 ## Input-field practice applied to the setup wizard, 2026-08-18
 
 Worked from Eleken's "46 Input Field Design Examples" tip by tip. Most of it the form

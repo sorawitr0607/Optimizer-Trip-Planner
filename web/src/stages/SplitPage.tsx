@@ -12,17 +12,7 @@ import {
 } from "../api/client";
 import { copy, copyFormat } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
-import {
-  categoryName,
-  type CostCategory,
-  Donut,
-  Meters,
-  money,
-  Note,
-  Tag,
-  Tile,
-  travellerNames,
-} from "./money";
+import { categoryName, Donut, Meters, money, Note, Required, Tag, Tile, travellerNames, type CostCategory } from "./money";
 
 const TAGS = ["transport", "accommodation", "activity", "food", "fees", "shopping", "other"];
 const CURRENCIES = ["THB", "TWD", "JPY", "KRW", "CNY", "USD"];
@@ -426,8 +416,12 @@ export function SplitPage() {
       <h2 className="money-eyebrow">{copy("split_add", language)}</h2>
       {roster.length === 1 ? <Note mark="ⓘ" tone="info">{copy("split_no_members", language)}</Note> : null}
       <form className="money-form" onSubmit={submit}>
+        {/* Both fields were `required` with nothing on screen saying so — the browser
+            only mentions it after a refused submit, which is the article's "provide clear
+            messaging when required fields are missed" arriving too late to prevent it. */}
         <label>
           {copy("split_label", language)}
+          <Required language={language} />
           <input
             onChange={(event) => setDraft({ ...draft, label: event.target.value })}
             required
@@ -436,7 +430,10 @@ export function SplitPage() {
         </label>
         <label>
           {copy("split_amount", language)}
+          <Required language={language} />
           <input
+            // A money keyboard on a phone: digits and a separator, not the alphabet.
+            inputMode="decimal"
             min="0"
             onChange={(event) => setDraft({ ...draft, original_amount: event.target.value })}
             required
