@@ -712,6 +712,28 @@ Worth knowing for the next time a mirror is evaluated: **`overpass.osm.ch` is re
 and useless** — it serves a Switzerland-only extract, so it answers 200 with zero
 elements for anywhere else, which looks exactly like a city having nothing in it.
 
+## The deck and the panel beside it are framed differently, and the card nudges
+
+Two identically-framed cards side by side made "which of these do the buttons belong to"
+a question to work out rather than to see. The deck takes a **2px accent border**; the
+detail panel keeps the plain 1px house border. Written as the `border` shorthand, not as
+`border-color`/`border-width` longhands above it — a later `border:` in the same rule
+resets both, which is exactly what the first attempt did.
+
+**And an untouched card nudges after five seconds.** The deck already carries a grip bar,
+two coloured edges and a four-way legend, and the gesture was still reported as
+undiscovered — every one of those is a thing to *read*, and nobody reads a card they are
+looking at. Movement is the only hint that needs no reading. A tilt-and-return rather
+than a shake, because a shake is what a rejected password field does and this is an
+invitation. Three times per card and then it stops: whoever has not taken the hint by the
+third has understood and declined it. Behind `prefers-reduced-motion`, and never during a
+capture.
+
+**The inline transform had to go for it to work at all.** `.place-deck-drag` always
+carried `style.transform`, written as an identity while at rest — and an inline style
+beats a stylesheet animation, so the class would go on, the keyframes would be correct,
+and nothing would move. It is now omitted entirely when the card is not offset.
+
 ## A place's own Commons category is the source that needs no heuristic
 
 "No photograph exists in the free sources" was shown for places that plainly have

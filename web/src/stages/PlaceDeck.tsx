@@ -68,6 +68,12 @@ const LOADING_LINES = [
 /** How long each loading line holds before the next one. */
 const LOADING_LINE_MS = 1400;
 
+/** Idle time before the card nudges, and how long the nudge itself runs. */
+const NUDGE_AFTER_MS = 5000;
+const NUDGE_MS = 700;
+/** How many times one card will offer the hint before letting it go. */
+const NUDGE_TIMES = 3;
+
 /**
  * Where the loading line starts for this card.
  *
@@ -253,6 +259,35 @@ export function PlaceDeck({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cardPending]);
 
+  // A nudge after five idle seconds, so the card says it can be thrown.
+  //
+  // The deck already carries a grip bar, two coloured edges and a legend, and the gesture
+  // was still reported as undiscovered — all of those are things to read, and nobody
+  // reads a card they are looking at. Movement is the one hint that does not need
+  // reading. It waits for the card to have arrived (a placeholder cannot be swiped),
+  // restarts on every new card, and stops the moment a drag begins, because a hint that
+  // keeps firing while someone is using the thing it is hinting at is an animation
+  // fighting the hand.
+  const [nudge, setNudge] = useState(false);
+  useEffect(() => {
+    if (cardPending || drag) return;
+    if (typeof document !== "undefined" && document.documentElement.dataset.capture) return;
+    // Three times per card, then it stops. A hint that keeps pulsing every five seconds
+    // for as long as someone is reading stops being a hint and becomes a fidget — and
+    // whoever has not taken it by the third has understood and declined it. The count
+    // resets with `currentId`, so each new card gets its own three.
+    let fired = 0;
+    const timer = window.setInterval(() => {
+      setNudge(true);
+      // Long enough for the animation to finish before the class comes off, so the next
+      // one can retrigger it.
+      window.setTimeout(() => setNudge(false), NUDGE_MS);
+      fired += 1;
+      if (fired >= NUDGE_TIMES) window.clearInterval(timer);
+    }, NUDGE_AFTER_MS);
+    return () => window.clearInterval(timer);
+  }, [cardPending, drag, currentId]);
+
   // Advance the loading line while a card is arriving, and only then: a timer left
   // running behind a loaded deck is a re-render a second for nothing.
   const [loadingStep, setLoadingStep] = useState(0);
@@ -431,8 +466,15 @@ export function PlaceDeck({
   const offsetY = leaving
     ? (leaving === "skip" ? 420 : leaving === "maybe" ? -420 : 0)
     : (drag?.y ?? 0);
+  // The transform is omitted entirely when the card is sitting still, rather than being
+  // written as an identity. An inline style beats a stylesheet animation, so a permanent
+  // `translate(0,0) rotate(0)` would have silently swallowed the idle nudge — the class
+  // would go on, the keyframes would be correct, and nothing would move.
+  const resting = offsetX === 0 && offsetY === 0;
   const style = {
-    transform: `translate(${offsetX}px, ${offsetY}px) rotate(${offsetX / 26}deg)`,
+    ...(resting
+      ? {}
+      : { transform: `translate(${offsetX}px, ${offsetY}px) rotate(${offsetX / 26}deg)` }),
     transition: drag ? "none" : "transform var(--duration-standard) var(--ease-out)",
   };
 
@@ -474,7 +516,7 @@ export function PlaceDeck({
         </div>
       ) : null}
       <div
-        className={`place-deck-drag${drag ? " dragging" : ""}${cardPending ? " pending" : ""}`}
+        className={`place-deck-drag${drag ? " dragging" : ""}${cardPending ? " pending" : ""}${nudge ? " nudge" : ""}`}
         onPointerCancel={() => setDrag(null)}
         ref={cardRef}
         onPointerDown={(event) => {

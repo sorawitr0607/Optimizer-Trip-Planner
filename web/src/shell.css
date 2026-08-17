@@ -1066,6 +1066,10 @@
   gap: 10px;
 }
 
+/* The reference panel, not the thing you throw. The deck beside it carries the accent
+   border and the hard shadow; this one keeps the house border and stays visually quiet,
+   because two identically-framed cards side by side read as two decks and the owner has
+   to work out which one the buttons belong to. */
 .place-card {
   background: var(--bg-card);
   border: 1px solid var(--bg-card-border);
@@ -1158,7 +1162,12 @@
     linear-gradient(90deg, var(--deck-drop-edge) 0%, transparent 14%, transparent 86%, var(--deck-keep-edge) 100%),
     var(--deck-tint),
     var(--bg-card);
-  border: 1px solid var(--bg-card-border);
+  /* A 2px accent edge, where the detail panel beside it keeps the plain house border.
+     They were framed identically, so which of the two the swipe and the buttons belonged
+     to had to be worked out rather than seen. Written as the shorthand, not as longhands
+     above it: a `border:` further down the same rule resets colour and width, which is
+     exactly what happened on the first attempt. */
+  border: 2px solid var(--color-accent);
   border-radius: var(--radius-house);
   box-shadow: var(--shadow-hard-md);
   display: flex;
@@ -3232,6 +3241,31 @@
    deck is as tall as the small placeholder and the loading state is genuinely small.
    The card returning at full height is a jump, and a deliberate one: it is the answer to
    "make the loading card smaller", and it happens once per card, on arrival. */
+/* The idle nudge: a small tilt-and-return, not a shake. A shake reads as an error —
+   it is what a rejected password field does — and this is an invitation. Behind
+   `prefers-reduced-motion` like every other animation here, and never during a capture,
+   where a card caught mid-tilt would be a different baseline image on every run. */
+@media (prefers-reduced-motion: no-preference) {
+  .place-deck-drag.nudge {
+    animation: deck-nudge 700ms ease-in-out;
+  }
+}
+
+@keyframes deck-nudge {
+  0%,
+  100% {
+    transform: translateX(0) rotate(0deg);
+  }
+
+  25% {
+    transform: translateX(10px) rotate(1.2deg);
+  }
+
+  60% {
+    transform: translateX(-7px) rotate(-0.9deg);
+  }
+}
+
 .place-deck-drag.pending {
   display: none;
 }
