@@ -1934,6 +1934,11 @@ class WikidataSummaryProvider:
         )
         last: Exception | None = None
         for attempt in range(self.retries + 1):
+            # Before **every** request, not only between retries. That looks like pure
+            # waste — measured, it is about 15 seconds of a 41-second refresh — and
+            # removing it was tried and made the run *slower*: 41.6s became 63.3s,
+            # because Commons answered 429 and the retries cost far more than the pauses
+            # had. The pause is not overhead, it is the thing that stops the burst.
             if attempt or self.pause_seconds:
                 sleep(self.pause_seconds * (attempt + 1))
             try:
@@ -2126,7 +2131,35 @@ class WikidataSummaryProvider:
                 found.append(url)
         return sorted(found)
 
-    def summary(self, qid: str) -> dict[str, Any]:
+    #: `wbgetentities` takes up to 50 ids in one request. The whole reason a deck of
+    #: twenty took most of a minute was that it asked fifty times for what fits in one.
+    entity_batch = 50
+
+    def entities(self, qids: list[str]) -> dict[str, Any]:
+        """Raw entities for many ids, in as few requests as the API allows.
+
+        Same call `summary` makes, asked once for a batch instead of once per place.
+        A failed batch raises, and the caller falls back to asking individually — a
+        provider that answers for nineteen places and refuses the twentieth must not
+        cost the nineteen their summaries.
+        """
+
+        found: dict[str, Any] = {}
+        sites = "|".join(f"{code}wiki" for code in self.languages)
+        codes = "|".join(self.languages)
+        unique = list(dict.fromkeys(str(qid) for qid in qids if qid))
+        for start in range(0, len(unique), self.entity_batch):
+            chunk = unique[start : start + self.entity_batch]
+            payload = self._json(
+                f"{self.wikidata_url}?action=wbgetentities"
+                f"&ids={quote('|'.join(chunk))}"
+                f"&props=sitelinks|claims|labels|descriptions&languages={codes}"
+                f"&sitefilter={sites}&format=json"
+            )
+            found.update((payload.get("entities") or {}))
+        return found
+
+    def summary(self, qid: str, entity: dict[str, Any] | None = None) -> dict[str, Any]:
         """Titles, extracts and an image for one Wikidata entity.
 
         Returns whichever languages exist. A place with no article in either language
@@ -2135,7 +2168,7 @@ class WikidataSummaryProvider:
 
         sites = "|".join(f"{code}wiki" for code in self.languages)
         codes = "|".join(self.languages)
-        entity = self._json(
+        prefetched = {} if entity else self._json(
             f"{self.wikidata_url}?action=wbgetentities&ids={quote(str(qid))}"
             # `labels` rides along in the request already being made, so an English name
             # for a Chinese-only place costs nothing extra. 61% of the Taipei catalogue
@@ -2148,7 +2181,7 @@ class WikidataSummaryProvider:
             f"&props=sitelinks|claims|labels|descriptions&languages={codes}&sitefilter={sites}"
             f"&format=json"
         )
-        found = ((entity.get("entities") or {}).get(str(qid))) or {}
+        found = entity or ((prefetched.get("entities") or {}).get(str(qid))) or {}
         if not found or "missing" in found:
             raise ProviderUnavailable(f"Wikidata has no entity {qid}")
         sitelinks = found.get("sitelinks") or {}
@@ -2191,7 +2224,11 @@ class WikidataSummaryProvider:
             if category:
                 break
         category_files: list[str] = []
-        if category:
+        # Only when nothing has been found yet. The listing is a Commons request with a
+        # courtesy pause in front of it, and it was being made for every place that
+        # already had a curated `P18` — paying a round trip to append to a gallery that
+        # was already led by the better picture.
+        if category and image is None:
             try:
                 listing = self._json(
                     "https://commons.wikimedia.org/w/api.php?action=query&format=json"

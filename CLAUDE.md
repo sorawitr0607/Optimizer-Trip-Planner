@@ -720,6 +720,48 @@ Worth knowing for the next time a mirror is evaluated: **`overpass.osm.ch` is re
 and useless** — it serves a Switzerland-only extract, so it answers 200 with zero
 elements for anywhere else, which looks exactly like a city having nothing in it.
 
+## Summary fetching: batched, and the profile says that is not where the time is
+
+Asked to make summaries faster by batching, so the first thing was to measure. Ten
+Singapore places, refreshed with `force`:
+
+| | |
+|---|---|
+| **Deliberate courtesy pauses** | **44.8s** |
+| Network | 28.5s over 70 requests |
+| Everything else | 1.0s |
+
+**Sixty percent of the wait is the app choosing to wait.** `pause_seconds = 0.4` sits in
+front of every Wikimedia request because a burst gets HTTP 429 — CLAUDE.md already records
+eight of thirteen places failing without it. So the only lever that matters is **the
+number of requests**, and each one costs its pause *plus* its network time.
+
+`wbgetentities` takes fifty ids at a time and was being asked once per place:
+`WikidataSummaryProvider.entities()` now asks once for the batch, **22 requests → 1**.
+`summary()` takes an optional prefetched entity and is otherwise unchanged; it is passed
+only when one exists, so every provider and every test fake still works against the old
+one-argument signature, and a failed batch simply leaves each place to ask for itself.
+The Commons category listing also no longer runs for a place that already has a curated
+`P18` — a round trip spent appending to a gallery the better picture already led.
+
+**And the honest part: wall-clock did not improve.** A/B on two identical fresh copies —
+without batching 42.6s / 38 requests / 8 of 10 with a photo; with batching 47.2s / 42
+requests / **the same** 8 of 10. Twenty-one Wikidata requests disappear and about
+twenty-five Commons and Wikipedia ones take their place, because a place whose Wikidata
+call used to 429 out was counted `failed` and skipped everything downstream. The old
+speed was partly failure.
+
+It is kept because twenty-one fewer requests to a free public service is right on its own
+terms, and this app's own notice promises low volume. It is not kept because it is faster.
+
+**Two attempts to shorten the pause both made it worse, and that is the lesson.** Moving
+it to fire only between retries: 41.6s → **63.3s**, 38 → 97 requests, because Commons
+answered 429 and the retries cost far more than the pauses had. The pause is not overhead
+sitting next to the work; it is what stops the work from being rejected. Anything faster
+has to come from asking less, or from an adaptive backoff that earns the pause on a real
+429 — and given two measured backfires, that deserves its own change and its own testing
+rather than being folded into this one.
+
 ## A card was released when its bytes arrived, not when its picture could be drawn
 
 Three rounds of "the skeleton stops after the first two cards, and I can swipe a card that

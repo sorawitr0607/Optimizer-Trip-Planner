@@ -2597,6 +2597,29 @@ class PlannerActions:
 
         fetched = cached = skipped = failed = 0
         errors: list[str] = []
+        # Every Wikidata id this run will need, asked for **once**.
+        #
+        # The loop below used to make one `wbgetentities` call per place, and
+        # `wbgetentities` takes fifty ids at a time — so a deck of twenty spent twenty
+        # round trips, plus twenty courtesy pauses, on one request's worth of data.
+        # Measured on ten Singapore places before this: 38 requests and 41.6s.
+        #
+        # Best-effort by design: a failed batch leaves `prefetched` empty and every place
+        # falls back to asking for itself, which is exactly the behaviour that was there
+        # before. One unreachable batch must not cost twenty places their summaries.
+        prefetched: dict[str, Any] = {}
+        batch = getattr(provider, "entities", None)
+        if batch is not None:
+            qids = [
+                str((place.get("signals") or {}).get("wikidata"))
+                for place in wanted
+                if (place.get("signals") or {}).get("wikidata")
+            ]
+            if qids:
+                try:
+                    prefetched = batch(qids)
+                except ProviderUnavailable:
+                    prefetched = {}
         for place in wanted:
             qid = (place.get("signals") or {}).get("wikidata")
             held = existing.get(place["place_id"])
@@ -2654,7 +2677,16 @@ class PlannerActions:
                     trip_id=trip_id,
                     detail={"place_id": place["place_id"], "qid": str(qid)},
                 )
-                value = provider.summary(str(qid))
+                # The prefetched entity is passed **only** when there is one. A provider
+                # with no `entities` never fills `prefetched`, so it is called exactly as
+                # before — which is what keeps every existing provider and every test
+                # fake working against the old one-argument signature.
+                entity = prefetched.get(str(qid))
+                value = (
+                    provider.summary(str(qid), entity=entity)
+                    if entity
+                    else provider.summary(str(qid))
+                )
             except ProviderBudgetExceeded:
                 raise
             except ProviderUnavailable as error:
