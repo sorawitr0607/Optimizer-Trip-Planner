@@ -246,26 +246,41 @@ export function RevisePage() {
 
       <div className="revise-ai">
         <label className="setup-check">
+          {/* The price and the data boundary are pointed at by the control that spends
+              the money. `WF-MAP-002`'s S5 decision requires both to be *visible* before
+              this is enabled; visible is not the same as announced, and a screen-reader
+              user was reaching the checkbox with the cost and the transmitted-data
+              disclosure sitting unattached below it. `ai_disabled_note` joins them only
+              while it is on screen — describing a paragraph that is not rendered points
+              at nothing. */}
           <input
+            aria-describedby={`ai-cost ai-disclosure${aiEnabled ? "" : " ai-disabled-note"}`}
             checked={aiEnabled}
             onChange={(event) => setAiEnabled(event.target.checked)}
             type="checkbox"
           />
           <span>{copy("ai_enabled", language)}</span>
         </label>
-        {!aiEnabled ? <p className="setup-hint">{copy("ai_disabled_note", language)}</p> : null}
-        <p className="setup-hint">{copy("ai_cost", language)}</p>
-        <p className="setup-hint">{copy("ai_disclosure", language)}</p>
+        {!aiEnabled ? (
+          <p className="setup-hint" id="ai-disabled-note">
+            {copy("ai_disabled_note", language)}
+          </p>
+        ) : null}
+        <p className="setup-hint" id="ai-cost">{copy("ai_cost", language)}</p>
+        <p className="setup-hint" id="ai-disclosure">{copy("ai_disclosure", language)}</p>
         <fieldset className="revise-ai-fields" disabled={!aiEnabled}>
           <label>
             {copy("free_text", language)}
             <textarea
+              aria-describedby="free-text-help"
               onChange={(event) => setRequestText(event.target.value)}
               rows={4}
               value={requestText}
             />
           </label>
-          <p className="setup-hint">{copy("free_text_help", language)}</p>
+          <p className="setup-hint" id="free-text-help">
+            {copy("free_text_help", language)}
+          </p>
           <button
             className="setup-primary"
             disabled={!requestText.trim() || interpret.isPending}

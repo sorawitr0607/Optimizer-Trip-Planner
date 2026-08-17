@@ -119,10 +119,13 @@ export function StayPage() {
 
       <div className="evidence-card">
         <strong>{copy("accommodation_base_title", language)}</strong>
-        <span className="setup-hint">{copy("accommodation_base_help", language)}</span>
+        <span className="setup-hint" id="base-help">
+          {copy("accommodation_base_help", language)}
+        </span>
         <label>
           {copy("accommodation_query", language)}
           <input
+            aria-describedby={typed.length === 0 ? "base-help base-empty" : "base-help"}
             onChange={(event) => setQuery(event.target.value)}
             placeholder={copy("accommodation_query_example", language)}
             value={query ?? base.data?.name ?? ""}
@@ -138,7 +141,9 @@ export function StayPage() {
           {copy("save_accommodation_base", language)}
         </button>
         {typed.length === 0 ? (
-          <span className="setup-hint">{copy("stay_type_a_place", language)}</span>
+          <span className="setup-hint" id="base-empty">
+            {copy("stay_type_a_place", language)}
+          </span>
         ) : null}
         {flash ? (
           <p aria-live="polite" className="setup-hint">

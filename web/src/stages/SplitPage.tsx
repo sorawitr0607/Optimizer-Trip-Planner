@@ -268,6 +268,7 @@ export function SplitPage() {
       <label className="money-cardholder">
         {copy("split_cardholder", language)}
         <select
+          aria-describedby="cardholder-help"
           disabled={setCardholder.isPending}
           onChange={(event) => setCardholder.mutate(event.target.value)}
           value={cardholder.data ?? "owner"}
@@ -278,7 +279,9 @@ export function SplitPage() {
             </option>
           ))}
         </select>
-        <span className="setup-hint">{copy("split_cardholder_help", language)}</span>
+        <span className="setup-hint" id="cardholder-help">
+          {copy("split_cardholder_help", language)}
+        </span>
       </label>
       {summary.data.settlement.length === 0 ? (
         <p className="money-empty">{copy("split_nothing_to_settle", language)}</p>
@@ -554,10 +557,15 @@ export function SplitPage() {
           </div>
         </fieldset>
 
+        {/* The allocation hint is described at the fieldset, not on each amount: it is
+            about how the numbers relate to one another, which is a property of the group.
+            Repeating it per participant would read it aloud once per person. */}
         {draft.mode === "manual" ? (
-          <fieldset className="money-allocation">
+          <fieldset aria-describedby="allocation-help" className="money-allocation">
             <legend>{copy("split_allocation", language)}</legend>
-            <p className="setup-hint">{copy("split_allocation_help", language)}</p>
+            <p className="setup-hint" id="allocation-help">
+              {copy("split_allocation_help", language)}
+            </p>
             <div className="money-allocation-list">
               {(draft.participants.length ? draft.participants : roster).map((id) => {
                 const val = Number(draft.allocation[id] ?? 0);

@@ -259,6 +259,7 @@ export function EvidencePage() {
         <p>{copy("evidence_help", language)}</p>
         <div className="evidence-auto-bar">
           <button
+            aria-describedby="auto-resolve-note"
             type="button"
             className="setup-primary evidence-auto-btn"
             disabled={autoResolveAll.isPending}
@@ -268,7 +269,9 @@ export function EvidencePage() {
               ? copy("loading", language)
               : copy("auto_resolve_free", language)}
           </button>
-          <small className="setup-hint">{copy("auto_resolve_note", language)}</small>
+          <small className="setup-hint" id="auto-resolve-note">
+            {copy("auto_resolve_note", language)}
+          </small>
         </div>
       </header>
 
@@ -379,8 +382,11 @@ export function EvidencePage() {
         ) : (
           <>
             <span className="setup-hint">{copy("no_timezone", language)}</span>
-            <span className="evidence-cost">{copy("timezone_cost", language)}</span>
+            <span className="evidence-cost" id="timezone-cost">
+              {copy("timezone_cost", language)}
+            </span>
             <button
+              aria-describedby="timezone-cost"
               disabled={fetchZone.isPending || spend?.state === "stopped"}
               onClick={() => fetchZone.mutate()}
               type="button"
@@ -405,8 +411,12 @@ export function EvidencePage() {
               .join(", ")}
           </span>
         ) : null}
-        <span className="evidence-cost">{copy("hours_cost", language)}</span>
+        <span className="evidence-cost" id="hours-cost">{copy("hours_cost", language)}</span>
+        {/* The price, announced by the control that spends it. This app's rule is that a
+            paid action names its price *before* it is pressed; an unattached span is
+            visible but silent, so a screen-reader user met the button with no figure. */}
         <button
+          aria-describedby="hours-cost"
           disabled={fetchHours.isPending || spend?.state === "stopped"}
           onClick={() => fetchHours.mutate()}
           type="button"
@@ -471,8 +481,11 @@ export function EvidencePage() {
       {/* Card 4 — routes. Priced at zero on the free tier, so it states no cost. */}
       <div className="evidence-card">
         <strong>{copy("venue_notices", language)}</strong>
-        <span className="setup-hint">{copy("venue_notices_hint", language)}</span>
+        <span className="setup-hint" id="venue-notices-hint">
+          {copy("venue_notices_hint", language)}
+        </span>
         <button
+          aria-describedby="venue-notices-hint"
           disabled={scanNotices.isPending}
           onClick={() => scanNotices.mutate()}
           type="button"

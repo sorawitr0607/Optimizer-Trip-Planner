@@ -187,8 +187,11 @@ export function CostsPage() {
               <li><strong>{shape.visits}</strong> {copy("plan_shape_visits", language)}</li>
               <li><strong>{shape.legs}</strong> {copy("plan_shape_legs", language)}</li>
             </ul>
-            <p className="setup-hint">{copy("plan_shape_help", language)}</p>
+            <p className="setup-hint" id="plan-shape-help">
+              {copy("plan_shape_help", language)}
+            </p>
             <button
+              aria-describedby="plan-shape-help"
               className="setup-primary"
               disabled={seedRows.isPending}
               onClick={() => seedRows.mutate()}
@@ -219,7 +222,9 @@ export function CostsPage() {
           workbooks are matched against. */}
       <details className="money-categories">
         <summary>{copy("costs_categories_edit", language)}</summary>
-        <p className="setup-hint">{copy("costs_categories_help", language)}</p>
+        <p className="setup-hint" id="categories-help">
+          {copy("costs_categories_help", language)}
+        </p>
         <ul className="money-category-list">
           {(categoryList.data ?? []).map((entry) => (
             <li key={entry.code}>
@@ -247,7 +252,11 @@ export function CostsPage() {
         <div className="money-category-add">
           <label>
             {copy("costs_categories_new", language)}
-            <input onChange={(event) => setNewCategory(event.target.value)} value={newCategory} />
+            <input
+              aria-describedby="categories-help"
+              onChange={(event) => setNewCategory(event.target.value)}
+              value={newCategory}
+            />
           </label>
           <button
             disabled={saveCategories.isPending || !newCategory.trim()}

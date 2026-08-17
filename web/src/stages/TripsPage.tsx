@@ -346,11 +346,14 @@ export function TripsPage() {
         {/* derives-from: element 6 .setup-card as .trip-form */}
         <form className="stage-card trip-form" id="start-a-trip" onSubmit={submit}>
           <h2>{copy("new_trip", language)}</h2>
-          <p className="setup-hint">{copy("destination_help", language)}</p>
+          <p className="setup-hint" id="destination-help">
+            {copy("destination_help", language)}
+          </p>
 
           <label>
             {copy("country", language)}
             <select
+              aria-describedby="destination-help"
               onChange={(event) => {
                 setCountry(event.target.value);
                 setCity("");
@@ -381,7 +384,11 @@ export function TripsPage() {
           <label>
             {copy("city", language)}
             {country && country !== TYPE_IT ? (
-              <select onChange={(event) => setCity(event.target.value)} value={city}>
+              <select
+                aria-describedby="destination-help"
+                onChange={(event) => setCity(event.target.value)}
+                value={city}
+              >
                 <option value="">{copy("choose_city", language)}</option>
                 {cities.map((item) => (
                   <option key={item} value={item}>
@@ -413,12 +420,17 @@ export function TripsPage() {
           <label>
             {copy("name", language)}
             <input
+              aria-describedby="trip-name-help"
               onChange={(event) => setName(event.target.value)}
               placeholder={resolvedCity || copy("trip_name_placeholder", language)}
               value={name}
             />
           </label>
-          <p className="setup-hint">{copy("trip_name_help", language)}</p>
+          {/* Named and pointed at, so the guidance is read *with* the field rather than
+              stranded as loose text after it. */}
+          <p className="setup-hint" id="trip-name-help">
+            {copy("trip_name_help", language)}
+          </p>
 
           {destination ? (
             <p className="landing-resolved">
@@ -427,6 +439,10 @@ export function TripsPage() {
           ) : null}
           {errorCode ? <p className="field-error">⚠ {errorCode}</p> : null}
           <button
+            // Why it is disabled, said *by* the button rather than beside it: a screen
+            // reader lands on a disabled control and would otherwise be told only that it
+            // is disabled, with the reason a paragraph away and unconnected.
+            aria-describedby={!resolvedCity ? "destination-required" : undefined}
             className="setup-primary"
             disabled={!resolvedCity || createTrip.isPending}
             type="submit"
@@ -435,7 +451,9 @@ export function TripsPage() {
           </button>
           {/* A disabled primary action always says why, never falls silent. */}
           {!resolvedCity ? (
-            <p className="setup-hint">{copy("destination_required", language)}</p>
+            <p className="setup-hint" id="destination-required">
+              {copy("destination_required", language)}
+            </p>
           ) : null}
         </form>
       </div>

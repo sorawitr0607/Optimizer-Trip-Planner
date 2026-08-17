@@ -749,6 +749,38 @@ buying the limiter never being triggered, and that is worth more than it costs.
 Do not try a fourth time without a way to learn the limit *without* crossing it. The
 lever that remains is asking less, not waiting less.
 
+## Every hint linked to the thing it describes, 2026-08-18
+
+Worked through the remaining forms case by case rather than mechanically, because a
+`aria-describedby` pointing at the wrong paragraph makes a screen reader worse, not
+better. Section prose stays unlinked — Readiness's "your board is current" and Costs's
+plan-shape summary describe a *screen*, not a field.
+
+What was linked, and why each one is the field's own text rather than text near it:
+
+- **Trips**: the trip-name hint to the name box; the destination hint to **both** the
+  country and city selects, since it explains the pair; and the "choose a destination
+  first" note to the **disabled button**, because a screen reader landing on a disabled
+  control is otherwise told only that it is disabled.
+- **Split**: the cardholder hint to its select; the allocation hint to the **fieldset**
+  rather than to each amount, since it is about how the numbers relate — repeated per
+  participant it would be read aloud once per person.
+- **Costs**: the categories hint to the box that adds one; the plan-shape hint to the
+  button it describes.
+- **Revise**: `ai_cost` and `ai_disclosure` to the **opt-in checkbox**. S5 requires the
+  price and the transmitted-data boundary to be *visible* before that control is enabled,
+  and visible is not announced — a screen-reader user reached the checkbox with both
+  sitting unattached below it. `ai_disabled_note` joins the list only while it is
+  rendered, because describing an absent element points at nothing.
+- **Evidence**: every **price** to the button that spends it. This app's rule is that a
+  paid action names its price before it is pressed; an unattached `evidence-cost` span is
+  visible and silent.
+- **Stay**: the base hint to the address box, plus the empty-field note while it applies.
+
+Verified in a browser across all eight surfaces and all six setup steps: **13 links, zero
+broken ids**. That check matters more than the count — a dangling `aria-describedby` is
+the one way this change could have made things worse than leaving them alone.
+
 ## The same practice across every other form, 2026-08-18
 
 Six containers each carried their own near-identical `input { background; border; radius;
