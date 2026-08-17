@@ -460,6 +460,12 @@ export function PlaceDeck({
 
   /** Commit whatever the gesture, an arrow key or a button asked for. */
   function act(action: Intent) {
+    // Nothing lands on a card that has not finished arriving, whatever asked. The
+    // buttons are disabled and the drag surface is out of layout while pending, but a
+    // keypress, a gesture already in flight when the card changed, or any future caller
+    // reaches this function directly — and a decision recorded against a place the owner
+    // never saw is the one outcome none of those guards may miss.
+    if (cardPending) return;
     if (action === "skip") advance(1);
     else if (action === "must_do") decide("must_do");
     else if (action === "interested") decide("interested");

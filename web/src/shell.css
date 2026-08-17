@@ -1175,7 +1175,7 @@
      to had to be worked out rather than seen. Written as the shorthand, not as longhands
      above it: a `border:` further down the same rule resets colour and width, which is
      exactly what happened on the first attempt. */
-  border: 2px solid var(--color-accent);
+  border: 3px solid var(--color-accent);
   border-radius: var(--radius-house);
   box-shadow: var(--shadow-hard-md);
   display: flex;
@@ -3381,6 +3381,21 @@
   padding: 12px 14px;
 }
 
+/* The row's actual action, weighted like one. It was a default grey button at the end of
+   a line of small print, so the only visible way past an unfit place looked like a label. */
+.optimize-unfit-list button {
+  background: var(--color-warning);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-hard-sm);
+  color: var(--color-on-accent);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-selected);
+  padding: 8px 14px;
+  white-space: nowrap;
+}
+
 .optimize-unfit-list {
   display: grid;
   gap: 6px;
@@ -3605,9 +3620,12 @@
   background: var(--bg-secondary);
   border: 1px solid var(--bg-card-border);
   border-radius: var(--radius);
-  display: flex;
+  /* The opened detail sits *beside* the name rather than pushing the rest of the list
+     down: a fifteen-row list that reflows every time one is opened loses the reader's
+     place, which is the opposite of what a reconsider list is for. */
+  display: grid;
   gap: 10px;
-  justify-content: space-between;
+  grid-template-columns: minmax(0, 1fr) auto;
   padding: 6px 10px;
 }
 
@@ -3625,7 +3643,7 @@
 .deck-reconsider-about {
   display: grid;
   gap: 8px;
-  grid-template-columns: 72px minmax(0, 1fr);
+  grid-template-columns: 88px minmax(0, 1fr);
   margin-top: 8px;
 }
 
@@ -3725,11 +3743,15 @@
    you are in, the other leaves it — and in one accent they read as a row of four ways to
    do the same thing. The accent stays with the primary; these take the secondary surface
    with a full-weight border, which is the house pattern for "also a real action". */
+/* Neither grey, and not each other's colour. "Show more from here" keeps the accent
+   because it continues what you are doing; these leave it, so they take the success
+   green — a second real colour rather than a second shade of the first. Grey was read as
+   disabled, and one accent for both was read as four ways to do the same thing. */
 .deck-lane-suggest .lane-tab {
-  background: var(--bg-secondary);
-  border: 2px solid var(--text-secondary);
+  background: var(--color-success);
+  border: 2px solid var(--color-success);
   box-shadow: var(--shadow-hard-sm);
-  color: var(--text-primary);
+  color: var(--color-on-accent);
   font-size: var(--text-sm);
   font-weight: var(--weight-selected);
   padding: 10px 16px;

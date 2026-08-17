@@ -256,7 +256,8 @@
       "comfort_value_within_threshold": "That is already inside your limit — nothing needs agreeing",
       "assumptions_not_used_by_this_trip": "This trip plans against verified evidence only, so an assumed window would not be used",
       "discovery_required_for_climate": "Find places first — the weather guide reads the area your places were found in.",
-      "bad_map_window": "The map window was not a usable area, so no buildings were requested."
+      "bad_map_window": "The map window was not a usable area, so no buildings were requested.",
+      "day_ends_free": "Evening free — everything you chose for today is done"
     },
     "th": {
       "broader_replan_required": "ต้องวางแผนใหม่ในภาพกว้าง — วันนี้รับเพิ่มไม่ไหว",
@@ -392,7 +393,8 @@
       "comfort_value_within_threshold": "ค่านี้อยู่ในขีดจำกัดของคุณอยู่แล้ว ไม่ต้องยอมรับอะไร",
       "assumptions_not_used_by_this_trip": "ทริปนี้วางแผนจากหลักฐานที่ยืนยันแล้วเท่านั้น ช่วงเวลาที่คาดการณ์จึงไม่ถูกนำไปใช้",
       "discovery_required_for_climate": "ค้นหาสถานที่ก่อน — คำแนะนำสภาพอากาศอ่านจากพื้นที่ที่พบสถานที่ของคุณ",
-      "bad_map_window": "ขอบเขตแผนที่ไม่ถูกต้อง จึงไม่ได้ร้องขอข้อมูลอาคาร"
+      "bad_map_window": "ขอบเขตแผนที่ไม่ถูกต้อง จึงไม่ได้ร้องขอข้อมูลอาคาร",
+      "day_ends_free": "ช่วงเย็นว่าง ทุกที่ที่เลือกไว้สำหรับวันนี้เสร็จแล้ว"
     }
   },
   "REJECTION_TEXT": {
@@ -1433,7 +1435,8 @@
       "photo_none_map": "No free source has a photograph of this place — here is where it is",
       "catalog_empty_unreachable_help": "This computer could not open a connection to the map service at all — which is a network or firewall problem, not a busy server, so pressing again will fail the same way. Set TOURIST_OVERPASS_URL to a mirror you trust (it accepts a comma-separated list and tries them in order) and restart the app. Nothing you have entered is lost.",
       "build_again": "Build them again",
-      "photo_buy_one": "Get photographs from Google · US${cost}"
+      "photo_buy_one": "Get photographs from Google · US${cost}",
+      "blocked_by_comfort_only": "This plan schedules all {visits} of your places and nothing is wrong with it — it only goes past a comfort budget you set. Agree to the measured figure in “Comfort tradeoffs” above and it becomes usable. Dropping a place is not required."
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -2404,7 +2407,8 @@
       "photo_none_map": "ไม่มีแหล่งข้อมูลเสรีใดมีรูปของสถานที่นี้ นี่คือตำแหน่งของที่นี่",
       "catalog_empty_unreachable_help": "เครื่องนี้เชื่อมต่อกับบริการแผนที่ไม่ได้เลย ซึ่งเป็นปัญหาเครือข่ายหรือไฟร์วอลล์ ไม่ใช่เซิร์ฟเวอร์ไม่ว่าง การกดใหม่จะล้มเหลวแบบเดิม ให้ตั้งค่า TOURIST_OVERPASS_URL เป็นมิเรอร์ที่คุณเชื่อถือ (ใส่หลายรายการคั่นด้วยจุลภาคได้ ระบบจะลองตามลำดับ) แล้วเปิดแอปใหม่ ข้อมูลที่กรอกไว้ไม่หาย",
       "build_again": "สร้างตัวเลือกใหม่อีกครั้ง",
-      "photo_buy_one": "ดึงรูปจาก Google · US${cost}"
+      "photo_buy_one": "ดึงรูปจาก Google · US${cost}",
+      "blocked_by_comfort_only": "แผนนี้จัดครบทั้ง {visits} แห่งและไม่มีอะไรผิดพลาด เพียงแต่เกินเกณฑ์ความสบายที่คุณตั้งไว้ ยอมรับค่าที่วัดได้ในหัวข้อ “การแลกเปลี่ยนความสบาย” ด้านบน แล้วแผนจะใช้งานได้ ไม่จำเป็นต้องตัดสถานที่ออก"
     }
   }
 }

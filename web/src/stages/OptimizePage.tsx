@@ -258,6 +258,12 @@ export function OptimizePage() {
       variant?.validation?.valid,
   );
   const activationAllowed = variant?.status === "ready" || provisionalAllowed;
+  // Hard violations that are *only* an unapproved comfort budget. `COMFORT_RULES` pairs
+  // each reason with an `UNAPPROVED_` violation code, so the prefix is the server's own
+  // marker for "the owner can agree to this", not a guess made here.
+  const comfortOnly = (variant?.validation?.hard_violations ?? []).filter((item) =>
+    String(item.code).startsWith("UNAPPROVED_"),
+  );
 
   const area = optimizerInput?.candidates?.find(
     (candidate) => candidate.id === variant?.hotel_recommendation?.default_area_id,
@@ -562,6 +568,25 @@ export function OptimizePage() {
           {/* Outside the warnings box, not inside it. A control that resolves the list
               is not one of the list's items, and buried in a `<details>` it read as part
               of the problem rather than the way out. */}
+          {/* Why this plan cannot be used, when the answer is "a comfort budget", and it
+              very often is. Measured on the owner's Singapore trip: all 14 places
+              scheduled, timeline continuous, and the single hard violation was
+              `UNAPPROVED_PLAIN_WALK_THRESHOLD` at 40 minutes against a 35-minute
+              preference. A finished plan was being withheld over five minutes of walking,
+              the screen said only "cannot activate", and the one control on offer was
+              "drop a place" — so the owner dropped places to fix a problem no place was
+              causing. The tradeoff panel that resolves it was already on the screen,
+              above; nothing connected the two. */}
+          {!activationAllowed && comfortOnly.length ? (
+            <p className="money-note money-note-warn">
+              <b aria-hidden="true">⚠</b>
+              <span>
+                {copyFormat("blocked_by_comfort_only", language, {
+                  visits: String(variant.validation.scheduled_visit_count ?? 0),
+                })}
+              </span>
+            </p>
+          ) : null}
           {!activationAllowed && !evidence.data?.needing_hours ? (
             <div className="optimize-resolve">
               <button

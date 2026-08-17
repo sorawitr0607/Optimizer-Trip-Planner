@@ -392,7 +392,16 @@ export interface PlanVariant {
   days: PlanDay[];
   stopped_at_limit: boolean;
   objective_improved_or_equal_to_greedy: boolean;
-  validation: { valid: boolean };
+  validation: {
+    valid: boolean;
+    /** Why not, when not. A code starting `UNAPPROVED_` is a comfort budget the owner
+     *  can agree to rather than a fault in the plan — the distinction the optimize
+     *  screen needs to tell "drop a place" from "accept the figure". */
+    hard_violations?: { code: string; subject_id: string | null }[];
+    scheduled_visit_count?: number;
+    selected_reconciled_count?: number;
+    continuous_timeline?: boolean;
+  };
   hotel_recommendation?: { default_area_id: string; basis: string } | null;
 }
 

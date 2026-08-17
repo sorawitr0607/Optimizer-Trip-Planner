@@ -712,6 +712,48 @@ Worth knowing for the next time a mirror is evaluated: **`overpass.osm.ch` is re
 and useless** — it serves a Switzerland-only extract, so it answers 200 with zero
 elements for anywhere else, which looks exactly like a city having nothing in it.
 
+## A finished plan was being withheld over five minutes of walking
+
+"After drop and rebuild, still can't create plan." Measured on the owner's Singapore
+trip: **all 14 chosen places scheduled**, `continuous_timeline: true`,
+`selected_reconciled_count: 14`, and one hard violation —
+`UNAPPROVED_PLAIN_WALK_THRESHOLD`, **40 minutes measured against a 35-minute
+preference**. Nothing was wrong with the plan. It exceeded a comfort budget by five
+minutes and was therefore `unavailable`.
+
+`WF-039` built the way out and it was already on the screen, above the variant picker:
+`ComfortTradeoffs` lets the owner accept the *measured value*. What was missing was any
+statement that it was **the reason**. The screen said "cannot activate" and the only
+control near the failure was "drop this place" — so the owner dropped places to fix a
+problem no place was causing, and the next plan failed the same way.
+
+The optimize screen now says so where the refusal happens, and the test is the server's
+own: `COMFORT_RULES` pairs every reason with an `UNAPPROVED_` violation code, so that
+prefix means "the owner may agree to this" rather than "the plan is broken". When every
+hard violation carries it, the message names the visit count, points at the panel, and
+says explicitly that dropping a place is not required.
+
+**The general shape, and it has now cost two rounds: a refusal that does not name its own
+cause sends the owner to whichever control is nearest.**
+
+## A three-hour buffer that was not a hole
+
+The trailing gap on a day now has its own reason, `day_ends_free`. On the same Singapore
+plan every chosen place was scheduled and the day still ran to 21:15, so the remainder
+was printed as a 165-minute `BUFFER` and read as the planner having failed to fill it.
+Same row and the same honest length — only the name changes, because "evening free,
+everything you chose for today is done" is what it actually is. No frozen fixture sets
+`include_operational_timeline`, so this branch is unreachable from the 27 regressions,
+which stay byte-identical.
+
+## A decision cannot land on a card that has not arrived
+
+The buttons are disabled and the drag surface is out of layout while a card is pending,
+and `act()` now refuses as well. The owner reported swiping cards that had not finished
+loading, and a decision recorded against a place they never saw is the one outcome that
+must not slip through a gap between three guards — a keypress, or a gesture already in
+flight when the card changed, reaches that function directly.
+
 ## The pictures are not free, which is a different answer from "there are none"
 
 "The pic is everywhere, find it" was investigated properly rather than answered again.

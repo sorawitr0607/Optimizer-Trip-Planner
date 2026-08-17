@@ -850,7 +850,13 @@ def _build_day(
         current = _append_operational(items, day, current, meal)
 
     if snapshot["trip"].get("include_operational_timeline"):
-        current = _append_wait(items, day, current, body_end, "free_time_or_rest")
+        # The trailing gap gets its own reason. It is the *evening*, not a hole the
+        # planner failed to fill: on the owner's Singapore trip all 14 chosen places were
+        # scheduled and the day still ran to 21:15, so the remainder was printed as a
+        # 165-minute `BUFFER` and read as a fault. Same row, same honest length, named
+        # for what it is. No frozen fixture sets `include_operational_timeline`, so this
+        # branch is not reached by the 27 regressions.
+        current = _append_wait(items, day, current, body_end, "day_ends_free")
         for block in operational["suffix"]:
             current = _append_operational(items, day, current, block)
     return {
