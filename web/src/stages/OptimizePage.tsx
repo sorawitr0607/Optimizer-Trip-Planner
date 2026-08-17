@@ -287,7 +287,11 @@ export function OptimizePage() {
         </div>
       ) : null}
 
-      {evidence.data && considered.length ? (
+      {/* Gone while the optimize runs. The panel asks a question whose answer has already
+          been taken and acted on, and leaving it up during the ~52s wait invites changing
+          an answer that is no longer being read — the radio would move while the run it
+          was meant to configure was already past it. */}
+      {evidence.data && considered.length && !building ? (
         <section className={`evidence-verdict${evidence.data.needing_hours ? "" : " settled"}`}>
           <h2>{copy("before_you_build", language)}</h2>
           <p className="evidence-verdict-answer">

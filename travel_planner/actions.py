@@ -1965,14 +1965,45 @@ class PlannerActions:
         return nearest > self.ACCOMMODATION_BASE_TOO_FAR_KM * 1000
 
     def confirm_accommodation_base(
-        self, trip_id: str, query: str = ""
+        self,
+        trip_id: str,
+        query: str = "",
+        latitude: float | None = None,
+        longitude: float | None = None,
     ) -> dict[str, Any]:
-        """Geocode one owner-entered booked stay and keep it as the routing base."""
+        """Keep one owner-chosen stay as the routing base.
+
+        Coordinates may be supplied instead of geocoding, and that path is the safer one:
+        it is how "use this area" works on the ranked list, where the station's position is
+        already known exactly. Geocoding a name the app itself produced would put a
+        round-trip through Nominatim between a known point and the same point — which is
+        precisely the round-trip that answered "New York, United States Station" with a
+        platform 286 km upstate.
+        """
 
         trip = self.store.get_trip(trip_id)
         if trip is None:
             raise PlannerRefusal("unknown_trip", trip_id=trip_id)
         name = query.strip()
+        if latitude is not None and longitude is not None:
+            # A point the caller already holds. No provider, no query, nothing to mistake.
+            value = {
+                "name": name or trip.destination,
+                "latitude": float(latitude),
+                "longitude": float(longitude),
+                "status": "owner_confirmed",
+                "provider": "owner",
+            }
+            now = datetime.now(timezone.utc)
+            self.store.upsert_trip_evidence(
+                trip_id=trip_id,
+                kind="accommodation_base",
+                value=value,
+                provider="owner",
+                retrieved_at=now.isoformat(),
+                expires_at=(now + timedelta(days=3650)).isoformat(),
+            )
+            return value
         if not name:
             name = f"{trip.destination} Station"
         provider = (
@@ -3021,8 +3052,22 @@ class PlannerActions:
         # on them. Fetching the same 9 pairs by relevance turned those legs into
         # 14, 10 and 9 minutes and the plan went valid with no other change.
         # place_id stays as the final tiebreak so the order remains deterministic.
+        # A place with **no route at all** is unschedulable; a place with twenty gains
+        # almost nothing from a twenty-first. Nearest-first alone therefore starved the
+        # outliers permanently: measured on the owner's Sapporo trip, 98 of 182 pairs were
+        # stored and **not one of them touched** Hitsujigaoka, Asahiyama Memorial Park or
+        # Mount Moiwa — three hills on the edge of the city, three `must_do` places, all
+        # dropped `ROUTE_UNVERIFIED` while the cap was spent on pairs downtown that already
+        # had routes. Pressing "Refresh routes" again could never reach them, which is what
+        # made "press it until every pair is measured" advice that does not terminate.
+        #
+        # So served-ness outranks distance, and nearest-first still orders within each
+        # group — the relevance win that sort was written for is untouched. It converges:
+        # once a starved place has a route it joins the second group.
+        served = {place_id for key in existing for place_id in key[:2]}
         pairs.sort(
             key=lambda pair: (
+                pair[0]["place_id"] in served and pair[1]["place_id"] in served,
                 _distance_metres(pair[0], pair[1]),
                 pair[0]["place_id"],
                 pair[1]["place_id"],

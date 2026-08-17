@@ -1407,7 +1407,16 @@
       "stay_using_centroid": "The centre of the places you chose. Nothing is booked, and nothing here books anything.",
       "stay_type_a_place": "Type the name of your hotel or the area you booked.",
       "accommodation_query_example": "e.g. Hotel Gracery Shinjuku",
-      "stay_base_ignored": "This saved address is more than 150 km from every place you chose, so the planner is not building from it. Replace it below if it is wrong. On file:"
+      "stay_base_ignored": "This saved address is more than 150 km from every place you chose, so the planner is not building from it. Replace it below if it is wrong. On file:",
+      "use_this_area": "Stay around here",
+      "loading_card_2": "Fetching the photographs…",
+      "loading_card_3": "Reading what this place is…",
+      "loading_card_4": "Looking it up on the map…",
+      "loading_card_5": "Getting the pictures ready…",
+      "loading_card_6": "Just a moment for this one…",
+      "lane_try_another": "Or look at a different list:",
+      "day_first": "First day",
+      "day_last": "Last day"
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -2352,7 +2361,16 @@
       "stay_using_centroid": "จุดกึ่งกลางของสถานที่ที่คุณเลือก ยังไม่มีการจอง และหน้านี้ไม่ได้จองอะไรให้",
       "stay_type_a_place": "พิมพ์ชื่อโรงแรมหรือย่านที่คุณจองไว้",
       "accommodation_query_example": "เช่น Hotel Gracery Shinjuku",
-      "stay_base_ignored": "ที่อยู่ที่บันทึกไว้อยู่ห่างจากทุกสถานที่ที่คุณเลือกเกิน 150 กม. ตัวจัดแผนจึงไม่ได้ใช้ที่อยู่นี้ หากไม่ถูกต้องให้แก้ด้านล่าง ที่บันทึกไว้:"
+      "stay_base_ignored": "ที่อยู่ที่บันทึกไว้อยู่ห่างจากทุกสถานที่ที่คุณเลือกเกิน 150 กม. ตัวจัดแผนจึงไม่ได้ใช้ที่อยู่นี้ หากไม่ถูกต้องให้แก้ด้านล่าง ที่บันทึกไว้:",
+      "use_this_area": "พักแถวนี้",
+      "loading_card_2": "กำลังดึงรูปภาพ…",
+      "loading_card_3": "กำลังอ่านว่าที่นี่คือที่ไหน…",
+      "loading_card_4": "กำลังค้นหาบนแผนที่…",
+      "loading_card_5": "กำลังเตรียมรูปภาพ…",
+      "loading_card_6": "รอสักครู่สำหรับที่นี่…",
+      "lane_try_another": "หรือดูจากรายการอื่น:",
+      "day_first": "วันแรก",
+      "day_last": "วันสุดท้าย"
     }
   }
 }

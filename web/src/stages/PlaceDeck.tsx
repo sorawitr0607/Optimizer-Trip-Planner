@@ -54,6 +54,31 @@ type Intent = "must_do" | "interested" | "not_for_trip" | "skip" | "maybe" | nul
 
 /** The same normalisation `discovery.py` dedupes on, so the two agree about what
  *  counts as the same name: case folded, punctuation and spacing dropped. */
+/** The lines shown while a card arrives. */
+const LOADING_LINES = [
+  "loading_card",
+  "loading_card_2",
+  "loading_card_3",
+  "loading_card_4",
+  "loading_card_5",
+  "loading_card_6",
+] as const;
+
+/**
+ * Which line this card gets.
+ *
+ * Derived from the place id rather than drawn at random, which is both nicer and safer: a
+ * card keeps its line across re-renders instead of flickering between them, and a
+ * screenshot of a loading deck is the same screenshot twice — `Math.random()` here would
+ * be the self-drifting-baseline bug that the export timestamp and the paid-usage counter
+ * were already fixed for.
+ */
+function loadingLine(placeId: string): string {
+  let hash = 0;
+  for (const character of placeId) hash = (hash * 31 + character.charCodeAt(0)) % 100_000;
+  return LOADING_LINES[hash % LOADING_LINES.length];
+}
+
 function nameKey(value: string): string {
   return value.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
 }
@@ -112,6 +137,8 @@ export interface PlaceDeckProps {
   altNameOf: (placeId: string) => string | null;
   /** Records a decision and advances. `null` reason means none was given. */
   onDecide: (placeId: string, action: string, reason: string | null) => void;
+  /** True while the card in front is still arriving, so the panel beside it can wait. */
+  onPendingChange?: (pending: boolean) => void;
   /** Fetches the free description and photographs for one place. */
   onWantSummary: (placeId: string) => void;
   /** True while this card's description and photographs are still on their way. The card
@@ -142,6 +169,7 @@ export function PlaceDeck({
   nameOf,
   altNameOf,
   onDecide,
+  onPendingChange,
   onWantSummary,
   summaryLoading = false,
   laneRemaining = 0,
@@ -212,6 +240,14 @@ export function PlaceDeck({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentId]);
 
+  // The detail panel beside the deck describes *this* card, so while the card is still
+  // arriving the panel is describing a place the owner cannot see — the same "deciding on
+  // half the evidence" problem the card gate exists to prevent, one element over.
+  useEffect(() => {
+    onPendingChange?.(cardPending);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cardPending]);
+
   useEffect(() => {
     for (const url of [upcoming, nextUrl]) {
       if (!url) continue;
@@ -237,15 +273,22 @@ export function PlaceDeck({
           {/* Two different endings, said differently. Reaching the cap is "there is more
               if you want it"; reaching the end of a lane is "this list is spent, here is
               another". They used to be the same blank wall. */}
+          {/* Both, not one or the other. "More of this lane" and "try another lane" are
+              different questions and the owner has both at once — offering only the first
+              until the lane is exhausted meant the other lanes were effectively invisible,
+              since a 431-card lane never runs out. */}
           {laneRemaining > 0 && onShowMore ? (
             <button className="setup-primary" onClick={onShowMore} type="button">
               {copyFormat("lane_more", language, {
                 count: Math.min(laneRemaining, LANE_STEP),
               })}
             </button>
-          ) : onPickLane && lanes.length ? (
+          ) : null}
+          {onPickLane && lanes.length > 1 ? (
             <div className="deck-lane-suggest">
-              <p className="setup-hint">{copy("lane_seen_all", language)}</p>
+              <p className="setup-hint">
+                {copy(laneRemaining > 0 ? "lane_try_another" : "lane_seen_all", language)}
+              </p>
               <div className="lane-tabs">
                 {lanes
                   .filter((value) => value !== lane)
@@ -396,7 +439,7 @@ export function PlaceDeck({
           {/* A small block that says what it is, rather than a full-height grey copy of
               the card. The card's own height is still held by the element underneath, so
               nothing jumps when the photograph lands — only the placeholder shrank. */}
-          <p className="place-deck-pending-text">{copy("loading_card", language)}</p>
+          <p className="place-deck-pending-text">{copy(loadingLine(entry.place_id), language)}</p>
           <span aria-hidden="true" className="skeleton skeleton-photo" />
           <span aria-hidden="true" className="skeleton skeleton-line" />
         </div>

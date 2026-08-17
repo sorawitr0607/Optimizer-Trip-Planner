@@ -37,7 +37,7 @@ def build_candidate_catalog(
             (
                 existing
                 for existing in candidates
-                if existing["_name_key"] == candidate["_name_key"]
+                if _same_place_name(existing, candidate)
                 and _distance_metres(existing, candidate) <= 150
             ),
             None,
@@ -57,6 +57,7 @@ def build_candidate_catalog(
 
     for candidate in candidates:
         candidate.pop("_name_key", None)
+        candidate.pop("_word_key", None)
     candidates.sort(key=lambda item: (item["name"].casefold(), item["place_id"]))
 
     coverage = payload.get("coverage") if isinstance(payload.get("coverage"), dict) else {}
@@ -106,6 +107,7 @@ def _candidate(
 
     category = str(raw.get("category") or "attraction").strip()
     name_key = _name_key(name)
+    word_key = _word_key(name)
     place_id = "place_" + sha256(
         f"{name_key}|{latitude:.5f}|{longitude:.5f}|{category}".encode("utf-8")
     ).hexdigest()[:20]
@@ -155,6 +157,7 @@ def _candidate(
                 "access": {"value": None, "state": "unconfirmed"},
             },
             "_name_key": name_key,
+            "_word_key": word_key,
         },
         "",
     )
@@ -179,9 +182,54 @@ def _merge(target: dict[str, Any], incoming: dict[str, Any]) -> None:
         left["state"] = "conflicting"
 
 
+def _same_place_name(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    """One place under two spellings, or two places?
+
+    The exact key first, then the word-order-insensitive one — which is only ever
+    consulted inside the 150 m radius the caller applies, because at that range two
+    records holding the same words are the same thing far more often than not. An empty
+    word key never matches: it means the name was one word, or a script that does not
+    space its words, and in both cases `_name_key` has already had the final say.
+    """
+
+    if left["_name_key"] == right["_name_key"]:
+        return True
+    return bool(left["_word_key"]) and left["_word_key"] == right["_word_key"]
+
+
 def _name_key(value: str) -> str:
     normalized = unicodedata.normalize("NFKC", value).casefold()
     return "".join(character for character in normalized if character.isalnum())
+
+
+def _word_key(value: str) -> tuple[str, ...]:
+    """The same words in any order.
+
+    OpenStreetMap records one place under both "Botanical Garden of Hokkaido University"
+    and "Hokkaido University Botanical Garden" — measured 147 m apart on the owner's
+    Sapporo catalogue, and `_name_key` cannot see it because it strips the spaces and so
+    bakes the word order in. Sorting the words catches the permutation.
+
+    Returns an empty tuple for a single word, and for a script that does not space its
+    words at all: in both cases this says nothing `_name_key` has not already said, and an
+    empty key must never be treated as a match.
+    """
+
+    normalized = unicodedata.normalize("NFKC", value).casefold()
+    words = sorted(
+        word
+        for word in "".join(
+            character if character.isalnum() else " " for character in normalized
+        ).split()
+        # "of", "the" and their like are exactly what differs between two spellings of one
+        # name, so they cannot be part of the identity.
+        if word not in _NAME_NOISE
+    )
+    return tuple(words) if len(words) > 1 else ()
+
+
+#: Words that carry no identity, so a name is the same name with or without them.
+_NAME_NOISE = frozenset({"of", "the", "at", "in", "and", "de", "la", "le", "el"})
 
 
 def _distance_metres(left: dict[str, Any], right: dict[str, Any]) -> float:

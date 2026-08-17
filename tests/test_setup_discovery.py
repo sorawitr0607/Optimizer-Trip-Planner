@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 
 from travel_planner import destinations
+from travel_planner import discovery
 from travel_planner import setup as setup_module
 from travel_planner.actions import PlannerActions
 from travel_planner.providers import OpenStreetMapProvider, ProviderUnavailable
@@ -730,3 +731,48 @@ class LegacyAccommodationStatusTest(unittest.TestCase):
                 main_style=["sightseeing"],
                 accommodation_status="maybe_booked",
             )
+
+
+class WordOrderDuplicateTest(unittest.TestCase):
+    """One place recorded under two word orders is one place.
+
+    Measured on the owner's Sapporo catalogue, 2026-08-17: OpenStreetMap held
+    "Botanical Garden of Hokkaido University" and "Hokkaido University Botanical Garden"
+    **147 m apart**, and both reached the deck, so the owner was asked about the same
+    garden twice. `_name_key` strips the spaces and so bakes the word order in; it cannot
+    see a permutation however close the two records sit.
+    """
+
+    def test_the_same_words_in_another_order_are_the_same_name(self) -> None:
+        left = {
+            "_name_key": discovery._name_key("Botanical Garden of Hokkaido University"),
+            "_word_key": discovery._word_key("Botanical Garden of Hokkaido University"),
+        }
+        right = {
+            "_name_key": discovery._name_key("Hokkaido University Botanical Garden"),
+            "_word_key": discovery._word_key("Hokkaido University Botanical Garden"),
+        }
+
+        self.assertTrue(discovery._same_place_name(left, right))
+
+    def test_an_extra_word_is_a_different_place(self) -> None:
+        # The greenhouse really is a separate building the owner may want or skip.
+        garden = {
+            "_name_key": discovery._name_key("Hokkaido University Botanical Garden"),
+            "_word_key": discovery._word_key("Hokkaido University Botanical Garden"),
+        }
+        greenhouse = {
+            "_name_key": discovery._name_key("Hokkaido University Botanical Garden Greenhouse"),
+            "_word_key": discovery._word_key("Hokkaido University Botanical Garden Greenhouse"),
+        }
+
+        self.assertFalse(discovery._same_place_name(garden, greenhouse))
+
+    def test_an_unspaced_script_never_matches_on_words_alone(self) -> None:
+        # 円山公園 is one token, so the word key is empty and must not match anything —
+        # otherwise every unspaced name within 150 m would collapse into one place.
+        left = {"_name_key": "a", "_word_key": discovery._word_key("円山公園")}
+        right = {"_name_key": "b", "_word_key": discovery._word_key("北海道神宮")}
+
+        self.assertEqual((), left["_word_key"])
+        self.assertFalse(discovery._same_place_name(left, right))

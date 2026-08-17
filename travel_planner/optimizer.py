@@ -2106,10 +2106,24 @@ def _buffer_item(day: str, start: int, end: int, reason: str) -> dict[str, Any]:
     }
 
 
+#: Beyond this, a gap before a meal is not "waiting for the meal window" — it is an empty
+#: afternoon that happens to end at dinner. Measured on the owner's Sapporo arrival day: a
+#: single row read `12:30–17:30 · BUFFER · 300 min · meal_window`, which names the wrong
+#: cause and reads as the planner having decided on a five-hour lunch break. Ninety minutes
+#: is about the longest a genuine wait-for-opening can be while still being about the meal.
+MEAL_WAIT_MAX_MINUTES = 90
+
+
 def _append_wait(
     items: list[dict[str, Any]], day: str, current: int, target: int, reason: str
 ) -> int:
     if target > current:
+        # An honest label, not a shorter row. The gap is real and is still shown at its
+        # real length; only the reason changes, because a row's reason is what the owner
+        # reads to decide whether it is a problem — and "free time" invites filling the
+        # day where "meal window" says the planner needed it.
+        if reason == "meal_window" and target - current > MEAL_WAIT_MAX_MINUTES:
+            reason = "free_time_or_rest"
         items.append(_buffer_item(day, current, target, reason))
     return max(current, target)
 

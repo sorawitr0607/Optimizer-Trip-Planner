@@ -671,6 +671,133 @@ does: ArrowRight wrote **`must_do` 0 → 1** and ArrowUp wrote **`interested` 9 
 way — the gesture uses `setPointerCapture`, and a synthetic `PointerEvent` carries no real
 pointer to capture — which is the same reason `deck.test.tsx` was built around the buttons.
 
+## Owner testing, 2026-08-17: twelve reports
+
+### Nearest-first starved the places that most needed a route
+
+Three `must_do` places on the owner's Sapporo trip — Hitsujigaoka, Asahiyama Memorial
+Park and Mount Moiwa, all hills on the city's edge — were dropped `ROUTE_UNVERIFIED`,
+and the screen's advice was "press Refresh routes until every pair is measured". That
+advice **does not terminate**. Measured: 98 of 182 pairs stored and **not one touching
+those three**. `refresh_routes` sorts nearest-first and caps at 60 a run, so the outliers
+were last in a queue that was refilled from the front every time.
+
+A place with no route at all is unschedulable; a place with twenty gains nothing from a
+twenty-first. So **served-ness now outranks distance**, with nearest-first still ordering
+within each group — the relevance win that sort was written for is untouched, and it
+converges, because a starved place joins the second group as soon as it has one route.
+After the change all 60 of the next batch touch those three, where it was zero.
+
+### A five-hour lunch break
+
+`12:30–17:30 · BUFFER · 300 min · meal_window` on the arrival day. The gap was real —
+nothing could be scheduled — but `meal_window` names the wrong cause, and reads as the
+planner having decided on a five-hour lunch. Beyond `MEAL_WAIT_MAX_MINUTES` (90) a wait
+before a meal is labelled `free_time_or_rest`: **an honest label, not a shorter row**. The
+gap is still shown at its real length, because a row's reason is what the owner reads to
+decide whether it is a problem. The 27 regressions are byte-identical, so no fixture ever
+held a meal wait that long.
+
+### One garden, two word orders
+
+OpenStreetMap held "Botanical Garden of Hokkaido University" and "Hokkaido University
+Botanical Garden" **147 m apart**, and the owner was asked about the same garden twice.
+`_name_key` strips spaces, so it bakes the word order in and cannot see a permutation.
+`_word_key` sorts the words, drops the noise words that are exactly what differs between
+two spellings of one name, and is consulted **only** inside the same 150 m radius. It
+returns empty for a single word and for scripts that do not space their words — 焼山 is
+one token — and an empty key never matches, or every unspaced name in a block would
+collapse into one place. The greenhouse, which has a real extra word, stays separate.
+
+### The deck could never reach its own ending
+
+"I think the deck shows more than 20" was right. `main_queue` excludes decided places
+**server-side**, every decision invalidates the ranking, and so each refetch shifted the
+list up and `slice(0, shown)` handed back twenty fresh cards — forever. The end-of-deck
+panel, the one offering the other lanes, was effectively unreachable. The window now
+shrinks by what has been decided out of it, and the panel offers **both** "more of this
+lane" and the other lanes rather than one or the other, since a 431-card lane never runs
+out and the alternatives were therefore invisible.
+
+**Derived during render, not seeded in an effect.** The first attempt held the page in
+state and filled it from `useEffect`, which left the first paint — and every static
+render — with no cards at all. Six tests caught it immediately.
+
+### "Trace the day" was never going to run
+
+Two independent reasons, either fatal. SMIL's `begin` defaults to `0s` on the **document**
+timeline, so by the time anyone presses the button that instant is minutes past and
+`fill="freeze"` parks the traveller on the last stop. And, measured in this browser,
+`svg.getCurrentTime()` stayed at **0** three seconds in — the SVG timeline does not
+advance at all, so no `begin` would have helped. It is `getPointAtLength` plus
+`requestAnimationFrame` now: plain DOM, starts when asked, stoppable, and dependent on no
+animation engine. The dot is placed at the first stop **before** the first frame, so a
+throttled `requestAnimationFrame` cannot leave a circle with no `cx` sitting at the origin
+— off the map, and indistinguishable from the button doing nothing.
+
+### A fourth stroke measured in map units, and the gate that could not see it
+
+`.plan-map-route` — the itinerary's day line — carried `stroke-width: 2` with no
+`vector-effect`, so at the map's 178x ceiling it was drawn as a band hundreds of pixels
+wide. That is the **fourth** occurrence of this one mistake, after the label halo, the
+one-way arrows and the pin number.
+
+The reason it shipped is the more useful finding: `check_design_tokens.py` enforced the
+rule against a **hand-written tuple of six selectors**, so it silently stopped covering
+anything added after it was written — the exact failure it exists to prevent. It now
+*finds* every map rule declaring a stroke width. That immediately caught three more,
+of which two are deliberate: the one-way arrows ride a carrier line whose stroke width
+**is** the marker's unit, and the small literal there is what stopped the ~170px arrows.
+Those say so in the stylesheet with `map-units-deliberate`, so the exception lives next
+to its reason.
+
+### The paid button was hidden by somebody else's fetch
+
+"Some places can't click Load live gallery" — measured on Sapporo City Museum, which has
+both a summary row and a photograph. The control was gated on the bare
+`fetchSummary.isPending`, which is the **prefetch** for cards further down the deck, so
+any in-flight batch replaced the open card's button with "Loading…". It never recovered
+for a place the summaries query holds nothing for, because `!summaries.data?.[id]` stays
+true and every future prefetch hid it again. **Second time the shared prefetch has been
+mistaken for the card's own request**; the first blanked the whole workspace on every
+swipe.
+
+### Six places with no picture, and why
+
+All six carried a QID, no `P18`, no OpenStreetMap image tag, and nothing that passed the
+Commons name filter — two of them stone monuments (碑) whose names are two characters,
+which `PHOTO_NAME_MIN_CHARACTERS` refuses by design. Wikidata records a picture under
+more properties than `P18`, and every one of them means "an image of this item", so none
+can put another place's photograph on a card: aerial view, winter view, panoramic view,
+plan and collage are now read in that order after the curated `P18`. `cache_version` goes
+to `wikidata-summary-v8` so a place that came up blank is asked once more. Places with no
+free photograph anywhere still exist, and are still shown without one rather than with
+someone else's.
+
+### Smaller things from the same round
+
+**Where to stay is locked until the owner presses "Build the plan"**, at their asking:
+ranking neighbourhoods against a shortlist still being swiped ranks them against the wrong
+shortlist. It borrows the `optimize` gate key, which carries exactly that predicate.
+**"Rank areas to stay" is a primary button** and every ranked area offers **"Stay around
+here"**, which writes the station's own coordinates straight to the base — no geocoder
+between a known point and the same point, which is the round-trip that produced a hotel
+286 km upstate. `confirm_accommodation_base` takes optional coordinates for it.
+
+**The detail panel waits for the card.** It describes the card in front, so showing it
+while the card is still arriving is the "decide on half the evidence" problem the card
+gate exists to prevent, one element over. **The loading line varies by card**, chosen from
+the place id rather than at random — varied to read, and stable to photograph, since
+`Math.random()` there would be the self-drifting-baseline bug again.
+
+**"Before you build" is hidden while the optimize runs**: it asks a question whose answer
+has already been taken, and leaving it up invites moving a radio the run is already past.
+
+**The itinerary's day picker is prev/next, sticky, above the map.** A trip is a sequence
+and the move you make ninety-nine times in a hundred is "the next day"; a select turned
+that into open, find, aim, click, and never showed which day you were about to get. The
+date is on the control, and the ends disable rather than wrap.
+
 ### "Where to stay" is its own route, and the count went nine to ten
 
 Artifact 028 decided nine stage routes. There are **ten** as of 2026-08-14, at the owner's

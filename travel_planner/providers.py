@@ -1808,7 +1808,9 @@ class WikidataSummaryProvider:
     # under, so bumping this refetches every place once and no further -- without it a
     # place cached before geosearch existed keeps its empty gallery for the 60-day TTL,
     # which is what left cards blank after the source was added.
-    cache_version = "wikidata-summary-v7"
+    # v8: five more Wikidata image properties beside P18, so a place with an aerial,
+    # winter or panoramic view stops showing as a card with no picture.
+    cache_version = "wikidata-summary-v8"
     # An encyclopedia article changes slowly and a description is not a fact the
     # planner schedules against, so this can sit for a long time.
     cache_ttl_days = 60
@@ -2062,16 +2064,27 @@ class WikidataSummaryProvider:
         claims = found.get("claims") or {}
 
         image = None
-        for claim in claims.get("P18") or []:
-            filename = (claim.get("mainsnak") or {}).get("datavalue", {}).get("value")
-            if filename:
-                # Special:FilePath redirects to the current file, so no thumbnail URL
-                # has to be constructed or kept in step with Wikimedia's layout.
-                image = (
-                    "https://commons.wikimedia.org/wiki/Special:FilePath/"
-                    + quote(str(filename).replace(" ", "_"))
-                    + "?width=640"
-                )
+        # P18 is the *curated* photograph and stays first. The rest are the other ways
+        # Wikidata records a picture of the same subject, and they are the difference
+        # between a card with a photograph and a card with none: measured on the owner's
+        # Sapporo catalogue, six places had a QID, no P18, no OpenStreetMap image tag and
+        # nothing that passed the Commons name filter — two of them stone monuments whose
+        # names are two characters, which `PHOTO_NAME_MIN_CHARACTERS` refuses by design.
+        # Every one of these properties means "an image of this item", so none of them
+        # can put another place's photograph on the card.
+        for prop in ("P18", "P8592", "P5252", "P4291", "P3451", "P2716"):
+            for claim in claims.get(prop) or []:
+                filename = (claim.get("mainsnak") or {}).get("datavalue", {}).get("value")
+                if filename:
+                    # Special:FilePath redirects to the current file, so no thumbnail URL
+                    # has to be constructed or kept in step with Wikimedia's layout.
+                    image = (
+                        "https://commons.wikimedia.org/wiki/Special:FilePath/"
+                        + quote(str(filename).replace(" ", "_"))
+                        + "?width=640"
+                    )
+                    break
+            if image:
                 break
 
         gallery: list[str] = []

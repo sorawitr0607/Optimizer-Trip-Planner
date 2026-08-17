@@ -1,4 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { ApiError, rpc, type StayAreaReport } from "../api/client";
 import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
@@ -29,8 +29,20 @@ export interface StayAreasProps {
 }
 
 export function StayAreas({ tripId, language }: StayAreasProps) {
+  const queryClient = useQueryClient();
   const recommend = useMutation<StayAreaReport, Error, void>({
     mutationFn: () => rpc<StayAreaReport>("recommend_areas", { trip_id: tripId }),
+  });
+  const chooseArea = useMutation({
+    mutationFn: (area: { name: string; latitude: number; longitude: number }) =>
+      rpc("confirm_accommodation_base", { trip_id: tripId, query: area.name, ...area }),
+    onSuccess: async () => {
+      await Promise.all(
+        ["accommodation_base", "journey", "plan_preview"].map((key) =>
+          queryClient.invalidateQueries({ queryKey: [key, tripId] }),
+        ),
+      );
+    },
   });
   const report = recommend.data;
 
@@ -38,8 +50,13 @@ export function StayAreas({ tripId, language }: StayAreasProps) {
     <section className="stay-areas">
       <h3>{copy("stay_areas", language)}</h3>
       <p className="setup-hint">{copy("stay_areas_hint", language)}</p>
-      <button disabled={recommend.isPending} onClick={() => recommend.mutate()} type="button">
-        {copy("rank_areas", language)}
+      <button
+        className="setup-primary"
+        disabled={recommend.isPending}
+        onClick={() => recommend.mutate()}
+        type="button"
+      >
+        {recommend.isPending ? copy("loading", language) : copy("rank_areas", language)}
       </button>
 
       {/* The refusal's own words. This printed `areas_amenities_unavailable` for *every*
@@ -112,6 +129,25 @@ export function StayAreas({ tripId, language }: StayAreasProps) {
                     </div>
                   ))}
                 </dl>
+                {/* The point of ranking areas is to pick one. Without this the list was a
+                    verdict with nothing to press, and the owner had to retype a station
+                    name into the box above — through a geocoder, for a point already
+                    known exactly here. Coordinates go straight in. */}
+                {area.latitude !== null && area.longitude !== null ? (
+                  <button
+                    disabled={chooseArea.isPending}
+                    onClick={() =>
+                      chooseArea.mutate({
+                        name: placeName(area, language, area.name),
+                        latitude: area.latitude as number,
+                        longitude: area.longitude as number,
+                      })
+                    }
+                    type="button"
+                  >
+                    {copy("use_this_area", language)}
+                  </button>
+                ) : null}
                 {area.notes.length ? (
                   <p className="setup-hint">
                     {area.notes

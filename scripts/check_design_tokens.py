@@ -538,22 +538,34 @@ def main() -> int:
             "the pin's number must divide by var(--map-zoom): inside the map's viewBox a "
             "fixed size grows with the zoom"
         )
-    for selector in (
-        ".places-map-road-casing,\n.places-map-road",
-        ".places-map-rail",
-        ".places-map-building",
-        ".places-map-country",
-        ".places-map-marker",
-        ".places-map-area",
-    ):
-        block = re.search(re.escape(selector) + r" \{[^}]*\}", stylesheet)
-        if not block:
-            failures.append(f"{selector.splitlines()[0]} has no rule to check")
-        elif "non-scaling-stroke" not in block.group(0):
-            failures.append(
-                f"{selector.splitlines()[0]} needs vector-effect: non-scaling-stroke, or "
-                "its stroke is measured in map units and thickens as the map is zoomed"
-            )
+    # Found, not listed. This was a hand-written tuple of six selectors and it missed
+    # `.plan-map-route` — the itinerary's day line, drawn at `stroke-width: 2` in map
+    # units, which at the map's 178x ceiling is a band hundreds of pixels wide. A gate
+    # whose coverage is a literal list silently stops covering the thing added after it
+    # was written, which is the failure it exists to prevent. Every map rule declaring a
+    # stroke width is now required to opt out of scaling, so a new layer is covered on
+    # the day it lands.
+    stroked = re.findall(
+        r"(?m)^((?:\.[\w-]*(?:places-map|plan-map)[\w-]*[^{]*?))\{([^}]*stroke-width[^}]*)\}",
+        stylesheet,
+    )
+    if not stroked:
+        failures.append("no stroked map layer found to check — has the map been renamed?")
+    for selector, body in stroked:
+        name = selector.strip().splitlines()[0]
+        if "non-scaling-stroke" in body or "--map-zoom" in body:
+            continue
+        # A deliberate exception, which must say so in the rule itself. The one-way
+        # arrows ride a carrier line whose *stroke width is the marker's unit*
+        # (`markerUnits: strokeWidth`), so a screen-unit stroke there would resize every
+        # arrow — the 170px arrows that once hid the whole map are what the small
+        # literal is for. Opting out in the stylesheet keeps the reason next to the rule.
+        if "map-units-deliberate" in body:
+            continue
+        failures.append(
+            f"{name} needs vector-effect: non-scaling-stroke, or "
+            "its stroke is measured in map units and thickens as the map is zoomed"
+        )
     if not failures:
         print("PASS: every map layer is measured in screen units, not map units", flush=True)
 

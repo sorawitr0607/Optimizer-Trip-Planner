@@ -42,10 +42,17 @@ export type StageRoute = (typeof STAGE_ROUTES)[number];
 export const STAGE_GATE: Record<StageRoute, StageKey> = {
   setup: "setup",
   places: "places",
-  // Needs somewhere to be near, and that is the chosen places — the same gate the deck's
-  // own output has. It deliberately does not wait on evidence: choosing a neighbourhood
-  // is what you do *before* buying opening hours for the places in it.
-  stay: "places",
+  // Locked until the owner presses "Build the plan" on `/places`, at their asking on
+  // 2026-08-17: the workflow is places → stay → build the plan, and ranking neighbourhoods
+  // against a shortlist that is still being swiped ranks them against the wrong shortlist.
+  //
+  // It borrows the `optimize` key rather than `places` because that key carries exactly
+  // this predicate — `blocked_by: None if chosen else "places"`, where `chosen` means kept
+  // *and* confirmed — while the `places` key is unblocked the moment setup is. Both
+  // therefore unlock at the same moment, which is what makes the sidebar order the real
+  // order. It deliberately does not wait on evidence: choosing a neighbourhood is what you
+  // do *before* buying opening hours for the places in it.
+  stay: "optimize",
   evidence: "evidence",
   optimize: "optimize",
   itinerary: "itinerary",

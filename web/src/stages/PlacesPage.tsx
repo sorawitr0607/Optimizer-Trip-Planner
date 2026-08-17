@@ -104,6 +104,7 @@ export function PlacesPage() {
   const pickLane = (next: Lane) => {
     setLane(next);
     setShown(LANE_PAGE);
+    setDecidedHere(0);
     setCardId("");
   };
   // Deck first, because WF-005 designed this stage as a swipe queue and the list is
@@ -145,6 +146,10 @@ export function PlacesPage() {
     enabled: Boolean(tripId),
   });
   const [cardId, setCardId] = useState("");
+  /** Reported by the deck: the card in front has not finished arriving. */
+  const [cardPending, setCardPending] = useState(false);
+  /** Decisions taken out of the current page, which is what makes the page end. */
+  const [decidedHere, setDecidedHere] = useState(0);
   // The coverage report is collapsed on arrival and holds the audit table and the
   // raw provider JSON. `<details>` hides its contents; it does not avoid building
   // them, so both were mounted on every visit to this screen. Rendering them on
@@ -208,9 +213,25 @@ export function PlacesPage() {
   // order, so the strongest are all at the front and everything after about the first
   // page is diminishing returns. The cap is a *view* over the lane, never a filter on
   // the ranking: nothing is dropped, and pressing for more is one press.
+  // A page of twenty that can actually be finished.
+  //
+  // "I think the deck shows more than 20" was real. `main_queue` excludes decided places
+  // *server-side*, every decision invalidates the ranking, and so each refetch shifted
+  // the list up — `slice(0, shown)` then handed back twenty fresh cards, forever. The
+  // page could never end, which is also why the end-of-deck panel offering the other
+  // lanes was effectively unreachable.
+  //
+  // The window therefore shrinks by what has been decided out of it. Derived rather than
+  // held in an effect, so the very first render already deals a full page: seeding the
+  // page from `useEffect` left the first paint — and every static render — with no cards
+  // at all, which six tests caught immediately.
   const allEntries = ranking.data ? laneEntries(ranking.data, lane) : [];
-  const entries = allEntries.slice(0, shown);
+  const entries = allEntries.slice(0, Math.max(0, shown - decidedHere));
   const laneRemaining = allEntries.length - entries.length;
+  const dealMore = () => {
+    setShown(LANE_PAGE);
+    setDecidedHere(0);
+  };
   const selectedId = entries.some((entry) => entry.place_id === cardId)
     ? cardId
     : (entries[0]?.place_id ?? "");
@@ -404,6 +425,22 @@ export function PlacesPage() {
   const cardMapPlaces = shortlistPlaces.some((place) => place.place_id === selectedId)
     ? shortlistPlaces
     : [...shortlistPlaces, ...mapPlaces([{ place_id: selectedId }], catalog, nameFor)];
+  // Is the free summary for *this* place still coming?
+  //
+  // Gating on the bare `fetchSummary.isPending` gated on the **prefetch**, which fetches
+  // summaries for cards further down the deck — so while any batch was in flight, the
+  // paid button on the open card was replaced by "Loading…" and could not be pressed.
+  // Worse, it never recovered for a place the summaries query holds nothing for:
+  // `!summaries.data?.[selectedId]` stays true forever, so every future prefetch hid the
+  // button again. Reported as "some places can't click Load live gallery" — measured on
+  // Sapporo City Museum, which has both a summary row and a photograph.
+  //
+  // This is the second time the shared prefetch has been mistaken for the card's own
+  // request; the first blanked the whole workspace on every swipe.
+  const summaryPendingForCard =
+    fetchSummary.isPending &&
+    (fetchSummary.variables ?? []).includes(selectedId) &&
+    !summaries.data?.[selectedId];
   const paidAllowed = Boolean(detailsCost.data?.allowed && photosCost.data?.allowed);
   const paidEstimate = (detailsCost.data?.estimate_usd ?? 0) + (photosCost.data?.estimate_usd ?? 0);
   const paidCaption = copy("live_details_cost", language)
@@ -705,6 +742,7 @@ export function PlacesPage() {
                 choices={choices.data ?? []}
                 entries={entries}
                 language={language}
+                onPendingChange={setCardPending}
                 altNameOf={(placeId) => {
                   const found = catalog.find((item) => item.place_id === placeId);
                   if (!found) return null;
@@ -726,9 +764,13 @@ export function PlacesPage() {
                     found.name,
                   );
                 }}
-                onDecide={(placeId, action, reason) =>
-                  saveChoice.mutate({ action, reason, placeId })
-                }
+                onDecide={(placeId, action, reason) => {
+                  // Counted here rather than derived from `choices`, because a decision
+                  // made on the list view or on an earlier page is not a card taken out
+                  // of *this* one.
+                  setDecidedHere((current) => current + 1);
+                  saveChoice.mutate({ action, reason, placeId });
+                }}
                 onCardChange={setCardId}
                 onWantSummary={(placeId) => fetchSummary.mutate([placeId])}
                 summaryLoading={fetchSummary.isPending && !summaries.data?.[selectedId]}
@@ -736,7 +778,7 @@ export function PlacesPage() {
                 laneRemaining={laneRemaining}
                 lanes={LANES}
                 onPickLane={(next) => pickLane(next as Lane)}
-                onShowMore={() => setShown((current) => current + LANE_PAGE)}
+                onShowMore={dealMore}
                 ranking={ranking.data}
                 summaries={summaries.data ?? {}}
               />
@@ -867,7 +909,7 @@ export function PlacesPage() {
                 // Held back while the *free* summary is still arriving: offering to spend
                 // money on better pictures before the free ones have landed asks the owner
                 // to pay for something they cannot yet see they already have.
-                fetchSummary.isPending && !summaries.data?.[selectedId] ? (
+                summaryPendingForCard ? (
                 <div aria-busy="true" className="place-paid-action">
                   <p className="setup-hint">{copy("loading", language)}</p>
                 </div>
@@ -885,7 +927,10 @@ export function PlacesPage() {
                 {choice ? <button onClick={() => clearChoice.mutate(undefined)} type="button">{copy("clear_choice", language)}</button> : null}
               </div>
 
-              <details className="place-explanations">
+              {/* Hidden while the card in front is still arriving. The panel describes
+                  *that* card, so showing it first is the "decide on half the evidence"
+                  problem the card gate exists to prevent, one element over. */}
+              <details className="place-explanations" hidden={cardPending && mode === "deck"}>
                 <summary>{copy("card_detail", language)}</summary>
                 <div className="place-detail-grid">
                   {(["why", "pros", "cons"] as const).map((kind) => {

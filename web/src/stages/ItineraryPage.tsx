@@ -473,6 +473,7 @@ export function ItineraryPage() {
   const plan = snapshot.data.data;
 
   const day = plan.days.find((item) => item.date === chosenDate) ?? plan.days[0];
+  const dayIndex = plan.days.indexOf(day);
   if (!day) return <p>{copy("no_schedule", language)}</p>;
   const totals = day.totals;
   const versionTag = plan.stamp.plan_version_id.replace(/^plan_/, "").slice(0, 12);
@@ -535,10 +536,35 @@ export function ItineraryPage() {
       ) : null}
       {plan.readiness.capability_gaps.length ? <details className="optimize-warnings"><summary>{copy("capability_gaps", language)}</summary><ul>{plan.readiness.capability_gaps.map((gap) => <li key={gap}>{codeText(gap, language)}</li>)}</ul></details> : null}
 
-      <label className="optimize-variant">
-        {copy("days", language)}
-        <select value={day.date} onChange={(event) => setChosenDate(event.target.value)}>{plan.days.map((item) => <option key={item.date} value={item.date}>{item.date}</option>)}</select>
-      </label>
+      {/* Prev / next rather than a dropdown, at the owner's asking. A trip is a sequence
+          and the move you make ninety-nine times out of a hundred is "the next day" — a
+          select turns that into open, find, aim, click, and it never showed which day you
+          were about to get. The date is on the control itself, so the destination is
+          named before the press; the ends disable rather than wrap, because a trip has a
+          first and a last day and silently jumping from one to the other reads as a bug. */}
+      <div className="day-stepper">
+        <button
+          disabled={dayIndex <= 0}
+          onClick={() => setChosenDate(plan.days[dayIndex - 1].date)}
+          type="button"
+        >
+          ← {dayIndex > 0 ? plan.days[dayIndex - 1].date : copy("day_first", language)}
+        </button>
+        <span className="day-stepper-current">
+          {copy("day_of", language)
+            .replace("{current}", String(dayIndex + 1))
+            .replace("{total}", String(plan.days.length))}
+          {" · "}
+          <strong>{day.date}</strong>
+        </span>
+        <button
+          disabled={dayIndex >= plan.days.length - 1}
+          onClick={() => setChosenDate(plan.days[dayIndex + 1].date)}
+          type="button"
+        >
+          {dayIndex < plan.days.length - 1 ? plan.days[dayIndex + 1].date : copy("day_last", language)} →
+        </button>
+      </div>
       {/* derives-from: element 12 .hero-banner-image-wrapper as .dayhead, at aspect-ratio
           3/1 rather than the donor's locked 260px. That is deviation D10: it
           follows the donor's README over the donor's CSS, at the owner's

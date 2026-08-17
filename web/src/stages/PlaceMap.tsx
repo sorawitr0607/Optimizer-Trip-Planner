@@ -308,6 +308,8 @@ export function PlaceMap({
   // screen baseline photographs whatever frame it lands on. Never available under the
   // capture flag for that second reason.
   const [tracing, setTracing] = useState(false);
+  const tracePathRef = useRef<SVGPathElement | null>(null);
+  const travellerRef = useRef<SVGCircleElement | null>(null);
   // Which window has already been asked for, so panning inside it costs nothing.
   const asked = useRef<string>("");
   // Unique per instance, because two maps are on screen at once and a `textPath` points
@@ -442,6 +444,50 @@ export function PlaceMap({
   }, [basemap, outline, places, detail, paths]);
   const { lines, linePoints, areas, buildings, roads, rails, markers } = geometry;
   const { land, landBox, pinPoints, walked, trace } = geometry;
+
+  /**
+   * Walk the day's path by hand.
+   *
+   * This was an SVG `<animateMotion>` and it never ran. Two reasons, either fatal:
+   * SMIL's default `begin="0s"` is relative to the **document** timeline, so by the time
+   * anyone presses the button that instant is minutes past and `fill="freeze"` parks the
+   * dot on the last stop — and, measured in this browser, the SVG timeline does not
+   * advance at all (`svg.getCurrentTime()` stayed at 0 three seconds in), so no `begin`
+   * would have helped. `getPointAtLength` on a real path plus `requestAnimationFrame` is
+   * plain DOM: it starts when asked, it can be stopped, and it does not depend on an
+   * animation engine being present.
+   */
+  useEffect(() => {
+    const path = tracePathRef.current;
+    const dot = travellerRef.current;
+    if (!tracing || !path || !dot) return;
+    const total = path.getTotalLength();
+    if (!total) return;
+    const duration = Math.max(4000, walked.length * 2000);
+    let frame = 0;
+    let start: number | null = null;
+    // Placed before the first frame, so the dot is at the day's first stop even where
+    // `requestAnimationFrame` is throttled or suspended. Without this a circle with no
+    // `cx`/`cy` sits at the origin — off the map — which is indistinguishable from the
+    // button having done nothing at all, and that is the report this is answering.
+    const origin = path.getPointAtLength(0);
+    dot.setAttribute("cx", String(origin.x));
+    dot.setAttribute("cy", String(origin.y));
+    const step = (now: number) => {
+      start ??= now;
+      const fraction = Math.min(1, (now - start) / duration);
+      const point = path.getPointAtLength(fraction * total);
+      dot.setAttribute("cx", String(point.x));
+      dot.setAttribute("cy", String(point.y));
+      // Stops at the last stop rather than looping, so the end of the day reads as an
+      // arrival. Pressing again replays it.
+      if (fraction < 1) frame = requestAnimationFrame(step);
+      else setTracing(false);
+    };
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+  }, [tracing, walked.length]);
+
   // How far out the map may be zoomed: far enough to hold the whole country, which is
   // what "where is this in the country" actually asks for. Without an outline there is
   // nothing out there to look at, so it stays at the fitted city.
@@ -883,14 +929,10 @@ export function PlaceMap({
             radius counter-scales like every other mark on this map. */}
         {tracing && trace ? (
           <g className="plan-map-traveller">
-            <circle r={7 / view.zoom}>
-              <animateMotion
-                dur={`${Math.max(4, walked.length * 2)}s`}
-                fill="freeze"
-                path={trace}
-                repeatCount="1"
-              />
-            </circle>
+            {/* The path is measured, never painted: `getPointAtLength` needs a real
+                element, and the day's legs are already drawn above. */}
+            <path d={trace} fill="none" ref={tracePathRef} stroke="none" />
+            <circle r={7 / view.zoom} ref={travellerRef} />
           </g>
         ) : null}
         {pinPoints.map((point) => {

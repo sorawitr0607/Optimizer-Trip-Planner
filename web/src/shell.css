@@ -1777,6 +1777,12 @@
   stroke: var(--color-accent);
   stroke-dasharray: 5 4;
   stroke-width: 2;
+  /* Screen units. Without this the 2-unit stroke is multiplied by the viewBox zoom, and
+     the map reaches 178x — so the day's connecting line was drawn as a band hundreds of
+     pixels wide over the streets it is meant to trace. Fourth occurrence of this exact
+     mistake (the label halo, the one-way arrows, the pin number), and the first the
+     token gate did not catch, because its list of layers was written by hand. */
+  vector-effect: non-scaling-stroke;
 }
 
 .plan-map-point circle {
@@ -2247,6 +2253,41 @@
    260px. It follows the donor's README over the donor's CSS, at the owner's
    request, and keeps the column rule unchanged. Below 720px the ratio is
    dropped, because a fixed ratio there crushes both columns. */
+/* The day stepper. Sticky, because on a seven-day plan the map, the stops and the
+   timeline run well past a screen and the owner asked to be able to see where they are —
+   moving to the next day should not mean scrolling back up to find the control. */
+.day-stepper {
+  align-items: center;
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius);
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  margin: 12px 0;
+  padding: 8px 10px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.day-stepper button {
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.day-stepper-current {
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .day-stepper {
+    font-size: var(--text-xs);
+    gap: 6px;
+  }
+}
+
 .dayhead {
   aspect-ratio: 3 / 1;
   border: 1px solid var(--bg-card-border);
@@ -4701,6 +4742,10 @@
   stroke-dasharray: none;
   stroke-opacity: 0.55;
   stroke-width: 2.4;
+  /* Restated rather than inherited from `.places-map-rail`: this rule overrides the
+     width, and a reader checking whether *this* line scales should not have to find the
+     base rule to answer. */
+  vector-effect: non-scaling-stroke;
 }
 
 /* The one-way arrows ride on an invisible line: only the marker is painted. The line
@@ -4708,6 +4753,10 @@
 .places-map-flow-line {
   fill: none;
   stroke: none;
+  /* map-units-deliberate: this line is never painted. Its stroke width is the *unit* the
+     one-way arrow marker is measured in (`markerUnits: strokeWidth`), so the small
+     literal is the arrow's size — the default 1 drew arrows ~170px wide that merged into
+     a mass covering the entire map. A screen-unit stroke here would undo that. */
   stroke-width: 0.1;
 }
 
@@ -4715,6 +4764,8 @@
   fill: none;
   stroke: var(--map-flow);
   stroke-linecap: round;
+  /* map-units-deliberate: drawn inside the `<marker>`, whose viewport is already scaled
+     by the carrier line's stroke width above. This is arrow-local, not map-local. */
   stroke-width: 0.7;
 }
 
