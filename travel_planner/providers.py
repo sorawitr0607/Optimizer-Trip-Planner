@@ -12,7 +12,7 @@ from pathlib import Path
 from collections.abc import Iterable
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote, urlencode
+from urllib.parse import quote, urlencode, urlsplit
 from urllib.request import Request, urlopen
 
 from . import interpret
@@ -869,6 +869,63 @@ class VenueNoticeProvider:
                 f"Venue page unreachable: {type(error).__name__}"
             ) from None
         return visible_text(raw.decode(charset, errors="replace"), limit=self.PAGE_LIMIT)
+
+    def preview(self, website: str) -> dict[str, Any]:
+        """The place's own published preview: `og:image` and `og:description`.
+
+        The last free source, for the places every encyclopedic one is silent about — a
+        tailor, a mini-golf, a martial arts club. Those have no Wikidata entry, no article
+        and nothing on Commons, and no amount of widening a radius will conjure one.
+
+        **This is the venue's own page**, and the two tags are what a site publishes
+        *specifically* so that other software can show a picture and a sentence for it.
+        That is why this is the only "anything on the internet" source worth having: an
+        image search for `Ancient Egypt` returns a museum object from another continent —
+        measured, when a looser rule briefly admitted exactly that — while a site's own
+        `og:image` is about that site by construction. Relevance, not licence, is what
+        rules the wider web out.
+
+        Owner-authorised for a local, single-user app on 2026-08-17. Never fatal: a place
+        with no website, an unreachable page or a page without the tags keeps the blank
+        card it already had.
+        """
+
+        request = Request(
+            website, headers={"User-Agent": self.user_agent, "Accept": "text/html,*/*"}
+        )
+        try:
+            with urlopen(request, timeout=20) as response:  # noqa: S310 - the place's own site
+                raw = response.read(400_000)
+                charset = response.headers.get_content_charset() or "utf-8"
+        except (HTTPError, URLError, TimeoutError, OSError) as error:
+            raise ProviderUnavailable(
+                f"Venue page unreachable: {type(error).__name__}"
+            ) from None
+        head = raw.decode(charset, errors="replace")
+        found: dict[str, Any] = {}
+        for prop, key in (("og:image", "image"), ("og:description", "text")):
+            # Both attribute orders, because half the web writes `content` first.
+            match = re.search(
+                rf'<meta[^>]+(?:property|name)=["\']{prop}["\'][^>]*content=["\']([^"\']+)',
+                head,
+                re.IGNORECASE,
+            ) or re.search(
+                rf'<meta[^>]+content=["\']([^"\']+)["\'][^>]*(?:property|name)=["\']{prop}["\']',
+                head,
+                re.IGNORECASE,
+            )
+            if match:
+                found[key] = match.group(1).strip()
+        image = found.get("image") or ""
+        if image.startswith("//"):
+            image = "https:" + image
+        elif image.startswith("/"):
+            parts = urlsplit(website)
+            image = f"{parts.scheme}://{parts.netloc}{image}"
+        return {
+            "image_url": image if image.startswith("http") else "",
+            "text": found.get("text", ""),
+        }
 
     def notice(self, *, name: str, website: str) -> dict[str, Any]:
         key = os.environ.get("OPENAI_API_KEY", "").strip()
@@ -1871,7 +1928,9 @@ class WikidataSummaryProvider:
     # are not geotagged and so were invisible to both the geosearch and the name search.
     # v10: the words rule. Places whose Commons files insert or omit a word were
     # storing a blank, and the blank is cached for 60 days — so they must be asked again.
-    cache_version = "wikidata-summary-v10"
+    # v11: the venue's own `og:` preview as a last resort, so places every free
+    # encyclopedic source is silent about get asked once more.
+    cache_version = "wikidata-summary-v11"
     # An encyclopedia article changes slowly and a description is not a fact the
     # planner schedules against, so this can sit for a long time.
     cache_ttl_days = 60
@@ -1924,7 +1983,26 @@ class WikidataSummaryProvider:
         }
 
     # Wikimedia rate-limits bursts and asks for serial requests with a descriptive
-    # agent. Eight of thirteen places came back HTTP 429 without this.
+    # agent. Eight of thirteen places came back HTTP 429 without a pause.
+    #
+    # **Flat, before every request, and three attempts to make it adaptive have failed.**
+    #
+    # It looks like pure overhead: profiled at **44.8s of a 74.3s refresh**, sixty percent
+    # of the wait. Every attempt to reclaim it made the run slower:
+    #
+    #   pause only between retries   41.6s → 63.3s,  38 → 97 requests
+    #   adaptive, decay 0.6          42.6s → 71.6s,  49 rate-limits in one run
+    #   adaptive, decay 0.98         42.6s → 73.9s,  47 rate-limits in one run
+    #
+    # The reason both adaptive schemes fail is the same, and it is not tuning. A pause
+    # that starts at zero has to **discover** the limit by exceeding it, and Wikimedia
+    # does not answer one 429 and forgive — it keeps refusing for a stretch, so the burst
+    # is punished for far longer than it lasted. Slowing the decay did nothing because the
+    # damage was already done in the first second. The flat pause is not paying for
+    # requests; it is buying the limiter never being triggered, and that is worth more
+    # than it costs.
+    #
+    # Do not try a fourth time without a way to know the limit *without* crossing it.
     pause_seconds = 0.4
     retries = 2
 
@@ -1934,11 +2012,6 @@ class WikidataSummaryProvider:
         )
         last: Exception | None = None
         for attempt in range(self.retries + 1):
-            # Before **every** request, not only between retries. That looks like pure
-            # waste — measured, it is about 15 seconds of a 41-second refresh — and
-            # removing it was tried and made the run *slower*: 41.6s became 63.3s,
-            # because Commons answered 429 and the retries cost far more than the pauses
-            # had. The pause is not overhead, it is the thing that stops the burst.
             if attempt or self.pause_seconds:
                 sleep(self.pause_seconds * (attempt + 1))
             try:

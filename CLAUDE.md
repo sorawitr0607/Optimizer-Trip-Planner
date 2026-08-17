@@ -720,6 +720,47 @@ Worth knowing for the next time a mirror is evaluated: **`overpass.osm.ch` is re
 and useless** — it serves a Switzerland-only extract, so it answers 200 with zero
 elements for anywhere else, which looks exactly like a city having nothing in it.
 
+## The courtesy pause is not overhead, and three attempts have now proved it
+
+Profiled at **44.8s of a 74.3s refresh** — sixty percent of the wait is `pause_seconds`,
+a flat 0.4s in front of every Wikimedia request. Every attempt to reclaim it made the run
+slower:
+
+| Attempt | Result |
+|---|---|
+| Pause only between retries | 41.6s → **63.3s**, 38 → 97 requests |
+| Adaptive from zero, decay 0.6 | 42.6s → **71.6s**, **49** rate-limits in one run |
+| Adaptive from zero, decay 0.98 | 42.6s → **73.9s**, **47** rate-limits in one run |
+
+Both adaptive schemes fail for the same reason, and it is not tuning — slowing the decay
+from 0.6 to 0.98 changed nothing because the damage was already done in the first second.
+**A pause that starts at zero has to discover the limit by exceeding it**, and Wikimedia
+does not answer one 429 and forgive: it keeps refusing for a stretch, so a burst is
+punished for far longer than it lasted. The flat pause is not paying per request; it is
+buying the limiter never being triggered, and that is worth more than it costs.
+
+Do not try a fourth time without a way to learn the limit *without* crossing it. The
+lever that remains is asking less, not waiting less.
+
+## A place's own website is the last free source, and the only honest "anywhere" one
+
+The owner set the licensing question aside on 2026-08-17 — this is a local, single-user
+app — so the wider web was in scope. It is still almost all ruled out, on **relevance**
+rather than licence: a general image search for `Ancient Egypt` returns a museum object
+from another continent, which is not a hypothetical but the exact failure measured when a
+looser Commons rule briefly admitted a Horus canister for a Singapore attraction.
+
+`VenueNoticeProvider.preview()` reads the venue's own `og:image` and `og:description` —
+tags a site publishes *specifically* so other software can show a picture and a sentence
+for it, and which are about that site by construction. It runs only after every free
+encyclopedic source has said nothing, and it is never fatal: no website, an unreachable
+page or a page without the tags leaves the blank card that was already there.
+
+Measured across the owner's three catalogues, 38 blanks: **4 recovered**, three of them
+through this path — a martial arts club, KidZania, and a gym. Those are precisely the
+places with no Wikidata entry, no article and nothing on Commons, which no radius and no
+name rule could ever have reached. `cache_version` is `wikidata-summary-v11`.
+
 ## Summary fetching: batched, and the profile says that is not where the time is
 
 Asked to make summaries faster by batching, so the first thing was to measure. Ten

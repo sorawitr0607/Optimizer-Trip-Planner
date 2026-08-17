@@ -2642,6 +2642,10 @@ class PlannerActions:
                 # photographed here" rather than "photographs of this place" -- stored
                 # flagged as nearby so the screen says which it is showing.
                 photos = self._nearby_photos(provider, place)
+                # Nothing on Commons either. These places — a tailor, a mini-golf, a
+                # martial arts club — are exactly the ones with no encyclopedic presence
+                # anywhere, and their own website is the only thing that is about them.
+                own = {} if photos else self._own_site_preview(place)
                 # Stored even when empty. Without a record the answer is not cached, so
                 # every page load asked Commons again for the same place and got the
                 # same nothing -- against a public service this app's own notice
@@ -2657,15 +2661,16 @@ class PlannerActions:
                         "cache_version": current_version,
                         "qid": None,
                         "names": {},
-                        "text": {},
-                        "image_url": photos[0] if photos else None,
-                        "image_urls": photos,
+                        "text": {"en": own["text"]} if own.get("text") else {},
+                        "image_url": photos[0] if photos else (own.get("image_url") or None),
+                        "image_urls": photos or ([own["image_url"]] if own.get("image_url") else []),
                         "photos_are_nearby": bool(photos),
+                        "photo_from_own_site": bool(not photos and own.get("image_url")),
                         "licence": "CC BY-SA or compatible, Wikimedia Commons",
                         "source_urls": {},
                     },
                 )
-                if photos:
+                if photos or own.get("image_url"):
                     fetched += 1
                 else:
                     skipped += 1
@@ -2718,6 +2723,20 @@ class PlannerActions:
             # nearby fallback applies here too rather than only where the id is missing.
             if not value.get("image_urls") and not value.get("image_url"):
                 photos = self._nearby_photos(provider, place)
+                if not photos:
+                    # Every free encyclopedic source has now said nothing. The venue's own
+                    # site is the last one, and the only one that is about this place by
+                    # construction.
+                    own = self._own_site_preview(place)
+                    if own.get("image_url"):
+                        value = {
+                            **value,
+                            "image_url": own["image_url"],
+                            "image_urls": [own["image_url"]],
+                            "photo_from_own_site": True,
+                        }
+                    if own.get("text") and not (value.get("text") or {}).get("en"):
+                        value = {**value, "text": {**(value.get("text") or {}), "en": own["text"]}}
                 if photos:
                     value = {
                         **value,
@@ -2770,6 +2789,32 @@ class PlannerActions:
         # -- measured, it had nothing for Shilin Presidential Residence Park while four
         # files carry that exact name.
         return PlannerActions._named_photos(provider, place)
+
+    def _own_site_preview(self, place: dict[str, Any]) -> dict[str, Any]:
+        """The place's own `og:image` and `og:description`. The last resort, and free.
+
+        For the places every encyclopedic source is silent about — a tailor, a mini-golf,
+        a martial arts club — there is no Wikidata entry, no article and nothing on
+        Commons, and no radius widens far enough to conjure one. Their own website is the
+        only thing on the internet that is *about them by construction*, and `og:` tags
+        are published precisely so other software can show a picture and a sentence.
+
+        Owner-authorised on 2026-08-17 for a local, single-user app. Measured on their own
+        catalogues: of seven blank places carrying a `website`, **three** yielded an image
+        and a description; the rest were unreachable or had no tags. Never fatal.
+        """
+
+        website = str(place.get("website") or "").strip()
+        if not website.startswith("http"):
+            return {}
+        provider = self.venue_notice_provider or VenueNoticeProvider()
+        preview = getattr(provider, "preview", None)
+        if preview is None:
+            return {}
+        try:
+            return preview(website) or {}
+        except (ProviderUnavailable, ValueError):
+            return {}
 
     @staticmethod
     def _named_photos(provider: Any, place: dict[str, Any]) -> list[str]:
