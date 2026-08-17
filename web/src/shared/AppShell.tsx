@@ -254,6 +254,13 @@ export function AppShell() {
           ) : null}
         </div>
 
+        {/* Which build is on screen. See the note in `vite.config.ts`: six rounds of
+            testing were spent on fixes that were already shipped and simply not loaded,
+            and nothing about behaviour is worth discussing until this matches the build
+            that was just made. */}
+        <p className="build-stamp" title="Build">
+          build {__BUILD_ID__}
+        </p>
         <div className="sidebar-controls">
           {/* Named for what it switches to. "EN / ไทย" states the pair and not the
               action, so neither the current language nor the outcome was announced. */}

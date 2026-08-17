@@ -4,6 +4,19 @@ import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  /**
+   * The build's own timestamp, rendered in the sidebar.
+   *
+   * Six rounds of owner testing produced reports of fixes "not working" that were
+   * verified working minutes earlier, and every one turned out to be a browser holding
+   * an older bundle — a tab open across a rebuild, or a server never restarted. There was
+   * no way for either side to tell, so each round spent its first hour re-diagnosing a
+   * fixed bug. A visible stamp settles it in one glance: if it does not match the build
+   * that was just made, nothing about behaviour is worth discussing yet.
+   */
+  define: {
+    __BUILD_ID__: JSON.stringify(new Date().toISOString().slice(0, 16).replace("T", " ")),
+  },
   build: {
     /**
      * A budget, not Vite's default guess.

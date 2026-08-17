@@ -141,6 +141,7 @@ export function StayAreas({ tripId, language, onOutcome }: StayAreasProps) {
                     known exactly here. Coordinates go straight in. */}
                 {area.latitude !== null && area.longitude !== null ? (
                   <button
+                    className="stay-area-pick"
                     disabled={chooseArea.isPending}
                     onClick={() =>
                       chooseArea.mutate({

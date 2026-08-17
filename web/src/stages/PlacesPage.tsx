@@ -157,6 +157,8 @@ export function PlacesPage() {
   const [cardId, setCardId] = useState("");
   /** Reported by the deck: the card in front has not finished arriving. */
   const [cardPending, setCardPending] = useState(false);
+  /** Latched when the first card ever finishes, so the discovery block cannot come back. */
+  const [firstCardDone, setFirstCardDone] = useState(false);
   /** Decisions taken out of the current page, which is what makes the page end. */
   const [decidedHere, setDecidedHere] = useState(0);
   // The coverage report is collapsed on arrival and holds the audit table and the
@@ -445,7 +447,15 @@ export function PlacesPage() {
   // so it covers the press it was asked for and nothing else. Keyed on the choices being
   // empty as well, because the busy block says "searching for places", and showing that
   // to someone returning to a half-swiped deck would be a lie about what is happening.
-  const firstCardWait = discover.isSuccess && cardPending && !(choices.data ?? []).length;
+  //
+  // **Latched, and that was a real bug for a round.** Written as a plain condition it was
+  // true for *every* card while the shortlist was still empty — so `busy` flipped on each
+  // swipe, the whole workspace hid and reappeared, and the deck's own placeholder was
+  // replaced by the discovery block. That is the "places page is blinking" report and the
+  // "some cards show no skeleton" one: the same edit caused both. Once the first card has
+  // arrived, this can never be true again for the life of the screen.
+  const firstCardWait =
+    discover.isSuccess && cardPending && !firstCardDone && !(choices.data ?? []).length;
   const busy =
     discover.isPending ||
     (catalog.length > 0 && (!ranking.data || summaries.isPending || firstCardWait));
@@ -795,7 +805,10 @@ export function PlacesPage() {
                 choices={choices.data ?? []}
                 entries={entries}
                 language={language}
-                onPendingChange={setCardPending}
+                onPendingChange={(pending) => {
+                  setCardPending(pending);
+                  if (!pending) setFirstCardDone(true);
+                }}
                 altNameOf={(placeId) => {
                   const found = catalog.find((item) => item.place_id === placeId);
                   if (!found) return null;

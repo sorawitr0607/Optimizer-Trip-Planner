@@ -712,6 +712,32 @@ Worth knowing for the next time a mirror is evaluated: **`overpass.osm.ch` is re
 and useless** — it serves a Switzerland-only extract, so it answers 200 with zero
 elements for anywhere else, which looks exactly like a city having nothing in it.
 
+## The build stamp, and the bug that made the last round unreadable
+
+Six rounds produced reports of fixes "not working" that had been verified working minutes
+earlier, and every one turned out to be a browser holding an older bundle. `python -m api`
+rebuilds **only at startup**, and only when a source is newer than `dist/index.html`, so a
+server left running never picks anything up — and a tab left open holds the old JavaScript
+even after it does. Neither side could tell which build was on screen, so each round spent
+its first hour re-diagnosing something already fixed.
+
+The sidebar now prints `build <timestamp>`, stamped by `vite.config.ts`. **If it does not
+match the build that was just made, nothing about behaviour is worth discussing yet.** The
+recipe is: stop the server, `uv run --locked python -m api`, hard-reload the browser.
+
+**And one of those reports was real, from my own edit the round before.** `firstCardWait`
+— which holds the discovery skeleton until the first card is ready — was written as a
+plain condition, so it was true for *every* card while the shortlist was still empty. That
+flipped `busy` on each swipe, hiding and re-showing the whole workspace and replacing the
+deck's own placeholder with the discovery block. Two of the reports in the next round were
+that single line: "the places page is blinking" and "some cards show no skeleton". It is
+latched now, in state set from the deck's own callback rather than a ref, because a ref
+read during render is neither allowed by the lint rules nor correct.
+
+The lesson worth keeping: **a fix that makes a condition true more often needs asking
+"how often, and on what"** — this one was scoped to "after a discovery" and read as
+"after the first card", and those differ by every card in the deck.
+
 ## The deck and the panel beside it are framed differently, and the card nudges
 
 Two identically-framed cards side by side made "which of these do the buttons belong to"
