@@ -764,17 +764,38 @@
   padding: 6px 8px;
 }
 
-/* A focus ring the keyboard can see. There was none anywhere in this stylesheet, so
-   every field fell back to whatever the browser drew — which in Safari over a bordered
-   input is nearly invisible. `:focus-visible`, not `:focus`, so a mouse click does not
-   ring the field it just filled. */
-.setup-fields input:focus-visible,
-.setup-fields select:focus-visible,
-.setup-fields textarea:focus-visible,
-.setup-fields button:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
+/* The states the article's anatomy list names — inactive, hover, disabled, error — of
+   which this form had exactly one. A field that does not change under the pointer reads
+   as static text until it is clicked, and a disabled one that looks identical to an
+   enabled one is the worse half of that. */
+.setup-fields input:hover:not(:disabled),
+.setup-fields select:hover:not(:disabled),
+.setup-fields textarea:hover:not(:disabled) {
+  border-color: var(--text-secondary);
 }
+
+.setup-fields input:disabled,
+.setup-fields select:disabled,
+.setup-fields textarea:disabled {
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+/* The error state on the field itself, not only in the sentence beneath it. Colour is
+   never the only carrier — the message says what is wrong and `aria-invalid` says it to a
+   screen reader — but the border is what makes the right field findable on a long step. */
+.setup-fields [aria-invalid="true"] {
+  border-color: var(--color-danger);
+}
+
+/* No focus rule here on purpose. `tokens.css` already ships a house one —
+   `:focus-visible { outline: 2.5px solid var(--color-purple) }` — and a version of this
+   file briefly added a 2px accent ring for the setup fields alone, which would have made
+   one screen ring differently from every other. That is the "consistent styles across all
+   fields" rule broken by the change meant to honour it. Found by reading the computed
+   style rather than the stylesheet: grepping `shell.css` and concluding the app had no
+   focus ring was the mistake. */
 
 /* An input as wide as what goes in it. An age is three characters and was being given a
    whole column, which reads as a field expecting something longer — the article's point

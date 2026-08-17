@@ -755,9 +755,13 @@ Worked from Eleken's "46 Input Field Design Examples" tip by tip. Most of it the
 already did — visible labels rather than placeholder-only, one column, fieldset grouping,
 a step indicator, 44px touch targets, consistent borders. Five things it did not:
 
-**There was no focus ring anywhere in the stylesheet.** Every field fell back to the
-browser default, which over a bordered input in Safari is close to invisible.
-`:focus-visible`, not `:focus`, so a mouse click does not ring the field it just filled.
+**~~There was no focus ring anywhere in the stylesheet.~~ There was, in `tokens.css`,
+and I grepped only `shell.css`.** The house rule is
+`:focus-visible { outline: 2.5px solid var(--color-purple) }`. A 2px accent ring was
+briefly added for the setup fields alone, which would have made one screen ring
+differently from every other — the "consistent styles across all fields" rule broken by
+the change meant to honour it. Removed. Found by reading the *computed* style in a
+browser rather than the stylesheet, which is the only way it could have been found.
 
 **Every hint was unattached.** Eleven inputs, sixteen labels, and not one
 `aria-describedby` — a sighted reader could see that the grey line under a field belonged
@@ -778,6 +782,17 @@ prevent. One column now, capped at `34rem` — the cap matters as much as the co
 single column stretched across 1000px is its own problem. The error is worth recording
 because of how it happened: I read the rule, agreed the form met it, and did not measure
 until asked whether I had actually checked.
+
+**Reading the images, not just the text, is what found the last of it.** The article's
+anatomy list names the states a field should have — *inactive, hover, disabled,
+validation, error, focused* — and only appears in a screenshot's surrounding bullet list.
+Of those six the setup form had **one**. Hover, disabled and an `aria-invalid` error
+border are now real, verified on a live number field: inactive `rgb(58,58,58)`, error
+`rgb(238,107,107)`, disabled greyed with `not-allowed`, 80px wide.
+
+The before/after screenshot carries the clearest single lesson in the piece: the redesigned
+question states its own rule as helper text — *"Select one or more answers – required"* —
+directly under the label, rather than leaving the requirement to be discovered on submit.
 
 **Read the page, do not read a summary of it.** Two `WebFetch` calls returned a small
 model's précis, and both were faithful — but only opening the article in a browser and
