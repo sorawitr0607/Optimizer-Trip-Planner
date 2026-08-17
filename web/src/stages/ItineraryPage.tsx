@@ -295,9 +295,16 @@ export function CoordinateMap({
   // Only the legs this day actually walks, in the order it walks them — the trip holds a
   // shape for every pair the router was asked about, most of which belong to other days.
   const walked: { points: [number, number][]; exact: boolean }[] = [];
-  for (let at = 1; at < points.length; at += 1) {
-    const from = points[at - 1];
-    const to = points[at];
+  // The day is a **round trip**: it starts at the accommodation and ends back there. The
+  // loop below joined `points` in order and stopped at the last stop, so the walk home
+  // was missing from the line and from the trace — the day appeared to end wherever the
+  // last museum was. Closing the ring only where there is an anchor to close it to: a
+  // trip with no accommodation base has no home leg to draw.
+  const homeward = points.length > 1 && points[0].place_id === "hotel" ? [points[0]] : [];
+  const route = [...points, ...homeward];
+  for (let at = 1; at < route.length; at += 1) {
+    const from = route[at - 1];
+    const to = route[at];
     const leg = shapes.find(
       (shape) =>
         (shape.origin_id === from.place_id && shape.destination_id === to.place_id)

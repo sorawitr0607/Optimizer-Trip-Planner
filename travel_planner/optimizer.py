@@ -1834,16 +1834,22 @@ def _best_inbound_route(
 
 
 def _usable_route_statuses(snapshot: dict[str, Any]) -> set[str]:
-    """`verified` always; `estimated` only for an Explore preview.
+    """`verified` always; `estimated` and `accepted_estimate` on an Explore preview.
 
     The same rule `_planning_fact` applies to opening hours. A transit leg derived
     from topology or a timetable is `estimated` by construction -- it is honest, not
     looked up -- so without this the optimizer discards every transit route it is
     given and `WF-038` buys nothing.
+
+    `accepted_estimate` is a straight line the **owner asked for** where no router would
+    answer, deliberately inflated so it can only over-state the journey. It is admitted
+    on the same terms as `estimated` and never on a `ready_to_schedule` trip: a plan that
+    claims to be scheduled against verified evidence must not be resting on a guess,
+    however conservative, and however explicitly it was requested.
     """
 
     if snapshot.get("trip", {}).get("allow_provisional_assumptions"):
-        return {"verified", "estimated"}
+        return {"verified", "estimated", "accepted_estimate"}
     return {"verified"}
 
 

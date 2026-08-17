@@ -740,3 +740,53 @@ class ProvisionalDerivationTest(unittest.TestCase):
         self.assertEqual("ready", export["readiness"]["state"])
         self.assertEqual([], export["readiness"]["capability_gaps"])
         self.assertEqual(version.version_id, export["stamp"]["plan_version_id"])
+
+
+class AcceptedRouteEstimateTest(unittest.TestCase):
+    """A straight line the owner asked for, and it may only ever over-state the walk.
+
+    `ROUTE_UNVERIFIED` is fatal by design, and the free routers do not always answer —
+    OpenRouteService rate-limits, and some pairs it will not route at all. The owner was
+    left with "drop the place" as the only way past it. This is the other way, and the
+    direction of the error is the whole reason it is allowed: an optimistic guess makes a
+    plan that cannot be walked, while a pessimistic one makes a plan with slack in it.
+    """
+
+    def test_the_estimate_is_never_shorter_than_the_straight_line(self) -> None:
+        from travel_planner.actions import _distance_metres
+        from travel_planner.transit import WALK_METRES_PER_MINUTE
+
+        directory = TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        actions = PlannerActions(Path(directory.name) / "estimates.sqlite3")
+        left = {"id": "a", "latitude": 25.0330, "longitude": 121.5654}
+        right = {"id": "b", "latitude": 25.0478, "longitude": 121.5170}
+        made = actions._accepted_route_estimates([left, right], [])
+
+        straight = _distance_metres(left, right)
+        for leg in made:
+            self.assertGreater(leg["distance_metres"], straight)
+            self.assertEqual("accepted_estimate", leg["status"])
+            self.assertEqual("owner_accepted_straight_line", leg["basis"])
+            # And the minutes agree with the distance it claims.
+            self.assertAlmostEqual(
+                leg["duration_minutes"],
+                round(leg["distance_metres"] / WALK_METRES_PER_MINUTE, 1),
+                places=1,
+            )
+        # Both directions, because the optimizer asks for ordered pairs.
+        self.assertEqual({("a", "b"), ("b", "a")},
+                         {(leg["origin_id"], leg["destination_id"]) for leg in made})
+
+    def test_a_pair_that_already_has_a_route_is_left_alone(self) -> None:
+        directory = TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        actions = PlannerActions(Path(directory.name) / "estimates.sqlite3")
+        left = {"id": "a", "latitude": 25.03, "longitude": 121.56}
+        right = {"id": "b", "latitude": 25.04, "longitude": 121.51}
+        held = [{"origin_id": "a", "destination_id": "b"}]
+
+        made = actions._accepted_route_estimates([left, right], held)
+
+        self.assertEqual([("b", "a")],
+                         [(leg["origin_id"], leg["destination_id"]) for leg in made])

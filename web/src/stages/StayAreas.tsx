@@ -30,9 +30,11 @@ export interface StayAreasProps {
    *  ranked at all — the centre-of-my-places fallback is only an answer once the
    *  question has actually been asked. */
   onOutcome?: (outcome: "ranked" | "unrankable") => void;
+  /** Called once an area has been adopted as the base, so the page can move on. */
+  onChosen?: () => void;
 }
 
-export function StayAreas({ tripId, language, onOutcome }: StayAreasProps) {
+export function StayAreas({ tripId, language, onOutcome, onChosen }: StayAreasProps) {
   const queryClient = useQueryClient();
   const recommend = useMutation<StayAreaReport, Error, void>({
     mutationFn: () => rpc<StayAreaReport>("recommend_areas", { trip_id: tripId }),
@@ -48,6 +50,10 @@ export function StayAreas({ tripId, language, onOutcome }: StayAreasProps) {
           queryClient.invalidateQueries({ queryKey: [key, tripId] }),
         ),
       );
+      // On to the plan. Picking an area *is* the answer to this page, and leaving the
+      // owner on the ranked list afterwards was read as the button not working — the
+      // base was written and the stage completed, with nothing on screen saying so.
+      onChosen?.();
     },
   });
   const report = recommend.data;

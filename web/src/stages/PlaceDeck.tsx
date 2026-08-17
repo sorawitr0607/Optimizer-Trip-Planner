@@ -277,6 +277,25 @@ export function PlaceDeck({
   const cardPending = summaryLoading || (Boolean(currentPhoto) && photoLoaded !== currentPhoto && photo === 0);
   // Report the card in front, so the panel beside the deck tracks it.
   const currentId = entry?.place_id;
+
+  // The gallery index belongs to the card, so it resets with the card.
+  //
+  // It was reset in `decide()` and `advance()` only — the two ways *this* deck advances —
+  // and not when the card in front changed for any other reason. Changing lane is the
+  // common one, which is why the owner's repro was "after deciding twenty from City
+  // Icons and switching category": tap twice through a gallery, switch lane, and the new
+  // card arrives with `photo` still at 2. `cardPending` requires `photo === 0`, so it was
+  // false, so **no skeleton and a swipeable card whose picture had not loaded** — and the
+  // card also opened on its third photograph rather than its first.
+  //
+  // Adjusted during render rather than in an effect: this is state derived from a prop
+  // that changed, which is the shape React sanctions for it, and an effect would paint
+  // one frame of the wrong card's gallery first.
+  const [shownCard, setShownCard] = useState<string | undefined>(currentId);
+  if (currentId !== shownCard) {
+    setShownCard(currentId);
+    setPhoto(0);
+  }
   useEffect(() => {
     if (currentId) onCardChange?.(currentId);
     // `onCardChange` is a fresh closure each render; the card id is what changes.
@@ -323,6 +342,8 @@ export function PlaceDeck({
   // Advance the loading line while a card is arriving, and only then: a timer left
   // running behind a loaded deck is a re-render a second for nothing.
   const [loadingStep, setLoadingStep] = useState(0);
+  /** Which reconsider row is open, so its detail can be laid out beside the name. */
+  const [openRow, setOpenRow] = useState<string | null>(null);
   useEffect(() => {
     if (!cardPending) return;
     const timer = window.setInterval(
@@ -420,7 +441,10 @@ export function PlaceDeck({
                   const prose = about?.text?.[language] ?? about?.text?.en
                     ?? about?.description?.[language] ?? about?.description?.en ?? "";
                   return (
-                    <li className="deck-reconsider-row" key={c.place_id}>
+                    <li
+                      className={`deck-reconsider-row${openRow === c.place_id ? " open" : ""}`}
+                      key={c.place_id}
+                    >
                       {/* Opening a row also selects the place, so the panel beside the
                           deck shows its full card — score, breakdown, gallery and all —
                           rather than this row's thumbnail being the whole of what a
@@ -429,7 +453,9 @@ export function PlaceDeck({
                       <details
                         className="deck-reconsider-detail"
                         onToggle={(event) => {
-                          if (event.currentTarget.open) onCardChange?.(c.place_id);
+                          const open = event.currentTarget.open;
+                          setOpenRow(open ? c.place_id : null);
+                          if (open) onCardChange?.(c.place_id);
                         }}
                       >
                         <summary className="deck-reconsider-name">{nameOf(c.place_id)}</summary>

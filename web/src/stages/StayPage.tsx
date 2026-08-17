@@ -58,6 +58,11 @@ export function StayPage() {
           queryClient.invalidateQueries({ queryKey: [key, tripId] }),
         ),
       );
+      // Naming an address answers this page as completely as picking an area does, so it
+      // goes the same way. Both were reported as "didn't work" for the same reason:
+      // they succeeded silently and left the owner looking at the form they had just
+      // finished with.
+      navigate(`/trips/${tripId}/optimize`);
     },
     onError: (error) => setFlash(error instanceof ApiError ? error.code : String(error)),
   });
@@ -162,7 +167,12 @@ export function StayPage() {
         </button>
       </div>
 
-      <StayAreas language={language} onOutcome={setOutcome} tripId={tripId} />
+      <StayAreas
+        language={language}
+        onChosen={() => navigate(`/trips/${tripId}/optimize`)}
+        onOutcome={setOutcome}
+        tripId={tripId}
+      />
 
       {/* Picking an area answers this page too, but unlike accepting the centre it is not
           obviously terminal — an owner may want to compare two before moving on — so this

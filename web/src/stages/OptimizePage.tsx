@@ -120,6 +120,20 @@ export function OptimizePage() {
     queryKey: ["comfort_tradeoffs", tripId],
     queryFn: () => rpc<ComfortTradeoffReport>("comfort_tradeoffs", { trip_id: tripId }),
   });
+  const acceptRoutes = useMutation({
+    mutationFn: async () => {
+      await rpc("accept_route_estimates", { trip_id: tripId });
+      // Rebuilt straight away: the estimates only reach the plan through a new
+      // `_optimizer_input`, so accepting without rebuilding would look like nothing.
+      return rpc<PlanPreview>("generate_plan_preview", { trip_id: tripId });
+    },
+    onSuccess: async () => {
+      setRefusal(null);
+      await queryClient.invalidateQueries({ queryKey: ["plan_preview", tripId] });
+    },
+    onError: (error) => setRefusal(error instanceof ApiError ? error.code : String(error)),
+  });
+
   const acceptAll = useMutation({
     mutationFn: async (rules: ComfortTradeoffReport["rules"]) => {
       for (const rule of rules) {
@@ -690,6 +704,24 @@ export function OptimizePage() {
                       {copy("unfit_change_dates", language)}
                     </Link>
                   </p>
+                ) : null}
+                {/* The other way past a route nothing will measure. "Fix routes" asks
+                    the routers again, which is right when they were merely busy and
+                    useless when they will not answer this pair at all — and then the only
+                    remaining control was "drop the place". This accepts a deliberately
+                    **over-stated** straight line instead: the plan gains slack rather
+                    than losing a place, and the estimate is marked so nothing downstream
+                    can mistake it for something a router said. */}
+                {needsRoutes ? (
+                  <button
+                    disabled={acceptRoutes.isPending}
+                    onClick={() => acceptRoutes.mutate()}
+                    type="button"
+                  >
+                    {acceptRoutes.isPending
+                      ? copy("loading", language)
+                      : copy("accept_route_estimates", language)}
+                  </button>
                 ) : null}
                 {needsRoutes ? (
                   <button

@@ -204,6 +204,65 @@ class PlannerActions:
         return value
 
     STAY_DECIDED_KIND = "stay_decided"
+    ROUTE_ESTIMATES_KIND = "route_estimates_accepted"
+    #: How much longer a real path is than the straight line between two points. 1.4 is
+    #: the usual figure for a street grid and is applied *against* the owner here: it
+    #: makes every accepted leg longer, never shorter.
+    ACCEPTED_ROUTE_DETOUR = 1.4
+
+    def accept_route_estimates(self, trip_id: str) -> dict[str, Any]:
+        """Record that the owner accepts straight-line estimates where no route exists."""
+
+        if self.store.get_trip(trip_id) is None:
+            raise PlannerRefusal("unknown_trip", trip_id=trip_id)
+        now = datetime.now(timezone.utc)
+        value = {"kind": self.ROUTE_ESTIMATES_KIND, "accepted_at": now.isoformat()}
+        self.store.upsert_trip_evidence(
+            trip_id=trip_id,
+            kind=self.ROUTE_ESTIMATES_KIND,
+            value=value,
+            provider="owner",
+            retrieved_at=now.isoformat(),
+            expires_at=(now + timedelta(days=3650)).isoformat(),
+        )
+        return value
+
+    def _route_estimates_accepted(self, trip_id: str) -> bool:
+        return bool(self.store.get_trip_evidence(trip_id, self.ROUTE_ESTIMATES_KIND))
+
+    def _accepted_route_estimates(
+        self, candidates: list[dict[str, Any]], routes: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """One pessimistic walking leg per ordered pair nothing else covers."""
+
+        from travel_planner.transit import WALK_METRES_PER_MINUTE
+
+        points = [
+            item
+            for item in candidates
+            if item.get("latitude") is not None and item.get("longitude") is not None
+        ]
+        held = {(route["origin_id"], route["destination_id"]) for route in routes}
+        made: list[dict[str, Any]] = []
+        for origin in points:
+            for destination in points:
+                if origin["id"] == destination["id"]:
+                    continue
+                if (origin["id"], destination["id"]) in held:
+                    continue
+                metres = _distance_metres(origin, destination) * self.ACCEPTED_ROUTE_DETOUR
+                made.append(
+                    {
+                        "origin_id": origin["id"],
+                        "destination_id": destination["id"],
+                        "mode": "walk",
+                        "status": "accepted_estimate",
+                        "basis": "owner_accepted_straight_line",
+                        "duration_minutes": round(metres / WALK_METRES_PER_MINUTE, 1),
+                        "distance_metres": round(metres),
+                    }
+                )
+        return made
 
     def accept_provisional_base(self, trip_id: str) -> dict[str, Any]:
         """Record that the owner is happy to plan from the centre of their places.
@@ -1461,6 +1520,24 @@ class PlannerActions:
                 for endpoint in (route.get("origin_id"), route.get("destination_id"))
             )
         ]
+        # Owner-accepted straight-line fallbacks for pairs no router could answer.
+        #
+        # `ROUTE_UNVERIFIED` is fatal, and rightly: a place the plan cannot reach is a
+        # place the plan should not schedule. But a public router that never answers is a
+        # dead end the owner cannot cross — the free tier rate-limits, and some pairs it
+        # simply will not route — and the only offer on screen was "drop the place".
+        #
+        # So it can be accepted, once, explicitly. The estimate is **deliberately
+        # pessimistic**: crow-flies distance multiplied by `ACCEPTED_ROUTE_DETOUR` for the
+        # streets a straight line ignores, walked at `transit.WALK_METRES_PER_MINUTE`.
+        # That direction is the whole point. This file's standing rule is that a
+        # fabricated travel time must never err *optimistic*, because an optimistic guess
+        # produces a plan that cannot be walked; an over-estimate produces a plan with
+        # slack in it, which is a worse plan and not a false one. Marked `status:
+        # "accepted_estimate"` and `basis: "owner_accepted_straight_line"`, so nothing
+        # downstream can mistake it for something a router said.
+        if self._route_estimates_accepted(trip_id):
+            routes.extend(self._accepted_route_estimates(candidates, routes))
         zone = self.get_timezone_evidence(trip_id)
         verified_zone = zone["timezone"] if zone and zone.get("status") == "verified" else None
         accommodation_confirmed = bool(accommodation_base) or basics.get(

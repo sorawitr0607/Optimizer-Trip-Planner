@@ -258,7 +258,8 @@
       "discovery_required_for_climate": "Find places first — the weather guide reads the area your places were found in.",
       "bad_map_window": "The map window was not a usable area, so no buildings were requested.",
       "day_ends_free": "Evening free — everything you chose for today is done",
-      "AREA_TIMES_ARE_WALKING_ONLY": "No metro network is published for this destination, so these are the neighbourhoods around the places you chose, ranked by walking time between them"
+      "AREA_TIMES_ARE_WALKING_ONLY": "No metro network is published for this destination, so these are the neighbourhoods around the places you chose, ranked by walking time between them",
+      "owner_accepted_straight_line": "Straight-line walking estimate you accepted, deliberately over-stated"
     },
     "th": {
       "broader_replan_required": "ต้องวางแผนใหม่ในภาพกว้าง — วันนี้รับเพิ่มไม่ไหว",
@@ -396,7 +397,8 @@
       "discovery_required_for_climate": "ค้นหาสถานที่ก่อน — คำแนะนำสภาพอากาศอ่านจากพื้นที่ที่พบสถานที่ของคุณ",
       "bad_map_window": "ขอบเขตแผนที่ไม่ถูกต้อง จึงไม่ได้ร้องขอข้อมูลอาคาร",
       "day_ends_free": "ช่วงเย็นว่าง ทุกที่ที่เลือกไว้สำหรับวันนี้เสร็จแล้ว",
-      "AREA_TIMES_ARE_WALKING_ONLY": "จุดหมายนี้ไม่มีข้อมูลเครือข่ายรถไฟฟ้า จึงจัดอันดับย่านรอบสถานที่ที่คุณเลือก ตามเวลาเดินระหว่างกัน"
+      "AREA_TIMES_ARE_WALKING_ONLY": "จุดหมายนี้ไม่มีข้อมูลเครือข่ายรถไฟฟ้า จึงจัดอันดับย่านรอบสถานที่ที่คุณเลือก ตามเวลาเดินระหว่างกัน",
+      "owner_accepted_straight_line": "ค่าประมาณการเดินแบบเส้นตรงที่คุณยอมรับ ซึ่งตั้งใจให้สูงกว่าจริง"
     }
   },
   "REJECTION_TEXT": {
@@ -1439,7 +1441,8 @@
       "build_again": "Build them again",
       "photo_buy_one": "Get photographs from Google · US${cost}",
       "blocked_by_comfort_only": "This plan schedules all {visits} of your places and nothing is wrong with it — it only goes past a comfort budget you set. Agree to the measured figure in “Comfort tradeoffs” above and it becomes usable. Dropping a place is not required.",
-      "accept_measured_and_continue": "Accept {measured} minutes and rebuild"
+      "accept_measured_and_continue": "Accept {measured} minutes and rebuild",
+      "accept_route_estimates": "Accept a walking estimate and rebuild"
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -2412,7 +2415,8 @@
       "build_again": "สร้างตัวเลือกใหม่อีกครั้ง",
       "photo_buy_one": "ดึงรูปจาก Google · US${cost}",
       "blocked_by_comfort_only": "แผนนี้จัดครบทั้ง {visits} แห่งและไม่มีอะไรผิดพลาด เพียงแต่เกินเกณฑ์ความสบายที่คุณตั้งไว้ ยอมรับค่าที่วัดได้ในหัวข้อ “การแลกเปลี่ยนความสบาย” ด้านบน แล้วแผนจะใช้งานได้ ไม่จำเป็นต้องตัดสถานที่ออก",
-      "accept_measured_and_continue": "ยอมรับ {measured} นาที แล้วสร้างแผนใหม่"
+      "accept_measured_and_continue": "ยอมรับ {measured} นาที แล้วสร้างแผนใหม่",
+      "accept_route_estimates": "ยอมรับค่าประมาณการเดินแล้วสร้างแผนใหม่"
     }
   }
 }

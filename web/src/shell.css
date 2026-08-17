@@ -2368,8 +2368,24 @@
 }
 
 .day-stepper button {
+  background: var(--color-accent);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-hard-sm);
+  color: var(--color-on-accent);
+  cursor: pointer;
   font-size: var(--text-sm);
+  font-weight: var(--weight-selected);
+  padding: 8px 14px;
   white-space: nowrap;
+}
+
+.day-stepper button:disabled {
+  background: var(--bg-secondary);
+  border-color: var(--bg-card-border);
+  box-shadow: none;
+  color: var(--text-muted);
+  cursor: default;
 }
 
 .day-stepper-current {
@@ -3640,11 +3656,26 @@
   font-weight: var(--weight-secondary);
 }
 
+/* Beside the name, not under it. An open row used to push every row below it down, and
+   on a fifteen-place list that loses the reader's place — the opposite of what a
+   reconsider list is for. The row becomes two columns while it is open: the name and its
+   button on the left, everything the owner is deciding on to the right of them. */
+.deck-reconsider-row.open {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.deck-reconsider-row.open .deck-reconsider-detail {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(120px, 1fr) minmax(0, 2fr);
+  align-items: start;
+}
+
 .deck-reconsider-about {
   display: grid;
   gap: 8px;
   grid-template-columns: 88px minmax(0, 1fr);
-  margin-top: 8px;
+  margin: 0;
 }
 
 .deck-reconsider-about:not(:has(img)) {

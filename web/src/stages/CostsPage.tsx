@@ -2,7 +2,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useParams } from "react-router";
 
-import { rpc, type CostItem, type CostTotals, type ExportSnapshot, type Frozen, type SetupDraft } from "../api/client";
+import {
+  ApiError,
+  rpc,
+  type CostItem,
+  type CostTotals,
+  type ExportSnapshot,
+  type Frozen,
+  type SetupDraft,
+} from "../api/client";
 import { copy } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
 import { categoryName, type CostCategory, money, Note, signed, Tag, Tile } from "./money";
@@ -144,6 +152,9 @@ export function CostsPage() {
         queryClient.invalidateQueries({ queryKey: ["cost_totals", tripId] }),
       ]);
     },
+    // Silence was the whole bug report. Without this a refusal left the button looking
+    // exactly like a button that does nothing — pressed, no error, no rows.
+    onError: (error) => setFlash(error instanceof ApiError ? error.code : String(error)),
   });
 
   if (totals.isPending || items.isPending) return <p>{copy("loading", language)}</p>;
@@ -185,6 +196,14 @@ export function CostsPage() {
             >
               {seedRows.isPending ? copy("loading", language) : copy("plan_shape_seed", language)}
             </button>
+            {/* Beside the button, not only in the flash further down. The rows this adds
+                land below the fold, so the page changed and nothing near the press did —
+                which reads as a button that did nothing. */}
+            {seedRows.isSuccess ? (
+              <p className="setup-hint" aria-live="polite">
+                ✓ {copy("plan_shape_seeded", language)}
+              </p>
+            ) : null}
           </>
         ) : (
           <p className="setup-hint">{copy("plan_shape_none", language)}</p>
