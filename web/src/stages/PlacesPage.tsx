@@ -838,7 +838,9 @@ export function PlacesPage() {
                   saveChoice.mutate({ action, reason, placeId });
                 }}
                 onCardChange={setCardId}
+                onWantPhotos={() => enrich.mutate()}
                 onWantSummary={(placeId) => fetchCard.mutate(placeId)}
+                paidPhotoUsd={paidAllowed ? paidEstimate : null}
                 summaryLoading={fetchCard.isPending && !summaries.data?.[selectedId]}
                 lane={lane}
                 laneRemaining={laneRemaining}

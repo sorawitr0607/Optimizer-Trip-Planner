@@ -712,6 +712,43 @@ Worth knowing for the next time a mirror is evaluated: **`overpass.osm.ch` is re
 and useless** — it serves a Switzerland-only extract, so it answers 200 with zero
 elements for anywhere else, which looks exactly like a city having nothing in it.
 
+## The pictures are not free, which is a different answer from "there are none"
+
+"The pic is everywhere, find it" was investigated properly rather than answered again.
+For every place that comes up blank, the **free** sources hold nothing — and the searches
+that look like near-misses are not:
+
+- `Taro Quad Bikes` → Commons returns *Report and findings of the Commission on the
+  Abolition of G…* and an 18th-century philosophy volume.
+- `Puri Agung Peliatan` → *Permen No. 137 Tahun 2017 - Bali.pdf*.
+- `Patung Dewa Indra` → a statue in a different village.
+
+The name filter is right to refuse all of them, and 19 of Bali's 34 have **no Wikidata
+entry at all**, so there is no `P18`, no article and no category to read. The photographs
+the owner has seen are on Google and TripAdvisor: **licensed sources, not absent ones.**
+
+So the card no longer says "no photograph exists in the free sources" and stop. It says no
+*free* source has one, shows where the place is, and offers the one path that can produce
+a picture — `enrich_place_card`, priced on the button's face. That is the app's standing
+rule applied where the gap is actually felt: a paid control names its price before it is
+pressed, and it is never a card's primary action, because a card's primary action is a
+decision about the place rather than a purchase.
+
+## Tapping through a gallery outran its prefetch
+
+Only **one** photo ahead was warmed, so a second tap raced the prefetch and every tap
+after it waited on a cold fetch — "tap to advance loading so long". The whole gallery of
+the card in front is warmed now, plus the next card's lead image. Widening it became both
+cheaper to justify and more necessary at once: reading a subject's Commons category means
+galleries are six deep where they used to be one or two.
+
+**A direct `upload.wikimedia.org/thumb/...` URL would halve each image's latency and
+cannot be built.** Every URL here is a `Special:FilePath` redirect, which costs a round
+trip before any bytes move, and the obvious fix — computing the MD5 thumbnail path — was
+tried and **measured as HTTP 400: "Use thumbnail sizes listed on…"**, because Wikimedia
+restricts widths to its own set and 640 is not in it. Warming early is the way to pay
+that cost off screen instead.
+
 ## The build stamp, and the bug that made the last round unreadable
 
 Six rounds produced reports of fixes "not working" that had been verified working minutes

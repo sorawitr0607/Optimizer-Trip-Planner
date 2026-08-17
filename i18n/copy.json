@@ -1430,9 +1430,10 @@
       "next_revise": "Change a constraint and rebuild — swap a day, drop a place, walk less.",
       "unfit_needs_days": "{count} of these did not fit because the trip is only {days} days long — nothing is wrong with them.",
       "unfit_change_dates": "Change the dates",
-      "photo_none_map": "No photograph exists in the free sources — here is where it is",
+      "photo_none_map": "No free source has a photograph of this place — here is where it is",
       "catalog_empty_unreachable_help": "This computer could not open a connection to the map service at all — which is a network or firewall problem, not a busy server, so pressing again will fail the same way. Set TOURIST_OVERPASS_URL to a mirror you trust (it accepts a comma-separated list and tries them in order) and restart the app. Nothing you have entered is lost.",
-      "build_again": "Build them again"
+      "build_again": "Build them again",
+      "photo_buy_one": "Get photographs from Google · US${cost}"
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -2400,9 +2401,10 @@
       "next_revise": "เปลี่ยนเงื่อนไขแล้วสร้างแผนใหม่ เช่น สลับวัน ตัดสถานที่ หรือเดินน้อยลง",
       "unfit_needs_days": "{count} แห่งไม่พอดีเพราะทริปยาวเพียง {days} วัน ไม่ได้มีปัญหาอะไรกับสถานที่เหล่านี้",
       "unfit_change_dates": "เปลี่ยนวันที่",
-      "photo_none_map": "ไม่มีรูปภาพในแหล่งข้อมูลเสรี นี่คือตำแหน่งของสถานที่นี้",
+      "photo_none_map": "ไม่มีแหล่งข้อมูลเสรีใดมีรูปของสถานที่นี้ นี่คือตำแหน่งของที่นี่",
       "catalog_empty_unreachable_help": "เครื่องนี้เชื่อมต่อกับบริการแผนที่ไม่ได้เลย ซึ่งเป็นปัญหาเครือข่ายหรือไฟร์วอลล์ ไม่ใช่เซิร์ฟเวอร์ไม่ว่าง การกดใหม่จะล้มเหลวแบบเดิม ให้ตั้งค่า TOURIST_OVERPASS_URL เป็นมิเรอร์ที่คุณเชื่อถือ (ใส่หลายรายการคั่นด้วยจุลภาคได้ ระบบจะลองตามลำดับ) แล้วเปิดแอปใหม่ ข้อมูลที่กรอกไว้ไม่หาย",
-      "build_again": "สร้างตัวเลือกใหม่อีกครั้ง"
+      "build_again": "สร้างตัวเลือกใหม่อีกครั้ง",
+      "photo_buy_one": "ดึงรูปจาก Google · US${cost}"
     }
   }
 }

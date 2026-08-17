@@ -150,6 +150,10 @@ export interface PlaceDeckProps {
   onDecide: (placeId: string, action: string, reason: string | null) => void;
   /** True while the card in front is still arriving, so the panel beside it can wait. */
   onPendingChange?: (pending: boolean) => void;
+  /** Buy Google's photographs for a place no free source has one for. */
+  onWantPhotos?: (placeId: string) => void;
+  /** What that costs, so the price is on the button rather than a screen away. */
+  paidPhotoUsd?: number | null;
   /** Fetches the free description and photographs for one place. */
   onWantSummary: (placeId: string) => void;
   /** True while this card's description and photographs are still on their way. The card
@@ -181,6 +185,8 @@ export function PlaceDeck({
   altNameOf,
   onDecide,
   onPendingChange,
+  onWantPhotos,
+  paidPhotoUsd,
   onWantSummary,
   summaryLoading = false,
   laneRemaining = 0,
@@ -232,7 +238,6 @@ export function PlaceDeck({
   // slowly": by the time the card turns over, the bytes are in the browser cache.
   const nextEntry = queue[Math.min(cursor + 1, queue.length - 1)];
   const nextUrl = nextEntry ? summaries[nextEntry.place_id]?.image_url : null;
-  const upcoming = gallery.length ? gallery[(photo + 1) % gallery.length] : null;
   // Which photo is on screen, and which one has finished arriving. Held as the URL
   // rather than a boolean so that tapping through a gallery shows the placeholder again
   // for each new picture, and a cached one never flashes it at all.
@@ -300,14 +305,30 @@ export function PlaceDeck({
     return () => window.clearInterval(timer);
   }, [cardPending]);
 
+  // The **whole** gallery of the card in front, plus the next card's lead image.
+  //
+  // Only one photo ahead was warmed, so a second tap outran the prefetch and a third and
+  // fourth each waited on a cold fetch — "tap to advance is loading so long". A gallery
+  // is a handful of images the browser will cache anyway, they are free, and the owner
+  // has already shown they want them by opening the card. Widening this got cheaper to
+  // justify and more necessary at the same time: reading a subject's Commons category
+  // means galleries are now six deep where they used to be one or two.
+  //
+  // Every URL is a `Special:FilePath` redirect, which costs a round trip before the bytes
+  // start — a direct `upload.wikimedia.org/thumb/...` URL would save it, and cannot be
+  // built: Wikimedia refuses widths outside its own listed set, measured as HTTP 400 for
+  // the 640 this app asks for. Warming them early is the way to pay that cost off screen.
+  const galleryKey = gallery.join("|");
   useEffect(() => {
-    for (const url of [upcoming, nextUrl]) {
+    for (const url of [...gallery, nextUrl]) {
       if (!url) continue;
       const image = new Image();
       image.decoding = "async";
       image.src = url;
     }
-  }, [upcoming, nextUrl]);
+    // `gallery` is rebuilt each render; its contents are what matter.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [galleryKey, nextUrl]);
 
   if (!entry || !card) {
     const rejectedChoices = choices.filter((c) => c.action === "not_for_trip");
@@ -678,6 +699,24 @@ export function PlaceDeck({
                 />
               );
             })()}
+            {/* The one path that can actually produce a picture of this place, offered
+                where the absence is felt rather than in a panel further down.
+                Investigated 2026-08-17: for the places that come up blank the free
+                sources genuinely hold nothing — Commons returns an 18th-century
+                philosophy book for "Taro Quad Bikes" and a ministerial PDF for "Puri
+                Agung Peliatan", and the name filter is right to refuse them. The
+                photographs the owner has seen are on Google and TripAdvisor, which are
+                licensed sources. So the honest answer is not "none exists" but "none is
+                free", with the price of the one that is not. */}
+            {onWantPhotos && paidPhotoUsd != null ? (
+              <button
+                className="place-deck-buy-photo"
+                onClick={() => onWantPhotos(entry.place_id)}
+                type="button"
+              >
+                {copyFormat("photo_buy_one", language, { cost: paidPhotoUsd.toFixed(3) })}
+              </button>
+            ) : null}
           </div>
         ) : (
           <div className="place-deck-photo place-deck-photo-empty">

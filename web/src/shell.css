@@ -1262,6 +1262,20 @@
   padding: 4px 8px;
 }
 
+/* Priced on its face. This is the only paid control that appears inside the deck, so it
+   is deliberately not the accent — a card's primary action is always a decision about the
+   place, never a purchase. */
+.place-deck-buy-photo {
+  background: var(--bg-secondary);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: var(--text-2xs);
+  margin-top: 8px;
+  padding: 6px 12px;
+}
+
 .place-deck-photo-empty {
   align-items: center;
   cursor: default;
