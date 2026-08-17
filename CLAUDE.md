@@ -749,6 +749,48 @@ buying the limiter never being triggered, and that is worth more than it costs.
 Do not try a fourth time without a way to learn the limit *without* crossing it. The
 lever that remains is asking less, not waiting less.
 
+## Input-field practice applied to the setup wizard, 2026-08-18
+
+Worked from Eleken's "46 Input Field Design Examples" tip by tip. Most of it the form
+already did — visible labels rather than placeholder-only, one column, fieldset grouping,
+a step indicator, 44px touch targets, consistent borders. Five things it did not:
+
+**There was no focus ring anywhere in the stylesheet.** Every field fell back to the
+browser default, which over a bordered input in Safari is close to invisible.
+`:focus-visible`, not `:focus`, so a mouse click does not ring the field it just filled.
+
+**Every hint was unattached.** Eleven inputs, sixteen labels, and not one
+`aria-describedby` — a sighted reader could see that the grey line under a field belonged
+to it and nobody else could. The hints now carry ids and the fields point at them.
+
+**Required was marked in punctuation only.** A bare `" *"` in the legend says nothing to a
+screen reader and nothing to anyone who has not learned the convention, so the word
+`(required)` is there too and the asterisk is `aria-hidden`.
+
+**A field as wide as its column, not as its content.** An age is three characters and was
+given a full column, which reads as a field expecting something longer. Numerics cap at
+`8ch`, dates and times at `18ch`.
+
+**And the one that actually mattered: the error was on the wrong screen.** "Choose at
+least one Main style" is raised by **Confirm**, which lives on the review step — while the
+tags are on step 3. So the owner was told to fix something that was not on screen, which
+is the article's "place the message next to the problematic field" failing in a way no
+amount of moving the message can fix. A refused confirm now **takes the owner to step 3**,
+where the message, `aria-invalid` on the fieldset and the tags themselves are together;
+picking a style clears it immediately.
+
+Verified end to end on a fresh trip, because `save_setup` erases what it omits and this
+form is the one place that could break silently: confirm with nothing picked lands on step
+3 with the error beside the field, picking a style clears both the error and the
+`aria-invalid`, and the walk through to Confirm then stores all five `trip_basics` fields,
+`confirmed: true`, and moves the journey to `places`.
+
+**Not applied, deliberately.** Password toggles and input masking (no passwords here);
+autocomplete on ages and dates (a browser's saved addresses are not this trip's answers,
+and `autoCorrect` on a place name is the "overly aggressive auto-correct" the article warns
+about); and green success ticks per field, which on a form where every field is optional
+would mark "you typed something" as an achievement.
+
 ## The back-and-forth day was a drawing fault, not a planning one
 
 Reported as the plan sending the owner back and forth. It was not: measured across every

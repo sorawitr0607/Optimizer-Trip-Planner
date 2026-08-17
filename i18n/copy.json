@@ -1442,7 +1442,9 @@
       "photo_buy_one": "Get photographs from Google · US${cost}",
       "blocked_by_comfort_only": "This plan schedules all {visits} of your places and nothing is wrong with it — it only goes past a comfort budget you set. Agree to the measured figure in “Comfort tradeoffs” above and it becomes usable. Dropping a place is not required.",
       "accept_measured_and_continue": "Accept {measured} minutes and rebuild",
-      "accept_route_estimates": "Accept a walking estimate and rebuild"
+      "accept_route_estimates": "Accept a walking estimate and rebuild",
+      "required_field": "(required)",
+      "main_style_help": "Pick at least one. This is what every day of the plan is built around."
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -2416,7 +2418,9 @@
       "photo_buy_one": "ดึงรูปจาก Google · US${cost}",
       "blocked_by_comfort_only": "แผนนี้จัดครบทั้ง {visits} แห่งและไม่มีอะไรผิดพลาด เพียงแต่เกินเกณฑ์ความสบายที่คุณตั้งไว้ ยอมรับค่าที่วัดได้ในหัวข้อ “การแลกเปลี่ยนความสบาย” ด้านบน แล้วแผนจะใช้งานได้ ไม่จำเป็นต้องตัดสถานที่ออก",
       "accept_measured_and_continue": "ยอมรับ {measured} นาที แล้วสร้างแผนใหม่",
-      "accept_route_estimates": "ยอมรับค่าประมาณการเดินแล้วสร้างแผนใหม่"
+      "accept_route_estimates": "ยอมรับค่าประมาณการเดินแล้วสร้างแผนใหม่",
+      "required_field": "(จำเป็น)",
+      "main_style_help": "เลือกอย่างน้อยหนึ่งอย่าง นี่คือสิ่งที่ใช้วางแผนของทุกวัน"
     }
   }
 }

@@ -28,6 +28,9 @@ const STEP_TITLES = [
 // A POC view convention, not a core rule: setup.py accepts any number.
 const MAX_MEMBERS = 8;
 
+/** Where the trip-style tags live, so a refusal can take the owner to them. */
+const MAIN_STYLE_STEP = 3;
+
 /** What the intro step promises, in the order the wizard then asks it. */
 const INTRO_STEPS = [
   ["trip_basics", "setup_intro_basics"],
@@ -185,6 +188,12 @@ export function SetupPage() {
   if (vocabulary.isError) return <p className="field-error">⚠ {vocabulary.error.message}</p>;
 
   const values = draft ?? toDraft(stored.data);
+  // Set when a save is refused, cleared the moment a style is picked. Not while typing:
+  // the article asks for real-time validation, and the honest reading of that is "say so
+  // as soon as it is fixed", not "warn before they have started". Read from `values`
+  // rather than `draft`, which is null until the first edit — reading `draft` would have
+  // called a stored, perfectly valid setup empty.
+  const mainStyleMissing = flash?.code === "main_required" && !values.main_style.length;
   const confirmed = Boolean(stored.data?.confirmed);
   const trip = trips.data?.find((item) => item.trip_id === tripId);
   const words = vocabulary.data;
@@ -212,6 +221,13 @@ export function SetupPage() {
   async function go(target: number, options: { confirm?: boolean } = {}) {
     if (options.confirm && values.main_style.length === 0) {
       setFlash({ tone: "bad", code: "main_required" });
+      // **And go to the field.** Confirm lives on the review step and the styles are on
+      // step 3, so refusing in place told the owner to fix something that was not on
+      // screen — the article's "place the message next to the problematic field", which
+      // cannot be satisfied by the message alone when the field is two steps away. The
+      // error and the tags are then together, and `MAIN_STYLE_STEP` names the coupling
+      // rather than leaving a bare 3 to drift when a step is inserted.
+      setChosenStep(MAIN_STYLE_STEP);
       return;
     }
     try {
@@ -422,11 +438,38 @@ export function SetupPage() {
       {step === 3 ? (
         <div className="setup-fields">
           <p className="setup-hint setup-wide">{copy("setup_style_help", language)}</p>
+          {/* The error next to the thing that caused it. It was raised only as a flash at
+              the head of the form, so on a long step the owner was told "choose a main
+              style" with the styles scrolled off screen — the article's point about
+              placing the message beside the problem field, and the reason this form could
+              refuse without appearing to say why. */}
+          {mainStyleMissing ? (
+            <p className="setup-field-error" id="main-style-help" role="alert">
+              ⚠ {copy("main_required", language)}
+            </p>
+          ) : (
+            <span className="setup-hint setup-wide" id="main-style-help">
+              {copy("main_style_help", language)}
+            </span>
+          )}
           {(["main_style", "also_enjoy", "avoid", "comfort"] as const).map((group) => (
-            <fieldset className="setup-tags" key={group}>
+            <fieldset
+              aria-describedby={group === "main_style" ? "main-style-help" : undefined}
+              aria-invalid={group === "main_style" && mainStyleMissing ? true : undefined}
+              className="setup-tags"
+              key={group}
+            >
               <legend>
                 {copy(group, language)}
-                {group === "main_style" ? " *" : ""}
+                {/* Required, marked where the requirement is. The bare " *" said nothing
+                    to a screen reader and nothing to anyone who has not learned the
+                    convention, so the word is there too. */}
+                {group === "main_style" ? (
+                  <>
+                    <span aria-hidden="true" className="setup-required">*</span>
+                    <span className="setup-hint"> {copy("required_field", language)}</span>
+                  </>
+                ) : null}
               </legend>
               {words.tag_groups[group].map((code) => (
                 <button
@@ -444,6 +487,10 @@ export function SetupPage() {
           <label>
             {copy("owner_age", language)}
             <input
+              aria-describedby="owner-age-help"
+              // `numeric`, so a phone offers digits rather than a full keyboard for a
+              // field that can only ever hold digits.
+              inputMode="numeric"
               max={120}
               min={0}
               onChange={(event) =>
@@ -453,7 +500,13 @@ export function SetupPage() {
               value={values.owner_age ?? ""}
             />
           </label>
-          <p className="setup-hint">{copy("owner_age_help", language)}</p>
+          {/* The hint is *named* and pointed at by the field above, so a screen reader
+              reads the guidance with the field instead of stranding it as loose text
+              after it. Every hint on this form was unattached; a sighted user could see
+              the relationship and nobody else could. */}
+          <p className="setup-hint" id="owner-age-help">
+            {copy("owner_age_help", language)}
+          </p>
           {/* The free-text boxes never said what happens to what you type, so they
               read as a comment field nobody reads. They are parsed for constraints
               when the plan is built, and an example is worth more than the label. */}
@@ -476,6 +529,8 @@ export function SetupPage() {
           <label>
             {copy("member_count", language)}
             <input
+              aria-describedby="member-count-help"
+              inputMode="numeric"
               max={MAX_MEMBERS}
               min={0}
               onChange={(event) =>
@@ -485,7 +540,9 @@ export function SetupPage() {
               value={values.travellers.length}
             />
           </label>
-          <p className="setup-hint">{copy("member_count_help", language)}</p>
+          <p className="setup-hint" id="member-count-help">
+            {copy("member_count_help", language)}
+          </p>
           {values.travellers.map((member, index) => (
             <fieldset className="setup-member setup-wide" key={member.traveller_id}>
               <legend>{member.traveller_id}</legend>
