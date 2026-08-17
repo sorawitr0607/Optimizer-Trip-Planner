@@ -4,6 +4,7 @@ import type { CandidateChoice, DiscoveryCandidate, PlaceSummary, Ranking } from 
 import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
 import { flyToShortlist } from "../shared/flyToShortlist";
 import { galleryFor } from "../shared/photos";
+import { PlaceMap } from "./PlaceMap";
 
 /**
  * The swipe deck `WF-005` decided on 2026-07-28 and `WF-036` left to prototype.
@@ -64,19 +65,23 @@ const LOADING_LINES = [
   "loading_card_6",
 ] as const;
 
+/** How long each loading line holds before the next one. */
+const LOADING_LINE_MS = 1400;
+
 /**
- * Which line this card gets.
+ * Where the loading line starts for this card.
  *
- * Derived from the place id rather than drawn at random, which is both nicer and safer: a
- * card keeps its line across re-renders instead of flickering between them, and a
- * screenshot of a loading deck is the same screenshot twice — `Math.random()` here would
- * be the self-drifting-baseline bug that the export timestamp and the paid-usage counter
- * were already fixed for.
+ * Derived from the place id rather than drawn at random: two cards in a row do not open
+ * on the same sentence, and a screenshot of a loading deck is still the same screenshot
+ * twice — `Math.random()` here would be the self-drifting-baseline bug that the export
+ * timestamp and the paid-usage counter were already fixed for. The lines then advance on
+ * a timer, because a wait that is long enough to notice wants something that is visibly
+ * still running, which one fixed sentence is not.
  */
-function loadingLine(placeId: string): string {
+function loadingLine(placeId: string, step: number): string {
   let hash = 0;
   for (const character of placeId) hash = (hash * 31 + character.charCodeAt(0)) % 100_000;
-  return LOADING_LINES[hash % LOADING_LINES.length];
+  return LOADING_LINES[(hash + step) % LOADING_LINES.length];
 }
 
 function nameKey(value: string): string {
@@ -246,6 +251,18 @@ export function PlaceDeck({
   useEffect(() => {
     onPendingChange?.(cardPending);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cardPending]);
+
+  // Advance the loading line while a card is arriving, and only then: a timer left
+  // running behind a loaded deck is a re-render a second for nothing.
+  const [loadingStep, setLoadingStep] = useState(0);
+  useEffect(() => {
+    if (!cardPending) return;
+    const timer = window.setInterval(
+      () => setLoadingStep((current) => current + 1),
+      LOADING_LINE_MS,
+    );
+    return () => window.clearInterval(timer);
   }, [cardPending]);
 
   useEffect(() => {
@@ -439,7 +456,9 @@ export function PlaceDeck({
           {/* A small block that says what it is, rather than a full-height grey copy of
               the card. The card's own height is still held by the element underneath, so
               nothing jumps when the photograph lands — only the placeholder shrank. */}
-          <p className="place-deck-pending-text">{copy(loadingLine(entry.place_id), language)}</p>
+          <p className="place-deck-pending-text">
+            {copy(loadingLine(entry.place_id, loadingStep), language)}
+          </p>
           <span aria-hidden="true" className="skeleton skeleton-photo" />
           <span aria-hidden="true" className="skeleton skeleton-line" />
         </div>
@@ -570,8 +589,43 @@ export function PlaceDeck({
           // Wikidata entry at all. Offering the fetch button again would be a control
           // that cannot work, which reads as the app being broken rather than the
           // encyclopedia being empty.
+          // A place with no free photograph anywhere still gets something to look at:
+          // where it is. Measured on the owner's Sapporo catalogue, six places had a QID,
+          // no image property, no OpenStreetMap tag and nothing that passed the Commons
+          // name filter — two of them stone monuments whose names are two characters,
+          // which the name filter refuses by design. There is no picture to find for
+          // those, and inventing one is fabrication, so this shows the map instead and
+          // says that is what it is. A swipe decision made on a location is a worse
+          // decision than one made on a photograph, and a much better one than a
+          // decision made on a grey box.
           <div className="place-deck-photo place-deck-photo-empty">
-            <p className="setup-hint">{copy("no_description_yet", language)}</p>
+            {(() => {
+              // No coordinates is the one case with nothing to draw either. Discovery
+              // refuses a candidate without them, so this is defence rather than a
+              // branch the catalogue reaches.
+              const spot = candidates[entry.place_id];
+              if (spot?.latitude == null || spot.longitude == null) {
+                return <p className="setup-hint">{copy("no_description_yet", language)}</p>;
+              }
+              return (
+                <PlaceMap
+                  focusId={entry.place_id}
+                  headingLevel={4}
+                  language={language}
+                  places={[
+                    {
+                      place_id: entry.place_id,
+                      name,
+                      label: name,
+                      latitude: spot.latitude,
+                      longitude: spot.longitude,
+                    },
+                  ]}
+                  title={copy("photo_none_map", language)}
+                  withKey={false}
+                />
+              );
+            })()}
           </div>
         ) : (
           <div className="place-deck-photo place-deck-photo-empty">

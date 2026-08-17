@@ -235,6 +235,7 @@ function FallbackRow({ fallback, language }: { fallback: ExportFallback; languag
 }
 
 export function CoordinateMap({
+  autoTraceKey,
   anchor,
   stops,
   accommodationStatus,
@@ -254,6 +255,8 @@ export function CoordinateMap({
   basemap?: Basemap | null;
   outline?: CountryOutline | null;
   shapes?: RouteShapes["shapes"];
+  /** Changing this replays the day's trace: the itinerary passes the day's own date. */
+  autoTraceKey?: string;
 }) {
   // The same map `/places` draws, on the screen that is actually carried.
   //
@@ -323,6 +326,7 @@ export function CoordinateMap({
           The map's caption is the `<h2>` now and there is one of it. */}
       {points.length ? (
         <PlaceMap
+          autoTraceKey={autoTraceKey}
           basemap={basemap}
           headingLevel={2}
           language={language}
@@ -536,35 +540,6 @@ export function ItineraryPage() {
       ) : null}
       {plan.readiness.capability_gaps.length ? <details className="optimize-warnings"><summary>{copy("capability_gaps", language)}</summary><ul>{plan.readiness.capability_gaps.map((gap) => <li key={gap}>{codeText(gap, language)}</li>)}</ul></details> : null}
 
-      {/* Prev / next rather than a dropdown, at the owner's asking. A trip is a sequence
-          and the move you make ninety-nine times out of a hundred is "the next day" — a
-          select turns that into open, find, aim, click, and it never showed which day you
-          were about to get. The date is on the control itself, so the destination is
-          named before the press; the ends disable rather than wrap, because a trip has a
-          first and a last day and silently jumping from one to the other reads as a bug. */}
-      <div className="day-stepper">
-        <button
-          disabled={dayIndex <= 0}
-          onClick={() => setChosenDate(plan.days[dayIndex - 1].date)}
-          type="button"
-        >
-          ← {dayIndex > 0 ? plan.days[dayIndex - 1].date : copy("day_first", language)}
-        </button>
-        <span className="day-stepper-current">
-          {copy("day_of", language)
-            .replace("{current}", String(dayIndex + 1))
-            .replace("{total}", String(plan.days.length))}
-          {" · "}
-          <strong>{day.date}</strong>
-        </span>
-        <button
-          disabled={dayIndex >= plan.days.length - 1}
-          onClick={() => setChosenDate(plan.days[dayIndex + 1].date)}
-          type="button"
-        >
-          {dayIndex < plan.days.length - 1 ? plan.days[dayIndex + 1].date : copy("day_last", language)} →
-        </button>
-      </div>
       {/* derives-from: element 12 .hero-banner-image-wrapper as .dayhead, at aspect-ratio
           3/1 rather than the donor's locked 260px. That is deviation D10: it
           follows the donor's README over the donor's CSS, at the owner's
@@ -647,6 +622,37 @@ export function ItineraryPage() {
           like nothing of the sort. Implementing the full pattern is the other way to
           fix it, but these two are not really tabs: the state lives in the query
           string, each is independently linkable, and a toggle pair is what that is. */}
+      {/* Prev / next rather than a dropdown, at the owner's asking. A trip is a sequence
+          and the move you make ninety-nine times out of a hundred is "the next day" — a
+          select turns that into open, find, aim, click, and it never showed which day you
+          were about to get. The date is on the control itself, so the destination is
+          named before the press; the ends disable rather than wrap, because a trip has a
+          first and a last day and silently jumping from one to the other reads as a bug. */}
+      <div className="day-stepper">
+        <button
+          disabled={dayIndex <= 0}
+          onClick={() => setChosenDate(plan.days[dayIndex - 1].date)}
+          type="button"
+        >
+          ← {copy("day_previous", language)}
+          {dayIndex > 0 ? ` · ${plan.days[dayIndex - 1].date}` : ""}
+        </button>
+        <span className="day-stepper-current">
+          {copy("day_of", language)
+            .replace("{current}", String(dayIndex + 1))
+            .replace("{total}", String(plan.days.length))}
+          {" · "}
+          <strong>{day.date}</strong>
+        </span>
+        <button
+          disabled={dayIndex >= plan.days.length - 1}
+          onClick={() => setChosenDate(plan.days[dayIndex + 1].date)}
+          type="button"
+        >
+          {copy("day_next", language)}
+          {dayIndex < plan.days.length - 1 ? ` · ${plan.days[dayIndex + 1].date}` : ""} →
+        </button>
+      </div>
       <div className="plan-tabs">
         <button aria-pressed={tab === "timeline"} onClick={() => setTab("timeline")} type="button">{copy("timeline", language)}</button>
         <button aria-pressed={tab === "map"} onClick={() => setTab("map")} type="button">{copy("tab_map", language)}</button>
@@ -654,6 +660,7 @@ export function ItineraryPage() {
       {tab === "timeline" ? <Timeline day={day} language={language} /> : (
         <CoordinateMap
           accommodationStatus={plan.accommodation.status}
+          autoTraceKey={day.date}
           anchor={plan.accommodation.anchor}
           basemap={basemap.data ?? null}
           language={language}
@@ -663,6 +670,30 @@ export function ItineraryPage() {
           tripId={tripId}
         />
       )}
+
+      {/* Where to go next, said in words. The sidebar names these six but never says
+          what any of them is for, so from the finished itinerary — the screen an owner
+          lands on for the rest of the trip — they read as six more places to check
+          rather than as six answers to questions they will actually have. */}
+      <h2 className="money-eyebrow">{copy("what_next", language)}</h2>
+      <ul className="plan-next-links">
+        {(
+          [
+            ["costs", "next_costs"],
+            ["split", "next_split"],
+            ["evidence", "next_evidence"],
+            ["readiness", "next_readiness"],
+            ["revise", "next_revise"],
+          ] as const
+        ).map(([route, blurb]) => (
+          <li key={route}>
+            <Link className="primary-link" to={`/trips/${tripId}/${route}`}>
+              {copy(`stage_${route}`, language)}
+            </Link>
+            <span className="setup-hint">{copy(blurb, language)}</span>
+          </li>
+        ))}
+      </ul>
 
       <h2 className="money-eyebrow">{copy("downloads", language)}</h2>
       <div className="plan-downloads">

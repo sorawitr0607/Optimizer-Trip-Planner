@@ -190,6 +190,13 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
   return (
     // derives-from: element 36 .currency-info-box as .stay-planner
     <section className="stay-planner">
+      {/* The whole picker goes while the build runs, at the owner's asking. Pace, month
+          grid, month guide and the chosen window are all inputs to a decision that has
+          already been taken and sent — leaving them up during the ~1 minute wait invites
+          changing an answer nothing is reading any more, and buries the progress line
+          under a screen of controls. `hidden` rather than unmounting, so the picker comes
+          back exactly as it was if the build fails. */}
+      <div hidden={save.isPending}>
       <h2 className="money-eyebrow">{copy("stay_pace_title", language)}</h2>
       <p className="setup-hint">{copy("stay_pace_help", language)}</p>
 
@@ -306,6 +313,7 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
       <p className="stay-dates">
         <strong>{start}</strong> → <strong>{end}</strong>
       </p>
+      </div>
       {save.error ? (
         <p className="field-error">
           ⚠ {save.error instanceof ApiError ? save.error.code : String(save.error)}

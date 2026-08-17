@@ -59,6 +59,15 @@ export function StayPage() {
     onError: (error) => setFlash(error instanceof ApiError ? error.code : String(error)),
   });
 
+  const accept = useMutation({
+    mutationFn: () => rpc("accept_provisional_base", { trip_id: tripId }),
+    onSuccess: async () => {
+      setFlash("stay_accepted");
+      await queryClient.invalidateQueries({ queryKey: ["journey", tripId] });
+    },
+    onError: (error) => setFlash(error instanceof ApiError ? error.code : String(error)),
+  });
+
   const typed = (query ?? base.data?.name ?? "").trim();
 
   return (
@@ -123,6 +132,25 @@ export function StayPage() {
             {copy(flash, language)}
           </p>
         ) : null}
+      </div>
+
+      {/* The way out for a trip this cannot rank. `recommend_areas` needs a transit
+          graph, and a city with no metro in OpenStreetMap has none — measured as
+          `no_transit_graph_for_areas`. That is not a reason to leave the owner with
+          nothing to press: the centre of their chosen places is the base the planner
+          would use anyway, and accepting it is a real decision, which is what completes
+          this stage for anyone who has not booked. */}
+      <div className="evidence-card">
+        <strong>{copy("stay_accept_centre_title", language)}</strong>
+        <span className="setup-hint">{copy("stay_accept_centre_help", language)}</span>
+        <button
+          className={base.data ? undefined : "setup-primary"}
+          disabled={accept.isPending}
+          onClick={() => accept.mutate()}
+          type="button"
+        >
+          {copy("stay_accept_centre", language)}
+        </button>
       </div>
 
       <StayAreas language={language} tripId={tripId} />

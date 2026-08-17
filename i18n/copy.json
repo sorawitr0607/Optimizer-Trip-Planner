@@ -1226,7 +1226,7 @@
       "assumption_hours": "{count} place(s) have no confirmed opening hours, so a window was assumed for them.",
       "assumption_routes": "Some travel times are estimated from distance rather than a looked-up route.",
       "assumption_accommodation": "No booked address, so every day starts and ends at the centre of your chosen places.",
-      "what_next": "What happens next",
+      "what_next": "What else you can do",
       "next_activate": "Activating writes this draft as your itinerary. Old versions are kept, so nothing is lost and you can go back.",
       "next_fix_first": "This variant cannot be activated yet. Fix what the warnings name, or pick another variant, then generate again.",
       "open_evidence": "Open the Evidence screen",
@@ -1416,7 +1416,21 @@
       "loading_card_6": "Just a moment for this one…",
       "lane_try_another": "Or look at a different list:",
       "day_first": "First day",
-      "day_last": "Last day"
+      "day_last": "Last day",
+      "stay_accept_centre_title": "Not booked yet?",
+      "stay_accept_centre_help": "Plan from the middle of the places you chose. You can name a real address here any time — the plan is rebuilt from it.",
+      "stay_accept_centre": "Plan from the centre of my places",
+      "stay_accepted": "Noted. The plan uses the centre of your places.",
+      "day_previous": "Previous day",
+      "day_next": "Next day",
+      "next_costs": "Estimate what this plan will cost, per category and per person.",
+      "next_split": "Record what people actually paid and see who owes whom.",
+      "next_evidence": "Check the opening hours, routes and time zone this plan was built on.",
+      "next_readiness": "Documents, bookings and things to bring, with deadlines.",
+      "next_revise": "Change a constraint and rebuild — swap a day, drop a place, walk less.",
+      "unfit_needs_days": "{count} of these did not fit because the trip is only {days} days long — nothing is wrong with them.",
+      "unfit_change_dates": "Change the dates",
+      "photo_none_map": "No photograph exists in the free sources — here is where it is"
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -2180,7 +2194,7 @@
       "assumption_hours": "{count} สถานที่ยังไม่มีเวลาเปิด-ปิดที่ยืนยันแล้ว ระบบจึงสมมติช่วงเวลาให้",
       "assumption_routes": "เวลาเดินทางบางส่วนประมาณจากระยะทาง ไม่ได้มาจากเส้นทางที่ค้นจริง",
       "assumption_accommodation": "ยังไม่มีที่อยู่ที่จองไว้ ทุกวันจึงเริ่มและจบที่จุดกึ่งกลางของสถานที่ที่เลือก",
-      "what_next": "ขั้นตอนถัดไป",
+      "what_next": "สิ่งที่ทำได้ต่อ",
       "next_activate": "การเปิดใช้งานจะบันทึกแผนร่างนี้เป็นตารางเดินทางของคุณ เวอร์ชันเก่าจะถูกเก็บไว้ จึงไม่มีอะไรหาย และย้อนกลับได้",
       "next_fix_first": "ตัวเลือกนี้ยังเปิดใช้งานไม่ได้ แก้ตามที่คำเตือนระบุ หรือเลือกตัวเลือกอื่น แล้วสร้างใหม่",
       "open_evidence": "ไปที่หน้าหลักฐาน",
@@ -2370,7 +2384,21 @@
       "loading_card_6": "รอสักครู่สำหรับที่นี่…",
       "lane_try_another": "หรือดูจากรายการอื่น:",
       "day_first": "วันแรก",
-      "day_last": "วันสุดท้าย"
+      "day_last": "วันสุดท้าย",
+      "stay_accept_centre_title": "ยังไม่ได้จองที่พัก",
+      "stay_accept_centre_help": "วางแผนจากจุดกึ่งกลางของสถานที่ที่คุณเลือก คุณระบุที่อยู่จริงที่นี่เมื่อไรก็ได้ แล้วแผนจะถูกสร้างใหม่จากที่อยู่นั้น",
+      "stay_accept_centre": "วางแผนจากจุดกึ่งกลางของสถานที่",
+      "stay_accepted": "รับทราบ แผนจะใช้จุดกึ่งกลางของสถานที่ของคุณ",
+      "day_previous": "วันก่อนหน้า",
+      "day_next": "วันถัดไป",
+      "next_costs": "ประมาณค่าใช้จ่ายของแผนนี้ แยกตามหมวดและตามคน",
+      "next_split": "บันทึกว่าใครจ่ายจริงเท่าไร และดูว่าใครต้องคืนใคร",
+      "next_evidence": "ตรวจเวลาเปิดทำการ เส้นทาง และเขตเวลาที่ใช้สร้างแผนนี้",
+      "next_readiness": "เอกสาร การจอง และของที่ต้องเตรียม พร้อมกำหนดเวลา",
+      "next_revise": "เปลี่ยนเงื่อนไขแล้วสร้างแผนใหม่ เช่น สลับวัน ตัดสถานที่ หรือเดินน้อยลง",
+      "unfit_needs_days": "{count} แห่งไม่พอดีเพราะทริปยาวเพียง {days} วัน ไม่ได้มีปัญหาอะไรกับสถานที่เหล่านี้",
+      "unfit_change_dates": "เปลี่ยนวันที่",
+      "photo_none_map": "ไม่มีรูปภาพในแหล่งข้อมูลเสรี นี่คือตำแหน่งของสถานที่นี้"
     }
   }
 }

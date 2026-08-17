@@ -203,6 +203,39 @@ class PlannerActions:
         )
         return value
 
+    STAY_DECIDED_KIND = "stay_decided"
+
+    def accept_provisional_base(self, trip_id: str) -> dict[str, Any]:
+        """Record that the owner is happy to plan from the centre of their places.
+
+        The centroid was always the fallback; what did not exist was a way to *say so*.
+        Without it the stay stage could never complete for anyone who has not booked, and
+        `next` would point at it for the rest of the trip. It writes no base — the
+        optimizer keeps deriving the centre itself, so nothing here can go stale against
+        a shortlist that is still changing.
+        """
+
+        if self.store.get_trip(trip_id) is None:
+            raise PlannerRefusal("unknown_trip", trip_id=trip_id)
+        now = datetime.now(timezone.utc)
+        value = {"kind": self.STAY_DECIDED_KIND, "decided_at": now.isoformat()}
+        self.store.upsert_trip_evidence(
+            trip_id=trip_id,
+            kind=self.STAY_DECIDED_KIND,
+            value=value,
+            provider="owner",
+            retrieved_at=now.isoformat(),
+            expires_at=(now + timedelta(days=3650)).isoformat(),
+        )
+        return value
+
+    def _stay_decided(self, trip_id: str) -> bool:
+        """Named a base, or accepted the centre. Either is a decision."""
+
+        if self.store.get_trip_evidence(trip_id, self.STAY_DECIDED_KIND):
+            return True
+        return bool(self.store.get_trip_evidence(trip_id, "accommodation_base"))
+
     def _places_confirmed(self, trip_id: str) -> bool:
         """Has the owner pressed "Build the plan", or already moved past needing to?
 
@@ -253,6 +286,21 @@ class PlannerActions:
                 "key": "evidence",
                 "done": bool(choices and (not gaps or trip.planning_mode == "explore_first")),
                 "blocked_by": None if discovery is not None and chosen else "places",
+            },
+            {
+                # A real step, not a screen off to one side. The route existed and was
+                # correctly locked, but the journey had no `stay` stage — so `next` went
+                # straight from places to optimize and the app itself never sent anyone
+                # there. That is the "workflow should be place → stay → build the plan"
+                # report: the order was in the sidebar and nowhere else.
+                #
+                # Done once the owner has *decided*, which is either naming a base or
+                # accepting the centre of their places. Both are decisions and both are
+                # recorded; without the second, an owner who books nothing would have
+                # `next` stuck here for the rest of the trip.
+                "key": "stay",
+                "done": bool(chosen and self._stay_decided(trip_id)),
+                "blocked_by": None if chosen else "places",
             },
             {
                 "key": "optimize",

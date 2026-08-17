@@ -411,9 +411,20 @@ export function OptimizePage() {
           <p className="money-note money-note-plain">
             <span>{copy("plan_draft_note", language)}</span>
           </p>
-          {/* derives-from: element 36 .currency-info-box as .plan-assumptions */}
-          <section className="plan-assumptions">
-            <h2 className="money-eyebrow">{copy("assumptions_title", language)}</h2>
+          {/* Folded behind its own summary, at the owner's asking. It is a list of
+              caveats sitting between the draft and the variants the owner came to read,
+              and it is the same list every time until something changes — so it is
+              available in one press rather than occupying the page. `<details>` rather
+              than a hand-rolled toggle: the disclosure triangle, the keyboard behaviour
+              and the announced expanded state all come from the platform.
+              derives-from: element 36 .currency-info-box as .plan-assumptions */}
+          <details className="plan-assumptions">
+            <summary>
+              <span aria-hidden="true">⚠</span> {copy("assumptions_title", language)}
+              {assumptions.length + gaps.length
+                ? ` · ${assumptions.length + gaps.length}`
+                : ""}
+            </summary>
             <p className="setup-hint">{copy("assumptions_help", language)}</p>
             {assumptions.length || gaps.length ? (
               <ul>
@@ -435,7 +446,7 @@ export function OptimizePage() {
             <Link className="primary-link" to={`/trips/${tripId}/evidence`}>
               {copy("open_evidence", language)}
             </Link>
-          </section>
+          </details>
         </>
       ) : null}
 
@@ -559,10 +570,27 @@ export function OptimizePage() {
             );
             if (!unfit.length) return null;
             const needsRoutes = unfit.some((item) => item.reason === "ROUTE_UNVERIFIED");
+            // "The trip has no remaining time capacity" is the honest residual: these
+            // places fit nothing that is wrong, there are simply more of them than the
+            // days hold. The optimizer cannot invent a day — the dates are the owner's —
+            // so the only useful thing to say is how short the trip is and where to
+            // lengthen it. Saying it without that link was the dead end reported.
+            const needsDays = unfit.filter((item) => item.reason === "NO_TIME_CAPACITY");
             return (
               <section className="optimize-unfit">
                 <h2 className="money-eyebrow">{copy("unfit_title", language)}</h2>
                 <p className="setup-hint">{copy("unfit_help", language)}</p>
+                {needsDays.length ? (
+                  <p className="setup-hint">
+                    {copyFormat("unfit_needs_days", language, {
+                      count: needsDays.length,
+                      days: variant.days.length,
+                    })}{" "}
+                    <Link className="primary-link" to={`/trips/${tripId}/setup`}>
+                      {copy("unfit_change_dates", language)}
+                    </Link>
+                  </p>
+                ) : null}
                 {needsRoutes ? (
                   <button
                     className="setup-primary"

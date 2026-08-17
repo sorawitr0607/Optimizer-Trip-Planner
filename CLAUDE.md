@@ -671,6 +671,80 @@ does: ArrowRight wrote **`must_do` 0 → 1** and ArrowUp wrote **`interested` 9 
 way — the gesture uses `setPointerCapture`, and a synthetic `PointerEvent` carries no real
 pointer to capture — which is the same reason `deck.test.tsx` was built around the buttons.
 
+## Owner testing, 2026-08-17 (second round)
+
+Three of these were reported as *still* broken, and in each case the first fix had been
+aimed one element short of the thing being complained about. Worth stating as a rule: when
+a fix is rejected, find out what was actually looked at before applying the same fix
+harder.
+
+**The detail card, not its explanations block.** Hiding `.place-explanations` while a card
+loaded left the name, score, photograph and every button on screen describing a place the
+owner could not see. It is the whole `.place-card` now.
+
+**The loading line changes over time, not per card.** Derived from the place id it was
+stable — deliberately, so a screenshot is repeatable — but a fixed sentence during a wait
+is exactly what does not look alive. The id now picks the *starting* line and a timer
+advances it, so two cards still do not open on the same sentence and nothing is random.
+
+**`/stay` was locked correctly and still not in the workflow.** The route was gated and
+sat in the right sidebar slot, but `journey()` had no `stay` stage — so `next` went
+straight from places to optimize and the app never sent anyone there. The order existed in
+the sidebar and nowhere else. It is a real stage now, done once the owner has **decided**:
+either naming a base or pressing "Plan from the centre of my places", which is
+`accept_provisional_base`, the **90th** allowlisted method. Without that second answer an
+owner who books nothing would have `next` stuck on this stage for the rest of the trip.
+
+That button is also the answer to a screen that could refuse and offer nothing:
+`recommend_areas` needs a transit graph, and a city whose metro OpenStreetMap does not
+carry returns `no_transit_graph_for_areas`. The centre of the chosen places is what the
+planner would use anyway.
+
+### A place with no photograph gets a map, not a grey box
+
+Six places on the Sapporo catalogue have no free photograph anywhere — no image property,
+no OpenStreetMap tag, nothing past the Commons name filter, and two of them stone
+monuments whose two-character names that filter refuses by design. There is nothing to
+find, and inventing one is fabrication. So the card draws **where the place is** and says
+that is what it is doing. A swipe decision made on a location is worse than one made on a
+photograph and much better than one made on an empty rectangle.
+
+### "No remaining time capacity" is true and was useless
+
+It is the honest residual — those places fit nothing wrong, there are simply more of them
+than the days hold — and the optimizer cannot invent a day, because the dates are the
+owner's. Saying it without saying *that* was a dead end. It now names how many places and
+how many days, states that nothing is wrong with them, and links to where the dates are
+changed.
+
+### Smaller things from the same round
+
+**"What this draft assumed" folds behind its own summary** with a ⚠ and a count: the same
+list every time until something changes, sitting between the draft and the variants the
+owner opened the page to read. A `<details>`, so the triangle, the keyboard behaviour and
+the announced expanded state come from the platform.
+
+**The date picker disappears while "Use these dates" runs.** Pace, month grid, guide and
+chosen window are inputs to a decision already sent; leaving them up invites changing an
+answer nothing is reading, and buries the progress line. `hidden`, not unmounted, so a
+failed build returns the picker exactly as it was.
+
+**The lane alternatives got the weight of a control.** At the end of a page of cards
+"look at a different list" is one of only two things to do, and it read as disabled chrome
+beside the primary.
+
+**The itinerary's day stepper says "Previous day" / "Next day"** with the date beside it,
+and sits directly above the map it steers rather than at the top of the page. **The day's
+trace autoplays on arrival**, keyed on the date — the map is one component reused across
+days, so without a key it would trace the first day and sit still for the other six. That
+key is adjusted during render rather than in an effect: React sanctions that shape for
+state derived from a changed prop, and the lint rule rejects the effect version as a
+cascading render.
+
+**The itinerary names the other five screens and says what each is for.** It is the page
+an owner lands on for the rest of the trip, and the sidebar lists those five without ever
+saying what any of them does.
+
 ## Owner testing, 2026-08-17: twelve reports
 
 ### Nearest-first starved the places that most needed a route

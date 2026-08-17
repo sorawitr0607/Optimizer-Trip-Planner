@@ -252,6 +252,8 @@ export interface PlaceMapProps {
   focusId?: string;
   /** The numbered list under the map. Off in the card, where one name is enough. */
   withKey?: boolean;
+  /** Changing this replays the day's trace. The day's date, on the itinerary. */
+  autoTraceKey?: string;
   /** Enables the zoomed-in detail fetch. Omit on a map nobody zooms. */
   tripId?: string;
   /** One entry per leg, in order. `exact` where the router gave a real path and false
@@ -279,6 +281,7 @@ export function PlaceMap({
   basemap = null,
   focusId,
   withKey = true,
+  autoTraceKey,
   tripId,
   route = false,
   paths = [],
@@ -308,6 +311,19 @@ export function PlaceMap({
   // screen baseline photographs whatever frame it lands on. Never available under the
   // capture flag for that second reason.
   const [tracing, setTracing] = useState(false);
+  // Play the day as soon as it is shown, at the owner's asking. Keyed on the day rather
+  // than on mount, because the map is one component reused across days — without a key
+  // it would trace the first day and then sit still for the other six.
+  //
+  // Adjusted during render rather than in an effect. React sanctions exactly this shape
+  // for "state derived from a prop that changed", and it is the honest description here:
+  // there is no external system to synchronise with, and setting state inside an effect
+  // means a render, a commit and a second render for something already known.
+  const [tracedKey, setTracedKey] = useState<string | undefined>(undefined);
+  if (autoTraceKey && autoTraceKey !== tracedKey) {
+    setTracedKey(autoTraceKey);
+    setTracing(true);
+  }
   const tracePathRef = useRef<SVGPathElement | null>(null);
   const travellerRef = useRef<SVGCircleElement | null>(null);
   // Which window has already been asked for, so panning inside it costs nothing.

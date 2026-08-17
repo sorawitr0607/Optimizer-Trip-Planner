@@ -1852,6 +1852,21 @@
   font-size: var(--text-2xs);
 }
 
+/* Six routes with a sentence each. A list rather than a row of buttons: the sentence is
+   the point, and a row would push it to a tooltip nobody opens. */
+.plan-next-links {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0 0 18px;
+  padding: 0;
+}
+
+.plan-next-links li {
+  display: grid;
+  gap: 2px;
+}
+
 .plan-downloads {
   display: flex;
   flex-wrap: wrap;
@@ -3595,6 +3610,24 @@
    Lane tabs. Five lanes is a small enough set to show at once, and which lane
    you are in is then readable without opening a select.
    --------------------------------------------------------------------------- */
+/* The lane alternatives are a real offer, not a footnote: at the end of a page of cards
+   "look at a different list" is one of only two things to do, and it read as disabled
+   chrome beside the primary. Same shape as before, given the weight of a control. */
+.deck-lane-suggest .lane-tab {
+  background: var(--bg-card);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  font-weight: var(--weight-selected);
+  padding: 8px 14px;
+}
+
+.plan-assumptions > summary {
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-selected);
+  list-style-position: inside;
+}
+
 .lane-tabs {
   display: flex;
   flex-wrap: wrap;

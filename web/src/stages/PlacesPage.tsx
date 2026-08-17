@@ -786,7 +786,11 @@ export function PlacesPage() {
           ) : null}
           {!entries.length ? <p>{copy("no_lane_cards", language)}</p> : null}
 
-          {candidate && card ? (
+          {/* The whole right-hand card waits, not just its explanations block. Hiding the
+              `<details>` alone left the name, the score, the photograph and every button
+              on screen describing a place the owner cannot see yet — which is the report
+              coming back a second time. */}
+          {candidate && card && !(cardPending && mode === "deck") ? (
             // derives-from: A4 ranked candidate card, reduced to one functional list card for S4.
             <article className="place-card">
               <header className="place-card-head">
@@ -927,10 +931,7 @@ export function PlacesPage() {
                 {choice ? <button onClick={() => clearChoice.mutate(undefined)} type="button">{copy("clear_choice", language)}</button> : null}
               </div>
 
-              {/* Hidden while the card in front is still arriving. The panel describes
-                  *that* card, so showing it first is the "decide on half the evidence"
-                  problem the card gate exists to prevent, one element over. */}
-              <details className="place-explanations" hidden={cardPending && mode === "deck"}>
+              <details className="place-explanations">
                 <summary>{copy("card_detail", language)}</summary>
                 <div className="place-detail-grid">
                   {(["why", "pros", "cons"] as const).map((kind) => {
