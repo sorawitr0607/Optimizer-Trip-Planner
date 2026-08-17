@@ -26,12 +26,18 @@ const FACTORS = ["travel_time", "metro_access", "food_nearby", "after_dark", "lo
 export interface StayAreasProps {
   tripId: string;
   language: Language;
+  /** Told when the ranking has been attempted, and whether this destination can be
+   *  ranked at all — the centre-of-my-places fallback is only an answer once the
+   *  question has actually been asked. */
+  onOutcome?: (outcome: "ranked" | "unrankable") => void;
 }
 
-export function StayAreas({ tripId, language }: StayAreasProps) {
+export function StayAreas({ tripId, language, onOutcome }: StayAreasProps) {
   const queryClient = useQueryClient();
   const recommend = useMutation<StayAreaReport, Error, void>({
     mutationFn: () => rpc<StayAreaReport>("recommend_areas", { trip_id: tripId }),
+    onSuccess: (report) => onOutcome?.(report.areas.length ? "ranked" : "unrankable"),
+    onError: () => onOutcome?.("unrankable"),
   });
   const chooseArea = useMutation({
     mutationFn: (area: { name: string; latitude: number; longitude: number }) =>

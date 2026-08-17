@@ -1842,7 +1842,9 @@ class WikidataSummaryProvider:
     # which is what left cards blank after the source was added.
     # v8: five more Wikidata image properties beside P18, so a place with an aerial,
     # winter or panoramic view stops showing as a card with no picture.
-    cache_version = "wikidata-summary-v8"
+    # v9: the subject's own Commons category, for places whose photographs exist but
+    # are not geotagged and so were invisible to both the geosearch and the name search.
+    cache_version = "wikidata-summary-v9"
     # An encyclopedia article changes slowly and a description is not a fact the
     # planner schedules against, so this can sit for a long time.
     cache_ttl_days = 60
@@ -2001,6 +2003,8 @@ class WikidataSummaryProvider:
     #: geosearch radius on purpose: this path already knows the file claims the place by
     #: name, and the coordinate is only there to prove it is the right one of that name.
     named_radius_metres = 2500
+    #: How many files to take from a subject's own Commons category.
+    category_file_limit = 6
     named_limit = 8
 
     def named_photos(self, name: str, latitude: float, longitude: float) -> list[str]:
@@ -2119,9 +2123,48 @@ class WikidataSummaryProvider:
             if image:
                 break
 
+        # Failing all of those, the subject's own Commons **category**. A file in a
+        # category is about that category's subject by definition, so this needs neither
+        # coordinates nor a name heuristic — it is the one source that can answer for a
+        # place whose photographs simply are not geotagged. Measured on the owner's
+        # Taipei catalogue 2026-08-17: Chanchushan carries `P373 = "Toad Mountain"` and
+        # no image property at all, so it was a card with no picture while Commons held
+        # the pictures under that name.
+        category = None
+        for claim in claims.get("P373") or []:
+            category = (claim.get("mainsnak") or {}).get("datavalue", {}).get("value")
+            if category:
+                break
+        category_files: list[str] = []
+        if category:
+            try:
+                listing = self._json(
+                    "https://commons.wikimedia.org/w/api.php?action=query&format=json"
+                    "&list=categorymembers&cmtype=file&cmlimit="
+                    f"{self.category_file_limit}&cmtitle="
+                    + quote(f"Category:{category}")
+                )
+                for member in (listing.get("query") or {}).get("categorymembers") or []:
+                    title = str(member.get("title") or "")
+                    if not title.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
+                        continue
+                    category_files.append(
+                        "https://commons.wikimedia.org/wiki/Special:FilePath/"
+                        + quote(title.split(":", 1)[-1].replace(" ", "_"))
+                        + "?width=640"
+                    )
+            except ProviderUnavailable:
+                # A gallery is not worth failing a summary over.
+                category_files = []
+        if image is None and category_files:
+            image = category_files[0]
+
         gallery: list[str] = []
         if image:
             gallery.append(image)
+        for url in category_files:
+            if url not in gallery:
+                gallery.append(url)
 
         text: dict[str, str] = {}
         for code in self.languages:

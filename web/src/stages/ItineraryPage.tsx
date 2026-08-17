@@ -686,11 +686,14 @@ export function ItineraryPage() {
             ["revise", "next_revise"],
           ] as const
         ).map(([route, blurb]) => (
+          // The sentence leads and the control follows, at the owner's asking: a link
+          // above its own explanation makes the reader decide before they have read why,
+          // so the explanation only ever gets read by someone who already pressed.
           <li key={route}>
-            <Link className="primary-link" to={`/trips/${tripId}/${route}`}>
-              {copy(`stage_${route}`, language)}
+            <p className="plan-next-blurb">{copy(blurb, language)}</p>
+            <Link className="plan-next-action" to={`/trips/${tripId}/${route}`}>
+              {copy(`stage_${route}`, language)} →
             </Link>
-            <span className="setup-hint">{copy(blurb, language)}</span>
           </li>
         ))}
       </ul>

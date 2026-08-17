@@ -78,6 +78,12 @@ export function OptimizePage() {
   // Free is the default, and stays the default: this app's rule is that a control which
   // spends money says so before it is pressed, never that it is pressed by accident.
   const [hoursChoice, setHoursChoice] = useState<"assume" | "verified">("assume");
+  // Once a draft exists the build controls are done asking. Leaving "Before you build"
+  // and "Build three plan options" above a finished proposal put the question and its
+  // answer on screen together, so the screen read as still waiting for a press that had
+  // already happened — and re-pressing throws away the draft below it. They come back on
+  // a deliberate "Build them again", which is the only moment they mean anything.
+  const [rebuilding, setRebuilding] = useState(false);
 
   const trips = useQuery({ queryKey: ["trips"], queryFn: () => rpc<Trip[]>("list_trips") });
   const choices = useQuery({
@@ -257,6 +263,7 @@ export function OptimizePage() {
     (candidate) => candidate.id === variant?.hotel_recommendation?.default_area_id,
   );
   const assumptions = assumptionsOf(preview.data ?? null, proposal);
+  const showBuildControls = !proposal || rebuilding;
   const gaps = optimizerInput?.capability_gaps ?? [];
   // One label, two dead ends — the refusal card and an unusable variant's warnings.
   // It says "free" because it now is, and says what it assumes, because a button that
@@ -291,7 +298,7 @@ export function OptimizePage() {
           been taken and acted on, and leaving it up during the ~52s wait invites changing
           an answer that is no longer being read — the radio would move while the run it
           was meant to configure was already past it. */}
-      {evidence.data && considered.length && !building ? (
+      {evidence.data && considered.length && !building && showBuildControls ? (
         <section className={`evidence-verdict${evidence.data.needing_hours ? "" : " settled"}`}>
           <h2>{copy("before_you_build", language)}</h2>
           <p className="evidence-verdict-answer">
@@ -345,7 +352,15 @@ export function OptimizePage() {
           instead — which meant the screen's named action disappeared exactly when the
           owner was looking for it. The radio above now decides *how* it builds; this
           decides *that* it builds. */}
-      <div className="optimize-actions">
+      {/* The rebuild offer, where the build controls used to be. */}
+      {!showBuildControls && !building ? (
+        <div className="optimize-actions">
+          <button onClick={() => setRebuilding(true)} type="button">
+            {copy("build_again", language)}
+          </button>
+        </div>
+      ) : null}
+      <div className="optimize-actions" hidden={!showBuildControls || building}>
         <button
           className="setup-primary"
           disabled={considered.length === 0 || building}

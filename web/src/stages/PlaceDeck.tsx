@@ -338,7 +338,17 @@ export function PlaceDeck({
                     ?? about?.description?.[language] ?? about?.description?.en ?? "";
                   return (
                     <li className="deck-reconsider-row" key={c.place_id}>
-                      <details className="deck-reconsider-detail">
+                      {/* Opening a row also selects the place, so the panel beside the
+                          deck shows its full card — score, breakdown, gallery and all —
+                          rather than this row's thumbnail being the whole of what a
+                          reconsideration is decided on. Reusing that panel beats
+                          building a second one that could describe the place differently. */}
+                      <details
+                        className="deck-reconsider-detail"
+                        onToggle={(event) => {
+                          if (event.currentTarget.open) onCardChange?.(c.place_id);
+                        }}
+                      >
                         <summary className="deck-reconsider-name">{nameOf(c.place_id)}</summary>
                         <div className="deck-reconsider-about">
                           {photo ? (

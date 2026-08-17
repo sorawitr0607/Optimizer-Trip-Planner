@@ -1852,19 +1852,54 @@
   font-size: var(--text-2xs);
 }
 
-/* Six routes with a sentence each. A list rather than a row of buttons: the sentence is
-   the point, and a row would push it to a tooltip nobody opens. */
+/* Five routes with a sentence each. Cards on a grid rather than a bare list: this is the
+   foot of the screen an owner lands on for the rest of the trip, and a run of five links
+   with grey text under them read as leftovers. The sentence leads and the control follows,
+   because a link above its own explanation is decided on before the explanation is read. */
 .plan-next-links {
   display: grid;
-  gap: 10px;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   list-style: none;
   margin: 0 0 18px;
   padding: 0;
 }
 
 .plan-next-links li {
-  display: grid;
-  gap: 2px;
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-hard-sm);
+  display: flex;
+  /* The action sits on the floor of the card whatever the sentence above it costs, so
+     five cards of different text lengths still line their controls up. */
+  flex-direction: column;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 14px;
+}
+
+.plan-next-blurb {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+.plan-next-action {
+  align-self: start;
+  background: var(--bg-secondary);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-selected);
+  padding: 8px 14px;
+  text-decoration: none;
+}
+
+.plan-next-action:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
 }
 
 .plan-downloads {
@@ -3614,11 +3649,16 @@
    "look at a different list" is one of only two things to do. A tinted outline was still
    read as chrome, so these are filled — the same weight as the primary beside them,
    because they are the same kind of thing: the two ways forward from a spent page. */
+/* A different colour from "Show more from here" beside them, deliberately. Both are
+   controls and both need weight, but they do opposite things — one deals more of the list
+   you are in, the other leaves it — and in one accent they read as a row of four ways to
+   do the same thing. The accent stays with the primary; these take the secondary surface
+   with a full-weight border, which is the house pattern for "also a real action". */
 .deck-lane-suggest .lane-tab {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
+  background: var(--bg-secondary);
+  border: 2px solid var(--text-secondary);
   box-shadow: var(--shadow-hard-sm);
-  color: var(--color-on-accent);
+  color: var(--text-primary);
   font-size: var(--text-sm);
   font-weight: var(--weight-selected);
   padding: 10px 16px;

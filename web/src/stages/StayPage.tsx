@@ -32,6 +32,8 @@ export function StayPage() {
   const queryClient = useQueryClient();
   const [query, setQuery] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
+  /** Null until the ranking has been run at all. */
+  const [outcome, setOutcome] = useState<"ranked" | "unrankable" | null>(null);
 
   const base = useQuery({
     queryKey: ["accommodation_base", tripId],
@@ -134,13 +136,14 @@ export function StayPage() {
         ) : null}
       </div>
 
-      {/* The way out for a trip this cannot rank. `recommend_areas` needs a transit
-          graph, and a city with no metro in OpenStreetMap has none — measured as
-          `no_transit_graph_for_areas`. That is not a reason to leave the owner with
-          nothing to press: the centre of their chosen places is the base the planner
-          would use anyway, and accepting it is a real decision, which is what completes
-          this stage for anyone who has not booked. */}
-      <div className="evidence-card">
+      {/* The way out for a trip this cannot rank, and **only** then, at the owner's
+          asking. `recommend_areas` needs a transit graph, and a city whose metro
+          OpenStreetMap does not carry has none — `no_transit_graph_for_areas`. Offered
+          up front it competed with the ranking for the same decision; offered after the
+          ranking has been tried and come back empty, it is the answer to a question that
+          was actually asked. A destination that ranks fine completes this stage by
+          picking an area instead. */}
+      <div className="evidence-card" hidden={outcome !== "unrankable"}>
         <strong>{copy("stay_accept_centre_title", language)}</strong>
         <span className="setup-hint">{copy("stay_accept_centre_help", language)}</span>
         <button
@@ -153,7 +156,7 @@ export function StayPage() {
         </button>
       </div>
 
-      <StayAreas language={language} tripId={tripId} />
+      <StayAreas language={language} onOutcome={setOutcome} tripId={tripId} />
     </section>
   );
 }

@@ -241,9 +241,14 @@ export function PlacesPage() {
     setShown(LANE_PAGE);
     setDecidedHere(0);
   };
-  const selectedId = entries.some((entry) => entry.place_id === cardId)
-    ? cardId
-    : (entries[0]?.place_id ?? "");
+  // A card id counts if the deck is dealing it **or** the catalogue holds it. The second
+  // half is what lets "Reconsider skipped places" open a real detail panel: a passed-over
+  // place is by definition not in `entries`, so requiring it there meant clicking one
+  // silently fell back to the head of the queue and showed the wrong place's card.
+  const selectedId =
+    (cardId && (entries.some((entry) => entry.place_id === cardId) || byId[cardId]))
+      ? cardId
+      : (entries[0]?.place_id ?? "");
   const candidate = catalog.find((item) => item.place_id === selectedId);
   const card = selectedId ? ranking.data?.cards[selectedId] : undefined;
   const choice = choices.data?.find((item) => item.place_id === selectedId);
@@ -298,7 +303,10 @@ export function PlacesPage() {
     mutationFn: () => rpc<unknown>("confirm_places_selection", { trip_id: tripId }),
     onSettled: async () => {
       await queryClient.invalidateQueries({ queryKey: ["journey", tripId] });
-      navigate(`/trips/${tripId}/optimize`);
+      // To "Where to stay", not past it. The journey's order is places → stay → build,
+      // and sending the owner straight to optimize skipped the stage the app had just
+      // been taught to require — the sidebar said one thing and the button did another.
+      navigate(`/trips/${tripId}/stay`);
     },
   });
 
@@ -519,7 +527,15 @@ export function PlacesPage() {
         >
           {discover.isPending ? copy("discovering", language) : copy("discover", language)}
         </button>
-        <button disabled={!discovery.data || discover.isPending} onClick={() => discover.mutate(true)} type="button">
+        {/* Also disabled while a card's picture is arriving. "Search again" throws the
+            catalogue away and spends 30-90s of a free public service rebuilding it, and
+            a press landing in the middle of the first card loading is almost always a
+            press meant for the deck. Same rule as the five decision buttons. */}
+        <button
+          disabled={!discovery.data || discover.isPending || cardPending}
+          onClick={() => discover.mutate(true)}
+          type="button"
+        >
           {copy("refresh", language)}
         </button>
       </div>

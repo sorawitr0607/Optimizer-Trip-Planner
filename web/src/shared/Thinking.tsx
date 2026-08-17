@@ -41,9 +41,12 @@ export function Thinking({ expectSeconds, language, lines }: ThinkingProps) {
   useEffect(() => {
     const step = expectSeconds ? Math.max(EVERY_MS, (expectSeconds * 1000) / lines.length) : EVERY_MS;
     const timer = window.setInterval(
-      // Holds on the last line rather than looping, so a long wait does not look like
-      // it has restarted. The counter beside it is what keeps that from reading as death.
-      () => setIndex((current) => Math.min(current + 1, lines.length - 1)),
+      // Wraps rather than holding on the last line, at the owner's asking. It used to
+      // hold, so that a long wait would not look like it had restarted — but the elapsed
+      // counter beside it now carries that job honestly, and with it there, coming back
+      // round reads as variety rather than as a reset. Holding read as frozen, which is
+      // the exact impression the counter was added to prevent.
+      () => setIndex((current) => current + 1),
       step,
     );
     return () => window.clearInterval(timer);
@@ -61,7 +64,7 @@ export function Thinking({ expectSeconds, language, lines }: ThinkingProps) {
     // derives-from: element 36 .currency-info-box as .thinking
     <p aria-live="polite" className="thinking">
       <span className="thinking-dot" />
-      <span key={index}>{copy(lines[index], language)}</span>
+      <span key={index}>{copy(lines[index % lines.length], language)}</span>
       <span className="thinking-elapsed">{copyFormat("thinking_elapsed", language, { seconds: String(elapsed) })}</span>
     </p>
   );

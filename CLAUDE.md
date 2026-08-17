@@ -712,6 +712,32 @@ Worth knowing for the next time a mirror is evaluated: **`overpass.osm.ch` is re
 and useless** — it serves a Switzerland-only extract, so it answers 200 with zero
 elements for anywhere else, which looks exactly like a city having nothing in it.
 
+## A place's own Commons category is the source that needs no heuristic
+
+"No photograph exists in the free sources" was shown for places that plainly have
+photographs. Measured across the owner's catalogues on 2026-08-17, the blanks are three
+different problems and only one of them was ours:
+
+- **Bali, 19 of 34 blank** — small businesses (a quad-bike operator, a water park) with
+  **no Wikidata entry at all**. No free source holds a picture of them. Nothing to fix.
+- **Tsiancheng Park, Zhaoyang Tea Park** — a Commons search returns **zero files**. The
+  photograph does not exist to be found.
+- **Chanchushan** — carries `P373 = "Toad Mountain"` and no image property, so Commons
+  held six photographs under a name nothing in the pipeline was looking at.
+
+A file in a Commons **category** is about that category's subject by definition, so it
+needs neither coordinates nor a name match — it is the one source that can answer for a
+place whose photographs exist but are not geotagged. Chanchushan goes **0 → 6**, and they
+are genuinely of the hill. `cache_version` is `wikidata-summary-v9`.
+
+**One gap is left open deliberately.** Taipei City Hakka Cultural Park has two Commons
+files whose titles contain its full name, no `P373`, and **no coordinates on either
+file** — and a file with no location is refused outright, which is the guard that stops
+six photographs of *Central Park in Vinnytsya* landing on a card for `Central Art Park`.
+Relaxing it for a strong name match is plausible (containment already rejects the
+Vinnytsya case) but it trades a measured safety property for a heuristic, and that is its
+own decision rather than something to slip into a fix for something else.
+
 ## A tab left open across a rebuild runs the old app, and that cost several rounds
 
 `Failed to fetch dynamically imported module: .../OptimizePage-D8dLZlyq.js`, reported from
