@@ -771,6 +771,22 @@ screen reader and nothing to anyone who has not learned the convention, so the w
 given a full column, which reads as a field expecting something longer. Numerics cap at
 `8ch`, dates and times at `18ch`.
 
+**And the form was six columns wide, which I first recorded as already satisfying the
+single-column guidance.** It does not: `repeat(auto-fit, minmax(170px, 1fr))` measured
+**six columns at 1440px**, which is the two-dimensional scan that guidance exists to
+prevent. One column now, capped at `34rem` — the cap matters as much as the count, since a
+single column stretched across 1000px is its own problem. The error is worth recording
+because of how it happened: I read the rule, agreed the form met it, and did not measure
+until asked whether I had actually checked.
+
+**Read the page, do not read a summary of it.** Two `WebFetch` calls returned a small
+model's précis, and both were faithful — but only opening the article in a browser and
+reading it top to bottom surfaced the two checks that were still outstanding: no
+horizontal scroll on mobile, and no sticky or fixed element that could sit over a field
+with the keyboard open. Both measured clean at 390px. Also worth stating plainly: **the
+article does not contain 46 tips.** The count is a title claim about screenshots; the
+actual guidance is ten best-practice paragraphs and five layout points.
+
 **And the one that actually mattered: the error was on the wrong screen.** "Choose at
 least one Main style" is raised by **Confirm**, which lives on the review step — while the
 tags are on step 3. So the owner was told to fix something that was not on screen, which

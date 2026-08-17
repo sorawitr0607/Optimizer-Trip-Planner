@@ -733,10 +733,16 @@
   margin: 0;
 }
 
+/* One column, capped at a readable measure.
+   `repeat(auto-fit, minmax(170px, 1fr))` measured **six columns at 1440px** — a form the
+   eye has to scan in two dimensions, which is what the single-column guidance exists to
+   prevent, and it also let a three-character age sit in a 173px cell beside an unrelated
+   question. The cap matters as much as the count: a single column stretched across 1000px
+   is its own problem, and the fields inside are now sized to their content. */
 .setup-fields {
   display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+  grid-template-columns: minmax(0, 34rem);
 }
 
 .setup-fields > label {
