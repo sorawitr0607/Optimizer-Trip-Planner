@@ -426,8 +426,10 @@ export function SplitPage() {
           {copy("split_label", language)}
           <Required language={language} />
           <input
+            autoComplete="off"
             onChange={(event) => setDraft({ ...draft, label: event.target.value })}
             required
+            type="text"
             value={draft.label}
           />
         </label>
@@ -580,6 +582,7 @@ export function SplitPage() {
                     <div className="money-allocation-input-wrap">
                       <span className="money-allocation-currency">{draft.original_currency}</span>
                       <input
+                        inputMode="decimal"
                         min="0"
                         onChange={(event) =>
                           setDraft((current) => {
@@ -623,8 +626,9 @@ export function SplitPage() {
 
         <label className="money-notes">
           {copy("split_notes", language)}
-          <input
+          <textarea
             onChange={(event) => setDraft({ ...draft, notes: event.target.value })}
+            rows={2}
             value={draft.notes}
           />
         </label>

@@ -207,6 +207,7 @@ describe("CostsPage", () => {
     expect(html).toContain("Record an estimate");
     expect(html).toContain("What is it for");
     expect(html).toContain("Amount");
+    expect(html).toMatch(/inputMode="decimal" min="0"[^>]*step="0.01" type="number"/);
     expect(html).toContain('type="submit"');
     expect(html).toContain("Edit");
     expectNoMissingCopy(html);

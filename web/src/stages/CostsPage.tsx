@@ -274,7 +274,9 @@ export function CostsPage() {
             {copy("costs_categories_new", language)}
             <input
               aria-describedby="categories-help"
+              autoComplete="off"
               onChange={(event) => setNewCategory(event.target.value)}
+              type="text"
               value={newCategory}
             />
           </label>
@@ -474,8 +476,10 @@ export function CostsPage() {
             {copy("what_for", language)}
             <Required language={language} />
             <input
+              autoComplete="off"
               onChange={(event) => setDraft({ ...draft, label: event.target.value })}
               required
+              type="text"
               value={draft.label}
             />
           </label>
@@ -483,9 +487,13 @@ export function CostsPage() {
             {copy("split_amount", language)}
             <Required language={language} />
             <input
+              autoComplete="off"
               inputMode="decimal"
+              min="0"
               onChange={(event) => setDraft({ ...draft, amount: event.target.value })}
               required
+              step="0.01"
+              type="number"
               value={draft.amount}
             />
           </label>

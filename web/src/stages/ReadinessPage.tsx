@@ -305,12 +305,14 @@ export function ReadinessPage() {
                         <label>
                           {copy("not_applicable_reason", language)}
                           <input
+                            autoComplete="off"
                             onChange={(event) =>
                               setDrafts((current) => ({
                                 ...current,
                                 [item.item_id]: { ...draft, note: event.target.value },
                               }))
                             }
+                            type="text"
                             value={draft.note}
                           />
                         </label>

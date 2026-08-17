@@ -134,8 +134,8 @@ planner&rsquo;s real forms and recorded with the measurement that produced the v
 in the middle column: what the code actually did before anyone looked.</p>
 </header>
 <div class="tally">
-<div class="g"><b>10</b><span>gaps found and closed</span></div>
-<div class="h"><b>7</b><span>already held</span></div>
+<div class="g"><b>11</b><span>gaps found and closed</span></div>
+<div class="h"><b>6</b><span>already held</span></div>
 <div class="d"><b>3</b><span>declined, with reason</span></div>
 <div><b>0</b><span>broken helper links</span></div>
 </div>
@@ -195,10 +195,10 @@ in the middle column: what the code actually did before anyone looked.</p>
   <p class="said">Placeholders hint; they never replace a label, because they vanish on typing.</p>
   <p class="found">Already true: every control had a real <code>&lt;label&gt;</code>, placeholders used only as examples.</p>
 </article>
-<article class="rec held">
-  <div class="rec-top"><p class="rule">The control matches the datum</p><span class="chip held">Held</span></div>
+<article class="rec gap">
+  <div class="rec-top"><p class="rule">The control matches the datum</p><span class="chip gap">Gap</span></div>
   <p class="said">Use the native control and mobile keyboard made for the value being entered.</p>
-  <p class="found">Checked every setup control: binary questions are checkboxes; dates and times use native pickers; ages and headcount are bounded whole numbers with numeric keyboards; accommodation is a select; names are text; longer answers are textareas. Trip creation uses country/city selects with an explicit typed fallback.</p>
+  <p class="found">A repository-wide inventory found one cost amount that requested a decimal keyboard but still accepted arbitrary text. It is now a bounded decimal number; accommodation lookup is search, longer notes are textareas, and every remaining input declares its native type explicitly.</p>
 </article>
 <article class="rec held">
   <div class="rec-top"><p class="rule">Multi-step with a progress indicator</p><span class="chip held">Held</span></div>

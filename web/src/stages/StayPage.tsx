@@ -126,8 +126,10 @@ export function StayPage() {
           {copy("accommodation_query", language)}
           <input
             aria-describedby={typed.length === 0 ? "base-help base-empty" : "base-help"}
+            autoComplete="off"
             onChange={(event) => setQuery(event.target.value)}
             placeholder={copy("accommodation_query_example", language)}
+            type="search"
             value={query ?? base.data?.name ?? ""}
           />
         </label>

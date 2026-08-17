@@ -68,7 +68,15 @@ export function DeleteTrip({ trip, onDeleted, compact = false }: DeleteTripProps
       </p>
       <label>
         {copyFormat("delete_trip_confirm", language, { name: trip.name })}
-        <input autoFocus onChange={(event) => setTyped(event.target.value)} value={typed} />
+        <input
+          autoComplete="off"
+          autoCorrect="off"
+          autoFocus
+          onChange={(event) => setTyped(event.target.value)}
+          spellCheck={false}
+          type="text"
+          value={typed}
+        />
       </label>
       {errorCode ? <p className="field-error">⚠ {errorCode}</p> : null}
       <div className={`trip-slot-actions${compact ? " compact" : ""}`}>
