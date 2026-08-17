@@ -720,6 +720,76 @@ Worth knowing for the next time a mirror is evaluated: **`overpass.osm.ch` is re
 and useless** — it serves a Switzerland-only extract, so it answers 200 with zero
 elements for anywhere else, which looks exactly like a city having nothing in it.
 
+## A card was released when its bytes arrived, not when its picture could be drawn
+
+Three rounds of "the skeleton stops after the first two cards, and I can swipe a card that
+has not finished loading". Instrumentation said the opposite every time — no frame ever
+showed a card with `complete: false` — and instrumentation was answering the wrong
+question. **`complete` and `onLoad` both mean the response finished**; the image is
+decoded afterwards, which `decoding="async"` explicitly asks for off the main thread. So
+the card was released with its bytes in hand and its picture still a blank box, and the
+owner was right: they were deciding on nothing.
+
+`markPainted()` waits for `element.decode()`, which resolves when the frame can actually
+be drawn. It releases the card on rejection too — a broken image, or an `src` that changed
+mid-flight — because a card held forever is worse than one released early.
+
+**The lesson is about the measurement, not the fix.** "No bad frames" was true and
+irrelevant: the probe tested the same property the code tested, so it could only ever
+confirm it. When a report survives three rounds of being measured away, the measurement is
+the thing to doubt.
+
+## Ranking a stay area without a metro
+
+`recommend_areas` refused outright where a destination has no published metro, on the
+ground that "an area ranking with no travel times is a list of amenity counts pretending
+to be advice". That reasoning holds only while the alternative is *inventing* a travel
+time. Walking distance is not invented: it comes from coordinates every candidate already
+has, and `TransitGraph.journey` has always taken the better of riding and walking anyway —
+so this is that same measure with the riding removed, and the two cannot disagree about
+what a minute means.
+
+The fallback ranks **the neighbourhoods around the places the owner chose**, not stations,
+and says so: every area is named for one of their own places and the report carries
+`AREA_TIMES_ARE_WALKING_ONLY`. Measured across three live trips that previously refused:
+Singapore 12 areas (30-minute medians), Da Nang 7, Shanghai 4 — where all three had
+returned `no_transit_graph_for_areas`.
+
+## The wrong control was nearest, again
+
+Two reports, one cause. "Why does *Assume hours, measure routes, build the plan — free*
+appear again" — because it renders whenever activation is refused, including when the
+refusal is a **comfort budget**, which fetching routes cannot possibly move. And "I didn't
+see the accept button" — because the only accept lived in a panel further up the page.
+
+The auto-resolve offer is now suppressed when every violation is an `UNAPPROVED_` one, and
+an **Accept N minutes and rebuild** button sits at the refusal itself. It agrees to the
+*measured* value, never the rule: `_accepts` requires `measured <= accepted_value`, so a
+later replan that walks further is refused again rather than blessed. It rebuilds
+afterwards, because the plan is judged at build time and agreeing to a figure otherwise
+appears to do nothing.
+
+Measured on all three live trips, each of which could not reach an itinerary:
+
+| Trip | Before | Accepted | After |
+|---|---|---|---|
+| Shanghai | `unavailable`, invalid | 64 min (limit 60) | `provisional`, **valid** |
+| Da Nang | `unavailable`, invalid | 112 min (limit 35) | `provisional`, **valid** |
+| Singapore | `unavailable`, invalid | 40 min (limit 35) | `provisional`, **valid** |
+
+## Photographs: the free sources are close to exhausted for these catalogues
+
+`nearby_radius_metres` goes 150 → **400**. The radius is a proxy for "was this
+photographed at the place", and 150 m is the *building* rather than the site — a citadel,
+park or temple complex is routinely photographed from a corner of its own grounds.
+Widening is safe only because `photo_depicts_place` still has to accept the file name.
+
+It is worth being plain about the yield: across three live catalogues this recovered
+**one** further photograph (Shanghai's Site of the First Congress). The remaining blanks
+are tailors, mini-golf, a martial arts club, a Marks & Spencer — places with no
+encyclopedic presence anywhere free. The paid button on the card is the honest answer for
+those, and it is already there.
+
 ## The photo filter got looser in one direction and was pushed back in the other
 
 Two changes to `photo_depicts_place`, one kept and one reverted the same hour. Worth

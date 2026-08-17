@@ -16,6 +16,7 @@ import {
   type PlanVariant,
   type PlanVersionRecord,
   type Trip,
+  type ComfortTradeoffReport,
 } from "../api/client";
 import { copy, copyFormat, copyFrom } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
@@ -112,6 +113,35 @@ export function OptimizePage() {
   const evidence = useQuery({
     queryKey: ["opening_options", tripId],
     queryFn: () => rpc<OpeningEvidenceOptions>("opening_evidence_options", { trip_id: tripId }),
+  });
+  // Same key the tradeoff panel uses, so TanStack serves both from one response and the
+  // two cannot disagree about which budget is exceeded.
+  const tradeoffs = useQuery({
+    queryKey: ["comfort_tradeoffs", tripId],
+    queryFn: () => rpc<ComfortTradeoffReport>("comfort_tradeoffs", { trip_id: tripId }),
+  });
+  const acceptAll = useMutation({
+    mutationFn: async (rules: ComfortTradeoffReport["rules"]) => {
+      for (const rule of rules) {
+        await rpc("accept_comfort_tradeoff", {
+          trip_id: tripId,
+          code: rule.code,
+          value: rule.measured,
+        });
+      }
+      // The plan is judged at build time, so agreeing to a figure changes nothing until
+      // it is rebuilt. Without this the button would appear to do nothing at all.
+      return rpc<PlanPreview>("generate_plan_preview", { trip_id: tripId });
+    },
+    onSuccess: async () => {
+      setRefusal(null);
+      await Promise.all(
+        ["comfort_tradeoffs", "plan_preview", "journey"].map((key) =>
+          queryClient.invalidateQueries({ queryKey: [key, tripId] }),
+        ),
+      );
+    },
+    onError: (error) => setRefusal(error instanceof ApiError ? error.code : String(error)),
   });
   // The paid path is buy-then-build, not buy-and-stop. Buying the hours and leaving the
   // owner to press again was the "back and forth" report: the purchase is only ever made
@@ -263,6 +293,11 @@ export function OptimizePage() {
   // marker for "the owner can agree to this", not a guess made here.
   const comfortOnly = (variant?.validation?.hard_violations ?? []).filter((item) =>
     String(item.code).startsWith("UNAPPROVED_"),
+  );
+  // The measured figures behind those violations, from the one table the validator, the
+  // soft count and the tradeoff screen already share.
+  const overBudget = (tradeoffs.data?.rules ?? []).filter(
+    (rule) => rule.exceeds && rule.measured !== null && rule.accepted_value === null,
   );
 
   const area = optimizerInput?.candidates?.find(
@@ -587,7 +622,32 @@ export function OptimizePage() {
               </span>
             </p>
           ) : null}
-          {!activationAllowed && !evidence.data?.needing_hours ? (
+          {/* The accept, here. It was only in the tradeoff panel further up the page and
+              was reported as not being there at all — a control that resolves a refusal
+              belongs beside the refusal. It agrees to the **measured** value, never the
+              rule in general: `_accepts` requires `measured <= accepted_value`, so a
+              later replan that walks further is refused again rather than blessed. */}
+          {!activationAllowed && comfortOnly.length && overBudget.length ? (
+            <div className="optimize-actions">
+              <button
+                className="setup-primary"
+                disabled={acceptAll.isPending}
+                onClick={() => acceptAll.mutate(overBudget)}
+                type="button"
+              >
+                {acceptAll.isPending
+                  ? copy("loading", language)
+                  : copyFormat("accept_measured_and_continue", language, {
+                      measured: overBudget.map((rule) => String(rule.measured)).join(", "),
+                    })}
+              </button>
+            </div>
+          ) : null}
+          {/* Not offered when the blocker is a comfort budget: fetching more routes
+              cannot move a walking threshold, so this button promised work that could not
+              possibly help — and being the only control near the failure, it was pressed.
+              Reported as "why does this appear again". */}
+          {!activationAllowed && !evidence.data?.needing_hours && !comfortOnly.length ? (
             <div className="optimize-resolve">
               <button
                 className="setup-primary auto-resolve-retry-btn"

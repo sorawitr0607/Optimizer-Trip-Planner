@@ -206,6 +206,33 @@ export function PlaceDeck({
   /** The card being decided, so the flight can be cut from its photograph. */
   const cardRef = useRef<HTMLDivElement | null>(null);
 
+  /**
+   * A photograph counts as arrived when it can be *painted*, not when its bytes have.
+   *
+   * `complete` and `onLoad` both mean "the response finished", and the image is decoded
+   * afterwards — `decoding="async"` asks for exactly that, off the main thread. So a card
+   * could be released while its picture was still a blank box, which is the swipe
+   * decision made on nothing and the report that survived three rounds of "the skeleton
+   * stops after the first two cards": the skeleton was correct that the bytes were in,
+   * and wrong that the owner could see anything.
+   *
+   * `decode()` resolves when the frame is ready to draw. It rejects on a broken image and
+   * on an `src` that changed mid-flight, and both mean "stop waiting for this one" — the
+   * card is released either way, because a card held forever is worse than a card
+   * released early.
+   */
+  function markPainted(element: HTMLImageElement, url: string | null) {
+    if (!url) return;
+    if (typeof element.decode !== "function") {
+      setPhotoLoaded(url);
+      return;
+    }
+    element
+      .decode()
+      .catch(() => undefined)
+      .finally(() => setPhotoLoaded(url));
+  }
+
   const decided = new Set(choices.map((choice) => choice.place_id));
   // And by name, not only by id. Discovery merges two records of one place when the
   // name and the spot match, but it cannot merge what it cannot tell apart — a zoo
@@ -636,14 +663,14 @@ export function PlaceDeck({
                 fetchPriority="high"
                 loading="eager"
                 onError={() => setPhotoLoaded(currentPhoto)}
-                onLoad={() => setPhotoLoaded(currentPhoto)}
+                onLoad={(event) => markPainted(event.currentTarget, currentPhoto)}
                 // A photograph already in the browser cache can finish before React
                 // attaches `onLoad`, and that handler then never fires — which would
                 // leave the card hidden behind its own placeholder for good. `complete`
                 // is the browser's own answer to "has this already arrived".
                 ref={(element) => {
                   if (element?.complete && element.naturalWidth > 0) {
-                    setPhotoLoaded(currentPhoto);
+                    markPainted(element, currentPhoto);
                   }
                 }}
                 src={currentPhoto ?? undefined}

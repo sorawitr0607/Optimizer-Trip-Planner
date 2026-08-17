@@ -2896,6 +2896,64 @@ class PlannerActions:
     # it is visible rather than silent.
     AREA_SHORTLIST = 12
 
+    #: A brisk walk. The same figure `transit.WALK_METRES_PER_MINUTE` uses, imported
+    #: rather than restated so one number means one thing.
+    def _walkable_areas(
+        self, trip_id: str, places: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """Rank the chosen places as neighbourhoods, on foot. No graph, no request."""
+
+        from travel_planner.transit import WALK_METRES_PER_MINUTE
+
+        candidates = []
+        for place in places:
+            if place.get("latitude") is None or place.get("longitude") is None:
+                continue
+            total = 0.0
+            reachable = 0
+            for other in places:
+                if other.get("latitude") is None or other["place_id"] == place["place_id"]:
+                    continue
+                metres = _distance_metres(place, other)
+                total += metres / WALK_METRES_PER_MINUTE
+                reachable += 1
+            candidates.append(
+                {
+                    "area_id": place["place_id"],
+                    "name": place.get("name") or place["place_id"],
+                    "names": place.get("names") or {},
+                    "latitude": place["latitude"],
+                    "longitude": place["longitude"],
+                    "total_travel_minutes": round(total),
+                    "reachable_place_count": reachable,
+                    "access_walk_minutes": 0.0,
+                    "line_count": 0,
+                    # Counted only for the shortlist, as the station path does — the one
+                    # Overpass request below fills these for the survivors.
+                    "food_count": 0,
+                    "after_dark_count": 0,
+                    "lodging_count": 0,
+                }
+            )
+        if not candidates:
+            raise PlannerRefusal("no_transit_graph_for_areas")
+        candidates.sort(
+            key=lambda item: (
+                item["total_travel_minutes"] / max(item["reachable_place_count"], 1),
+                item["area_id"],
+            )
+        )
+        shortlist = candidates[: self.AREA_SHORTLIST]
+        counts, counted = self._area_amenity_counts(trip_id, shortlist)
+        for area in shortlist:
+            area.update(counts.get(area["area_id"], {}))
+        report = areas.score_areas(shortlist, place_count=len(places))
+        report["amenities_counted"] = counted
+        report["considered_area_count"] = len(candidates)
+        report["excluded_next_best_minutes"] = None
+        report["reason"] = "AREA_TIMES_ARE_WALKING_ONLY"
+        return report
+
     def recommend_areas(self, trip_id: str) -> dict[str, Any]:
         """Rank transit-station neighbourhoods as places to stay. `WF-040`.
 
@@ -2922,12 +2980,25 @@ class PlannerActions:
 
         provider = self.transit_provider or self._default_transit_provider(trip_id)
         build_graph = getattr(provider, "build_graph", None)
-        if build_graph is None:
-            raise PlannerRefusal("no_transit_graph_for_areas")
-        try:
-            graph = build_graph()
-        except ProviderUnavailable as error:
-            raise PlannerRefusal("no_transit_graph_for_areas", detail=str(error)[:160])
+        graph = None
+        if build_graph is not None:
+            try:
+                graph = build_graph()
+            except ProviderUnavailable:
+                graph = None
+        if graph is None or not graph.stops:
+            # No metro to rank stations by, so rank **the chosen places' own
+            # neighbourhoods** on foot instead, at the owner's asking. Refusing outright
+            # was the honest answer while the alternative was inventing travel times; it
+            # is not the honest answer when a real one can be measured. Walking distance
+            # needs no graph, and `TransitGraph.journey` already takes the better of
+            # riding and walking — this is that same measure with the riding removed, so
+            # the two cannot disagree about what a minute means.
+            #
+            # It is not a station list and does not pretend to be: every area is named
+            # for a place the owner chose, and the report carries
+            # `AREA_TIMES_ARE_WALKING_ONLY` so the ranking says what it was computed from.
+            return self._walkable_areas(trip_id, places)
 
         # One area per **named station**, not per graph stop. `transit.STOP_TAGS`
         # deliberately admits `stop_position` and `platform` so subway relations stay

@@ -1895,7 +1895,13 @@ class WikidataSummaryProvider:
     # city and a street in Keelung. So the radius is tight, the result is used only
     # where nothing better exists, and it is stored flagged as nearby so the screen can
     # say so rather than implying the picture is of the place.
-    nearby_radius_metres = 150
+    #: 400 m, not 150. The radius is a proxy for "was this photographed at the place",
+    #: and 150 m is the *building*, not the site: a citadel, a park or a temple complex is
+    #: routinely photographed from a corner of its own grounds. Widening is safe only
+    #: because `photo_depicts_place` still has to accept the file name — the radius alone
+    #: never admits anything, and the name rule is materially stronger since it started
+    #: matching the same words in any order.
+    nearby_radius_metres = 400
     nearby_limit = 6
 
     def __init__(self) -> None:
