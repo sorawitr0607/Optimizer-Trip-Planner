@@ -671,6 +671,50 @@ does: ArrowRight wrote **`must_do` 0 → 1** and ArrowUp wrote **`interested` 9 
 way — the gesture uses `setPointerCapture`, and a synthetic `PointerEvent` carries no real
 pointer to capture — which is the same reason `deck.test.tsx` was built around the buttons.
 
+## `overpass-api.de` was unreachable from the owner's network, 2026-08-17
+
+"No places came back", with `<urlopen error [Errno 61] Connection refused>` twice. That
+error is worth reading carefully: a busy public endpoint answers 504 or times out, and
+**ECONNREFUSED means no connection was opened at all**. Measured from the owner's own
+machine: DNS resolved every host, and `nominatim.openstreetmap.org` (200),
+`www.wikidata.org` (301) and `example.com` (200) all answered normally, while
+`overpass-api.de` and three of its mirrors did not connect. The internet was fine; that
+one service was not reachable from that network.
+
+Three consequences.
+
+**`TOURIST_OVERPASS_URL` takes a comma-separated list**, tried in order, and **only a
+connection failure moves to the next one**. A 5xx or a `remark` is the endpoint being
+busy, which `_attempt_block` already handles — asking a second public server the same
+heavy question because the first was under load is the burst this file already warns
+about, aimed at a stranger. `overpass_url` stays the first entry, because the cache
+descriptor keys on it and a fingerprint that moved with a fallback would invalidate
+every cached run.
+
+**No mirror is added as a default.** These are third parties with their own
+jurisdictions and privacy terms, and which of them a trip's data goes to is the owner's
+decision, not a default someone inherits from a bug report. The capability is in the
+code; the choice is in the environment.
+
+**The empty-catalogue advice now depends on which failure it was.** "Wait a minute, then
+press Find places again" is right for a busy gateway and actively wrong for a host this
+network cannot open a connection to, where pressing again fails identically forever. The
+two are told apart by the provider's own words, since only one of them can be.
+
+Worth knowing for the next time a mirror is evaluated: **`overpass.osm.ch` is reachable
+and useless** — it serves a Switzerland-only extract, so it answers 200 with zero
+elements for anywhere else, which looks exactly like a city having nothing in it.
+
+## Every route change starts at the top
+
+A client-side navigation keeps the browser's scroll offset, because as far as the browser
+is concerned nothing was navigated. Leaving a long itinerary half way down and pressing
+"Costs" therefore opened Costs half way down, on a heading the owner never saw. Keyed on
+`pathname` only, deliberately: the day stepper and the map/timeline toggle both change
+the search string many times on one screen, and yanking the page to the top under someone
+reading a timetable is worse than the problem being fixed. An in-page `#anchor` is left
+alone for the same reason.
+
 ## Owner testing, 2026-08-17 (second round)
 
 Three of these were reported as *still* broken, and in each case the first fix had been

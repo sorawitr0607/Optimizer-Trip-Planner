@@ -541,7 +541,17 @@ export function PlacesPage() {
               {/* `h2`: this sits directly under the page's `h1`, and an `h3` here made
                   the empty state look nested inside a section that does not exist. */}
               <h2>{copy("catalog_empty_title", language)}</h2>
-              <p>{copy("catalog_empty_help", language)}</p>
+              {/* "Wait a minute and press again" is right for a busy gateway and wrong
+                  for a host this network cannot open a connection to — pressing again
+                  fails identically, forever. Measured on the owner's machine 2026-08-17:
+                  `overpass-api.de` refused the connection while Nominatim, Wikidata and
+                  the rest of the internet answered normally. The two cases are told
+                  apart by the provider's own words, since only one of them can be. */}
+              <p>
+                {/urlopen error|could not be reached/i.test(String(report?.provider_error ?? ""))
+                  ? copy("catalog_empty_unreachable_help", language)
+                  : copy("catalog_empty_help", language)}
+              </p>
               {/* One sentence in the app's voice, and the provider's own words folded
                   away behind it. `<urlopen error [Errno 61] Connection refused>` as the
                   headline makes the product look unfinished at its main conversion

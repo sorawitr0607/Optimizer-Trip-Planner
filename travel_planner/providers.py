@@ -66,9 +66,23 @@ class OpenStreetMapProvider:
         self.nominatim_url = os.environ.get(
             "TOURIST_NOMINATIM_URL", "https://nominatim.openstreetmap.org/search"
         )
-        self.overpass_url = os.environ.get(
-            "TOURIST_OVERPASS_URL", "https://overpass-api.de/api/interpreter"
-        )
+        # A comma-separated list, tried in order. `overpass-api.de` was unreachable from
+        # the owner's network on 2026-08-17 — `Errno 61 Connection refused`, while
+        # Nominatim, Wikidata and the rest of the internet answered — and one unreachable
+        # host meant discovery was impossible with nothing to press. Which mirrors this
+        # app talks to is the owner's decision, not a default: the endpoints are
+        # third parties with their own jurisdictions and privacy terms, so the capability
+        # is here and the choice is in the environment.
+        self.overpass_urls = [
+            url.strip()
+            for url in os.environ.get(
+                "TOURIST_OVERPASS_URL", "https://overpass-api.de/api/interpreter"
+            ).split(",")
+            if url.strip()
+        ]
+        # The first is still `overpass_url`, because the cache descriptor keys on it and
+        # a fingerprint that moved with a fallback would invalidate every cached run.
+        self.overpass_url = self.overpass_urls[0]
         self.user_agent = os.environ.get(
             "TOURIST_USER_AGENT", "TouristPlannerPersonalPOC/0.2 (local personal use)"
         )
@@ -133,19 +147,37 @@ class OpenStreetMapProvider:
         budget is what makes `DISCOVERY_BUDGET_SECONDS` a ceiling rather than a wish.
         """
 
-        payload = self._request_json(
-            Request(
-                self.overpass_url,
-                data=urlencode({"data": query}).encode("utf-8"),
-                headers={
-                    "Accept": "application/json",
-                    "Content-Type": "application/x-www-form-urlencoded",
-                    "User-Agent": self.user_agent,
-                },
-                method="POST",
-            ),
-            timeout=timeout,
-        )
+        # Only a *connection* failure moves to the next endpoint. A 5xx or a `remark` is
+        # this endpoint being busy — `_attempt_block` already knows how to handle that,
+        # and asking a second public server the same heavy question because the first
+        # was under load is the burst CLAUDE.md warns against, aimed at a stranger.
+        payload = None
+        unreachable: Exception | None = None
+        for url in self.overpass_urls:
+            try:
+                payload = self._request_json(
+                    Request(
+                        url,
+                        data=urlencode({"data": query}).encode("utf-8"),
+                        headers={
+                            "Accept": "application/json",
+                            "Content-Type": "application/x-www-form-urlencoded",
+                            "User-Agent": self.user_agent,
+                        },
+                        method="POST",
+                    ),
+                    timeout=timeout,
+                )
+                break
+            except ProviderUnavailable as error:
+                if "urlopen error" not in str(error):
+                    raise
+                unreachable = error
+        if payload is None:
+            raise ProviderUnavailable(
+                f"No Overpass endpoint could be reached ({len(self.overpass_urls)} tried): "
+                f"{unreachable}"
+            )
         elements = payload.get("elements") if isinstance(payload, dict) else None
         if not isinstance(elements, list):
             raise ProviderUnavailable("OpenStreetMap discovery returned no element list")

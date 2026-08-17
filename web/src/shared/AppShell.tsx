@@ -50,6 +50,23 @@ export function AppShell() {
   const location = useLocation();
   const [navOpen, setNavOpen] = useState(false);
 
+  // Every route change starts at the top.
+  //
+  // The browser keeps the scroll offset across a client-side navigation, because as far
+  // as it is concerned nothing was navigated — so leaving a long itinerary half way down
+  // and pressing "Costs" opened Costs half way down too, at whatever the previous screen
+  // happened to be tall enough to allow. On the stage screens, which run to several
+  // thousand pixels, that lands on the middle of a page whose heading was never seen.
+  //
+  // Keyed on `pathname` only, deliberately: `/itinerary?view=timeline` and the day
+  // stepper both change the search string many times on one screen, and yanking the page
+  // to the top under someone reading a timetable is worse than the problem being fixed.
+  // An in-page `#anchor` is left alone for the same reason.
+  useEffect(() => {
+    if (location.hash) return;
+    window.scrollTo({ top: 0, left: 0 });
+  }, [location.pathname, location.hash]);
+
   const trips = useQuery({ queryKey: ["trips"], queryFn: () => rpc<Trip[]>("list_trips") });
   const trip = trips.data?.find((item) => item.trip_id === tripId);
 
