@@ -657,6 +657,37 @@ const PRESETS = [
   },
 ] as const;
 
+const SWIPE_CANDIDATES = [
+  {
+    city: "Tokyo",
+    country: "Japan",
+    name: "Senso-ji Ancient Temple & Five-Story Pagoda",
+    tag: "Cultural Heritage",
+    meta: "⭐ 4.8 · Open 06:00 - 17:00 · Free Entry",
+  },
+  {
+    city: "Taipei",
+    country: "Taiwan",
+    name: "Longshan Historic Temple & Herb Lane",
+    tag: "Incense Alleys & Food",
+    meta: "⭐ 4.7 · Open 06:00 - 22:00 · Free Entry",
+  },
+  {
+    city: "Porto",
+    country: "Portugal",
+    name: "São Bento Azulejo Tile Station",
+    tag: "Architectural Marvel",
+    meta: "⭐ 4.9 · Open 24 Hours · Free Entry",
+  },
+  {
+    city: "Reykjavík",
+    country: "Iceland",
+    name: "Hallgrímskirkja Bell Tower View",
+    tag: "Panoramic Landmark",
+    meta: "⭐ 4.8 · Open 09:00 - 17:00 · Elevator Pass ISK 1,400",
+  },
+] as const;
+
 export function TripsPage() {
   const { language, setLanguage } = useLanguage();
   const { theme, toggleTheme } = useTheme();
@@ -682,6 +713,7 @@ export function TripsPage() {
   const [labPacing, setLabPacing] = useState<PacingMode>("balanced");
   const [labKeptCount, setLabKeptCount] = useState<number>(14);
   const [labPassedCount, setLabPassedCount] = useState<number>(6);
+  const [labSwipeIdx, setLabSwipeIdx] = useState<number>(0);
   const [labSolving, setLabSolving] = useState<boolean>(false);
   const [labExcelTab, setLabExcelTab] = useState<number>(0);
 
@@ -1329,8 +1361,9 @@ export function TripsPage() {
                 <span className="preview-chip"><CalendarClock aria-hidden="true" size={13} /> 2026-09-12 → 2026-09-17 (6 {copy("days", language)})</span>
                 <span className="preview-chip"><Users aria-hidden="true" size={13} /> {labPartySize} {copy("travellers", language)}</span>
                 <span className="preview-chip">
-                  <Route aria-hidden="true" size={13} /> {copy("landing_lab_walk_cap", language)}: {labPacing === "relaxed" ? "3.5" : labPacing === "balanced" ? "5.8" : "8.5"} km
+                  <Route aria-hidden="true" size={13} /> {copy("landing_lab_walk_cap", language)}: {labPacing === "relaxed" ? "3.5" : labPacing === "balanced" ? "5.8" : "8.5"} km ({labPacing === "relaxed" ? "~4,500" : labPacing === "balanced" ? "~8,200" : "~13,500"} steps)
                 </span>
+                <span className="preview-chip"><Wallet aria-hidden="true" size={13} /> Est. Budget: {labPacing === "relaxed" ? "$55/day" : labPacing === "balanced" ? "$110/day" : "$195/day"}</span>
                 <span className="preview-chip"><Utensils aria-hidden="true" size={13} /> {copy("landing_lab_lunch", language)} 12:00 - 13:30</span>
               </div>
             </div>
@@ -1339,25 +1372,31 @@ export function TripsPage() {
           {activeLabStep === 1 && (
             <div className="lab-preview-content">
               <div className="preview-tag">STAGE 2: CURATION & SWIPE DECK</div>
-              <h5>Tinder-Style Candidate Card Swipe & Shortlisting</h5>
+              <h5>Candidate Specimen Card Swipe & Shortlisting</h5>
               
               <div className="lab-swipe-card-preview">
                 <div className="swipe-card-info">
-                  <div className="swipe-card-badge">📍 Asakusa, Tokyo</div>
-                  <h6>Senso-ji Ancient Temple & Five-Story Pagoda</h6>
-                  <p>⭐ 4.8 · Open 06:00 - 17:00 · Free Entry · Historical Heritage</p>
+                  <div className="swipe-card-badge">📍 {SWIPE_CANDIDATES[labSwipeIdx].city}, {SWIPE_CANDIDATES[labSwipeIdx].country} · {SWIPE_CANDIDATES[labSwipeIdx].tag}</div>
+                  <h6>{SWIPE_CANDIDATES[labSwipeIdx].name}</h6>
+                  <p>{SWIPE_CANDIDATES[labSwipeIdx].meta}</p>
                 </div>
                 <div className="swipe-card-actions">
                   <button
                     className="swipe-btn pass"
-                    onClick={() => setLabPassedCount((c) => c + 1)}
+                    onClick={() => {
+                      setLabPassedCount((c) => c + 1);
+                      setLabSwipeIdx((i) => (i + 1) % SWIPE_CANDIDATES.length);
+                    }}
                     type="button"
                   >
                     <XCircle aria-hidden="true" size={16} /> Pass
                   </button>
                   <button
                     className="swipe-btn keep"
-                    onClick={() => setLabKeptCount((c) => c + 1)}
+                    onClick={() => {
+                      setLabKeptCount((c) => c + 1);
+                      setLabSwipeIdx((i) => (i + 1) % SWIPE_CANDIDATES.length);
+                    }}
                     type="button"
                   >
                     <Heart aria-hidden="true" size={16} /> Want to Visit
@@ -1368,7 +1407,8 @@ export function TripsPage() {
               <div className="preview-chips-row">
                 <span className="preview-chip green"><CheckCircle2 aria-hidden="true" size={13} /> Kept: {labKeptCount} Attractions</span>
                 <span className="preview-chip red"><XCircle aria-hidden="true" size={13} /> Passed: {labPassedCount} Attractions</span>
-                <span className="preview-chip"><Globe aria-hidden="true" size={13} /> Real OSM Geocodes</span>
+                <span className="preview-chip"><Globe aria-hidden="true" size={13} /> Real OSM Coordinates</span>
+                <span className="preview-chip"><Sparkles aria-hidden="true" size={13} /> Showing Card {labSwipeIdx + 1} of {SWIPE_CANDIDATES.length}</span>
               </div>
             </div>
           )}
@@ -1376,7 +1416,35 @@ export function TripsPage() {
           {activeLabStep === 2 && (
             <div className="lab-preview-content">
               <div className="preview-tag">STAGE 3: DETERMINISTIC OPTIMIZATION</div>
-              <h5>Mixed-Integer Linear Programming (ILP) Solver</h5>
+              <h5>Mixed-Integer Linear Programming (ILP) Solver & Route Matrix</h5>
+
+              <div className="solver-route-flow">
+                <div className="solver-node active">
+                  <span className="node-time">09:00</span>
+                  <span className="node-title">Hotel Base</span>
+                </div>
+                <div className="solver-edge">
+                  <span>8m walk (550m)</span>
+                </div>
+                <div className="solver-node">
+                  <span className="node-time">09:30</span>
+                  <span className="node-title">{SWIPE_CANDIDATES[labSwipeIdx].name.split(" ")[0]}</span>
+                </div>
+                <div className="solver-edge">
+                  <span>12m lunch</span>
+                </div>
+                <div className="solver-node">
+                  <span className="node-time">12:15</span>
+                  <span className="node-title">Lunch Window</span>
+                </div>
+                <div className="solver-edge">
+                  <span>14m transit</span>
+                </div>
+                <div className="solver-node">
+                  <span className="node-time">15:30</span>
+                  <span className="node-title">Panoramic View</span>
+                </div>
+              </div>
               
               <div className="lab-solver-interactive">
                 <button
@@ -1428,6 +1496,90 @@ export function TripsPage() {
                     <FileSpreadsheet aria-hidden="true" size={12} /> {sheetName}
                   </button>
                 ))}
+              </div>
+
+              <div className="lab-excel-sheet-preview">
+                {labExcelTab === 0 && (
+                  <table className="mini-sheet-table">
+                    <thead>
+                      <tr>
+                        <th>Time</th>
+                        <th>Activity / Place</th>
+                        <th>Leg Transit</th>
+                        <th>Fatigue Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>09:30</td>
+                        <td>Senso-ji Asakusa Pagoda</td>
+                        <td>8 min walk (500m)</td>
+                        <td><span className="sheet-tag-green">🌱 Fresh</span></td>
+                      </tr>
+                      <tr>
+                        <td>12:15</td>
+                        <td>Tsukiji Fresh Sushi Lunch</td>
+                        <td>14 min transit</td>
+                        <td><span className="sheet-tag-green">🍱 Reserved</span></td>
+                      </tr>
+                      <tr>
+                        <td>15:30</td>
+                        <td>Shibuya Sky Observatory</td>
+                        <td>10 min walk (700m)</td>
+                        <td><span className="sheet-tag-blue">⚡ Balanced</span></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                )}
+
+                {labExcelTab === 1 && (
+                  <table className="mini-sheet-table">
+                    <thead>
+                      <tr>
+                        <th>Item / Category</th>
+                        <th>Paid By</th>
+                        <th>Original ({splitCurrency})</th>
+                        <th>Fair Share / Net</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>Traditional Fado Dinner</td>
+                        <td>Alex</td>
+                        <td>{splitCurrency}120.00</td>
+                        <td>Alex +{splitCurrency}45.00</td>
+                      </tr>
+                      <tr>
+                        <td>Metro Passes &amp; Transit</td>
+                        <td>Sam</td>
+                        <td>{splitCurrency}60.00</td>
+                        <td>Sam -{splitCurrency}15.00</td>
+                      </tr>
+                      <tr>
+                        <td>Museum Gallery Entry</td>
+                        <td>Jordan</td>
+                        <td>{splitCurrency}45.00</td>
+                        <td>Jordan -{splitCurrency}30.00</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                )}
+
+                {labExcelTab === 2 && (
+                  <ul className="mini-checklist-items">
+                    <li className="checked">✓ Verify passport validity (&gt;6 months remaining)</li>
+                    <li className="checked">✓ Pre-load local IC transit cards on digital wallets</li>
+                    <li className="checked">✓ Confirm dietary requirements for dinner reservations</li>
+                  </ul>
+                )}
+
+                {labExcelTab === 3 && (
+                  <ul className="mini-checklist-items">
+                    <li className="checked">✓ Universal travel plug adapter &amp; charging brick</li>
+                    <li className="checked">✓ Lightweight rain shell / packable umbrella</li>
+                    <li className="checked">✓ Offline OpenStreetMap vector tiles cached</li>
+                  </ul>
+                )}
               </div>
 
               <div className="preview-chips-row">
@@ -1502,7 +1654,18 @@ export function TripsPage() {
                 }}
                 type="button"
               >
-                🏖️ Beach Villa ($600)
+                🏖️ Beach Villa ({splitCurrency}600)
+              </button>
+              <button
+                className="split-preset-btn"
+                onClick={() => {
+                  setSampleBill1(450);
+                  setSampleBill2(450);
+                  setSampleBill3(150);
+                }}
+                type="button"
+              >
+                🚄 Transit Passes ({splitCurrency}1,050)
               </button>
             </div>
           </div>

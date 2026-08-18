@@ -4942,6 +4942,122 @@
   font-weight: var(--weight-selected);
 }
 
+/* Solver Route Graph Flow */
+.solver-route-flow {
+  align-items: center;
+  background: var(--landing-ground);
+  border: 1px solid var(--landing-glass-border);
+  border-radius: var(--radius-house);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding: 12px 16px;
+}
+
+.solver-node {
+  align-items: center;
+  background: var(--landing-raised);
+  border: 1px solid var(--landing-glass-border);
+  border-radius: var(--radius-house);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px;
+}
+
+.solver-node.active {
+  border-color: var(--landing-route);
+  box-shadow: 0 0 10px var(--landing-glow);
+}
+
+.node-time {
+  color: var(--landing-route);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-selected);
+}
+
+.node-title {
+  color: var(--landing-mark);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-secondary);
+}
+
+.solver-edge {
+  color: var(--landing-haze);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+}
+
+/* Mini Excel Spreadsheet Preview Table */
+.lab-excel-sheet-preview {
+  background: var(--landing-ground);
+  border: 1px solid var(--landing-glass-border);
+  border-radius: var(--radius-house);
+  margin-bottom: 12px;
+  overflow-x: auto;
+  padding: 8px;
+}
+
+.mini-sheet-table {
+  border-collapse: collapse;
+  font-size: var(--text-2xs);
+  width: 100%;
+}
+
+.mini-sheet-table th,
+.mini-sheet-table td {
+  border-bottom: 1px solid var(--landing-glass-border);
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.mini-sheet-table th {
+  color: var(--landing-mark);
+  font-family: var(--font-mono);
+  font-weight: var(--weight-selected);
+}
+
+.mini-sheet-table td {
+  color: var(--landing-text);
+}
+
+.sheet-tag-green {
+  background: var(--landing-go-soft);
+  border: 1px solid var(--landing-go);
+  border-radius: var(--radius-pill);
+  color: var(--landing-go);
+  font-size: var(--text-2xs);
+  padding: 2px 6px;
+}
+
+.sheet-tag-blue {
+  background: var(--landing-route-soft);
+  border: 1px solid var(--landing-route);
+  border-radius: var(--radius-pill);
+  color: var(--landing-route);
+  font-size: var(--text-2xs);
+  padding: 2px 6px;
+}
+
+.mini-checklist-items {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+}
+
+.mini-checklist-items li {
+  align-items: center;
+  color: var(--landing-go);
+  display: flex;
+  font-size: var(--text-xs);
+  gap: 6px;
+}
+
 /* ---------------------------------------------------------------------------
    SECTION 4: BILL SPLIT SANDBOX
    --------------------------------------------------------------------------- */
