@@ -525,6 +525,15 @@ button:disabled {
      Only the pale hill runs full width. Everything darker sits to the right of
      the copy column, because the treeline green measures 2.69 against body text
      and the deep hill 3.86 — legible scenery has to stay off the reading side. */
+  /* The cut edge. Every object in the world is a piece of paper laid on the one
+     behind it, and what says so is a light irregular border around the shape plus
+     a hard shadow just under it — the two things a real cut-out has. Written as a
+     stroke drawn outside the fill (`paint-order`), never as a second path, so an
+     object's outline can never drift out of register with the object. */
+  --landing-cut: #fffdf5;
+  --landing-cut-line: rgb(28 18 7 / 16%);
+  --landing-cut-shadow: rgb(28 18 7 / 22%);
+
   --landing-hill: #9dbf6a;
   --landing-hill-deep: #6f9447;
   --landing-tree: #55793a;

@@ -2780,6 +2780,365 @@
   }
 }
 
+/* ===========================================================================
+   THE ILLUSTRATED WORLD
+   =========================================================================== */
+
+/* The world continues the hero's sky rather than starting a new box. Nothing on
+   this page may begin with a horizontal rule across a coloured band — that single
+   edge is what turns a landscape back into a website. */
+.landing-world {
+  background: linear-gradient(
+    to bottom,
+    var(--landing-sky-low) 0%,
+    var(--landing-sky-high) 22%,
+    var(--landing-ground) 88%
+  );
+  isolation: isolate;
+  margin: 0;
+  min-height: 78vh;
+  /* Clipped again. This was opened to `visible` so the hand-off wave could hang
+     below the section; the wave now lives under the ticker instead, and leaving
+     it open let the `slice`-scaled scenery push the document 44px wider than a
+     390px viewport. */
+  overflow: hidden;
+  padding: 56px clamp(16px, 5vw, 48px) 0;
+  position: relative;
+}
+
+/* The world's heading is not inside `.section-header`, so it was inheriting body
+   size and reading as a caption over a landscape. */
+.world-copy h2 {
+  color: var(--landing-mark);
+  font-size: clamp(1.7rem, 3.2vw, 2.4rem);
+  letter-spacing: -0.026em;
+  margin: 8px 0 6px;
+}
+
+.world-copy {
+  margin: 0 auto 12px;
+  max-width: 44rem;
+  position: relative;
+  text-align: center;
+  z-index: 3;
+}
+
+.world-scenery,
+.world-svg {
+  bottom: 0;
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+}
+
+.world-svg {
+  height: 100%;
+  width: 100%;
+}
+
+/* --- the palette, back to front ------------------------------------------ */
+.w-peak-far { fill: var(--landing-peak-far); }
+.w-peak-mid { fill: var(--landing-peak-mid); }
+.w-snow { fill: var(--landing-snow); }
+.w-hill { fill: var(--landing-hill); }
+.w-hill-deep { fill: var(--landing-hill-deep); }
+.w-tree { fill: var(--landing-tree); }
+.w-terrain { fill: var(--landing-ground-alt); }
+.w-bush { fill: var(--landing-tree-light); }
+.w-bloom { fill: var(--landing-bloom); }
+.w-rock { fill: var(--landing-rock); }
+
+.w-path {
+  stroke: var(--landing-route);
+  stroke-dasharray: 13 15;
+  stroke-linecap: round;
+  stroke-width: 5;
+}
+
+/* --- print texture -------------------------------------------------------- */
+
+/* A halftone screen laid over the mid range and the terrain, which is what keeps
+   a flat vector fill from reading as flat vector. Drawn as a pattern rather than
+   fetched as an image: `WF-034` forbids a remote asset and a bitmap grain would
+   be one. */
+#w-halftone circle,
+#w-halftone-coarse circle { fill: var(--landing-cut-line); }
+
+/* The grain sits over the whole frame at an alpha where it is felt rather than
+   seen. `multiply` so it darkens the ink instead of fogging the paper. */
+.w-grain {
+  mix-blend-mode: multiply;
+  opacity: 0.28;
+  pointer-events: none;
+}
+
+.w-screen-coarse {
+  fill: url(#w-halftone-coarse);
+  opacity: 0.45;
+}
+
+/* Rough shading, painted as a shape rather than a gradient. */
+.w-shade {
+  fill: var(--landing-cut-line);
+  opacity: 0.55;
+}
+
+.w-screen {
+  fill: url(#w-halftone);
+  opacity: 0.5;
+}
+
+.w-screen-warm {
+  fill: url(#w-halftone);
+  opacity: 0.7;
+}
+
+/* --- the cut edge --------------------------------------------------------- */
+
+/* `paint-order: stroke fill` draws the outline *outside* the shape, so one path
+   is both the object and its cut border and the two can never fall out of
+   register. The join is round and the width generous, which is what gives the
+   slightly imperfect, scissor-cut edge rather than a hairline. */
+.cut {
+  paint-order: stroke fill;
+  stroke: var(--landing-cut);
+  stroke-linejoin: round;
+  stroke-width: 6;
+}
+
+/* --- LANDMARKS ------------------------------------------------------------ */
+
+.world-landmarks {
+  inset: 0;
+  position: absolute;
+  z-index: 2;
+}
+
+/* A place in the world, and a real button. An illustrated world that only works
+   with a mouse is worse than the cards it replaced, so this takes focus in
+   reading order, opens on Enter or Space, and carries its own name. */
+/* The place: a position in the world holding the control and the card it opens. */
+.landmark-place {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: clamp(78px, 8vw, 108px);
+}
+
+.landmark-place.open {
+  z-index: 5;
+}
+
+.landmark {
+  align-items: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0;
+  pointer-events: auto;
+  width: 100%;
+}
+
+.landmark-art {
+  filter: drop-shadow(0 3px 0 var(--landing-cut-shadow));
+  height: auto;
+  overflow: visible;
+  transition: transform var(--duration-hover) var(--ease-standard);
+  width: 100%;
+}
+
+.landmark:hover .landmark-art,
+.landmark:focus-visible .landmark-art {
+  transform: translateY(-4px) scale(1.04);
+}
+
+.landmark-label {
+  background: var(--landing-cut);
+  border-radius: var(--radius-pill);
+  box-shadow: 0 2px 0 var(--landing-cut-shadow);
+  color: var(--landing-mark);
+  font-family: var(--font-display);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-display);
+  letter-spacing: 0.02em;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+
+/* --- the landmark's own shapes -------------------------------------------- */
+.lm-sign { fill: var(--landing-route); }
+.lm-sign-alt { fill: var(--landing-warn); }
+.lm-rock { fill: var(--landing-rock); }
+.lm-lens { fill: var(--landing-peak-mid); }
+.lm-flag { fill: var(--landing-route); }
+.lm-plinth { fill: var(--landing-rock); }
+.lm-dial { fill: var(--landing-cut); }
+.lm-needle { fill: var(--landing-route); }
+.lm-post,
+.landmark-art path.cut:not([class*="lm-"]) { stroke: var(--landing-tree); stroke-width: 7; }
+.lm-board { fill: var(--landing-go); }
+.lm-board-alt { fill: var(--landing-warn); }
+
+/* --- the folding card ----------------------------------------------------- */
+
+/* The card is folded flat against the landmark until it is opened, then hinges
+   down like a map leaf. Hidden from assistive technology while folded, because a
+   card at zero height that is still read aloud is not closed in any sense that
+   matters. */
+.landmark-card {
+  background: var(--landing-cut);
+  border-radius: var(--radius-house);
+  box-shadow: 0 6px 0 var(--landing-cut-shadow);
+  display: grid;
+  gap: 4px;
+  left: 50%;
+  opacity: 0;
+  padding: 10px 12px;
+  pointer-events: none;
+  position: absolute;
+  text-align: left;
+  top: calc(100% + 6px);
+  transform: translateX(-50%) rotateX(-92deg);
+  transform-origin: 50% 0%;
+  transition:
+    opacity 220ms var(--ease-standard),
+    transform 420ms var(--ease-reveal),
+    visibility 0s linear 420ms;
+  visibility: hidden;
+  width: clamp(180px, 20vw, 236px);
+  z-index: 4;
+}
+
+.landmark-place.open .landmark-card {
+  opacity: 1;
+  transform: translateX(-50%) rotateX(0deg);
+  transition:
+    opacity 220ms var(--ease-standard),
+    transform 420ms var(--ease-reveal),
+    visibility 0s linear;
+  visibility: visible;
+}
+
+.world-landmarks {
+  perspective: 900px;
+}
+
+.landmark-card-name {
+  color: var(--landing-mark);
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-display);
+}
+
+.landmark-card-desc {
+  color: var(--landing-text);
+  font-size: var(--text-2xs);
+  line-height: 1.5;
+}
+
+/* --- ambient motion ------------------------------------------------------- */
+
+/* Almost imperceptible by instruction and by measurement: nothing here travels
+   more than six pixels or turns more than a degree and a half, and every cycle
+   is long enough that no two elements ever look synchronised. A scene that is
+   alive is one you notice only if you stop and watch it. */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes w-sway {
+    0%, 100% { transform: rotate(-0.7deg) translateY(0); }
+    50% { transform: rotate(0.7deg) translateY(-3px); }
+  }
+
+  @keyframes w-breathe {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+  }
+
+  @keyframes w-flicker {
+    0%, 100% { opacity: 0.25; }
+    50% { opacity: 0.75; }
+  }
+
+  .w-tree { animation: w-sway 13s ease-in-out infinite; transform-origin: 50% 100%; }
+  .w-bush { animation: w-sway 17s ease-in-out infinite; transform-origin: 50% 100%; }
+  .w-bloom { animation: w-sway 9s ease-in-out infinite; transform-origin: 50% 100%; }
+  .w-snow { animation: w-breathe 21s ease-in-out infinite; }
+  .w-screen,
+  .w-screen-warm { animation: w-flicker 19s ease-in-out infinite; }
+
+  .landmark-art { animation: w-breathe 11s ease-in-out infinite; }
+  .landmark-place:nth-child(2) .landmark-art { animation-duration: 14s; }
+  .landmark-place:nth-child(3) .landmark-art { animation-duration: 9s; }
+  .landmark-place:nth-child(4) .landmark-art { animation-duration: 16s; }
+
+  /* Hover has to win over the ambient drift, or the object appears to ignore the
+     pointer for as long as the loop takes to come back around. */
+  .landmark:hover .landmark-art,
+  .landmark:focus-visible .landmark-art {
+    animation: none;
+  }
+}
+
+/* The world stacks on a phone: the landmarks stop being pinned to coordinates and
+   become a plain column, because a map you cannot fit on screen is not a map. */
+@media (max-width: 860px) {
+  .landing-world {
+    min-height: 0;
+    padding-bottom: 32px;
+  }
+
+  .world-landmarks {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(2, 1fr);
+    inset: auto;
+    padding: 12px 0 0;
+    perspective: none;
+    position: relative;
+  }
+
+  .landmark-place {
+    left: auto !important;
+    position: relative;
+    top: auto !important;
+    transform: none;
+    width: 100%;
+  }
+
+  .landmark-card {
+    position: relative;
+    top: 6px;
+    transform: none;
+    width: 100%;
+  }
+
+  .landmark-place.open .landmark-card {
+    transform: none;
+  }
+}
+
+/* The world hands off below the ticker rather than at it. The ticker sits flush
+   against the world's bottom edge, so a wave drawn on the world was hidden behind
+   it and the seam that remained was the ticker's own 1px rule — a hairline across
+   a landscape, which is exactly the transition this page must not have. The
+   ticker keeps the terrain colour and loses its border, so it reads as a band of
+   ground with words on it, and the wave moves to its underside. */
+.landing-ticker::after {
+  background: var(--landing-ground);
+  bottom: -51px;
+  content: "";
+  height: 52px;
+  left: 0;
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 60' preserveAspectRatio='none'%3E%3Cpath d='M0,0 L0,34 C140,12 300,58 520,46 C760,33 980,60 1200,42 L1200,0 Z'/%3E%3C/svg%3E");
+  mask-repeat: no-repeat;
+  mask-size: 100% 100%;
+  position: absolute;
+  right: 0;
+  z-index: 3;
+}
+
 /* ORGANIC EDGES BETWEEN SCENES.
 
    On the reference no two grounds meet in a straight line — sand runs into water
@@ -3833,10 +4192,12 @@
 /* ---------------------------------------------------------------------------
    LIVE MARQUEE TICKER (Hack the North aesthetic)
    --------------------------------------------------------------------------- */
+/* No rules top or bottom. This strip sits flush under the world's terrain, and a
+   hairline across a landscape is the one transition this page must not have — it
+   reads as a band of ground with words on it instead, and hands off to the next
+   scene with the wave below. */
 .landing-ticker {
   background: var(--landing-ground-alt);
-  border-bottom: 1px solid var(--landing-glass-border);
-  border-top: 1px solid var(--landing-glass-border);
   overflow: hidden;
   padding: 10px 0;
   position: relative;

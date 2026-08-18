@@ -29,7 +29,7 @@ import { type FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router";
 
 import { ApiError, rpc, type Journey, type SetupVocabulary, type Trip } from "../api/client";
-import { copy } from "../i18n/copy";
+import { copy, type Language } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
 import { DeleteTrip } from "../shared/DeleteTrip";
 import { useTheme } from "../shared/ThemeProvider";
@@ -52,6 +52,134 @@ const TICKER_ITEMS = [
   [Wallet, "landing_ticker_split"],
   [FileSpreadsheet, "landing_ticker_export"],
 ] as const;
+
+/**
+ * The world, and its landmarks.
+ *
+ * The brief for this section is that the page should feel like an illustrated
+ * world rather than a site with pictures on it, and that the product's features
+ * should be *places* in that world instead of a row of cards. So this is a scene
+ * in five named layers, and each feature is an object standing somewhere in it.
+ *
+ * Every landmark is a real `<button>`. That matters more than it sounds: an
+ * illustrated world that can only be used with a mouse is a worse page than the
+ * cards it replaced, so each one carries its own accessible name from the
+ * catalogue, takes focus in reading order, and opens on Enter or Space because
+ * that is what a button already does. The scenery around them is `aria-hidden`,
+ * because scenery is not information.
+ *
+ * The copy is the same bilingual catalogue the stage screens use — `stage_*` for
+ * the name and `landing_how_*` for the description — so nothing here is a second
+ * source of truth about what a stage does, and nothing is English-only.
+ */
+const LANDMARKS = [
+  {
+    id: "setup",
+    nameKey: "stage_setup",
+    descKey: "landing_how_setup",
+    x: 13,
+    y: 58,
+    art: (
+      <>
+        <path className="cut" d="M30 96 L30 44" />
+        <path className="cut lm-sign" d="M8 20 L58 16 L66 30 L58 44 L8 40 Z" />
+        <path className="cut lm-sign-alt" d="M52 52 L4 56 L-2 66 L4 78 L52 74 Z" />
+      </>
+    ),
+  },
+  {
+    id: "places",
+    nameKey: "stage_places",
+    descKey: "landing_how_places",
+    x: 33,
+    y: 44,
+    art: (
+      <>
+        <path className="cut lm-rock" d="M6 96 L18 52 L34 38 L52 50 L62 96 Z" />
+        <circle className="cut lm-lens" cx="34" cy="30" r="15" />
+        <path className="cut lm-flag" d="M34 15 L34 -8 L62 0 L34 8" />
+      </>
+    ),
+  },
+  {
+    id: "optimize",
+    nameKey: "stage_optimize",
+    descKey: "landing_how_plan",
+    x: 55,
+    y: 56,
+    art: (
+      <>
+        <path className="cut lm-plinth" d="M8 96 L14 66 L54 66 L60 96 Z" />
+        <circle className="cut lm-dial" cx="34" cy="40" r="26" />
+        <path className="cut lm-needle" d="M34 18 L44 40 L34 62 L24 40 Z" />
+      </>
+    ),
+  },
+  {
+    id: "itinerary",
+    nameKey: "stage_itinerary",
+    descKey: "landing_how_use",
+    x: 76,
+    y: 46,
+    art: (
+      <>
+        <path className="cut lm-post" d="M28 96 L28 40" />
+        <path className="cut lm-board" d="M4 12 L60 8 L60 36 L4 32 Z" />
+        <path className="cut lm-board-alt" d="M8 44 L58 40 L58 62 L8 58 Z" />
+      </>
+    ),
+  },
+] as const;
+
+/** One paper-cut object standing in the world, and the control that opens it. */
+function Landmark({
+  item,
+  open,
+  onOpen,
+  language,
+}: {
+  item: (typeof LANDMARKS)[number];
+  open: boolean;
+  onOpen: () => void;
+  language: Language;
+}) {
+  const name = copy(item.nameKey, language);
+  /* The card is a sibling of the button, not a child of it. Nested, every word of
+     the description became part of the button's own accessible name — screen
+     readers announced "Trip and setup, Trip and setup, Answer a short form…" as
+     the name of the control. A button is named by what it does; the card is the
+     thing it discloses, so `aria-controls` and `aria-expanded` join them instead. */
+  return (
+    <div className={`landmark-place ${open ? "open" : ""}`} style={{ left: `${item.x}%`, top: `${item.y}%` }}>
+      <button
+        aria-controls={`landmark-card-${item.id}`}
+        aria-expanded={open}
+        className="landmark"
+        onClick={onOpen}
+        type="button"
+      >
+        <svg aria-hidden="true" className="landmark-art" focusable="false" viewBox="-4 -12 76 112">
+          <defs>
+            {/* The landmarks are cut paper too. They were the only objects in the
+                world still carrying machine-exact edges, which is precisely the
+                digitally-sterile look this art direction rules out. Finer than the
+                landforms' tear, because these shapes are a tenth the size and a
+                landform's displacement would dissolve them. */}
+            <filter height="124%" id="lm-rough" width="124%" x="-12%" y="-12%">
+              <feTurbulence baseFrequency="0.09" numOctaves="4" result="w" seed="5" type="fractalNoise" />
+              <feDisplacementMap in="SourceGraphic" in2="w" scale="2.2" xChannelSelector="R" yChannelSelector="G" />
+            </filter>
+          </defs>
+          <g filter="url(#lm-rough)">{item.art}</g>
+        </svg>
+        <span className="landmark-label">{name}</span>
+      </button>
+      <span className="landmark-card" id={`landmark-card-${item.id}`}>
+        <span className="landmark-card-desc">{copy(item.descKey, language)}</span>
+      </span>
+    </div>
+  );
+}
 
 /**
  * The drawn props.
@@ -474,6 +602,8 @@ export function TripsPage() {
 
   // FAQ Accordion State
   const [openFaq, setOpenFaq] = useState<number | null>(0);
+  /** Which landmark has its card unfolded. One at a time, like a map legend. */
+  const [openLandmark, setOpenLandmark] = useState<string | null>(null);
 
   const trips = useQuery({ queryKey: ["trips"], queryFn: () => rpc<Trip[]>("list_trips") });
   const vocabulary = useQuery({
@@ -835,6 +965,122 @@ export function TripsPage() {
               <span className="sim-chip"><CheckCircle2 aria-hidden="true" size={13} /> {copy("landing_sim_lunch_ok", language)}</span>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* -------------------------------------------------------------
+          THE ILLUSTRATED WORLD
+
+          Five named layers, back to front, and the product's four stages
+          standing in it as places rather than sitting beside it as cards. The
+          terrain is continuous with the hero above and the band below, which is
+          the point: no scene on this page ends in a straight horizontal line.
+          ------------------------------------------------------------- */}
+      <section aria-labelledby="world-title" className="landing-world" id="world">
+        <div className="world-copy">
+          <span className="section-badge">{copy("landing_showcase_badge", language)}</span>
+          <h2 id="world-title">{copy("landing_showcase_title", language)}</h2>
+          <p className="section-lead">{copy("landing_showcase_lead", language)}</p>
+        </div>
+
+        {/* Layers 1-3 and 5 are scenery and say so; only the landmarks are content. */}
+        <div aria-hidden="true" className="world-scenery">
+          <svg className="world-svg" preserveAspectRatio="xMidYMax slice" viewBox="0 0 1200 620">
+            <defs>
+              {/* THE PRESS.
+
+                  Four effects, and between them they are the whole art direction:
+                  a halftone screen, a grain wash, an edge-roughening displacement
+                  and a soft shading pass. All drawn — `WF-034` forbids fetching a
+                  texture, and a bitmap grain would be one.
+
+                  The roughening is the load-bearing one. Vector paths are exactly
+                  as straight as they are written, and nothing reads as digitally
+                  sterile faster than a mountain with a perfect edge. Displacing
+                  every outline by a few pixels of fractal noise gives the torn,
+                  hand-cut edge that a scalpel and a sheet of paper actually make.
+                  `seed` is fixed so the tear is the same on every render — a
+                  screen baseline photographs this. */}
+              <filter id="w-rough" x="-6%" y="-6%" height="112%" width="112%">
+                <feTurbulence baseFrequency="0.055 0.07" numOctaves="5" result="warp" seed="7" type="fractalNoise" />
+                <feDisplacementMap in="SourceGraphic" in2="warp" scale="7" xChannelSelector="R" yChannelSelector="G" />
+              </filter>
+
+              {/* A gentler tear for the small objects, which would dissolve at the
+                  scale the landforms take. */}
+              <filter id="w-rough-fine" x="-10%" y="-10%" height="120%" width="120%">
+                <feTurbulence baseFrequency="0.11" numOctaves="4" result="warp" seed="3" type="fractalNoise" />
+                <feDisplacementMap in="SourceGraphic" in2="warp" scale="2.6" xChannelSelector="R" yChannelSelector="G" />
+              </filter>
+
+              {/* The grain. A full-frame noise wash laid over everything at low
+                  alpha, which is what stops flat fills reading as flat. */}
+              <filter id="w-grain">
+                <feTurbulence baseFrequency="0.72" numOctaves="4" seed="11" type="fractalNoise" />
+                <feColorMatrix type="saturate" values="0" />
+              </filter>
+
+              <pattern id="w-halftone" height="6" patternUnits="userSpaceOnUse" width="6">
+                <circle cx="1.5" cy="1.5" r="1.1" />
+              </pattern>
+
+              {/* A second screen at a different pitch and angle. One screen is a
+                  texture; two overlapping at different pitches is a print. */}
+              <pattern id="w-halftone-coarse" height="11" patternTransform="rotate(24)" patternUnits="userSpaceOnUse" width="11">
+                <circle cx="2.6" cy="2.6" r="1.9" />
+              </pattern>
+            </defs>
+
+            {/* LAYER 2 — distant scenery */}
+            <g className="w-layer w-distant" filter="url(#w-rough)" style={{ "--depth": 0.1 } as React.CSSProperties}>
+              <path className="w-peak-far" d="M-40,300 L120,176 L210,244 L330,140 L452,250 L560,186 L680,262 L800,168 L930,252 L1040,190 L1160,258 L1240,214 L1240,620 L-40,620 Z" />
+              <path className="w-snow" d="M330,140 L364,172 L346,177 L330,168 L314,180 L296,172 Z M800,168 L834,200 L816,205 L800,196 L784,208 L766,200 Z" />
+              <path className="w-peak-mid" d="M-40,352 L100,262 L220,338 L360,240 L500,330 L640,268 L790,344 L920,262 L1060,340 L1180,286 L1240,330 L1240,620 L-40,620 Z" />
+              <path className="w-screen" d="M-40,352 L100,262 L220,338 L360,240 L500,330 L640,268 L790,344 L920,262 L1060,340 L1180,286 L1240,330 L1240,620 L-40,620 Z" />
+            </g>
+
+            {/* LAYER 3 — middle scenery */}
+            <g className="w-layer w-middle" filter="url(#w-rough)" style={{ "--depth": 0.26 } as React.CSSProperties}>
+              <path className="w-hill" d="M-40,430 Q140,384 340,418 T720,404 T1060,428 T1240,410 L1240,620 L-40,620 Z" />
+              <path className="w-hill-deep" d="M620,452 Q800,410 980,442 T1240,428 L1240,620 L620,620 Z" />
+              <path className="w-tree" d="M690,442 l-9,20 h4 l-7,16 h7 l-6,12 h22 l-6,-12 h7 l-7,-16 h4 Z M742,432 l-10,22 h4 l-8,18 h8 l-6,13 h24 l-6,-13 h8 l-8,-18 h4 Z M800,440 l-9,20 h4 l-7,17 h7 l-6,12 h22 l-6,-12 h7 l-7,-17 h4 Z M1054,436 l-10,21 h4 l-8,17 h8 l-6,13 h24 l-6,-13 h8 l-8,-17 h4 Z M1108,446 l-9,19 h4 l-7,16 h7 l-6,11 h22 l-6,-11 h7 l-7,-16 h4 Z" />
+            </g>
+
+            {/* LAYER 4 — the ground the landmarks stand on */}
+            <g className="w-layer w-ground" filter="url(#w-rough)" style={{ "--depth": 0.46 } as React.CSSProperties}>
+              <path className="w-terrain" d="M-40,506 Q160,470 380,498 T760,486 T1240,504 L1240,620 L-40,620 Z" />
+              <path className="w-screen-warm" d="M-40,506 Q160,470 380,498 T760,486 T1240,504 L1240,620 L-40,620 Z" />
+              <path className="w-screen-coarse" d="M-40,506 Q160,470 380,498 T760,486 T1240,504 L1240,620 L-40,620 Z" />
+              {/* Rough shading: the ground darkens where it meets the hill behind
+                  it, painted as its own translucent shape rather than a gradient,
+                  because a gradient is the smooth thing this is avoiding. */}
+              <path className="w-shade" d="M-40,506 Q160,470 380,498 T760,486 T1240,504 L1240,548 Q760,528 380,540 T-40,548 Z" />
+              <path className="w-path" d="M-20,592 Q220,548 430,566 T820,540 T1220,556" fill="none" />
+            </g>
+
+            {/* LAYER 5 — decorative foreground */}
+            <g className="w-layer w-front" filter="url(#w-rough-fine)" style={{ "--depth": 0.72 } as React.CSSProperties}>
+              <path className="w-bush" d="M92,590 a20,20 0 0 1 40,0 z M138,596 a13,13 0 0 1 26,0 z M362,596 a17,17 0 0 1 34,0 z M902,592 a15,15 0 0 1 30,0 z M1128,598 a12,12 0 0 1 24,0 z" />
+              <path className="w-bloom" d="M214,600 m-5,0 a5,5 0 1 0 10,0 a5,5 0 1 0 -10,0 M262,592 m-4,0 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 M486,602 m-5,0 a5,5 0 1 0 10,0 a5,5 0 1 0 -10,0 M978,598 m-4,0 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0" />
+              <path className="w-rock" d="M556,604 q7,-16,16,-15 q11,-3,16,15 z M1046,600 q6,-14,14,-13 q10,-3,14,13 z" />
+            </g>
+
+            {/* The grain, over everything, last. */}
+            <rect className="w-grain" filter="url(#w-grain)" height="620" width="1200" x="0" y="0" />
+          </svg>
+        </div>
+
+        {/* Four features, standing in the world as places. */}
+        <div className="world-landmarks">
+          {LANDMARKS.map((item) => (
+            <Landmark
+              item={item}
+              key={item.id}
+              language={language}
+              onOpen={() => setOpenLandmark(openLandmark === item.id ? null : item.id)}
+              open={openLandmark === item.id}
+            />
+          ))}
         </div>
       </section>
 
