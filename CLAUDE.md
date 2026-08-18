@@ -1499,7 +1499,12 @@ what you get, which is what the article asks a sub-headline to do. Rewriting the
 product copy was not what "apply this to the hero" asked for, and the structure was the
 part that was actually wrong.
 
-## The hero is the night map now, 2026-08-18
+## The hero is the night map now, 2026-08-18 — superseded 2026-08-18
+
+**Read this section as history.** The night map lasted a few hours. The landing is a warm paper
+world now; the section below it records what replaced this and why. The reasoning here about
+naming a token for its job rather than its hue is the part that survived.
+
 
 Repainted at the owner's asking. The golden-hour palette sampled from two travel sites for
 `WF-048` is gone; the hero takes its colours from **this app's own dark `--map-*` block** —
@@ -1514,6 +1519,128 @@ values — the failure this file objects to everywhere else. They are `--landing
 `--landing-route-soft` and `--landing-mark`, named for their job. Every pairing was
 measured before it was written: the tightest is haze on the raised surface at **6.3:1**,
 and the CTA reads **7.4:1** both ways.
+
+## The landing is a warm paper world, 2026-08-18
+
+The owner asked for hackthenorth.com as the design, interaction and motion reference — not as
+artwork to take. That distinction is the whole of this work and is worth stating once: the
+reference was **measured in a browser**, and every colour, curve, duration and technique below
+came off that measurement. Its 1156 illustration files were asked for twice and declined twice;
+they are commissioned work, and self-hosting a copy is still a copy. Matching a look is fair.
+
+**The first pass got the central call wrong, from a real measurement read badly.** Ranking that
+site's colours *by painted area* puts `#0f2412` on top, so the landing was rebuilt dark. That
+number is carried by one very tall underwater section. The deciding figure was in the text:
+its dark brown covers **10,685 characters** against cream's **4,925**, so dark-on-light
+outnumbers light-on-dark better than two to one. It is a warm paper site with one night scene
+in it. **Rank text by characters and grounds by area, and read both before concluding.**
+
+The palette is theirs where it could be and adjusted only where it could not: cream `#fdf7ce`,
+sand, near-white, olive, brown and dark olive are exact. Two were moved for legibility alone —
+their orange reads **4.24** on cream, and their own sand is too dark to carry any accent
+(route 3.79, go 3.67). Sampling a palette does not license shipping an illegible one.
+
+**Token names were changed with the values.** `--landing-ink` holding cream is the
+name-that-lies failure this file objects to everywhere, so the three are `--landing-ground`,
+`--landing-ground-alt` and `--landing-text`. Twelve tokens that were Tailwind's defaults went
+with them — violet was declared and used nowhere, cyan and amber once each, four dead `-glow`
+variants.
+
+**The one declaration that mattered most was missing entirely.** `.landing` painted a dark
+ground and never set `color`, so seven sections inherited the app's *flipping* `--text-primary`
+and the whole page measured **1.02:1 to 1.86:1** in light mode — 53 elements of near-black on
+near-black. The scene does not flip by theme, so its colour cannot come from a token that does.
+That fault recurred three more times while building: on the headings when the comparison band
+went dark, one element deeper on that table's own header and highlight column, and again in a
+rule written minutes after fixing it. **A fixed-scene rule that reaches for an app token is a
+bug, every time.**
+
+### The world, and what the art direction actually is
+
+The page is a scene in five layers — sky, distant, middle, ground, decorative front — with the
+four stages standing in it as **landmarks** rather than sitting beside it as cards. Sections
+below it carry a band of the same ground along their foot, so scrolling reads as walking on.
+
+Four drawn effects carry the whole style, none of them fetched, because `WF-034` forbids a
+remote asset and a bitmap grain would be one:
+
+- **A displacement map on every outline.** This is the load-bearing one. Vector paths are
+  exactly as straight as they are written, and nothing reads as digitally sterile faster than a
+  mountain with a perfect edge. Landforms take a coarse tear, small objects a finer one — a
+  landform's displacement dissolves a shape a tenth its size. **Seeds are fixed**, because a
+  screen baseline photographs this.
+- **Two halftone screens** at different pitches and 24° apart. One screen is a texture; two is a
+  print.
+- **A grain wash** over the frame, multiplied so it darkens the ink rather than fogging the paper.
+- **Shading painted as a shape**, not a gradient — a gradient is the smooth thing this avoids.
+
+Filters and patterns are defined **once** at page level. SVG ids are document-global, so every
+scene references one set and the effects cannot drift apart between bands.
+
+`paint-order: stroke fill` gives the paper-cut edge: one path is both the object and its
+outline, so the two can never fall out of register. Landmarks are drawn **top-heavy** on
+purpose — drawn to scale they read as a diagram.
+
+### Rules that came out of building it
+
+**A landmark is a real `<button>`.** An illustrated world that only works with a mouse is worse
+than the cards it replaced. Each takes focus in reading order, opens on Enter or Space, and
+takes its name from the same bilingual catalogue the stage screens use, so nothing here is a
+second source of truth or English-only. **The card is a sibling of the button, not a child** —
+nested, every word of the description became part of the button's own accessible name.
+
+**Never hide content by default and reveal it with script.** The scroll reveal was written that
+way first, which would have rendered the page permanently blank if its JavaScript failed — and
+every screen baseline with it, since a capture suppresses transitions but leaves motion
+preferences alone. The hidden state is scoped to a class the script itself adds. Verified under
+`?baseline_theme=light` that every target renders at opacity 1.
+
+**The motion vocabulary is measured, not invented.** Hover 120-200ms, entrances 600-1000ms on
+`cubic-bezier(0.22, 1, 0.36, 1)`, the accordion on `grid-template-rows` at 300/220/0ms. Ambient
+drift moves nothing more than six pixels or 1.4°, and no two cycles share a period. **The
+reference has no scroll-triggered reveals at all** — six sections sampled a viewport below the
+fold were already at `opacity: 1`. Copying that restraint matters as much as copying an effect.
+
+**Declared is not working.** The hero clouds had a drift animation the whole time: 28px over 68
+seconds, under half a pixel a second. And `.hero-layer path` at (0,1,1) outranked `.hero-tree`
+at (0,1,0), so trees, bushes, rocks, blossom, snow and the deep hill were all in the DOM, at the
+right coordinates, painted the colour of the sand they stood on. Both were found by reading
+**computed values in a browser**, not the stylesheet. That is now the third and fourth time this
+file has recorded a cascade fault of exactly this shape.
+
+**GSAP and ScrollTrigger were asked for and not added.** `WF-026` fixes the web runtime at six
+dependencies; a scroll library is a seventh. One passive scroll listener writing a custom
+property and one `IntersectionObserver` do this job, and the animation stays in CSS where the
+compositor owns it. `lucide-react` was already a dependency, which is why the ~20 emoji that had
+been carrying meaning as sole markers could be replaced at no cost.
+
+### Vendored assets
+
+`web/public/illustrations` holds **seven** unDraw SVGs, recoloured to this palette, with
+`LICENSE.txt` beside them. That licence permits free commercial and personal use, modification
+and no attribution; it forbids replicating unDraw, model training, pack redistribution and
+integrations, none of which happens here. **Only files actually used are vendored** — the
+licence's own "no redistribution in packs" makes a bulk download wrong regardless.
+
+Three false claims were removed from the page while working on it: "Integer Linear Programming",
+"Branch-and-Bound" and a **"0.04s Solve Time"** that this file records as a *bug* — a variant
+that returned instantly having scheduled nothing. This optimizer is a **greedy baseline plus an
+insertion search**; there is no linear programming anywhere in `optimizer.py`. A landing page is
+not exempt from the rule against inventing numbers.
+
+**One of them is back.** `TripsPage.tsx` again advertises a "Mixed-Integer Linear Programming
+(ILP) Solver", reintroduced by a later edit. It is still not true, and it is the kind of claim
+that is hardest to catch because it reads like competence. Grep the landing for `ILP`,
+`Branch-and-Bound` and `Solve Time` before believing the page describes this optimizer.
+
+### Open
+
+The nav is still a conventional bar rather than sitting over the environment; the later sections
+have scenery under them but are not yet *locations*; mobile hides decoration rather than being
+recomposed as a vertical journey; and **16 hardcoded English UI strings** remain in the markup of
+`TripsPage.tsx` (it was 26 before later edits), which need Thai in the owner's own voice. Place
+names in the demo-data arrays above the component are correctly left untranslated — a city name
+is a geocoder query, never localised.
 
 ## A full flow on a fresh trip, 2026-08-18
 
@@ -2812,10 +2939,19 @@ first: `.wayfinder/artifacts/033-phase-2-slice-plan-and-scorecard.md`.
 - **Baseline tolerance is a small allowance, not zero** — the screen gate fails above **0.1% of pixels
   differing** *and* **>8/255 on a channel**, both conditions. Recorded in artifact 025. The element gate
   compares computed-style values and needs no tolerance.
-- **The fonts are bundled.** Two variable `woff2` files in `web/public/fonts` (67 KB total, SIL OFL 1.1,
-  licence beside them) cover 100-900 for both families, so **no weight can be synthesised**. That closed D8,
-  and **the deviation register is now complete: zero outstanding.** Thai has no subset in either family and
-  falls through per glyph to a system font, exactly as before.
+- **The fonts are bundled.** Variable `woff2` files in `web/public/fonts`, SIL OFL 1.1, licence
+  beside them, so **no weight can be synthesised**. Thai has no subset in any of them and falls
+  through per glyph to a system font, exactly as before.
+  **This was two files at 67 KB and D8 was closed with zero outstanding; it is three at 94 KB
+  and D8 is reopened, deliberately, on 2026-08-18.** Geist joined as the landing's display face —
+  see "The landing is a warm paper world" below. Adding it produced the exact defect D8 exists to
+  prevent, which is worth keeping: the first face tried (Fredoka) stops at **weight 700**, the
+  house `--weight-selected` is **800**, and the display rule was written *above* the component
+  rules, so `.landing-hero h1`'s own weight won on source order and the browser synthesised a
+  face that did not exist. Geist's axis is the full 100-900, so 800 is a real instance — but the
+  rule still sits after every component rule, because a display rule that loses to a component
+  rule is a silent defect whatever the axis. **Check the computed weight in a browser, not the
+  stylesheet.**
 - **Auto-Bill was never used with real expenses**, so `WF-030`'s pre-archive backup is **discharged**, not
   skipped. S6 may archive the donor whenever it is ready.
 
