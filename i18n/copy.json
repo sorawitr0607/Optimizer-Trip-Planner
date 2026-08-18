@@ -1242,7 +1242,7 @@
       "next_activate": "Activating writes this draft as your itinerary. Old versions are kept, so nothing is lost and you can go back.",
       "next_fix_first": "This variant cannot be activated yet. Fix what the warnings name, or pick another variant, then generate again.",
       "open_evidence": "Open the Evidence screen",
-      "optimizing_note": "Building three variants and checking each one. This takes about a minute — leave the tab open.",
+      "optimizing_note": "Measuring routes, then building three variants and checking each one. A few minutes on a first build — leave the tab open. The counter above is real time elapsed.",
       "no_preview_help": "Nothing has been drafted yet. Press the button above — it is free, nothing is committed, and you can throw the result away.",
       "own_words_help": "Write it in your own words, in any language. It is read for constraints when the plan is built — you do not need a special format.",
       "drop_to_maybe": "Maybe",
@@ -1450,7 +1450,8 @@
       "accept_measured_and_continue": "Accept {measured} minutes and rebuild",
       "accept_route_estimates": "Accept a walking estimate and rebuild",
       "required_field": "(required)",
-      "main_style_help": "Pick at least one. This is what every day of the plan is built around."
+      "main_style_help": "Pick at least one. This is what every day of the plan is built around.",
+      "day_before_you_go": "The evening before you go"
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -2224,7 +2225,7 @@
       "next_activate": "การเปิดใช้งานจะบันทึกแผนร่างนี้เป็นตารางเดินทางของคุณ เวอร์ชันเก่าจะถูกเก็บไว้ จึงไม่มีอะไรหาย และย้อนกลับได้",
       "next_fix_first": "ตัวเลือกนี้ยังเปิดใช้งานไม่ได้ แก้ตามที่คำเตือนระบุ หรือเลือกตัวเลือกอื่น แล้วสร้างใหม่",
       "open_evidence": "ไปที่หน้าหลักฐาน",
-      "optimizing_note": "กำลังสร้างสามตัวเลือกและตรวจทีละตัว ใช้เวลาประมาณหนึ่งนาที เปิดแท็บนี้ทิ้งไว้",
+      "optimizing_note": "กำลังวัดเส้นทาง แล้วสร้างสามตัวเลือกและตรวจทีละตัว การสร้างครั้งแรกใช้เวลาไม่กี่นาที เปิดแท็บนี้ทิ้งไว้ ตัวเลขด้านบนคือเวลาที่ผ่านไปจริง",
       "no_preview_help": "ยังไม่มีแผนร่าง กดปุ่มด้านบนได้เลย ใช้ฟรี ยังไม่ผูกมัดอะไร และทิ้งผลลัพธ์ได้",
       "own_words_help": "เขียนด้วยคำพูดของคุณเอง ภาษาไหนก็ได้ ระบบจะอ่านหาข้อจำกัดตอนสร้างแผน ไม่ต้องใช้รูปแบบพิเศษ",
       "drop_to_maybe": "อาจจะ",
@@ -2432,7 +2433,8 @@
       "accept_measured_and_continue": "ยอมรับ {measured} นาที แล้วสร้างแผนใหม่",
       "accept_route_estimates": "ยอมรับค่าประมาณการเดินแล้วสร้างแผนใหม่",
       "required_field": "(จำเป็น)",
-      "main_style_help": "เลือกอย่างน้อยหนึ่งอย่าง นี่คือสิ่งที่ใช้วางแผนของทุกวัน"
+      "main_style_help": "เลือกอย่างน้อยหนึ่งอย่าง นี่คือสิ่งที่ใช้วางแผนของทุกวัน",
+      "day_before_you_go": "เย็นก่อนออกเดินทาง"
     }
   }
 }

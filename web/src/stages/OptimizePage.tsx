@@ -448,7 +448,13 @@ export function OptimizePage() {
           <Thinking
             /* Three variants, each with its own time budget since `WF-043` — measured at
                about 52s end to end, which is what the six lines are paced across. */
-            expectSeconds={52}
+            /* 210s, measured, not 52. The 52 is the *optimizer* — three variants at
+               their own time budgets — and the free button does route collection first:
+               `collectRouteEvidence` loops `refresh_routes` and then asks for transit,
+               which on a fresh 15-place Porto trip took the wait to **210 seconds** end
+               to end. Paced at 52 the six lines cycled four times before the plan
+               arrived, and the note beside them promised "about a minute". */
+            expectSeconds={210}
             language={language}
             lines={["think_windows", "think_routes", "think_packing", "think_variants", "think_checking", "think_almost"]}
           />

@@ -1438,6 +1438,60 @@ cascading render.
 an owner lands on for the rest of the trip, and the sidebar lists those five without ever
 saying what any of them does.
 
+## The hero is the night map now, 2026-08-18
+
+Repainted at the owner's asking. The golden-hour palette sampled from two travel sites for
+`WF-048` is gone; the hero takes its colours from **this app's own dark `--map-*` block** —
+graphite ground, water deeper and bluer, the road network lighter than what it runs
+through, metro in transit blue. The hero is therefore the same world as the maps the
+planner draws, which is a better reason for a palette than a trend, and it reads as modern
+because it is cool and high-contrast rather than warm and nostalgic.
+
+**The tokens were renamed, not just repainted.** `--landing-amber` holding a blue and
+`--landing-sand` holding a pale slate would have been names that contradicted their
+values — the failure this file objects to everywhere else. They are `--landing-route`,
+`--landing-route-soft` and `--landing-mark`, named for their job. Every pairing was
+measured before it was written: the tightest is haze on the raised surface at **6.3:1**,
+and the CTA reads **7.4:1** both ways.
+
+## A full flow on a fresh trip, 2026-08-18
+
+Porto, five days, empty database, driven through the browser from the landing page to the
+downloads. What held, and the two things that did not.
+
+**Held.** Setup refused a confirm with no main style and **took the owner to step 3**,
+where the error, the `aria-invalid` fieldset and the tags are together. All eight
+downstream stages were locked with named reasons. Discovery returned in ~30s. Across ~30
+swipes and a lane change — the exact repro that produced three rounds of reports —
+**not one card was displayed with an unloaded image**, and the end-of-page panel offered
+both "show more" and the four other lanes. "Build the plan" went to Where to stay rather
+than past it; ranking produced 12 areas; picking one adopted it and moved on.
+`accept_route_estimates` took the plan from **6 unfit / 9 visits to 0 unfit / 15 visits**,
+and those estimates are still derived at read time rather than stored, so nothing
+fabricated is persisted as though a router said it. Activation, the itinerary map, and all
+three exports — the 6-sheet workbook, the 4-sheet money file, a 9-event calendar — were
+valid.
+
+**The wait lied.** The optimize screen paced its lines at `expectSeconds={52}` and its note
+promised "about a minute". Measured end to end on this trip: **210 seconds**. The 52 is the
+*optimizer*; the free button collects routes first, and `collectRouteEvidence` loops
+`refresh_routes` before the solver ever starts. The lines cycled four times against a note
+that was wrong by a factor of four. Both corrected, and the note now points at the elapsed
+counter, which was the only honest thing on screen.
+
+**"Day 1 of 6" counted an evening that is not a trip day.** Dates stored 04-10 → 04-14; the
+plan runs 04-09 → 04-14, because the evening before departure is a real planned day —
+pack, documents, alarm, 19:00–20:30. Numbering it as a trip day reads as an off-by-one to
+anyone who knows when their trip starts; I read it that way myself before checking. It is
+named now — "The evening before you go" — and the numbering counts the trip's own days, so
+04-10 is **Day 1 of 5**.
+
+**Two false alarms of my own, both the same mistake.** I reported the accept-estimate
+control and the activate button as missing; both were present, and my DOM query was scoped
+to the wrong section. Scoping a search to where you expect the answer is how you get a
+confident wrong one — the same shape as grepping one stylesheet and concluding the app had
+no focus ring.
+
 ## Owner testing, 2026-08-17: twelve reports
 
 ### Nearest-first starved the places that most needed a route

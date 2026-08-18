@@ -2656,14 +2656,14 @@
 
 .landing-controls button:hover {
   background: var(--landing-ink-soft);
-  border-color: var(--landing-sand);
+  border-color: var(--landing-mark);
 }
 
 .landing-hero {
   --drift-x: 0;
   --drift-y: 0;
   align-items: center;
-  background: linear-gradient(180deg, var(--landing-ink) 0%, var(--landing-ink-soft) 62%, var(--landing-amber-soft) 140%);
+  background: linear-gradient(180deg, var(--landing-ink) 0%, var(--landing-ink-soft) 62%, var(--landing-route-soft) 140%);
   display: grid;
   isolation: isolate;
   min-height: 82vh;
@@ -2736,11 +2736,11 @@
 }
 
 .hero-layer-far path { fill: var(--landing-haze); opacity: var(--opacity-tint-12); }
-.hero-layer-mid path { fill: var(--landing-amber-soft); opacity: var(--opacity-tint-30); }
-.hero-layer-near path { fill: var(--landing-amber-soft); opacity: var(--opacity-tint-40); }
+.hero-layer-mid path { fill: var(--landing-route-soft); opacity: var(--opacity-tint-30); }
+.hero-layer-near path { fill: var(--landing-route-soft); opacity: var(--opacity-tint-40); }
 
 .hero-route {
-  stroke: var(--landing-amber);
+  stroke: var(--landing-route);
   stroke-dasharray: 9 13;
   stroke-linecap: round;
   stroke-width: 3.5;
@@ -2753,8 +2753,8 @@
   font-weight: var(--weight-selected);
 }
 
-.hero-stop-ring { fill: var(--landing-amber); opacity: var(--opacity-tint-30); }
-.hero-stop-dot { fill: var(--landing-sand); }
+.hero-stop-ring { fill: var(--landing-route); opacity: var(--opacity-tint-30); }
+.hero-stop-dot { fill: var(--landing-mark); }
 
 /* Sticker cards, tilted and pinned along the route. */
 .hero-sticker {
@@ -2775,7 +2775,7 @@
 }
 
 .hero-spark {
-  background: var(--landing-sand);
+  background: var(--landing-mark);
   clip-path: polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%);
   height: 18px;
   position: absolute;
@@ -2797,7 +2797,7 @@
 /* derives-from: element 12 .hero-banner-badge as .landing-badge */
 .landing-badge {
   align-items: center;
-  background: var(--landing-amber);
+  background: var(--landing-route);
   border-radius: var(--radius-pill);
   color: var(--landing-ink);
   display: inline-flex;
@@ -2829,7 +2829,7 @@
 /* derives-from: element 12 .btn-hero-cta as .hero-cta */
 .hero-cta {
   align-items: center;
-  background: var(--landing-amber);
+  background: var(--landing-route);
   border-radius: var(--radius-pill);
   color: var(--landing-ink);
   display: inline-flex;
@@ -2900,7 +2900,7 @@
 }
 
 .landing-lead {
-  color: var(--landing-sand);
+  color: var(--landing-mark);
   font-size: var(--text-lg);
   margin: 0 0 22px;
   max-width: 58ch;
@@ -2937,7 +2937,7 @@
 .landing-bullet-icon {
   align-items: center;
   border-radius: var(--radius);
-  color: var(--landing-amber);
+  color: var(--landing-route);
   display: flex;
   flex: none;
   height: 30px;
@@ -3011,7 +3011,7 @@
 
 .landing-step-arrow {
   align-self: center;
-  color: var(--landing-amber-soft);
+  color: var(--landing-route-soft);
 }
 
 /* derives-from: element 7 .step-num-4 as .landing-step-num */
@@ -3019,7 +3019,7 @@
   align-items: center;
   background: var(--landing-ink);
   border-radius: var(--radius-pill);
-  color: var(--landing-sand);
+  color: var(--landing-mark);
   display: flex;
   font-weight: var(--weight-selected);
   height: 26px;
@@ -3046,7 +3046,7 @@
 }
 
 .trip-list-resume {
-  color: var(--landing-amber-soft);
+  color: var(--landing-route-soft);
   font-size: var(--text-sm);
   font-weight: var(--weight-secondary);
   text-align: right;
@@ -3074,7 +3074,7 @@
   border: 1px solid var(--landing-ink);
   border-radius: var(--radius-pill);
   box-shadow: var(--shadow-hard-sm);
-  color: var(--landing-sand);
+  color: var(--landing-mark);
   cursor: pointer;
   font-weight: var(--weight-secondary);
   padding: 11px 18px;

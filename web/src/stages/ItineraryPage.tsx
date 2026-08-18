@@ -507,6 +507,20 @@ export function ItineraryPage() {
 
   const day = plan.days.find((item) => item.date === chosenDate) ?? plan.days[0];
   const dayIndex = plan.days.indexOf(day);
+  // The evening before departure is a real day in the plan — pack, documents, alarm — but
+  // it is not a day *of the trip*, and numbering it "Day 1 of 6" on a trip the owner knows
+  // runs the 10th to the 14th reads as an off-by-one. Measured on a fresh Porto trip:
+  // dates stored 2027-04-10 → 04-14, plan days 04-09 → 04-14, and the first carried only
+  // `pack_bags`, `documents_and_tickets` and `charge_and_alarm`. It is named instead of
+  // numbered, and the numbering that remains counts the trip's own days.
+  const prepFirst = (plan.days[0]?.items ?? []).every((item) => item.type === "preparation");
+  const tripDayCount = plan.days.length - (prepFirst ? 1 : 0);
+  const dayLabel =
+    prepFirst && dayIndex === 0
+      ? copy("day_before_you_go", language)
+      : copy("day_of", language)
+          .replace("{current}", String(dayIndex + (prepFirst ? 0 : 1)))
+          .replace("{total}", String(tripDayCount));
   if (!day) return <p>{copy("no_schedule", language)}</p>;
   const totals = day.totals;
   const versionTag = plan.stamp.plan_version_id.replace(/^plan_/, "").slice(0, 12);
@@ -577,9 +591,7 @@ export function ItineraryPage() {
       <div className="dayhead">
         <div className="dayhead-left">
           <span className="dayhead-num">
-            {copy("day_of", language)
-              .replace("{current}", String(plan.days.indexOf(day) + 1))
-              .replace("{total}", String(plan.days.length))}
+            {dayLabel}
             {" · "}
             {copy("active_plan", language)} <code>{versionTag}</code>
           </span>
@@ -667,9 +679,7 @@ export function ItineraryPage() {
           {dayIndex > 0 ? ` · ${plan.days[dayIndex - 1].date}` : ""}
         </button>
         <span className="day-stepper-current">
-          {copy("day_of", language)
-            .replace("{current}", String(dayIndex + 1))
-            .replace("{total}", String(plan.days.length))}
+          {dayLabel}
           {" · "}
           <strong>{day.date}</strong>
         </span>
