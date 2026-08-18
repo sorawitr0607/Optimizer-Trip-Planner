@@ -425,10 +425,23 @@ button:disabled {
   --landing-route-soft: #1e3a5f;
   --landing-cream: #f2f7fc;
   --landing-on-ink: #e6eef7;
-  /* The working half below the hero, which is the one part of this page that does
-     follow the theme. Its own tokens so the hero's cream and sand stay ink-on-dark. */
   --landing-page: #f4f7fa;
   --landing-step: #e3ecf5;
+  /* Modern landing accents & glow tokens */
+  --landing-emerald: #10b981;
+  --landing-emerald-soft: #064e3b;
+  --landing-emerald-glow: rgb(16 185 129 / 35%);
+  --landing-amber: #f59e0b;
+  --landing-amber-soft: #78350f;
+  --landing-amber-glow: rgb(245 158 11 / 35%);
+  --landing-cyan: #06b6d4;
+  --landing-cyan-soft: #164e63;
+  --landing-cyan-glow: rgb(6 182 212 / 35%);
+  --landing-violet: #8b5cf6;
+  --landing-violet-soft: #4c1d95;
+  --landing-violet-glow: rgb(139 92 246 / 35%);
+  --landing-glass-bg: rgb(25 34 45 / 75%);
+  --landing-glass-border: rgb(157 176 196 / 25%);
   /* The tour scrim. Alpha has to live here: `rgba(` is a colour literal and the gate
      permits none outside this file, so a translucent overlay is only expressible as a
      token. Dark enough to push the screen back, sheer enough to keep it recognisable —
