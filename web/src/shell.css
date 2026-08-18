@@ -2892,6 +2892,44 @@
   box-shadow: 0 4px 0 var(--landing-night);
 }
 
+/* MEASURE.
+
+   Contrast was never what made these passages hard to read — the bullets under
+   the trip form are near-black on cream, about as legible as ink gets. They ran
+   **101 to 108 characters a line**, and past roughly 75 the eye loses its place
+   coming back to the left margin, so every line costs a moment finding where it
+   started. No contrast audit can see that, which is why every one of them
+   reported clean while the text was genuinely hard to read.
+
+   Capped in `em`, and **not** in `ch`, which is the trap here. `ch` is the width
+   of a zero glyph — measured in this face at 10.98px against an average lowercase
+   advance of 7.86px — so a `64ch` cap renders about **88** real characters, not
+   64, and the first attempt at this fix only moved the bullets from 108 to 92.
+   `em` scales with the type the same way but without the 40% zero-glyph error:
+   36em at 15px is 540px, which measures 69 characters in this face.
+
+   `margin-inline: auto` keeps the centred blocks centred at their new width
+   instead of pinning them to the left. */
+.landing-note,
+.landing-bullets li,
+.faq-answer-inner p,
+.landing-section > p,
+.split-sandbox-card > p {
+  max-width: 36em;
+}
+
+.landing-note,
+.landing-bullets {
+  margin-inline: auto;
+}
+
+/* Section leads are centred display copy rather than running text, so they take a
+   slightly wider measure — but still a bounded one. */
+.section-lead {
+  margin-inline: auto;
+  max-width: 38em;
+}
+
 /* SCROLL-LINKED DEPTH.
 
    One scroll listener writes `--scroll-y` on `.landing` and every layer derives
@@ -4398,11 +4436,14 @@
   transform: translateY(-2px);
 }
 
+/* 12px is the metadata step. This line is read rather than scanned — it is the
+   free/local/no-account promise directly under the call to action — so it takes
+   the body-small size instead. */
 .hero-trust-note {
   align-items: center;
   color: var(--landing-mark);
   display: inline-flex;
-  font-size: var(--text-2xs);
+  font-size: var(--text-xs);
   gap: 6px;
   margin: 0;
 }
