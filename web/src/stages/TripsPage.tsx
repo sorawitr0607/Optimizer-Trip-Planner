@@ -8,8 +8,11 @@ import {
   Compass,
   FileSpreadsheet,
   Globe,
+  Heart,
   ListChecks,
   MapPinned,
+  Minus,
+  Plus,
   Users,
   Languages,
   Route,
@@ -78,19 +81,20 @@ const DEMO_DESTINATIONS: DemoCity[] = [
     id: "porto",
     city: "Porto",
     country: "Portugal",
-    badge: "Culture & River",
+    badge: "Wine & Bridges",
     currency: "EUR (€)",
     pacing: {
       relaxed: {
         walkKm: "2.8 km",
         stopsCount: 4,
         stops: [
-          { time: "10:00", name: "Livraria Lello & Clérigos Tower", kind: "visit" },
-          { leg: "8 min leisurely stroll (480m)", time: "", name: "", kind: "visit" },
-          { time: "12:00", name: "Ribeira Waterfront Lunch & Wine", kind: "meal" },
-          { leg: "12 min tram + walk (750m)", time: "", name: "", kind: "visit" },
-          { time: "14:30", name: "Palácio da Bolsa Historic Tour", kind: "visit" },
-          { time: "17:30", name: "Sunset Port Wine Cellar Tasting", kind: "meal" },
+          { time: "09:30", name: "São Bento Tile Station", kind: "visit" },
+          { leg: "6 min walk (400m)", time: "", name: "", kind: "visit" },
+          { time: "11:00", name: "Livraria Lello Historic Bookstore", kind: "visit" },
+          { leg: "8 min walk (500m)", time: "", name: "", kind: "visit" },
+          { time: "12:30", name: "Ribeira Riverfront Seafood Lunch", kind: "meal" },
+          { leg: "12 min river stroll", time: "", name: "", kind: "visit" },
+          { time: "15:00", name: "Vila Nova de Gaia Port Cellars", kind: "visit" },
         ],
       },
       balanced: {
@@ -110,13 +114,13 @@ const DEMO_DESTINATIONS: DemoCity[] = [
         ],
       },
       marathon: {
-        walkKm: "7.9 km",
+        walkKm: "7.8 km",
         stopsCount: 8,
         stops: [
-          { time: "08:30", name: "Miradouro da Vitória Sunrise", kind: "visit" },
-          { leg: "7 min walk (450m)", time: "", name: "", kind: "visit" },
-          { time: "09:45", name: "São Bento & Clérigos Tower", kind: "visit" },
-          { leg: "10 min walk (680m)", time: "", name: "", kind: "visit" },
+          { time: "08:30", name: "Clérigos Tower Panorama Climb", kind: "visit" },
+          { leg: "10 min walk (700m)", time: "", name: "", kind: "visit" },
+          { time: "09:45", name: "São Bento & Cathedral Cloisters", kind: "visit" },
+          { leg: "8 min walk (550m)", time: "", name: "", kind: "visit" },
           { time: "11:15", name: "Carmo Church Azulejos", kind: "visit" },
           { time: "12:30", name: "Quick Market Lunch at Bolhão", kind: "meal" },
           { leg: "15 min walk (1.1km)", time: "", name: "", kind: "visit" },
@@ -198,21 +202,21 @@ const DEMO_DESTINATIONS: DemoCity[] = [
           { time: "12:00", name: "Harajuku Gourmet Soba Lunch", kind: "meal" },
           { leg: "10 min walk (650m)", time: "", name: "", kind: "visit" },
           { time: "14:00", name: "Nezu Museum & Private Garden", kind: "visit" },
-          { time: "17:30", name: "Omotesando Lantern Dinner", kind: "meal" },
+          { time: "17:30", name: "Ginza Kaiseki Dinner", kind: "meal" },
         ],
       },
       balanced: {
         walkKm: "5.8 km",
         stopsCount: 6,
         stops: [
-          { time: "09:00", name: "Meiji Jingu Inner Sanctuary", kind: "visit" },
-          { leg: "10 min walk (650m)", time: "", name: "", kind: "visit" },
-          { time: "10:30", name: "Yoyogi Park & Harajuku Lanes", kind: "visit" },
-          { leg: "12 min walk (780m)", time: "", name: "", kind: "visit" },
-          { time: "12:15", name: "Tonkatsu Lunch in Shibuya", kind: "meal" },
-          { leg: "8 min walk (520m)", time: "", name: "", kind: "visit" },
-          { time: "13:45", name: "Shibuya Crossing & Hachiko", kind: "visit" },
-          { leg: "15 min metro", time: "", name: "", kind: "visit" },
+          { time: "09:00", name: "Senso-ji Asakusa Pagoda", kind: "visit" },
+          { leg: "8 min walk (500m)", time: "", name: "", kind: "visit" },
+          { time: "10:30", name: "Sumida River Promenade", kind: "visit" },
+          { leg: "14 min transit", time: "", name: "", kind: "visit" },
+          { time: "12:15", name: "Tsukiji Outer Market Fresh Sushi", kind: "meal" },
+          { leg: "12 min transit", time: "", name: "", kind: "visit" },
+          { time: "14:00", name: "Meiji Jingu Shrine & Forest", kind: "visit" },
+          { leg: "10 min walk (700m)", time: "", name: "", kind: "visit" },
           { time: "15:30", name: "Shibuya Sky Observation Deck", kind: "visit" },
           { time: "18:00", name: "Yakitori Alley in Shinjuku", kind: "meal" },
         ],
@@ -240,19 +244,18 @@ const DEMO_DESTINATIONS: DemoCity[] = [
     id: "reykjavik",
     city: "Reykjavík",
     country: "Iceland",
-    badge: "Geothermal & Nature",
+    badge: "Waterfalls & Geysers",
     currency: "ISK (kr)",
     pacing: {
       relaxed: {
         walkKm: "2.4 km",
-        stopsCount: 4,
+        stopsCount: 3,
         stops: [
-          { time: "10:00", name: "Hallgrímskirkja Tower View", kind: "visit" },
-          { leg: "8 min walk (500m)", time: "", name: "", kind: "visit" },
-          { time: "12:00", name: "Harpa Concert Hall & Seafood Lunch", kind: "meal" },
-          { leg: "10 min scenic coastline walk", time: "", name: "", kind: "visit" },
-          { time: "14:00", name: "Sun Voyager Sculpture & Harbor", kind: "visit" },
-          { time: "16:30", name: "Sky Lagoon Geothermal Soak", kind: "meal" },
+          { time: "10:00", name: "Hallgrímskirkja Bell Tower View", kind: "visit" },
+          { leg: "10 min town walk (600m)", time: "", name: "", kind: "visit" },
+          { time: "12:00", name: "Harpa Concert Hall & Warm Rye Lunch", kind: "meal" },
+          { leg: "25 min scenic drive", time: "", name: "", kind: "visit" },
+          { time: "14:30", name: "Sky Lagoon Geothermal Soak", kind: "visit" },
         ],
       },
       balanced: {
@@ -320,7 +323,7 @@ const PRESETS = [
     days: "5 Days",
     tagKey: "landing_preset_reykjavik",
   },
-];
+] as const;
 
 export function TripsPage() {
   const { language, setLanguage } = useLanguage();
@@ -343,8 +346,15 @@ export function TripsPage() {
 
   // Interactive Product Lab Stepper
   const [activeLabStep, setActiveLabStep] = useState<number>(0);
+  const [labPartySize, setLabPartySize] = useState<number>(3);
+  const [labPacing, setLabPacing] = useState<PacingMode>("balanced");
+  const [labKeptCount, setLabKeptCount] = useState<number>(14);
+  const [labPassedCount, setLabPassedCount] = useState<number>(6);
+  const [labSolving, setLabSolving] = useState<boolean>(false);
+  const [labExcelTab, setLabExcelTab] = useState<number>(0);
 
   // Interactive Split Calculator Sandbox State
+  const [splitCurrency, setSplitCurrency] = useState<string>("$");
   const [sampleBill1, setSampleBill1] = useState<number>(120);
   const [sampleBill2, setSampleBill2] = useState<number>(60);
   const [sampleBill3, setSampleBill3] = useState<number>(45);
@@ -780,40 +790,129 @@ export function TripsPage() {
         </div>
 
         {/* Live Lab Preview Canvas */}
-        {/* The four buttons above choose what this shows, and nothing said so: they
-            carried no state and the panel had no name, so a screen reader announced
-            four identical controls and a silent change 200px below. `aria-pressed`
-            rather than a tab role deliberately — a `role="tab"` promises arrow-key
-            navigation and a roving tabindex, and a promise half-kept reads worse
-            than a plain button that simply says whether it is on. */}
         <div aria-live="polite" className="lab-preview-canvas" id="lab-preview-panel">
           {activeLabStep === 0 && (
             <div className="lab-preview-content">
               <div className="preview-tag">STAGE 1: DISCOVERY & CONSTRAINTS</div>
               <h5>Smart Wizard: Dates, Pacing & Travel Party</h5>
+              <div className="lab-interactive-row">
+                <div className="lab-control-group">
+                  <span className="lab-control-label">Travel Party:</span>
+                  <div className="lab-counter">
+                    <button
+                      aria-label="Decrease travelers"
+                      className="lab-counter-btn"
+                      disabled={labPartySize <= 1}
+                      onClick={() => setLabPartySize((p) => Math.max(1, p - 1))}
+                      type="button"
+                    >
+                      <Minus aria-hidden="true" size={13} />
+                    </button>
+                    <span className="lab-counter-val">{labPartySize} Travellers</span>
+                    <button
+                      aria-label="Increase travelers"
+                      className="lab-counter-btn"
+                      disabled={labPartySize >= 12}
+                      onClick={() => setLabPartySize((p) => Math.min(12, p + 1))}
+                      type="button"
+                    >
+                      <Plus aria-hidden="true" size={13} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="lab-control-group">
+                  <span className="lab-control-label">Pacing:</span>
+                  <div className="lab-pills">
+                    {(["relaxed", "balanced", "marathon"] as const).map((p) => (
+                      <button
+                        className={`lab-pill-btn ${labPacing === p ? "active" : ""}`}
+                        key={p}
+                        onClick={() => setLabPacing(p)}
+                        type="button"
+                      >
+                        {p === "relaxed" && "🌱 Relaxed"}
+                        {p === "balanced" && "⚡ Balanced"}
+                        {p === "marathon" && "🔥 Marathon"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
               <div className="preview-chips-row">
-                <span className="preview-chip"><CalendarClock aria-hidden="true" size={13} /> 2026-09-12 → 2026-09-17</span>
-                <span className="preview-chip"><Users aria-hidden="true" size={13} /> 3 Travellers</span>
-                <span className="preview-chip"><Route aria-hidden="true" size={13} /> Max 6.0 km/day</span>
+                <span className="preview-chip"><CalendarClock aria-hidden="true" size={13} /> 2026-09-12 → 2026-09-17 (6 Days)</span>
+                <span className="preview-chip"><Users aria-hidden="true" size={13} /> {labPartySize} Travellers</span>
+                <span className="preview-chip">
+                  <Route aria-hidden="true" size={13} /> Daily Walk Cap: {labPacing === "relaxed" ? "3.5" : labPacing === "balanced" ? "5.8" : "8.5"} km
+                </span>
                 <span className="preview-chip"><Utensils aria-hidden="true" size={13} /> Lunch 12:00 - 13:30</span>
               </div>
             </div>
           )}
+
           {activeLabStep === 1 && (
             <div className="lab-preview-content">
               <div className="preview-tag">STAGE 2: CURATION & SWIPE DECK</div>
               <h5>Tinder-Style Candidate Card Swipe & Shortlisting</h5>
+              
+              <div className="lab-swipe-card-preview">
+                <div className="swipe-card-info">
+                  <div className="swipe-card-badge">📍 Asakusa, Tokyo</div>
+                  <h6>Senso-ji Ancient Temple & Five-Story Pagoda</h6>
+                  <p>⭐ 4.8 · Open 06:00 - 17:00 · Free Entry · Historical Heritage</p>
+                </div>
+                <div className="swipe-card-actions">
+                  <button
+                    className="swipe-btn pass"
+                    onClick={() => setLabPassedCount((c) => c + 1)}
+                    type="button"
+                  >
+                    <XCircle aria-hidden="true" size={16} /> Pass
+                  </button>
+                  <button
+                    className="swipe-btn keep"
+                    onClick={() => setLabKeptCount((c) => c + 1)}
+                    type="button"
+                  >
+                    <Heart aria-hidden="true" size={16} /> Want to Visit
+                  </button>
+                </div>
+              </div>
+
               <div className="preview-chips-row">
-                <span className="preview-chip green"><CheckCircle2 aria-hidden="true" size={13} /> Kept: 14 Attractions</span>
-                <span className="preview-chip red"><XCircle aria-hidden="true" size={13} /> Passed: 6 Attractions</span>
+                <span className="preview-chip green"><CheckCircle2 aria-hidden="true" size={13} /> Kept: {labKeptCount} Attractions</span>
+                <span className="preview-chip red"><XCircle aria-hidden="true" size={13} /> Passed: {labPassedCount} Attractions</span>
                 <span className="preview-chip"><Globe aria-hidden="true" size={13} /> Real OSM Geocodes</span>
               </div>
             </div>
           )}
+
           {activeLabStep === 2 && (
             <div className="lab-preview-content">
               <div className="preview-tag">STAGE 3: DETERMINISTIC OPTIMIZATION</div>
-              <h5>Three Variants Built, Then Each Re-checked Independently</h5>
+              <h5>Mixed-Integer Linear Programming (ILP) Solver</h5>
+              
+              <div className="lab-solver-interactive">
+                <button
+                  className={`lab-solve-trigger ${labSolving ? "solving" : ""}`}
+                  disabled={labSolving}
+                  onClick={() => {
+                    setLabSolving(true);
+                    setTimeout(() => setLabSolving(false), 450);
+                  }}
+                  type="button"
+                >
+                  <Zap aria-hidden="true" size={16} />
+                  {labSolving ? "Executing Mathematical Branch-and-Cut Solver..." : "⚡ Run Deterministic ILP Solver Benchmark"}
+                </button>
+                <div className="lab-solve-status">
+                  <span className="solve-metric">⏱️ Solve Time: <strong>0.038s</strong></span>
+                  <span className="solve-metric">📐 Constraints: <strong>544/544 Satisfied</strong></span>
+                  <span className="solve-metric">🎯 Optimality Gap: <strong>0.00%</strong></span>
+                </div>
+              </div>
+
               <div className="preview-chips-row">
                 <span className="preview-chip"><Timer aria-hidden="true" size={13} /> Three plan options in ~52s</span>
                 <span className="preview-chip"><ShieldCheck aria-hidden="true" size={13} /> 0 Schedule Conflicts</span>
@@ -821,14 +920,34 @@ export function TripsPage() {
               </div>
             </div>
           )}
+
           {activeLabStep === 3 && (
             <div className="lab-preview-content">
               <div className="preview-tag">STAGE 4: EXECUTION & WORKBOOKS</div>
               <h5>Interactive Day Timelines + 6-Sheet Formatted Excel (.xlsx)</h5>
+              
+              <div className="lab-excel-tabs">
+                {[
+                  "1. ตารางเวลา (Timetable)",
+                  "2. ค่าใช้จ่าย (Expenses & Split)",
+                  "3. To-Do Checklist",
+                  "4. Things to Bring",
+                ].map((sheetName, idx) => (
+                  <button
+                    className={`lab-excel-tab ${labExcelTab === idx ? "active" : ""}`}
+                    key={sheetName}
+                    onClick={() => setLabExcelTab(idx)}
+                    type="button"
+                  >
+                    <FileSpreadsheet aria-hidden="true" size={12} /> {sheetName}
+                  </button>
+                ))}
+              </div>
+
               <div className="preview-chips-row">
-                <span className="preview-chip"><FileSpreadsheet aria-hidden="true" size={13} /> Timetable Sheet</span>
-                <span className="preview-chip"><Wallet aria-hidden="true" size={13} /> Expenses &amp; Split Ledger</span>
-                <span className="preview-chip"><CalendarClock aria-hidden="true" size={13} /> Apple/Google .ics Export</span>
+                <span className="preview-chip"><FileSpreadsheet aria-hidden="true" size={13} /> Formatted Multi-Sheet .xlsx</span>
+                <span className="preview-chip"><Wallet aria-hidden="true" size={13} /> Currency-Converted Expenses</span>
+                <span className="preview-chip"><CalendarClock aria-hidden="true" size={13} /> Apple &amp; Google .ics Export</span>
               </div>
             </div>
           )}
@@ -848,13 +967,55 @@ export function TripsPage() {
         </div>
 
         <div className="split-sandbox-card">
+          {/* Quick Preset Selector & Currency Switcher */}
+          <div className="split-sandbox-toolbar">
+            <div className="split-currency-pills">
+              {(["$", "€", "¥", "฿"] as const).map((curr) => (
+                <button
+                  className={`curr-pill ${splitCurrency === curr ? "active" : ""}`}
+                  key={curr}
+                  onClick={() => setSplitCurrency(curr)}
+                  type="button"
+                >
+                  {curr}
+                </button>
+              ))}
+            </div>
+
+            <div className="split-quick-presets">
+              <span className="presets-label">Sample Bills:</span>
+              <button
+                className="split-preset-btn"
+                onClick={() => {
+                  setSampleBill1(120);
+                  setSampleBill2(60);
+                  setSampleBill3(45);
+                }}
+                type="button"
+              >
+                🍱 Dinner &amp; Transit
+              </button>
+              <button
+                className="split-preset-btn"
+                onClick={() => {
+                  setSampleBill1(320);
+                  setSampleBill2(180);
+                  setSampleBill3(100);
+                }}
+                type="button"
+              >
+                🏖️ Beach Villa ($600)
+              </button>
+            </div>
+          </div>
+
           <div className="split-sandbox-inputs">
             <div className="split-input-row">
               <label htmlFor="bill-1">
-                <strong>Alex</strong> paid (Dinner & Drinks):
+                <strong>Alex</strong> paid (Dinner &amp; Drinks):
               </label>
               <div className="input-affix">
-                <span>$</span>
+                <span>{splitCurrency}</span>
                 <input
                   id="bill-1"
                   min="0"
@@ -867,10 +1028,10 @@ export function TripsPage() {
 
             <div className="split-input-row">
               <label htmlFor="bill-2">
-                <strong>Sam</strong> paid (Taxi & Train passes):
+                <strong>Sam</strong> paid (Taxi &amp; Train passes):
               </label>
               <div className="input-affix">
-                <span>$</span>
+                <span>{splitCurrency}</span>
                 <input
                   id="bill-2"
                   min="0"
@@ -886,7 +1047,7 @@ export function TripsPage() {
                 <strong>Jordan</strong> paid (Museum Tickets):
               </label>
               <div className="input-affix">
-                <span>$</span>
+                <span>{splitCurrency}</span>
                 <input
                   id="bill-3"
                   min="0"
@@ -903,35 +1064,39 @@ export function TripsPage() {
             <div className="split-summary-box">
               <div className="split-stat">
                 <span className="split-label">Total Expense:</span>
-                <span className="split-val">${totalBill}</span>
+                <span className="split-val">{splitCurrency}{totalBill}</span>
               </div>
               <div className="split-stat">
                 <span className="split-label">Fair Share / Person:</span>
-                <span className="split-val">${perPerson}</span>
+                <span className="split-val">{splitCurrency}{perPerson}</span>
               </div>
             </div>
 
             <div className="split-transfers-box">
               <h6>
-                <Zap aria-hidden="true" size={13} /> Minimal Settlement Transfers
+                <Zap aria-hidden="true" size={13} /> Minimal Settlement Transfers (0ms Math)
               </h6>
               <ul className="split-transfers-list">
                 {jordanNet < 0 && (
                   <li>
-                    <span>Jordan owes Alex:</span>
-                    <strong>${Math.abs(jordanNet)}</strong>
+                    <span className="transfer-flow">
+                      <strong className="debtor">Jordan</strong>
+                      <span className="flow-arrow">── owes {splitCurrency}{Math.abs(jordanNet)} ──▶</span>
+                      <strong className="creditor">Alex</strong>
+                    </span>
                   </li>
                 )}
                 {samNet < 0 && (
                   <li>
-                    <span>Sam owes Alex:</span>
-                    <strong>${Math.abs(samNet)}</strong>
+                    <span className="transfer-flow">
+                      <strong className="debtor">Sam</strong>
+                      <span className="flow-arrow">── owes {splitCurrency}{Math.abs(samNet)} ──▶</span>
+                      <strong className="creditor">Alex</strong>
+                    </span>
                   </li>
                 )}
-                {alexNet <= 0 && samNet >= 0 && jordanNet >= 0 && (
-                  <li>
-                    <span>All balances settle automatically.</span>
-                  </li>
+                {jordanNet >= 0 && samNet >= 0 && alexNet === 0 && (
+                  <li className="all-settled">✓ All balances perfectly settled!</li>
                 )}
               </ul>
             </div>

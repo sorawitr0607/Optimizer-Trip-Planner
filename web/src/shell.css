@@ -3820,6 +3820,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  margin-top: 14px;
 }
 
 .preview-chip {
@@ -3833,6 +3834,229 @@
 
 .preview-chip.green { color: var(--landing-go); border-color: var(--landing-go); }
 .preview-chip.red { color: var(--landing-warn); border-color: var(--landing-warn); }
+
+/* Lab Interactive Stage 1: Setup Wizard Controls */
+.lab-interactive-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.lab-control-group {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.lab-control-label {
+  color: var(--landing-haze);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-selected);
+}
+
+.lab-counter {
+  align-items: center;
+  background: var(--landing-raised);
+  border: 1px solid var(--landing-glass-border);
+  border-radius: var(--radius-pill);
+  display: inline-flex;
+  gap: 8px;
+  padding: 2px 6px;
+}
+
+.lab-counter-btn {
+  align-items: center;
+  background: var(--landing-ground);
+  border: 1px solid var(--landing-glass-border);
+  border-radius: var(--radius-pill);
+  color: var(--landing-mark);
+  cursor: pointer;
+  display: flex;
+  height: 22px;
+  justify-content: center;
+  width: 22px;
+}
+
+.lab-counter-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.lab-counter-val {
+  color: var(--landing-mark);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-selected);
+}
+
+.lab-pills {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.lab-pill-btn {
+  background: var(--landing-raised);
+  border: 1px solid var(--landing-glass-border);
+  border-radius: var(--radius-pill);
+  color: var(--landing-text);
+  cursor: pointer;
+  font-size: var(--text-2xs);
+  padding: 4px 10px;
+  transition: all var(--duration-hover) var(--ease-out);
+}
+
+.lab-pill-btn.active {
+  background: var(--landing-route-soft);
+  border-color: var(--landing-route);
+  color: var(--landing-route);
+  font-weight: var(--weight-selected);
+}
+
+/* Lab Interactive Stage 2: Swipe Deck Preview */
+.lab-swipe-card-preview {
+  background: var(--landing-raised);
+  border: 1px solid var(--landing-glass-border);
+  border-radius: var(--radius-house);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding: 16px;
+}
+
+.swipe-card-info h6 {
+  color: var(--landing-mark);
+  font-size: var(--text-sm);
+  margin: 4px 0 2px;
+}
+
+.swipe-card-info p {
+  color: var(--landing-haze);
+  font-size: var(--text-2xs);
+  margin: 0;
+}
+
+.swipe-card-badge {
+  color: var(--landing-route);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-selected);
+}
+
+.swipe-card-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.swipe-btn {
+  align-items: center;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-selected);
+  gap: 6px;
+  padding: 6px 14px;
+  transition: transform var(--duration-hover) var(--ease-out);
+}
+
+.swipe-btn:hover {
+  transform: scale(1.04);
+}
+
+.swipe-btn.pass {
+  background: var(--landing-ground);
+  border: 1px solid var(--landing-warn);
+  color: var(--landing-warn);
+}
+
+.swipe-btn.keep {
+  background: var(--landing-route);
+  border: 1px solid var(--landing-route);
+  color: var(--landing-ground);
+}
+
+/* Lab Interactive Stage 3: Solver Benchmark */
+.lab-solver-interactive {
+  background: var(--landing-raised);
+  border: 1px solid var(--landing-glass-border);
+  border-radius: var(--radius-house);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 16px;
+}
+
+.lab-solve-trigger {
+  align-items: center;
+  background: var(--landing-route);
+  border: 1px solid var(--landing-route);
+  border-radius: var(--radius-house);
+  color: var(--landing-ground);
+  cursor: pointer;
+  display: flex;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-selected);
+  gap: 8px;
+  justify-content: center;
+  padding: 10px 16px;
+  transition: all var(--duration-hover) var(--ease-out);
+}
+
+.lab-solve-trigger.solving {
+  opacity: 0.8;
+}
+
+.lab-solve-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-around;
+}
+
+.solve-metric {
+  color: var(--landing-text);
+  font-size: var(--text-2xs);
+}
+
+.solve-metric strong {
+  color: var(--landing-go);
+  font-family: var(--font-mono);
+}
+
+/* Lab Interactive Stage 4: Formatted Excel Tabs */
+.lab-excel-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.lab-excel-tab {
+  align-items: center;
+  background: var(--landing-raised);
+  border: 1px solid var(--landing-glass-border);
+  border-radius: var(--radius-house);
+  color: var(--landing-text);
+  cursor: pointer;
+  display: inline-flex;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  gap: 6px;
+  padding: 6px 12px;
+  transition: all var(--duration-hover) var(--ease-out);
+}
+
+.lab-excel-tab.active {
+  background: var(--landing-route-soft);
+  border-color: var(--landing-route);
+  color: var(--landing-route);
+  font-weight: var(--weight-selected);
+}
 
 /* ---------------------------------------------------------------------------
    SECTION 4: BILL SPLIT SANDBOX
@@ -3849,8 +4073,71 @@
   gap: 24px;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   margin: 0 auto;
-  max-width: 60rem;
+  max-width: 62rem;
   padding: 28px;
+}
+
+.split-sandbox-toolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  grid-column: 1 / -1;
+  justify-content: space-between;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--landing-glass-border);
+}
+
+.split-currency-pills {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.curr-pill {
+  background: var(--landing-ground);
+  border: 1px solid var(--landing-glass-border);
+  border-radius: var(--radius-pill);
+  color: var(--landing-text);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  height: 28px;
+  min-width: 28px;
+  transition: all var(--duration-hover) var(--ease-out);
+}
+
+.curr-pill.active {
+  background: var(--landing-route-soft);
+  border-color: var(--landing-route);
+  color: var(--landing-route);
+  font-weight: var(--weight-selected);
+}
+
+.split-quick-presets {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.presets-label {
+  color: var(--landing-haze);
+  font-size: var(--text-2xs);
+}
+
+.split-preset-btn {
+  background: var(--landing-ground);
+  border: 1px solid var(--landing-glass-border);
+  border-radius: var(--radius-pill);
+  color: var(--landing-mark);
+  cursor: pointer;
+  font-size: var(--text-2xs);
+  padding: 4px 10px;
+  transition: all var(--duration-hover) var(--ease-out);
+}
+
+.split-preset-btn:hover {
+  border-color: var(--landing-route);
 }
 
 @media (max-width: 768px) {
@@ -3941,21 +4228,43 @@
 
 .split-transfers-list {
   display: grid;
-  gap: 6px;
+  gap: 8px;
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
 .split-transfers-list li {
-  align-items: center;
-  background: var(--landing-ground-alt);
-  border-radius: var(--radius-house);
-  color: var(--landing-text);
-  display: flex;
   font-size: var(--text-xs);
-  justify-content: space-between;
-  padding: 8px 12px;
+}
+
+.transfer-flow {
+  align-items: center;
+  background: var(--landing-raised);
+  border: 1px solid var(--landing-glass-border);
+  border-radius: var(--radius-house);
+  display: flex;
+  gap: 6px;
+  padding: 6px 10px;
+}
+
+.debtor {
+  color: var(--landing-warn);
+}
+
+.creditor {
+  color: var(--landing-go);
+}
+
+.flow-arrow {
+  color: var(--landing-haze);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+}
+
+.all-settled {
+  color: var(--landing-go);
+  font-weight: var(--weight-selected);
 }
 
 .split-transfers-list li strong {
