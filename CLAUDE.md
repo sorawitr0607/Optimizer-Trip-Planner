@@ -1438,6 +1438,37 @@ cascading render.
 an owner lands on for the rest of the trip, and the sidebar lists those five without ever
 saying what any of them does.
 
+## The hero shows the product, not a picture of the product
+
+The article's third image option is a **teaser — the product demo** — and its argument for
+it is that an image is read far faster than a sentence. Ours was the second option:
+mountains, a dotted route, four stickers pinned along it naming the four stages. It said
+"this app plans trips". It never showed a plan.
+
+The hero is two columns from 1000px up: copy left, and **a day this planner actually
+built** on the right. Every row is real output from the five-day Porto trip generated
+during the flow check — 10:21 House of Filigree, a 7-minute walk, 11:51 lunch, 13:08
+Arqueossítio da Rua de Dom Hugo — with the times in tabular figures and the walking legs
+drawn as the gaps they are, in the same dotted language as the route behind them. Nothing
+in it is invented for a mockup, and it is badged **example** so it cannot be read as the
+reader's own trip.
+
+**The stickers went, and that was the point.** They were a schematic of the journey
+standing in for its result; "How it works" below names those same four stages with the
+same icons, so the information is not lost, and the hero now answers "what do I get" with
+the answer. Below 1000px the card is hidden entirely rather than squeezed: a timetable at
+300px is unreadable, and pushing the call to action below the fold to show one would trade
+the article's whole argument for an illustration. Measured at 390px, the call to action
+still sits at 467 of a 780 fold.
+
+**Two mistakes worth recording, both mine, both caught by looking.** The card did not
+appear at any width on the first build: I declared `display: grid` inside the layout
+media query, which sits *above* the base `display: none` in the file, so it lost on source
+order at equal specificity — the same cascade slip that once left the deck's accent border
+unapplied. And the regex that removed the sticker layer took the **sparkles** with it,
+because they lived inside the same container; only the stickers were a deliberate removal,
+so the atmosphere is back in a layer of its own, which is where it should have been.
+
 ## The hero carries three things, 2026-08-18
 
 Read Courey Wong's "How To Design A Killer Landing Page" in a browser, top to bottom. Its

@@ -1451,7 +1451,9 @@
       "accept_route_estimates": "Accept a walking estimate and rebuild",
       "required_field": "(required)",
       "main_style_help": "Pick at least one. This is what every day of the plan is built around.",
-      "day_before_you_go": "The evening before you go"
+      "day_before_you_go": "The evening before you go",
+      "landing_demo_day": "Day 1 · Porto",
+      "landing_demo_badge": "example"
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -2434,7 +2436,9 @@
       "accept_route_estimates": "ยอมรับค่าประมาณการเดินแล้วสร้างแผนใหม่",
       "required_field": "(จำเป็น)",
       "main_style_help": "เลือกอย่างน้อยหนึ่งอย่าง นี่คือสิ่งที่ใช้วางแผนของทุกวัน",
-      "day_before_you_go": "เย็นก่อนออกเดินทาง"
+      "day_before_you_go": "เย็นก่อนออกเดินทาง",
+      "landing_demo_day": "วันที่ 1 · ปอร์โต",
+      "landing_demo_badge": "ตัวอย่าง"
     }
   }
 }

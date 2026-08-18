@@ -59,15 +59,6 @@ const STOPS = [
   { x: 1140, y: 258, label: "itinerary" },
 ] as const;
 
-/** Where each stage's sticker sits, and how far it leans. Tilts are deliberately
- *  uneven — a row of cards at identical angles reads as a grid, not as pinned. */
-const STICKERS = [
-  { left: 3, top: 62, tilt: -5, depth: 1.1 },
-  { left: 5, top: 30, tilt: 4, depth: 0.9 },
-  { left: 82, top: 66, tilt: -3, depth: 1.0 },
-  { left: 84, top: 26, tilt: 6, depth: 0.8 },
-] as const;
-
 const CLOUDS = [
   { key: "a", left: 4, top: 12, width: 190, depth: 0.3, seconds: 68 },
   { key: "b", left: 38, top: 6, width: 250, depth: 0.45, seconds: 84 },
@@ -87,6 +78,33 @@ const STEPS = [
   [MapPinned, "stage_places", "landing_how_places"],
   [Route, "stage_optimize", "landing_how_plan"],
   [ListChecks, "stage_itinerary", "landing_how_use"],
+] as const;
+
+/**
+ * A day the planner actually built, shown as the hero's supporting image.
+ *
+ * The article's point is that an image is processed far faster than a sentence, and that
+ * the strongest hero image is a **teaser — the product demo**, not a picture of what the
+ * product represents. The scene behind this one is representational: mountains, a dotted
+ * route, four labelled stickers standing in for the four stages. It said "this app plans
+ * trips". It never showed a plan.
+ *
+ * Every row below is real output, taken from a five-day Porto trip generated on
+ * 2026-08-18 — the times, the order and the walking legs are the optimizer's, not
+ * invented for a mockup. Trimmed to five rows and the names shortened to what fits;
+ * nothing is stated that the planner did not produce. It is `aria-hidden` because it is
+ * an illustration of the product, and the sentence beside it already tells a screen
+ * reader what the product does.
+ */
+const DEMO_DAY = [
+  { time: "10:21", name: "House of Filigree", kind: "visit" },
+  { leg: "7 min walk" },
+  { time: "11:51", name: "Lunch nearby", kind: "meal" },
+  { leg: "13 min walk" },
+  { time: "13:08", name: "Arqueossítio da Rua de Dom Hugo", kind: "visit" },
+  { leg: "10 min walk" },
+  { time: "14:39", name: "Jardim de S. Lázaro", kind: "visit" },
+  { time: "17:30", name: "Dinner on the evening route", kind: "meal" },
 ] as const;
 
 export function TripsPage() {
@@ -243,31 +261,6 @@ export function TripsPage() {
         </div>
 
         {/* The stickers: one per stage, pinned along the route, tilted and floating. */}
-        <div aria-hidden="true" className="hero-stickers">
-          {STEPS.map(([Icon, title], index) => (
-            <span
-              className="hero-sticker"
-              key={title}
-              style={{
-                ["--tilt" as string]: `${STICKERS[index].tilt}deg`,
-                ["--depth" as string]: STICKERS[index].depth,
-                animationDelay: `${1.7 + index * 0.22}s`,
-                left: `${STICKERS[index].left}%`,
-                top: `${STICKERS[index].top}%`,
-              }}
-            >
-              <Icon aria-hidden="true" size={17} />
-              {copy(title, language)}
-            </span>
-          ))}
-          {SPARKS.map((spark) => (
-            <span
-              className="hero-spark"
-              key={spark.key}
-              style={{ animationDelay: `${spark.delay}s`, left: `${spark.left}%`, top: `${spark.top}%` }}
-            />
-          ))}
-        </div>
 
         <div className="hero-copy">
           <p className="landing-badge">
@@ -290,6 +283,43 @@ export function TripsPage() {
           <button className="hero-cta" onClick={startPlanning} type="button">
             {copy("start_planning", language)} <ArrowRight aria-hidden="true" size={17} />
           </button>
+        </div>
+        <div aria-hidden="true" className="hero-stickers">
+          {SPARKS.map((spark) => (
+            <span
+              className="hero-spark"
+              key={spark.key}
+              style={{ animationDelay: `${spark.delay}s`, left: `${spark.left}%`, top: `${spark.top}%` }}
+            />
+          ))}
+        </div>
+        {/* The product, where the schematic used to be.
+            The four stickers pinned along the route named the four stages — a diagram of
+            the journey rather than a picture of its result. "How it works" below names
+            those same four stages with the same icons, so nothing is lost by removing
+            them here, and the hero now answers "what do I get" with the answer instead of
+            a promise. The geometry went with them; git has it. */}
+        <div aria-hidden="true" className="hero-demo">
+          <div className="hero-demo-card">
+            <p className="hero-demo-head">
+              <span>{copy("landing_demo_day", language)}</span>
+              <span className="hero-demo-badge">{copy("landing_demo_badge", language)}</span>
+            </p>
+            <ol className="hero-demo-rows">
+              {DEMO_DAY.map((row, index) =>
+                "leg" in row ? (
+                  <li className="hero-demo-leg" key={`leg-${index}`}>
+                    <span>{row.leg}</span>
+                  </li>
+                ) : (
+                  <li className={`hero-demo-row ${row.kind}`} key={row.name}>
+                    <time>{row.time}</time>
+                    <span className="hero-demo-name">{row.name}</span>
+                  </li>
+                ),
+              )}
+            </ol>
+          </div>
         </div>
       </section>
 

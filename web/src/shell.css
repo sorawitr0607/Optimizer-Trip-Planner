@@ -2790,8 +2790,143 @@
   z-index: 1;
 }
 
+/* Copy left, product right, from 1000px up.
+   Centred copy over a full-bleed scene reads as a poster; copy set against the thing it
+   describes reads as a product. The article's third image option is a teaser — the demo —
+   and a demo needs a column of its own to be legible at any size worth showing.
+   Below 1000px it stacks and the copy re-centres, because a single narrow column has no
+   side to sit beside. */
 .landing-hero .hero-copy {
   justify-self: center;
+}
+
+@media (min-width: 1000px) {
+  .landing-hero {
+    gap: clamp(24px, 4vw, 64px);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    padding-inline: clamp(24px, 5vw, 72px);
+  }
+
+  .landing-hero .hero-copy {
+    justify-self: end;
+    max-width: 30rem;
+    text-align: left;
+  }
+
+  .landing-hero h1,
+  .landing-hero .landing-lead {
+    margin-inline: 0;
+    text-align: left;
+  }
+
+}
+
+/* The demo sits above the parallax layers but never over the copy, and it is hidden
+   entirely on a narrow screen: a timetable squeezed to 300px is unreadable, and pushing
+   the call to action below the fold to show it would trade the article's whole argument
+   for an illustration. */
+.hero-demo {
+  display: none;
+  justify-self: start;
+  position: relative;
+  z-index: 2;
+}
+
+/* After the base rule, not inside the layout block above it. Declared there, the
+   `display: grid` lost to the `display: none` below it on source order at equal
+   specificity, and the card never appeared at any width — the same cascade slip that
+   once left the deck's accent border unapplied. */
+@media (min-width: 1000px) {
+  .hero-demo {
+    display: grid;
+  }
+}
+
+.hero-demo-card {
+  background: var(--landing-ink-soft);
+  border: 1px solid var(--landing-route);
+  border-radius: var(--radius-house);
+  box-shadow: 6px 6px 0 0 var(--landing-route-soft);
+  display: grid;
+  gap: 10px;
+  max-width: 24rem;
+  padding: 16px 18px;
+  /* A slight lift, so it reads as an object resting on the scene rather than a panel
+     welded to it. Matches the tilt the stickers used, which this replaces. */
+  transform: rotate(-1.2deg);
+}
+
+.hero-demo-head {
+  align-items: center;
+  color: var(--landing-cream);
+  display: flex;
+  font-weight: var(--weight-selected);
+  justify-content: space-between;
+  margin: 0;
+}
+
+.hero-demo-badge {
+  border: 1px solid var(--landing-haze);
+  border-radius: var(--radius-house);
+  color: var(--landing-haze);
+  font-size: var(--text-2xs);
+  letter-spacing: 0.1em;
+  padding: 1px 6px;
+  text-transform: uppercase;
+}
+
+.hero-demo-rows {
+  display: grid;
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.hero-demo-row {
+  align-items: baseline;
+  color: var(--landing-on-ink);
+  display: grid;
+  font-size: var(--text-sm);
+  gap: 10px;
+  grid-template-columns: 3.6rem minmax(0, 1fr);
+}
+
+/* Times line up because they are a column of digits, which is what tabular figures are
+   for — the same treatment the itinerary screen gives them. */
+.hero-demo-row time {
+  color: var(--landing-route);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.hero-demo-row.meal .hero-demo-name {
+  color: var(--landing-haze);
+}
+
+.hero-demo-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The walk between two stops, drawn as the gap it is. The dotted rule is the same
+   language as the route running through the scene behind it. */
+.hero-demo-leg {
+  align-items: center;
+  color: var(--landing-haze);
+  display: grid;
+  font-size: var(--text-2xs);
+  gap: 8px;
+  grid-template-columns: 3.6rem minmax(0, 1fr);
+  padding-left: 0;
+}
+
+.hero-demo-leg span {
+  border-left: 2px dotted var(--landing-haze);
+  grid-column: 2;
+  padding: 2px 0 2px 10px;
 }
 
 /* derives-from: element 12 .hero-banner-badge as .landing-badge */
