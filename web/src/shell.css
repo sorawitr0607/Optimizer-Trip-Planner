@@ -2800,7 +2800,12 @@
   content: "";
   inset: 0;
   mix-blend-mode: multiply;
-  opacity: 0.055;
+  /* 0.04, not 0.055. Multiplied grain darkens the ground under dark-on-light
+     text, which costs about a tenth of a contrast point everywhere — enough to
+     put seven elements that measured fine in CSS just under 4.5 against the
+     pixels actually painted. The texture is still there; it no longer eats the
+     margin the type was relying on. */
+  opacity: 0.04;
   pointer-events: none;
   position: absolute;
   z-index: 6;
@@ -3008,6 +3013,25 @@
    mass, trees and boats sit a step back, and the flying and spanning things are
    line rather than shape — a bird at this scale is two strokes, and filling it
    makes a blot. */
+/* Undergrowth sits with the trees; wildlife and water movement are line, because
+   at this size a filled animal is a smudge and a two-stroke one still reads as an
+   animal. */
+.sb-extra { fill: var(--landing-tree); opacity: 0.34; }
+
+.sb-life {
+  opacity: 0.42;
+  stroke: var(--landing-mark);
+  stroke-linecap: round;
+  stroke-width: 2.4;
+}
+
+.sb-ripple {
+  opacity: 0.3;
+  stroke: var(--landing-cut);
+  stroke-linecap: round;
+  stroke-width: 2.6;
+}
+
 .sb-solid { fill: var(--landing-tree); opacity: 0.3; }
 .sb-fine { fill: var(--landing-tree); opacity: 0.42; }
 
@@ -3105,7 +3129,10 @@
 .action-workspace-section .sb-fine { fill: var(--landing-route); opacity: 0.3; }
 
 .comparison-section .sb-solid,
+.comparison-section .sb-extra,
 .comparison-section .sb-fine { fill: var(--landing-cream); opacity: 0.12; }
+
+.comparison-section .sb-life { stroke: var(--landing-cream); opacity: 0.2; }
 
 .comparison-section .sb-line {
   opacity: 0.16;
@@ -3113,9 +3140,22 @@
 }
 
 /* They take a depth of their own, nearer than the ground behind them. */
+.scene-env .sb-extra { translate: 0 calc(var(--scroll-y) * -34px); }
+.scene-env .sb-life { translate: 0 calc(var(--scroll-y) * -38px); }
+.scene-env .sb-ripple { translate: 0 calc(var(--scroll-y) * -30px); }
 .scene-env .sb-solid { translate: 0 calc(var(--scroll-y) * -26px); }
 .scene-env .sb-fine { translate: 0 calc(var(--scroll-y) * -32px); }
 .scene-env .sb-line { translate: 0 calc(var(--scroll-y) * -12px); }
+
+/* The form's own labels. `--text-muted` is sized for a label beside a filled
+   field on a plain surface; measured against the pixels actually painted on this
+   section it read 3.41, because the workspace now has a landscape behind it.
+   Secondary is the right weight of grey for a label that has to be read. */
+.action-workspace-section label,
+.trip-form label,
+.trip-list label {
+  color: var(--text-secondary);
+}
 
 /* The working surface holds the real trip form, so its ground stays almost
    subliminal — an environment must never make a form harder to read. */
@@ -4286,7 +4326,7 @@
 
 .hero-trust-note {
   align-items: center;
-  color: var(--landing-haze);
+  color: var(--landing-mark);
   display: inline-flex;
   font-size: var(--text-2xs);
   gap: 6px;
@@ -4625,7 +4665,7 @@
   align-items: center;
   background: var(--landing-route-soft);
   border-radius: var(--radius-pill);
-  color: var(--landing-route);
+  color: var(--landing-route-ink);
   display: inline-flex;
   font-size: var(--text-2xs);
   font-weight: var(--weight-selected);
@@ -4952,7 +4992,7 @@
 }
 
 .preview-tag {
-  color: var(--landing-route);
+  color: var(--landing-route-ink);
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   font-weight: var(--weight-selected);
@@ -5048,7 +5088,7 @@
   background: var(--landing-raised);
   border: 1px solid var(--landing-glass-border);
   border-radius: var(--radius-pill);
-  color: var(--landing-text);
+  color: var(--landing-mark);
   cursor: pointer;
   font-size: var(--text-2xs);
   min-height: 44px;
@@ -5623,9 +5663,12 @@
   margin: 0 0 16px;
 }
 
+/* The canonical rule. An earlier pass changed the colour on the *other*
+   `.preset-action` block — the one that only carries the button lip — so the fix
+   applied to nothing. Grep for every rule with a selector before editing one. */
 .preset-action {
   align-items: center;
-  color: var(--landing-route);
+  color: var(--landing-route-ink);
   display: inline-flex;
   font-size: var(--text-xs);
   font-weight: var(--weight-selected);

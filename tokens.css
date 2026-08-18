@@ -566,6 +566,13 @@ button:disabled {
   /* Their burnt orange darkened just enough to be read as text on paper — #bd580f
      is 4.24 on cream — and it still carries cream at 5.57 when used as a fill. */
   --landing-route: #a04a0c;
+  /* The accent doing its other job. `--landing-route` fills buttons and draws the
+     route, and at those sizes it is right; set as small text on paper it measured
+     4.46 to 4.58 — over the line on paper alone, and under it once the grain and
+     the scenery behind were counted. This is the same split `--color-accent` and
+     `--color-on-accent` already record: a colour that fills a shape and a colour
+     that inks a word cannot be one value. 6.48 on the badge fill, 8.38 on a card. */
+  --landing-route-ink: #7d3908;
   --landing-route-soft: #f7dcc0;
   --landing-page: #fdf7ce;
   --landing-step: #eee5c2;
