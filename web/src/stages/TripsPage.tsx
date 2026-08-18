@@ -1324,7 +1324,7 @@ export function TripsPage() {
       </div>
 
       {/* -------------------------------------------------------------
-          SECTION 2: "THE PAIN VS THE MATH" (Interactive Before/After)
+          SECTION 2: copy("landing_pain_tabs_label", language) (Interactive Before/After)
           ------------------------------------------------------------- */}
       <section className="landing-section pain-math-section" id="pain-math">
         <SceneEnvironment variant="alpine" />
@@ -1511,8 +1511,8 @@ export function TripsPage() {
 
           {activeLabStep === 1 && (
             <div className="lab-preview-content">
-              <div className="preview-tag">STAGE 2: CURATION & SWIPE DECK</div>
-              <h5>Candidate Specimen Card Swipe & Shortlisting</h5>
+              <div className="preview-tag">{copy("landing_lab_stage2_tag", language)}</div>
+              <h5>{copy("landing_lab_stage2_title", language)}</h5>
               
               <div className="lab-swipe-card-preview">
                 <div className="swipe-card-info">
@@ -1547,7 +1547,7 @@ export function TripsPage() {
               <div className="preview-chips-row">
                 <span className="preview-chip green"><CheckCircle2 aria-hidden="true" size={13} /> Kept: {labKeptCount} Attractions</span>
                 <span className="preview-chip red"><XCircle aria-hidden="true" size={13} /> Passed: {labPassedCount} Attractions</span>
-                <span className="preview-chip"><Globe aria-hidden="true" size={13} /> Real OSM Coordinates</span>
+                <span className="preview-chip"><Globe aria-hidden="true" size={13} /> {copy("landing_lab_osm", language)}</span>
                 <span className="preview-chip"><Sparkles aria-hidden="true" size={13} /> Showing Card {labSwipeIdx + 1} of {SWIPE_CANDIDATES.length}</span>
               </div>
             </div>
@@ -1555,13 +1555,13 @@ export function TripsPage() {
 
           {activeLabStep === 2 && (
             <div className="lab-preview-content">
-              <div className="preview-tag">STAGE 3: DETERMINISTIC OPTIMIZATION</div>
-              <h5>Mixed-Integer Linear Programming (ILP) Solver & Route Matrix</h5>
+              <div className="preview-tag">{copy("landing_lab_stage3_tag", language)}</div>
+              <h5>{copy("landing_lab_stage3_title", language)}</h5>
 
               <div className="solver-route-flow">
                 <div className="solver-node active">
                   <span className="node-time">09:00</span>
-                  <span className="node-title">Hotel Base</span>
+                  <span className="node-title">{copy("landing_lab_hotel", language)}</span>
                 </div>
                 <div className="solver-edge">
                   <span>8m walk (550m)</span>
@@ -1575,14 +1575,14 @@ export function TripsPage() {
                 </div>
                 <div className="solver-node">
                   <span className="node-time">12:15</span>
-                  <span className="node-title">Lunch Window</span>
+                  <span className="node-title">{copy("landing_lab_lunch", language)}</span>
                 </div>
                 <div className="solver-edge">
                   <span>14m transit</span>
                 </div>
                 <div className="solver-node">
                   <span className="node-time">15:30</span>
-                  <span className="node-title">Panoramic View</span>
+                  <span className="node-title">{copy("landing_lab_view", language)}</span>
                 </div>
               </div>
               
@@ -1597,12 +1597,12 @@ export function TripsPage() {
                   type="button"
                 >
                   <Zap aria-hidden="true" size={16} />
-                  {labSolving ? "Executing Mathematical Branch-and-Cut Solver..." : "⚡ Run Deterministic ILP Solver Benchmark"}
+                  {labSolving ? copy("landing_lab_building", language) : copy("landing_lab_build", language)}
                 </button>
                 <div className="lab-solve-status">
-                  <span className="solve-metric">⏱️ Solve Time: <strong>0.038s</strong></span>
-                  <span className="solve-metric">📐 Constraints: <strong>544/544 Satisfied</strong></span>
-                  <span className="solve-metric">🎯 Optimality Gap: <strong>0.00%</strong></span>
+                  <span className="solve-metric">{copy("landing_lab_metric_time", language)}</span>
+                  <span className="solve-metric">{copy("landing_lab_metric_recheck", language)}</span>
+                  <span className="solve-metric">{copy("landing_lab_metric_same", language)}</span>
                 </div>
               </div>
 
@@ -1616,8 +1616,8 @@ export function TripsPage() {
 
           {activeLabStep === 3 && (
             <div className="lab-preview-content">
-              <div className="preview-tag">STAGE 4: EXECUTION & WORKBOOKS</div>
-              <h5>Interactive Day Timelines + 6-Sheet Formatted Excel (.xlsx)</h5>
+              <div className="preview-tag">{copy("landing_lab_stage4_tag", language)}</div>
+              <h5>{copy("landing_lab_stage4_title", language)}</h5>
               
               <div className="lab-excel-tabs">
                 {[
@@ -1644,9 +1644,9 @@ export function TripsPage() {
                     <thead>
                       <tr>
                         <th>Time</th>
-                        <th>Activity / Place</th>
-                        <th>Leg Transit</th>
-                        <th>Fatigue Status</th>
+                        <th>{copy("landing_col_activity", language)}</th>
+                        <th>{copy("landing_col_leg", language)}</th>
+                        <th>{copy("landing_col_fatigue", language)}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1666,7 +1666,7 @@ export function TripsPage() {
                         <td>15:30</td>
                         <td>Shibuya Sky Observatory</td>
                         <td>10 min walk (700m)</td>
-                        <td><span className="sheet-tag-blue">⚡ Balanced</span></td>
+                        <td><span className="sheet-tag-blue">{copy("landing_pace_balanced", language)}</span></td>
                       </tr>
                     </tbody>
                   </table>
@@ -1676,10 +1676,10 @@ export function TripsPage() {
                   <table className="mini-sheet-table">
                     <thead>
                       <tr>
-                        <th>Item / Category</th>
-                        <th>Paid By</th>
+                        <th>{copy("landing_col_item", language)}</th>
+                        <th>{copy("landing_col_paidby", language)}</th>
                         <th>Original ({splitCurrency})</th>
-                        <th>Fair Share / Net</th>
+                        <th>{copy("landing_col_share", language)}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1723,9 +1723,9 @@ export function TripsPage() {
               </div>
 
               <div className="preview-chips-row">
-                <span className="preview-chip"><FileSpreadsheet aria-hidden="true" size={13} /> Formatted Multi-Sheet .xlsx</span>
-                <span className="preview-chip"><Wallet aria-hidden="true" size={13} /> Currency-Converted Expenses</span>
-                <span className="preview-chip"><CalendarClock aria-hidden="true" size={13} /> Apple &amp; Google .ics Export</span>
+                <span className="preview-chip"><FileSpreadsheet aria-hidden="true" size={13} /> {copy("landing_export_xlsx", language)}</span>
+                <span className="preview-chip"><Wallet aria-hidden="true" size={13} /> {copy("landing_export_money", language)}</span>
+                <span className="preview-chip"><CalendarClock aria-hidden="true" size={13} /> {copy("landing_export_ics", language)}</span>
               </div>
             </div>
           )}
@@ -1773,7 +1773,7 @@ export function TripsPage() {
             </div>
 
             <div className="split-quick-presets">
-              <span className="presets-label">Sample Bills:</span>
+              <span className="presets-label">{copy("landing_sample_bills", language)}</span>
               <button
                 className="split-preset-btn"
                 onClick={() => {
@@ -1864,11 +1864,11 @@ export function TripsPage() {
           <div className="split-sandbox-results">
             <div className="split-summary-box">
               <div className="split-stat">
-                <span className="split-label">Total Expense:</span>
+                <span className="split-label">{copy("landing_total_expense", language)}</span>
                 <span className="split-val">{splitCurrency}{totalBill}</span>
               </div>
               <div className="split-stat">
-                <span className="split-label">Fair Share / Person:</span>
+                <span className="split-label">{copy("landing_fair_share", language)}</span>
                 <span className="split-val">{splitCurrency}{perPerson}</span>
               </div>
             </div>

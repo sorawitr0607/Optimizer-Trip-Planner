@@ -3475,8 +3475,82 @@
   }
 }
 
-/* The world stacks on a phone: the landmarks stop being pinned to coordinates and
-   become a plain column, because a map you cannot fit on screen is not a map. */
+/* THE PHONE IS A DIFFERENT JOURNEY, NOT A SMALLER ONE.
+
+   A cinematic composition spread across a wide frame does not survive being
+   squeezed — landmarks pinned to percentage coordinates end up overlapping, and a
+   map you cannot fit on screen is not a map. So the same idea is recomposed
+   vertically: one landmark under the next, joined by the route, which is how the
+   walk reads on a phone anyway.
+
+   The scenery stays. It is the environment, not decoration — what goes is the
+   loose props and the illustrations that lived in gutters a phone does not have.
+   Parallax is halved, because depth read through a 390px window is mostly motion,
+   and every landmark becomes a full-width target rather than an 80px drawing. */
+@media (max-width: 860px) {
+  /* The route down the column, so the landmarks read as stops on one walk. */
+  .world-landmarks {
+    position: relative;
+  }
+
+  .world-landmarks::before {
+    border-left: 2px dotted var(--landing-route-soft);
+    bottom: 28px;
+    content: "";
+    left: 50%;
+    position: absolute;
+    top: 28px;
+    translate: -1px 0;
+  }
+
+  .landmark-place {
+    background: var(--landing-cut);
+    border: 2px solid var(--landing-cut);
+    border-radius: var(--radius-house);
+    box-shadow: 0 4px 0 var(--landing-cut-shadow);
+    padding: 12px;
+  }
+
+  .landmark {
+    /* A comfortable target, not a drawing you have to aim at. */
+    flex-direction: row;
+    gap: 12px;
+    min-height: 56px;
+    text-align: left;
+  }
+
+  .landmark-art {
+    flex: 0 0 auto;
+    width: 52px;
+  }
+
+  .landmark-label {
+    box-shadow: none;
+    font-size: var(--text-sm);
+    white-space: normal;
+  }
+
+  /* Depth through a 390px window is mostly motion, so halve every layer's travel. */
+  .scene-env .sb-far { translate: 0 calc(var(--scroll-y) * -3px); }
+  .scene-env .sb-mid { translate: 0 calc(var(--scroll-y) * -6px); }
+  .scene-env .sb-near { translate: 0 calc(var(--scroll-y) * -10px); }
+  .scene-env .sb-extra,
+  .scene-env .sb-life,
+  .scene-env .sb-ripple,
+  .scene-env .sb-solid,
+  .scene-env .sb-fine { translate: 0 calc(var(--scroll-y) * -14px); }
+
+  /* The ground band shrinks with the viewport, but never disappears — losing it
+     would turn the phone back into the stack of rectangles this all replaced. */
+  .scene-env {
+    height: clamp(150px, 42vw, 240px);
+  }
+
+  .landing-section {
+    padding-bottom: clamp(150px, 44vw, 250px);
+  }
+}
+
 @media (max-width: 860px) {
   .landing-world {
     min-height: 0;
@@ -3485,8 +3559,8 @@
 
   .world-landmarks {
     display: grid;
-    gap: 12px;
-    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    grid-template-columns: 1fr;
     inset: auto;
     padding: 12px 0 0;
     perspective: none;
