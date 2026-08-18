@@ -2901,10 +2901,12 @@
   --scroll-y: 0;
 }
 
-.scene-band .sb-far { translate: 0 calc(var(--scroll-y) * -8px); }
-.scene-band .sb-near { translate: 0 calc(var(--scroll-y) * -16px); }
-.scene-band .sb-tree,
-.scene-band .sb-bush { translate: 0 calc(var(--scroll-y) * -24px); }
+.scene-env .sb-far { translate: 0 calc(var(--scroll-y) * -7px); }
+.scene-env .sb-mid { translate: 0 calc(var(--scroll-y) * -14px); }
+.scene-env .sb-near { translate: 0 calc(var(--scroll-y) * -22px); }
+.scene-env .sb-tree,
+.scene-env .sb-bush,
+.scene-env .sb-water { translate: 0 calc(var(--scroll-y) * -30px); }
 
 .w-distant { translate: 0 calc(var(--scroll-y) * -10px); }
 .w-middle { translate: 0 calc(var(--scroll-y) * -22px); }
@@ -2919,7 +2921,7 @@
    that replays on every scroll-back reads as a glitch rather than as a story. */
 @media (prefers-reduced-motion: no-preference) {
   .landing.motion-ready .landing-section .section-header,
-  .landing.motion-ready .landing-section .scene-band,
+  .landing.motion-ready .landing-section .scene-env,
   .landing.motion-ready .landing-world .world-copy,
   .landing.motion-ready .landmark-place {
     opacity: 0;
@@ -2930,7 +2932,7 @@
   }
 
   .landing-section.in-view .section-header,
-  .landing-section.in-view .scene-band,
+  .landing-section.in-view .scene-env,
   .landing-world.in-view .world-copy,
   .landing-world.in-view .landmark-place {
     opacity: 1;
@@ -2938,7 +2940,7 @@
   }
 
   /* Scenery first, then the landmarks in reading order, then the copy. */
-  .landing-section.in-view .scene-band { transition-delay: 0ms; }
+  .landing-section.in-view .scene-env { transition-delay: 0ms; }
   .landing-world.in-view .landmark-place:nth-child(1) { transition-delay: 120ms; }
   .landing-world.in-view .landmark-place:nth-child(2) { transition-delay: 200ms; }
   .landing-world.in-view .landmark-place:nth-child(3) { transition-delay: 280ms; }
@@ -2955,52 +2957,114 @@
   width: 0;
 }
 
-/* A band of ground along the foot of a section. The page below the world was a
-   stack of coloured rectangles, and a rectangle is where an illustrated journey
-   stops being one — so the same hills, treeline, screens and torn edge continue
-   under every section, with the route running on across them. Scenery: behind
-   everything, and it never takes a pointer. */
-.scene-band {
+/* The environment a section stands in. A flat fill with a strip of hills at the
+   bottom is still a rectangle with decoration in it, so each section carries its
+   own terrain across its whole height instead — distant ridge, middle mass, near
+   ground — and scrolling moves through country rather than past panels.
+
+   Behind everything and never takes a pointer. Kept quiet enough that the words
+   in front of it never have to compete: these are grounds, not pictures. */
+.scene-env {
   bottom: 0;
-  height: clamp(120px, 15vw, 190px);
   left: 0;
   pointer-events: none;
   position: absolute;
   right: 0;
+  top: 0;
   z-index: 0;
 }
 
-/* Mirrored on alternate sections so the same geometry does not read as a repeat
-   tiling down the page. */
-.scene-band.flip {
+/* Mirrored on alternate sections, so the same parts do not read as a repeat tile
+   running down the page. */
+.scene-env.flip {
   transform: scaleX(-1);
 }
 
-.scene-band svg {
+.scene-env svg {
   display: block;
   height: 100%;
   width: 100%;
 }
 
-.sb-far { fill: var(--landing-hill); opacity: 0.42; }
-.sb-near { fill: var(--landing-hill-deep); opacity: 0.34; }
-.sb-tree { fill: var(--landing-tree); opacity: 0.4; }
-.sb-bush { fill: var(--landing-tree-light); opacity: 0.44; }
-.sb-screen { fill: url(#w-halftone); opacity: 0.4; }
+.sb-far { fill: var(--landing-hill); opacity: 0.3; }
+.sb-mid { fill: var(--landing-hill-deep); opacity: 0.26; }
+.sb-near { fill: var(--landing-tree); opacity: 0.16; }
+.sb-tree { fill: var(--landing-tree); opacity: 0.34; }
+.sb-bush { fill: var(--landing-tree-light); opacity: 0.4; }
+.sb-snow { fill: var(--landing-snow); opacity: 0.72; }
+.sb-water { fill: var(--landing-peak-mid); opacity: 0.34; }
+.sb-screen { fill: url(#w-halftone); opacity: 0.34; }
 
 .sb-path {
-  opacity: 0.5;
+  opacity: 0.38;
   stroke: var(--landing-route);
   stroke-dasharray: 13 15;
   stroke-linecap: round;
   stroke-width: 4;
 }
 
-/* On the night scene the bands would vanish; they take its ink instead. */
+/* Each ground tints its own terrain rather than every section wearing the same
+   greens — the cliffs read as rock, the river section cooler, the closing dunes
+   warmer. One set of shapes, seven places. */
+.pain-math-section .sb-far,
+.comparison-section .sb-far { fill: var(--landing-rock); }
+.pain-math-section .sb-mid { fill: var(--landing-peak-mid); opacity: 0.2; }
+.split-sandbox-section .sb-far { fill: var(--landing-peak-far); }
+.split-sandbox-section .sb-mid { fill: var(--landing-peak-mid); opacity: 0.22; }
+.faq-section .sb-far,
+.action-workspace-section .sb-far { fill: var(--landing-ground-alt); opacity: 0.7; }
+.faq-section .sb-mid,
+.action-workspace-section .sb-mid { fill: var(--landing-rock); opacity: 0.34; }
+
+/* THE AIR IN EACH PLACE.
+
+   The terrain anchors to the foot of its section, so on a tall one the upper two
+   thirds stayed a flat fill and the section still read as a panel with scenery
+   along the bottom. Each place gets its own atmosphere across the full height as
+   well — the light in a rocky pass is not the light on a river or at the end of a
+   walk, and that difference is most of what makes somewhere feel like somewhere.
+
+   Kept to a few percent. These sit under body copy that has to stay at 4.5:1, so
+   an atmosphere is a tint on the ground, never a second colour competing with it. */
+.pain-math-section {
+  background:
+    linear-gradient(to bottom, var(--landing-sky-low) 0%, transparent 46%),
+    var(--landing-ground);
+}
+
+.showcase-section {
+  background:
+    linear-gradient(to bottom, var(--landing-sky-high) 0%, transparent 52%),
+    var(--landing-ground-alt);
+}
+
+.split-sandbox-section {
+  background:
+    linear-gradient(to bottom, var(--landing-sky-high) 0%, transparent 58%),
+    var(--landing-ground);
+}
+
+.faq-section {
+  background:
+    linear-gradient(to bottom, var(--landing-ground-alt) 0%, transparent 54%),
+    var(--landing-ground);
+}
+
+/* The working surface holds the real trip form, so its ground stays almost
+   subliminal — an environment must never make a form harder to read. */
+.action-workspace-section .scene-env { opacity: 0.5; }
+
+/* On the night scene the terrain would vanish; it takes that scene's ink instead. */
 .comparison-section .sb-far,
-.comparison-section .sb-near {
+.comparison-section .sb-mid,
+.comparison-section .sb-near,
+.comparison-section .sb-snow {
   fill: var(--landing-cream);
-  opacity: 0.08;
+  opacity: 0.09;
+}
+
+.comparison-section .sb-path {
+  opacity: 0.22;
 }
 
 /* ===========================================================================

@@ -106,34 +106,75 @@ function SceneDefs() {
 }
 
 /**
- * A band of ground running along the foot of a section.
+ * The environment a section stands in.
  *
- * The page below the world was a stack of coloured rectangles, and a rectangle is
- * where an illustrated journey stops being one. Each band carries the same two
- * hill layers, the same treeline, the same screens and the same torn edge as the
- * world above it, plus the dotted route continuing across — so scrolling reads as
- * walking on rather than as paging through.
+ * A flat fill with a strip of hills at the bottom is still a rectangle with
+ * decoration in it. Each section gets its own terrain instead — a distant ridge,
+ * a middle mass and a near ground, chosen to suit what the section is about, so
+ * scrolling moves through country rather than past panels.
  *
- * Scenery, so `aria-hidden`, no pointer events, and behind everything.
+ * Every variant is drawn from the same parts and pressed by the same filters, so
+ * they read as one place seen at different points rather than as seven unrelated
+ * pictures. Scenery: `aria-hidden`, no pointer events, and behind everything.
  */
-function SceneBand({ flip = false }: { flip?: boolean }) {
+const ENVIRONMENTS = {
+  /* Exposed rock. This section argues that real constraints are hard, so it
+     stands somewhere with edges rather than somewhere soft. */
+  cliffs: {
+    far: "M-40,150 L110,58 L196,110 L300,40 L404,116 L520,64 L628,126 L742,56 L860,120 L972,70 L1090,128 L1240,84 L1240,400 L-40,400 Z",
+    mid: "M-40,232 L140,168 L268,236 L392,158 L520,230 L660,176 L800,244 L930,170 L1070,238 L1240,186 L1240,400 L-40,400 Z",
+    near: "M-40,300 L180,272 L360,300 L560,278 L780,302 L1000,276 L1240,298 L1240,400 L-40,400 Z",
+    detail: "M300,40 L326,64 L313,68 L300,60 L287,70 L274,64 Z M742,56 L768,80 L755,84 L742,76 L729,86 L716,80 Z",
+    detailClass: "sb-snow",
+  },
+  /* Rolling and open — the walkthrough, where the journey is explained. */
+  valley: {
+    far: "M-40,176 Q160,120 380,166 T780,146 T1240,178 L1240,400 L-40,400 Z",
+    mid: "M-40,244 Q200,196 440,238 T880,222 T1240,250 L1240,400 L-40,400 Z",
+    near: "M-40,312 Q240,282 500,308 T940,296 T1240,314 L1240,400 L-40,400 Z",
+    detail: "M212,232 l-11,24 h4 l-9,20 h8 l-7,15 h30 l-7,-15 h8 l-9,-20 h4 Z M268,220 l-12,26 h5 l-10,22 h9 l-8,16 h32 l-8,-16 h9 l-10,-22 h5 Z M960,228 l-11,24 h4 l-9,20 h8 l-7,15 h30 l-7,-15 h8 l-9,-20 h4 Z M1016,236 l-11,22 h4 l-9,19 h8 l-7,14 h30 l-7,-14 h8 l-9,-19 h4 Z",
+    detailClass: "sb-tree",
+  },
+  /* A river runs through it — the section where money is split and settled. */
+  river: {
+    far: "M-40,182 Q180,138 400,176 T820,158 T1240,186 L1240,400 L-40,400 Z",
+    mid: "M-40,256 Q220,214 460,250 T900,236 T1240,262 L1240,400 L-40,400 Z",
+    near: "M-40,336 Q260,310 520,332 T960,322 T1240,338 L1240,400 L-40,400 Z",
+    detail: "M-40,292 Q200,268 420,290 T860,278 T1240,296 L1240,322 Q860,304 420,316 T-40,318 Z",
+    detailClass: "sb-water",
+  },
+  /* Soft dunes at the end of the walk, where the questions are answered. */
+  dunes: {
+    far: "M-40,206 Q220,164 480,200 T940,184 T1240,208 L1240,400 L-40,400 Z",
+    mid: "M-40,272 Q260,240 540,266 T980,254 T1240,276 L1240,400 L-40,400 Z",
+    near: "M-40,340 Q300,318 600,336 T1240,340 L1240,400 L-40,400 Z",
+    detail: "M420,330 a18,18 0 0 1 36,0 z M472,336 a12,12 0 0 1 24,0 z M840,332 a15,15 0 0 1 30,0 z",
+    detailClass: "sb-bush",
+  },
+} as const;
+
+function SceneEnvironment({
+  variant,
+  flip = false,
+}: {
+  variant: keyof typeof ENVIRONMENTS;
+  flip?: boolean;
+}) {
+  const env = ENVIRONMENTS[variant];
   return (
-    <div aria-hidden="true" className={`scene-band ${flip ? "flip" : ""}`}>
-      <svg preserveAspectRatio="none" viewBox="0 0 1200 180">
+    <div aria-hidden="true" className={`scene-env scene-env-${variant} ${flip ? "flip" : ""}`}>
+      <svg preserveAspectRatio="xMidYMax slice" viewBox="0 60 1200 340">
         <g filter="url(#w-rough)">
-          <path className="sb-far" d="M-40,86 Q150,52 360,80 T760,66 T1240,84 L1240,180 L-40,180 Z" />
-          <path className="sb-screen" d="M-40,86 Q150,52 360,80 T760,66 T1240,84 L1240,180 L-40,180 Z" />
-          <path className="sb-near" d="M-40,124 Q220,98 460,118 T900,106 T1240,122 L1240,180 L-40,180 Z" />
+          <path className="sb-far" d={env.far} />
+          <path className="sb-screen" d={env.far} />
+          <path className="sb-mid" d={env.mid} />
+          <path className="sb-near" d={env.near} />
         </g>
         <g filter="url(#w-rough-fine)">
-          <path
-            className="sb-tree"
-            d="M188,112 l-8,17 h3 l-6,14 h6 l-5,10 h16 l-5,-10 h6 l-6,-14 h3 Z M232,104 l-9,19 h3 l-7,15 h7 l-5,11 h18 l-5,-11 h7 l-7,-15 h3 Z M980,110 l-8,17 h3 l-6,14 h6 l-5,10 h16 l-5,-10 h6 l-6,-14 h3 Z M1028,116 l-8,15 h3 l-6,13 h6 l-5,9 h16 l-5,-9 h6 l-6,-13 h3 Z"
-          />
-          <path className="sb-bush" d="M520,152 a16,16 0 0 1 32,0 z M566,156 a11,11 0 0 1 22,0 z M700,154 a13,13 0 0 1 26,0 z" />
+          <path className={env.detailClass} d={env.detail} />
         </g>
-        <path className="sb-path" d="M-20,158 Q260,132 520,146 T900,134 T1220,148" fill="none" />
-        <rect className="w-grain" filter="url(#w-grain)" height="180" width="1200" x="0" y="0" />
+        <path className="sb-path" d="M-20,372 Q260,346 520,360 T900,348 T1220,362" fill="none" />
+        <rect className="w-grain" filter="url(#w-grain)" height="400" width="1200" x="0" y="0" />
       </svg>
     </div>
   );
@@ -1193,7 +1234,7 @@ export function TripsPage() {
           SECTION 2: "THE PAIN VS THE MATH" (Interactive Before/After)
           ------------------------------------------------------------- */}
       <section className="landing-section pain-math-section" id="pain-math">
-        <SceneBand />
+        <SceneEnvironment variant="cliffs" />
         <SceneProp kind="foldedMap" place="mid" />
         <SceneProp kind="compass" place="tl" />
         <SceneProp kind="stamp" place="br" />
@@ -1269,7 +1310,7 @@ export function TripsPage() {
           SECTION 3: 4-STAGE PRODUCT LABORATORY (Interactive Walkthrough)
           ------------------------------------------------------------- */}
       <section className="landing-section showcase-section" id="lab">
-        <SceneBand flip />
+        <SceneEnvironment flip variant="valley" />
         <SceneProp kind="suitcase" place="bl" />
         <img
           alt=""
@@ -1602,7 +1643,7 @@ export function TripsPage() {
           SECTION 4: INTERACTIVE MULTI-CURRENCY BILL SPLIT SANDBOX
           ------------------------------------------------------------- */}
       <section className="landing-section split-sandbox-section" id="split-sandbox">
-        <SceneBand />
+        <SceneEnvironment variant="river" />
         <SceneProp kind="luggageTag" place="tr" />
         <img
           alt=""
@@ -1775,6 +1816,7 @@ export function TripsPage() {
           SECTION 5: 1-CLICK CURATED DESTINATION BLUEPRINTS
           ------------------------------------------------------------- */}
       <section className="landing-section presets-section" id="presets">
+        <SceneEnvironment flip variant="valley" />
         <SceneProp kind="boardingPass" place="bl" />
         <img
           alt=""
@@ -1818,6 +1860,7 @@ export function TripsPage() {
           SECTION 6: WHY US (Comprehensive Comparison Table)
           ------------------------------------------------------------- */}
       <section className="landing-section comparison-section" id="comparison">
+        <SceneEnvironment variant="cliffs" />
         <img alt="" aria-hidden="true" className="scene-art" loading="lazy" src="/illustrations/decide-night.svg" />
         <SceneProp kind="compass" place="tl" />
         <SceneProp kind="suitcase" place="tr" />
@@ -1897,6 +1940,7 @@ export function TripsPage() {
           SECTION 7: ACTION WORKSPACE (Creator Form + Saved Trips)
           ------------------------------------------------------------- */}
       <section className="landing-section action-workspace-section" id="start-a-trip">
+        <SceneEnvironment variant="dunes" />
         <img alt="" aria-hidden="true" className="scene-art" loading="lazy" src="/illustrations/booking.svg" />
         <div className="section-header">
           <span className="section-badge">{copy("start_planning", language)}</span>
@@ -2097,7 +2141,7 @@ export function TripsPage() {
           SECTION 8: FAQ ACCORDION (Objection Handling)
           ------------------------------------------------------------- */}
       <section className="landing-section faq-section" id="faq">
-        <SceneBand flip />
+        <SceneEnvironment flip variant="dunes" />
         <SceneProp kind="stamp" place="br" />
         <img
           alt=""
