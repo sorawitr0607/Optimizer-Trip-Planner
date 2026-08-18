@@ -202,7 +202,7 @@ describe("TripsPage", () => {
 
     // Thai does not separate every word with a space. Wrapping its whole headline in
     // the English word-animation span made it one unbreakable inline block on phones.
-    expect(heading).toContain("วางแผนเที่ยวให้พอดีกับเวลาจริง");
+    expect(heading).toContain("วางแผนเที่ยวตามข้อจำกัดในโลกจริง");
     expect(heading).not.toContain("hero-word");
     expect(html).toContain("การทำงานเสริมผ่านผู้ให้บริการหรือ AI");
     expect(html).not.toContain("ไม่มีการอัปโหลด");
@@ -213,9 +213,27 @@ describe("TripsPage", () => {
     const html = render(<TripsPage />, "en");
 
     expect(html).toMatch(/<select[^>]*name="country"[^>]*required/);
+    expect(html).toContain('aria-describedby="destination-help"');
+    expect(html).toContain('autoComplete="country-name"');
+    expect(html).toContain('autoComplete="address-level2"');
     expect(html).toContain('type="text" name="city-custom"');
     expect(html).toContain('type="text" name="trip-name"');
     expect(html).toContain("Trip name (optional)");
+    expect(html).toContain("Destination is required.");
+    expectNoMissingCopy(html);
+  });
+
+  it("keeps landing claims durable and exposes interactive selection state", () => {
+    const html = render(<TripsPage />, "en");
+
+    expect(html).toContain("Regression-tested planning core");
+    expect(html).toContain("Trip data stays in local SQLite");
+    expect(html).not.toContain("638 Deterministic Tests Passing");
+    expect(html).not.toContain("100% Offline &amp; Private");
+    expect(html).not.toContain("mathematical certainty");
+    expect(html).not.toContain("100% Hours Verified");
+    expect(html).toContain('aria-pressed="true"');
+    expect(html).toContain("Fresh place discovery, map data");
     expectNoMissingCopy(html);
   });
 });

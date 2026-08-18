@@ -44,6 +44,15 @@ const BULLETS = [
   [FileSpreadsheet, "landing_bullet_export"],
 ] as const;
 
+const TICKER_ITEMS = [
+  [Zap, "landing_ticker_tests"],
+  [ShieldCheck, "landing_ticker_local"],
+  [Calculator, "landing_ticker_solver"],
+  [Globe, "landing_ticker_maps"],
+  [Wallet, "landing_ticker_split"],
+  [FileSpreadsheet, "landing_ticker_export"],
+] as const;
+
 const CLOUDS = [
   { key: "a", left: 4, top: 12, width: 190, depth: 0.3, seconds: 68 },
   { key: "b", left: 38, top: 6, width: 250, depth: 0.45, seconds: 84 },
@@ -433,36 +442,49 @@ export function TripsPage() {
           <span className="nav-version-badge">v2.0 · MIT</span>
         </div>
         <div className="landing-nav-links">
-          <button onClick={() => scrollToSection("simulator")} type="button">
-            {copy("landing_sim_mode_label", language)}
-          </button>
           <button onClick={() => scrollToSection("pain-math")} type="button">
-            {copy("landing_pain_ai_tab", language)}
+            {copy("landing_nav_story", language)}
           </button>
           <button onClick={() => scrollToSection("lab")} type="button">
-            {copy("landing_showcase_badge", language)}
+            {copy("landing_nav_demo", language)}
           </button>
           <button onClick={() => scrollToSection("split-sandbox")} type="button">
-            {copy("landing_split_sandbox_title", language)}
+            {copy("landing_nav_split", language)}
           </button>
           <button onClick={() => scrollToSection("comparison")} type="button">
-            {copy("landing_comparison_badge", language)}
+            {copy("landing_nav_compare", language)}
           </button>
           <button onClick={() => scrollToSection("faq")} type="button">
-            {copy("landing_faq_badge", language)}
+            {copy("landing_nav_faq", language)}
           </button>
         </div>
         <div className="landing-controls">
           <button
+            className="landing-nav-start"
+            onClick={() => scrollToSection("start-a-trip")}
+            type="button"
+          >
+            {copy("landing_nav_start", language)}
+          </button>
+          <button
             aria-label={copy("switch_language", language)}
+            className="landing-icon-control"
             onClick={() => setLanguage(language === "en" ? "th" : "en")}
             type="button"
           >
-            <Languages aria-hidden="true" size={14} /> {language === "en" ? "ไทย" : "English"}
+            <Languages aria-hidden="true" size={16} />
+            <span className="control-label">{language === "en" ? "ไทย" : "English"}</span>
           </button>
-          <button onClick={toggleTheme} type="button">
-            <SunMoon aria-hidden="true" size={14} />{" "}
-            {copy(theme === "dark" ? "theme_to_light" : "theme_to_dark", language)}
+          <button
+            aria-label={copy(theme === "dark" ? "theme_to_light" : "theme_to_dark", language)}
+            className="landing-icon-control"
+            onClick={toggleTheme}
+            type="button"
+          >
+            <SunMoon aria-hidden="true" size={16} />
+            <span className="control-label">
+              {copy(theme === "dark" ? "theme_to_light" : "theme_to_dark", language)}
+            </span>
           </button>
         </div>
       </nav>
@@ -539,9 +561,9 @@ export function TripsPage() {
               <>
                 <span className="hero-word">Plan </span>
                 <span className="hero-word">trips </span>
-                <span className="hero-word">with </span>
-                <span className="hero-word">mathematical </span>
-                <span className="hero-word">certainty</span>
+                <span className="hero-word">around </span>
+                <span className="hero-word">real-world </span>
+                <span className="hero-word">constraints</span>
               </>
             )}
           </h1>
@@ -593,6 +615,7 @@ export function TripsPage() {
             <div className="hero-demo-tabs">
               {DEMO_DESTINATIONS.map((d) => (
                 <button
+                  aria-pressed={activeCityId === d.id}
                   className={`hero-demo-tab ${activeCityId === d.id ? "active" : ""}`}
                   key={d.id}
                   onClick={() => setActiveCityId(d.id)}
@@ -609,6 +632,7 @@ export function TripsPage() {
               <div className="pacing-buttons">
                 {(["relaxed", "balanced", "marathon"] as const).map((mode) => (
                   <button
+                    aria-pressed={pacingMode === mode}
                     className={`pacing-btn ${pacingMode === mode ? "active" : ""}`}
                     key={mode}
                     onClick={() => setPacingMode(mode)}
@@ -671,15 +695,11 @@ export function TripsPage() {
           ------------------------------------------------------------- */}
       <div aria-hidden="true" className="landing-ticker">
         <div className="ticker-track">
-          <span className="ticker-item"><Zap aria-hidden="true" size={13} /> 638 Deterministic Tests Passing</span>
-          <span className="ticker-item"><ShieldCheck aria-hidden="true" size={13} /> 100% Offline &amp; Private Local SQLite</span>
-          <span className="ticker-item"><Calculator aria-hidden="true" size={13} /> Deterministic Solver, Independently Re-validated</span>
-          <span className="ticker-item"><Globe aria-hidden="true" size={13} /> Free OpenStreetMap Vector Tiles</span>
-          <span className="ticker-item"><Wallet aria-hidden="true" size={13} /> Multi-Currency Bill Settlement Engine</span>
-          <span className="ticker-item"><FileSpreadsheet aria-hidden="true" size={13} /> 6-Sheet Formatted Excel Exporter</span>
-          <span className="ticker-item"><Zap aria-hidden="true" size={13} /> 638 Deterministic Tests Passing</span>
-          <span className="ticker-item"><ShieldCheck aria-hidden="true" size={13} /> 100% Offline &amp; Private Local SQLite</span>
-          <span className="ticker-item"><Calculator aria-hidden="true" size={13} /> Deterministic Solver, Independently Re-validated</span>
+          {[...TICKER_ITEMS, ...TICKER_ITEMS].map(([Icon, code], index) => (
+            <span className="ticker-item" key={`${code}-${index}`}>
+              <Icon aria-hidden="true" size={13} /> {copy(code, language)}
+            </span>
+          ))}
         </div>
       </div>
 
@@ -696,6 +716,7 @@ export function TripsPage() {
         {/* Tab Switcher */}
         <div className="pain-math-switch">
           <button
+            aria-pressed={painTab === "ai"}
             className={`pain-tab ${painTab === "ai" ? "active-ai" : ""}`}
             onClick={() => setPainTab("ai")}
             type="button"
@@ -704,6 +725,7 @@ export function TripsPage() {
             {copy("landing_pain_ai_tab", language)}
           </button>
           <button
+            aria-pressed={painTab === "optimizer"}
             className={`pain-tab ${painTab === "optimizer" ? "active-opt" : ""}`}
             onClick={() => setPainTab("optimizer")}
             type="button"
@@ -722,7 +744,7 @@ export function TripsPage() {
             <h3>{copy("landing_benefit_1_title", language)}</h3>
             <p>
               {painTab === "ai"
-                ? "Generic chatbots hallucinate static hours, sending you to closed venues on public holidays and lunch breaks."
+                ? copy("landing_benefit_1_risk", language)
                 : copy("landing_benefit_1_desc", language)}
             </p>
           </div>
@@ -734,7 +756,7 @@ export function TripsPage() {
             <h3>{copy("landing_benefit_2_title", language)}</h3>
             <p>
               {painTab === "ai"
-                ? "Blind point-to-point connections create 25,000+ step criss-cross walks with zero lunch windows and extreme exhaustion."
+                ? copy("landing_benefit_2_risk", language)
                 : copy("landing_benefit_2_desc", language)}
             </p>
           </div>
@@ -746,7 +768,7 @@ export function TripsPage() {
             <h3>{copy("landing_benefit_3_title", language)}</h3>
             <p>
               {painTab === "ai"
-                ? "Late-night manual receipt math across Yen, Euros, and Dollars that leads to awkward group confusion."
+                ? copy("landing_benefit_3_risk", language)
                 : copy("landing_benefit_3_desc", language)}
             </p>
           </div>
@@ -793,14 +815,14 @@ export function TripsPage() {
         <div aria-live="polite" className="lab-preview-canvas" id="lab-preview-panel">
           {activeLabStep === 0 && (
             <div className="lab-preview-content">
-              <div className="preview-tag">STAGE 1: DISCOVERY & CONSTRAINTS</div>
-              <h5>Smart Wizard: Dates, Pacing & Travel Party</h5>
+              <div className="preview-tag">{copy("landing_lab_stage1", language)}</div>
+              <h5>{copy("landing_lab_stage1_title", language)}</h5>
               <div className="lab-interactive-row">
                 <div className="lab-control-group">
-                  <span className="lab-control-label">Travel Party:</span>
+                  <span className="lab-control-label">{copy("landing_lab_party", language)}</span>
                   <div className="lab-counter">
                     <button
-                      aria-label="Decrease travelers"
+                      aria-label={copy("landing_lab_decrease", language)}
                       className="lab-counter-btn"
                       disabled={labPartySize <= 1}
                       onClick={() => setLabPartySize((p) => Math.max(1, p - 1))}
@@ -808,9 +830,9 @@ export function TripsPage() {
                     >
                       <Minus aria-hidden="true" size={13} />
                     </button>
-                    <span className="lab-counter-val">{labPartySize} Travellers</span>
+                    <span className="lab-counter-val">{labPartySize} {copy("travellers", language)}</span>
                     <button
-                      aria-label="Increase travelers"
+                      aria-label={copy("landing_lab_increase", language)}
                       className="lab-counter-btn"
                       disabled={labPartySize >= 12}
                       onClick={() => setLabPartySize((p) => Math.min(12, p + 1))}
@@ -822,18 +844,19 @@ export function TripsPage() {
                 </div>
 
                 <div className="lab-control-group">
-                  <span className="lab-control-label">Pacing:</span>
+                  <span className="lab-control-label">{copy("landing_sim_mode_label", language)}</span>
                   <div className="lab-pills">
                     {(["relaxed", "balanced", "marathon"] as const).map((p) => (
                       <button
+                        aria-pressed={labPacing === p}
                         className={`lab-pill-btn ${labPacing === p ? "active" : ""}`}
                         key={p}
                         onClick={() => setLabPacing(p)}
                         type="button"
                       >
-                        {p === "relaxed" && "🌱 Relaxed"}
-                        {p === "balanced" && "⚡ Balanced"}
-                        {p === "marathon" && "🔥 Marathon"}
+                        {p === "relaxed" && `🌱 ${copy("landing_pacing_relaxed", language)}`}
+                        {p === "balanced" && `⚡ ${copy("landing_pacing_balanced", language)}`}
+                        {p === "marathon" && `🔥 ${copy("landing_pacing_marathon", language)}`}
                       </button>
                     ))}
                   </div>
@@ -841,12 +864,12 @@ export function TripsPage() {
               </div>
 
               <div className="preview-chips-row">
-                <span className="preview-chip"><CalendarClock aria-hidden="true" size={13} /> 2026-09-12 → 2026-09-17 (6 Days)</span>
-                <span className="preview-chip"><Users aria-hidden="true" size={13} /> {labPartySize} Travellers</span>
+                <span className="preview-chip"><CalendarClock aria-hidden="true" size={13} /> 2026-09-12 → 2026-09-17 (6 {copy("days", language)})</span>
+                <span className="preview-chip"><Users aria-hidden="true" size={13} /> {labPartySize} {copy("travellers", language)}</span>
                 <span className="preview-chip">
-                  <Route aria-hidden="true" size={13} /> Daily Walk Cap: {labPacing === "relaxed" ? "3.5" : labPacing === "balanced" ? "5.8" : "8.5"} km
+                  <Route aria-hidden="true" size={13} /> {copy("landing_lab_walk_cap", language)}: {labPacing === "relaxed" ? "3.5" : labPacing === "balanced" ? "5.8" : "8.5"} km
                 </span>
-                <span className="preview-chip"><Utensils aria-hidden="true" size={13} /> Lunch 12:00 - 13:30</span>
+                <span className="preview-chip"><Utensils aria-hidden="true" size={13} /> {copy("landing_lab_lunch", language)} 12:00 - 13:30</span>
               </div>
             </div>
           )}
@@ -934,6 +957,7 @@ export function TripsPage() {
                   "4. Things to Bring",
                 ].map((sheetName, idx) => (
                   <button
+                    aria-pressed={labExcelTab === idx}
                     className={`lab-excel-tab ${labExcelTab === idx ? "active" : ""}`}
                     key={sheetName}
                     onClick={() => setLabExcelTab(idx)}
@@ -972,6 +996,8 @@ export function TripsPage() {
             <div className="split-currency-pills">
               {(["$", "€", "¥", "฿"] as const).map((curr) => (
                 <button
+                  aria-label={`${copy("landing_split_currency", language)} ${curr}`}
+                  aria-pressed={splitCurrency === curr}
                   className={`curr-pill ${splitCurrency === curr ? "active" : ""}`}
                   key={curr}
                   onClick={() => setSplitCurrency(curr)}
@@ -1254,11 +1280,19 @@ export function TripsPage() {
           <aside>
             <form className="stage-card trip-form" onSubmit={submit}>
               <h3>{copy("new_trip", language)}</h3>
-              <p className="landing-hint">{copy("destination_help", language)}</p>
+              <p className="landing-hint" id="destination-help">
+                {copy("destination_help", language)}
+              </p>
 
               <label htmlFor="country">
-                {copy("country", language)}
+                <span>
+                  {copy("country", language)}
+                  <span aria-hidden="true" className="setup-required">*</span>
+                  <span className="landing-hint"> {copy("required_field", language)}</span>
+                </span>
                 <select
+                  aria-describedby="destination-help"
+                  autoComplete="country-name"
                   id="country"
                   name="country"
                   onChange={(e) => {
@@ -1281,14 +1315,23 @@ export function TripsPage() {
 
               {country === TYPE_IT && (
                 <label htmlFor="country-custom">
-                  {copy("country", language)}
+                  <span>
+                    {copy("country", language)}
+                    <span aria-hidden="true" className="setup-required">*</span>
+                    <span className="landing-hint"> {copy("required_field", language)}</span>
+                  </span>
                   <input
+                    aria-describedby="destination-help"
                     autoFocus
+                    autoCapitalize="words"
+                    autoComplete="country-name"
+                    autoCorrect="off"
                     id="country-custom"
                     name="country-custom"
                     onChange={(e) => setTypedCountry(e.target.value)}
                     placeholder={copy("country_placeholder", language)}
                     required
+                    spellCheck={false}
                     type="text"
                     value={typedCountry}
                   />
@@ -1297,8 +1340,14 @@ export function TripsPage() {
 
               {country !== TYPE_IT && cities.length > 0 ? (
                 <label htmlFor="city">
-                  {copy("city", language)}
+                  <span>
+                    {copy("city", language)}
+                    <span aria-hidden="true" className="setup-required">*</span>
+                    <span className="landing-hint"> {copy("required_field", language)}</span>
+                  </span>
                   <select
+                    aria-describedby="destination-help"
+                    autoComplete="address-level2"
                     id="city"
                     name="city"
                     onChange={(e) => setCity(e.target.value)}
@@ -1318,13 +1367,22 @@ export function TripsPage() {
 
               {typingCity && (
                 <label htmlFor="city-custom">
-                  {copy("city", language)}
+                  <span>
+                    {copy("city", language)}
+                    <span aria-hidden="true" className="setup-required">*</span>
+                    <span className="landing-hint"> {copy("required_field", language)}</span>
+                  </span>
                   <input
+                    aria-describedby="destination-help"
+                    autoCapitalize="words"
+                    autoComplete="address-level2"
+                    autoCorrect="off"
                     id="city-custom"
                     name="city-custom"
                     onChange={(e) => setTypedCity(e.target.value)}
                     placeholder={copy("city_placeholder", language)}
                     required
+                    spellCheck={false}
                     type="text"
                     value={typedCity}
                   />
@@ -1334,6 +1392,8 @@ export function TripsPage() {
               <label htmlFor="trip-name">
                 {copy("trip_name", language)}
                 <input
+                  autoCapitalize="sentences"
+                  autoComplete="off"
                   id="trip-name"
                   name="trip-name"
                   onChange={(e) => setName(e.target.value)}
@@ -1347,12 +1407,18 @@ export function TripsPage() {
               {errorCode && <p className="landing-error">⚠ {copy(errorCode, language)}</p>}
 
               <button
+                aria-describedby={!resolvedCity ? "destination-required" : undefined}
                 className="setup-primary"
                 disabled={createTrip.isPending || !resolvedCity}
                 type="submit"
               >
                 {copy("start_planning", language)}
               </button>
+              {!resolvedCity && (
+                <p className="landing-hint" id="destination-required">
+                  {copy("destination_required", language)}
+                </p>
+              )}
             </form>
           </aside>
         </div>

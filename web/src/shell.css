@@ -2627,6 +2627,7 @@
   color: var(--landing-text);
   display: grid;
   gap: 0;
+  grid-template-columns: minmax(0, 1fr);
   margin: 0;
   max-width: none;
   min-height: 100vh;
@@ -2843,16 +2844,16 @@
 /* ---------------------------------------------------------------------------
    THE HERO'S OWN LOAD SEQUENCE
 
-   The reference spends almost its entire motion budget here — its hero assembles
-   over 4.28s at roughly a 0.35s step — and spends none of it on scroll. This is
-   that idea at product pace: the same reveal curve, the same rise-and-fade, the
+   The reference gives the hero its clearest entrance, then uses slower scroll
+   reveals for the story below. This is that idea at product pace: the same
+   reveal curve, the same rise-and-fade, the
    same sequencing, stepped at `--stagger-step` so the whole hero has settled in
    about 0.8s. The order is the reading order, which is also the order of
    importance: badges, headline, lead, the button, then the evidence beside it.
 
    Everything is `both`-filled, so an element is invisible before its turn rather
    than flashing at full opacity and then animating. Nothing here is
-   scroll-triggered, deliberately — see the note in tokens.css.
+   load sequence; the section-level scroll sequence lives below the landing rules.
 
    Suppression is not written per rule: the capture seam in `main.tsx` injects
    `*{animation:none!important}`, so no baseline can photograph a half-played
@@ -2925,9 +2926,12 @@
   background: var(--landing-ground);
   border-bottom: 1px solid var(--landing-glass-border);
   display: flex;
+  gap: 16px;
   justify-content: space-between;
+  min-width: 0;
   padding: 12px 24px;
   position: relative;
+  width: 100%;
   z-index: 20;
 }
 
@@ -2939,6 +2943,11 @@
   font-weight: var(--weight-selected);
   gap: 8px;
   letter-spacing: -0.01em;
+  min-width: 0;
+}
+
+.landing-nav-brand strong {
+  line-height: 1.1;
 }
 
 .nav-version-badge {
@@ -2955,6 +2964,7 @@
   align-items: center;
   display: flex;
   gap: 16px;
+  min-width: 0;
 }
 
 .landing-nav-links button {
@@ -2980,6 +2990,7 @@
 
 .landing-controls {
   display: flex;
+  flex-shrink: 0;
   gap: 8px;
   justify-content: flex-end;
   position: relative;
@@ -3005,6 +3016,58 @@
 .landing-controls button:hover {
   background: var(--landing-route-soft);
   border-color: var(--landing-mark);
+}
+
+.landing-controls .landing-nav-start {
+  background: var(--landing-route);
+  border-color: var(--landing-route);
+  box-shadow: inset 0 -3px 0 var(--landing-lip);
+  color: var(--landing-ground);
+}
+
+.landing-controls .landing-nav-start:hover {
+  background: var(--landing-route);
+  border-color: var(--landing-route);
+  filter: brightness(1.06);
+}
+
+@media (max-width: 560px) {
+  .landing-nav {
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .landing-nav-brand {
+    font-size: var(--text-xs);
+    gap: 6px;
+  }
+
+  .landing-nav-brand strong {
+    max-width: 7.5rem;
+  }
+
+  .nav-version-badge,
+  .landing-icon-control .control-label {
+    display: none;
+  }
+
+  .landing-controls {
+    gap: 6px;
+  }
+
+  .landing-controls button {
+    min-height: 44px;
+  }
+
+  .landing-controls .landing-icon-control {
+    justify-content: center;
+    padding: 0;
+    width: 44px;
+  }
+
+  .landing-controls .landing-nav-start {
+    padding-inline: 12px;
+  }
 }
 
 /* ---------------------------------------------------------------------------
@@ -3097,6 +3160,34 @@
   height: 18px;
   position: absolute;
   width: 18px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes hero-route-flow {
+    to { stroke-dashoffset: -44; }
+  }
+
+  @keyframes hero-cloud-drift {
+    from { translate: -10px 0; }
+    to { translate: 18px 5px; }
+  }
+
+  @keyframes hero-twinkle {
+    0%, 100% { filter: brightness(0.9); opacity: 0.35; }
+    50% { filter: brightness(1.2); opacity: 0.9; }
+  }
+
+  .hero-route {
+    animation: hero-route-flow 8s linear infinite;
+  }
+
+  .hero-cloud {
+    animation: hero-cloud-drift var(--drift-seconds) ease-in-out infinite alternate;
+  }
+
+  .hero-spark {
+    animation: hero-twinkle 3.2s ease-in-out infinite;
+  }
 }
 
 .hero-copy {
@@ -3350,6 +3441,7 @@
   cursor: pointer;
   font-size: var(--text-2xs);
   font-weight: var(--weight-secondary);
+  min-height: 44px;
   padding: 6px 0;
   text-align: center;
   transition: background var(--duration-hover) var(--ease-out), color var(--duration-hover) var(--ease-out);
@@ -3389,6 +3481,7 @@
   color: var(--landing-text);
   cursor: pointer;
   font-size: var(--text-2xs);
+  min-height: 44px;
   padding: 3px 8px;
 }
 
@@ -3592,6 +3685,7 @@
   font-size: var(--text-xs);
   font-weight: var(--weight-secondary);
   gap: 6px;
+  min-height: 44px;
   padding: 8px 18px;
   transition: all var(--duration-hover) var(--ease-out);
 }
@@ -3802,6 +3896,55 @@
   padding: 24px;
 }
 
+@media (min-width: 1000px) {
+  .showcase-section {
+    align-items: start;
+    display: grid;
+    gap: 28px 32px;
+    grid-template-columns: minmax(16rem, 0.72fr) minmax(0, 1.28fr);
+  }
+
+  .showcase-section > .section-header {
+    grid-column: 1 / -1;
+    margin-bottom: 0;
+  }
+
+  .lab-stepper-grid {
+    grid-template-columns: 1fr;
+    margin: 0;
+    max-width: none;
+  }
+
+  .lab-stepper-grid::before {
+    border-left: 2px dotted var(--landing-route-soft);
+    border-top: 0;
+    bottom: 12.5%;
+    left: 29px;
+    right: auto;
+    top: 12.5%;
+  }
+
+  .lab-step-card.active::after {
+    border-bottom: 8px solid transparent;
+    border-left: 8px solid var(--landing-route);
+    border-right: 0;
+    border-top: 8px solid transparent;
+    bottom: auto;
+    left: auto;
+    right: -8px;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  .lab-preview-canvas {
+    margin: 0;
+    max-width: none;
+    position: sticky;
+    top: 24px;
+    width: 100%;
+  }
+}
+
 .preview-tag {
   color: var(--landing-route);
   font-family: var(--font-mono);
@@ -3873,9 +4016,9 @@
   color: var(--landing-mark);
   cursor: pointer;
   display: flex;
-  height: 22px;
+  height: 44px;
   justify-content: center;
-  width: 22px;
+  width: 44px;
 }
 
 .lab-counter-btn:disabled {
@@ -3902,6 +4045,7 @@
   color: var(--landing-text);
   cursor: pointer;
   font-size: var(--text-2xs);
+  min-height: 44px;
   padding: 4px 10px;
   transition: all var(--duration-hover) var(--ease-out);
 }
@@ -4047,6 +4191,7 @@
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   gap: 6px;
+  min-height: 44px;
   padding: 6px 12px;
   transition: all var(--duration-hover) var(--ease-out);
 }
@@ -4101,8 +4246,8 @@
   cursor: pointer;
   font-family: var(--font-mono);
   font-size: var(--text-xs);
-  height: 28px;
-  min-width: 28px;
+  height: 44px;
+  min-width: 44px;
   transition: all var(--duration-hover) var(--ease-out);
 }
 
@@ -4128,6 +4273,7 @@
 .split-preset-btn {
   background: var(--landing-ground);
   border: 1px solid var(--landing-glass-border);
+  min-height: 44px;
   border-radius: var(--radius-pill);
   color: var(--landing-mark);
   cursor: pointer;
@@ -4726,6 +4872,53 @@
     flex-direction: column;
     gap: 8px;
     text-align: center;
+  }
+}
+
+/* The reference treats motion as section choreography, not decoration on every
+   card. Reveal the large story groups as they enter, using the platform's view
+   timeline so scrolling stays compositor-driven and needs no observer code. */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    @keyframes landing-scroll-rise {
+      from {
+        opacity: 0.18;
+        transform: translateY(34px) scale(0.985);
+      }
+
+      to {
+        opacity: 1;
+        transform: none;
+      }
+    }
+
+    .landing-section > .section-header,
+    .benefits-grid,
+    .lab-stepper-grid,
+    .lab-preview-canvas,
+    .split-sandbox-card,
+    .presets-grid,
+    .comparison-table-wrapper,
+    .landing-columns,
+    .landing-trust-strip,
+    .faq-list {
+      animation: landing-scroll-rise 1ms var(--ease-reveal) both;
+      animation-range: entry 0% cover 28%;
+      animation-timeline: view();
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ticker-track {
+    animation: none;
+  }
+
+  .hero-cloud,
+  .hero-layer,
+  .hero-spark {
+    transform: none;
+    transition: none;
   }
 }
 
