@@ -53,6 +53,81 @@ const TICKER_ITEMS = [
   [FileSpreadsheet, "landing_ticker_export"],
 ] as const;
 
+/**
+ * The drawn props.
+ *
+ * The reference layers painted objects across its scenes — a camera, a postcard,
+ * framed photographs — and that layering is most of why its page reads as a place
+ * rather than as boxes. Its artwork is commissioned and is not ours to take, so
+ * this is the same *idea* in the vocabulary the hero already speaks: flat SVG,
+ * one stroke weight, coloured entirely from tokens.
+ *
+ * Everything here is decoration and behaves like it. Nothing carries meaning that
+ * is not also written somewhere, every prop is `aria-hidden`, none of it takes a
+ * pointer event, and the whole layer is absent from the accessibility tree. The
+ * shapes are travel objects rather than generic ornament because the page is
+ * about trips: a postcard, a stamp, a compass, a ticket, a pin, a paper plane.
+ */
+const PROPS = {
+  postcard: (
+    <>
+      <rect height="86" rx="2" width="124" x="4" y="10" />
+      <path d="M4 34 h124" />
+      <path d="M96 14 h28 v20 h-28 z" />
+      <path d="M14 48 h60 M14 60 h48 M14 72 h66" />
+    </>
+  ),
+  compass: (
+    <>
+      <circle cx="52" cy="52" r="44" />
+      <circle cx="52" cy="52" r="34" />
+      <path d="M52 22 L62 52 L52 82 L42 52 Z" />
+      <path d="M22 52 h12 M70 52 h12 M52 14 v10 M52 80 v10" />
+    </>
+  ),
+  ticket: (
+    <>
+      <path d="M4 22 h60 a10 10 0 0 0 20 0 h44 v56 h-44 a10 10 0 0 0 -20 0 h-60 z" />
+      <path d="M74 30 v6 M74 46 v6 M74 62 v6" />
+      <path d="M14 40 h40 M14 54 h28" />
+    </>
+  ),
+  plane: (
+    <>
+      <path d="M6 46 L106 12 L74 92 L58 60 Z" />
+      <path d="M58 60 L106 12" />
+    </>
+  ),
+  pin: (
+    <>
+      <path d="M40 8 a28 28 0 0 1 28 28 c0 20 -28 48 -28 48 S12 56 12 36 A28 28 0 0 1 40 8 Z" />
+      <circle cx="40" cy="36" r="10" />
+    </>
+  ),
+  stamp: (
+    <>
+      <path d="M8 8 h80 v80 h-80 z" strokeDasharray="6 5" />
+      <path d="M22 62 L38 40 L50 54 L62 34 L74 62 Z" />
+      <circle cx="34" cy="26" r="6" />
+    </>
+  ),
+} as const;
+
+/** One decorative prop, positioned by its section's own stylesheet rule. */
+function SceneProp({ kind, place }: { kind: keyof typeof PROPS; place: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={`scene-prop scene-prop-${place}`}
+      fill="none"
+      focusable="false"
+      viewBox="0 0 132 104"
+    >
+      {PROPS[kind]}
+    </svg>
+  );
+}
+
 const CLOUDS = [
   { key: "a", left: 4, top: 12, width: 190, depth: 0.3, seconds: 68 },
   { key: "b", left: 38, top: 6, width: 250, depth: 0.45, seconds: 84 },
@@ -707,6 +782,8 @@ export function TripsPage() {
           SECTION 2: "THE PAIN VS THE MATH" (Interactive Before/After)
           ------------------------------------------------------------- */}
       <section className="landing-section pain-math-section" id="pain-math">
+        <SceneProp kind="compass" place="tl" />
+        <SceneProp kind="stamp" place="br" />
         <div className="section-header">
           <span className="section-badge">{copy("landing_solutions_badge", language)}</span>
           <h2>{copy("landing_pain_title", language)}</h2>
@@ -779,6 +856,14 @@ export function TripsPage() {
           SECTION 3: 4-STAGE PRODUCT LABORATORY (Interactive Walkthrough)
           ------------------------------------------------------------- */}
       <section className="landing-section showcase-section" id="lab">
+        <img
+          alt=""
+          aria-hidden="true"
+          className="scene-art"
+          loading="lazy"
+          src="/illustrations/adventure-map.svg"
+        />
+        <SceneProp kind="ticket" place="tr" />
         <div className="section-header">
           <span className="section-badge">{copy("landing_showcase_badge", language)}</span>
           <h2>{copy("landing_showcase_title", language)}</h2>
@@ -982,6 +1067,14 @@ export function TripsPage() {
           SECTION 4: INTERACTIVE MULTI-CURRENCY BILL SPLIT SANDBOX
           ------------------------------------------------------------- */}
       <section className="landing-section split-sandbox-section" id="split-sandbox">
+        <img
+          alt=""
+          aria-hidden="true"
+          className="scene-art"
+          loading="lazy"
+          src="/illustrations/currency-conversion.svg"
+        />
+        <SceneProp kind="postcard" place="tl" />
         <div className="section-header">
           <span className="section-badge">
             <Calculator aria-hidden="true" size={13} /> {copy("landing_bullet_money", language)}
@@ -1134,6 +1227,14 @@ export function TripsPage() {
           SECTION 5: 1-CLICK CURATED DESTINATION BLUEPRINTS
           ------------------------------------------------------------- */}
       <section className="landing-section presets-section" id="presets">
+        <img
+          alt=""
+          aria-hidden="true"
+          className="scene-art"
+          loading="lazy"
+          src="/illustrations/destination.svg"
+        />
+        <SceneProp kind="pin" place="tr" />
         <div className="section-header">
           <span className="section-badge">{copy("landing_proof_destinations", language)}</span>
           <h2>{copy("landing_presets_title", language)}</h2>
@@ -1443,6 +1544,14 @@ export function TripsPage() {
           SECTION 8: FAQ ACCORDION (Objection Handling)
           ------------------------------------------------------------- */}
       <section className="landing-section faq-section" id="faq">
+        <img
+          alt=""
+          aria-hidden="true"
+          className="scene-art"
+          loading="lazy"
+          src="/illustrations/all-checked.svg"
+        />
+        <SceneProp kind="plane" place="tl" />
         <div className="section-header">
           <span className="section-badge">{copy("landing_faq_badge", language)}</span>
           <h2>{copy("landing_faq_title", language)}</h2>

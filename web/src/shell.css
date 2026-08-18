@@ -2635,6 +2635,121 @@
   position: relative;
 }
 
+/* THE FREE-LICENSED ARTWORK.
+
+   Four unDraw illustrations, recoloured to this palette and vendored under
+   `web/public/illustrations` with the licence beside them. Each names the job its
+   own section does — a map for the walkthrough, a currency exchange for the bill
+   split, a destination for the blueprints, a finished checklist for the FAQ — so
+   they are illustration rather than ornament, which is the difference between
+   these and stock filler.
+
+   `alt=""` with `aria-hidden` because every one of them is decoration: nothing in
+   these pictures is information that is not also written in the section beside
+   them, and describing them would only add noise to a screen reader.
+
+   Lazily loaded and local. `WF-034` forbids fetching an asset from anywhere at
+   view time, and these are served from this app's own origin like the fonts. */
+.scene-art {
+  /* Clear of the wave. The next scene's edge is a 52px `::before` sitting over the
+     bottom of this one, and artwork at 24px was being sliced in half by it — which
+     reads as a broken asset rather than as a decorative crop. */
+  bottom: 84px;
+  height: auto;
+  opacity: 0.5;
+  pointer-events: none;
+  position: absolute;
+  right: clamp(6px, 1.5vw, 18px);
+  /* Sized to the gutter that actually exists rather than to what looked right.
+     Measured across the four scenes that carry artwork, the narrowest margin
+     beside the content column is 176px, so anything wider is drawn behind the
+     cards and reads as a broken asset. */
+  width: clamp(110px, 11vw, 156px);
+  z-index: 0;
+}
+
+/* On the two scenes with their own ground the artwork needs to sit back further,
+   or the figures read as a second subject competing with the cards. */
+.presets-section .scene-art,
+.comparison-section .scene-art {
+  opacity: 0.34;
+}
+
+/* Under 1100px the columns close up and there is no margin left for a picture to
+   live in without landing under the text. */
+@media (max-width: 1100px) {
+  .scene-art {
+    display: none;
+  }
+}
+
+/* THE DRAWN PROPS.
+
+   Decoration, and it behaves like it: no pointer events, no place in the
+   accessibility tree, and nothing here carries meaning that is not also written
+   somewhere in text. Positioned at the edges of each scene and never over the
+   reading column, at an opacity where the shape registers and the words in front
+   of it do not have to fight.
+
+   They take the accent as a stroke rather than a fill, so a scene that gets
+   repainted takes its props with it, and they inherit the hero's parallax
+   variables where a section sets them. */
+.scene-prop {
+  color: var(--landing-route);
+  height: auto;
+  opacity: 0.16;
+  pointer-events: none;
+  position: absolute;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.5;
+  width: clamp(72px, 7.5vw, 108px);
+  z-index: 0;
+}
+
+.landing-section {
+  position: relative;
+}
+
+/* The reading column has to sit above them, or a heading lands on a stamp. */
+.landing-section > .section-header,
+.landing-section > .landing-columns,
+.landing-section > .lab-stepper-grid,
+.landing-section > .lab-preview-canvas,
+.landing-section > .presets-grid,
+.landing-section > .benefits-grid,
+.landing-section > .comparison-table-wrapper,
+.landing-section > .faq-list,
+.landing-section > .split-sandbox-card {
+  position: relative;
+  z-index: 1;
+}
+
+.scene-prop-tl { left: clamp(6px, 1.5vw, 20px); top: 40px; transform: rotate(-9deg); }
+.scene-prop-tr { right: clamp(6px, 1.5vw, 20px); top: 52px; transform: rotate(11deg); }
+.scene-prop-br { bottom: 96px; right: clamp(6px, 1.5vw, 20px); transform: rotate(-6deg); }
+
+/* On the night scene the accent is too dark to register, and on grass it fights
+   the ground — both take the scene's own light ink instead. */
+.comparison-section .scene-prop {
+  color: var(--landing-cream);
+  opacity: 0.13;
+}
+
+.presets-section .scene-prop {
+  color: var(--landing-mark);
+  opacity: 0.14;
+}
+
+/* Below the point where the scenes go single-column the edges are where the text
+   is, so the props step out of the way entirely rather than sitting under it. */
+@media (max-width: 860px) {
+  .scene-prop {
+    display: none;
+  }
+}
+
 /* ORGANIC EDGES BETWEEN SCENES.
 
    On the reference no two grounds meet in a straight line — sand runs into water

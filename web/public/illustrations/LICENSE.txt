@@ -1,0 +1,14 @@
+Illustrations in this directory are from unDraw (https://undraw.co),
+copyright Katerina Limpitsouni, used under the unDraw licence.
+
+That licence grants a nonexclusive, worldwide copyright licence to download,
+copy, modify, distribute and use the assets for free, for commercial and
+noncommercial purposes, with no attribution required. This file is kept anyway,
+because a vendored asset whose provenance is not written down beside it is
+indistinguishable from one that was taken.
+
+The licence does prohibit four things, none of which happens here: replicating
+unDraw itself, training a model on the assets, redistributing them as a pack,
+and building an integration for them. Only the four files actually used on the
+landing page are vendored, and each has been recoloured to this project's
+palette, which the licence expressly permits.
