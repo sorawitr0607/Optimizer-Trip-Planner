@@ -2668,6 +2668,16 @@
   z-index: 0;
 }
 
+/* The hero already carries a drawn scene, so its illustration sits low in the
+   empty sand rather than in a gutter, and quieter than the rest. */
+.scene-art-hero {
+  bottom: 40px;
+  left: clamp(6px, 2vw, 28px);
+  opacity: 0.34;
+  right: auto;
+  width: clamp(96px, 9vw, 132px);
+}
+
 /* On the two scenes with their own ground the artwork needs to sit back further,
    or the figures read as a second subject competing with the cards. */
 .presets-section .scene-art,
@@ -2721,14 +2731,34 @@
 .landing-section > .benefits-grid,
 .landing-section > .comparison-table-wrapper,
 .landing-section > .faq-list,
-.landing-section > .split-sandbox-card {
+.landing-section > .split-sandbox-card,
+.landing-section > .pain-math-switch,
+.landing-section > .lab-stepper-grid,
+.landing-section > .lab-grid {
   position: relative;
   z-index: 1;
 }
 
-.scene-prop-tl { left: clamp(6px, 1.5vw, 20px); top: 40px; transform: rotate(-9deg); }
-.scene-prop-tr { right: clamp(6px, 1.5vw, 20px); top: 52px; transform: rotate(11deg); }
-.scene-prop-br { bottom: 96px; right: clamp(6px, 1.5vw, 20px); transform: rotate(-6deg); }
+/* Two props to a scene now, at different depths, so the pointer separates them
+   the way it separates the hero's own layers. `--depth` is the same variable the
+   clouds and the mountain ranges use, and the drift values are written once on
+   `.landing` by a single handler rather than one per section. */
+.scene-prop {
+  transform:
+    translate3d(
+      calc(var(--drift-x, 0) * var(--depth, 0.3) * -22px),
+      calc(var(--drift-y, 0) * var(--depth, 0.3) * -14px),
+      0
+    )
+    rotate(var(--tilt, 0deg));
+  transition: transform var(--duration-standard) var(--ease-out);
+}
+
+.scene-prop-tl { --depth: 0.22; --tilt: -9deg; left: clamp(6px, 1.5vw, 20px); top: 40px; }
+.scene-prop-mid { --depth: 0.5; --tilt: 7deg; left: clamp(6px, 1.5vw, 20px); top: 46%; }
+.scene-prop-bl { --depth: 0.46; --tilt: 6deg; bottom: 96px; left: clamp(6px, 1.5vw, 20px); }
+.scene-prop-tr { --depth: 0.34; --tilt: 11deg; right: clamp(6px, 1.5vw, 20px); top: 52px; }
+.scene-prop-br { --depth: 0.58; --tilt: -6deg; bottom: 96px; right: clamp(6px, 1.5vw, 20px); }
 
 /* On the night scene the accent is too dark to register, and on grass it fights
    the ground — both take the scene's own light ink instead. */
@@ -3004,9 +3034,74 @@
   /* The demo card is the hero's evidence rather than its claim, so it arrives
      last and travels a little further, which is what makes it read as settling
      into place beside the copy rather than with it. */
+  /* The wrapper only holds the perspective; the fold is on the card itself. */
   .hero-demo {
+    animation: none;
+  }
+
+  /* THE PAPER UNFOLD.
+
+     The demo card is a printed day, so it arrives the way a folded map does:
+     hinged along its top edge and swinging down flat. `perspective` lives on the
+     wrapper rather than the card, because a perspective declared on the element
+     being rotated is applied after its own transform and the fold comes out flat
+     and lifeless.
+
+     The crease is the part that sells it — a hairline of light across the fold
+     line that fades as the paper reaches flat, which is what a real fold does as
+     it stops catching the light. It rides the same reveal curve and the same
+     sequencing as everything else in the hero. */
+  .hero-demo {
+    perspective: 1400px;
+    perspective-origin: 50% 0%;
+  }
+
+  /* The card rests at a slight tilt, so the fold has to carry that rotation
+     through every frame or the paper lands square and the tilt disappears. */
+  @keyframes paper-unfold {
+    from {
+      opacity: 0;
+      transform: rotate(-0.8deg) rotateX(-78deg);
+    }
+
+    60% {
+      opacity: 1;
+    }
+
+    to {
+      opacity: 1;
+      transform: rotate(-0.8deg) rotateX(0deg);
+    }
+  }
+
+  @keyframes paper-crease {
+    from { opacity: 0.85; }
+    to { opacity: 0; }
+  }
+
+  /* `backwards`, not `both`. A filled-forwards animation keeps owning `transform`
+     after it ends, and an animated property beats a transitioned one — so `both`
+     would have left the card unable to lift on hover for the rest of the session.
+     `backwards` only holds the state *before* the delay, and the final keyframe
+     already equals the card's resting rule. */
+  .hero-demo-card {
+    animation: paper-unfold 1050ms var(--ease-reveal) backwards;
     animation-delay: calc(var(--stagger-step) * 3);
-    animation-duration: 1000ms;
+    transform-origin: 50% 0%;
+  }
+
+  .hero-demo-card::before {
+    animation: paper-crease 1050ms var(--ease-reveal) backwards;
+    animation-delay: calc(var(--stagger-step) * 3);
+    background: linear-gradient(to bottom, var(--landing-snow), transparent);
+    content: "";
+    height: 34px;
+    left: 0;
+    pointer-events: none;
+    position: absolute;
+    right: 0;
+    top: 0;
+    z-index: 2;
   }
 
   /* The headline reveals a word at a time. `.hero-word` was already
@@ -3192,7 +3287,14 @@
   --drift-x: 0;
   --drift-y: 0;
   align-items: center;
-  background: radial-gradient(circle at 50% 20%, var(--landing-route-soft) 0%, var(--landing-ground) 72%);
+  /* Sky at the top fading to the paper ground at the horizon, which is what puts
+     the mountains behind the copy rather than beside it. */
+  background: linear-gradient(
+    to bottom,
+    var(--landing-sky-high) 0%,
+    var(--landing-sky-low) 34%,
+    var(--landing-ground) 68%
+  );
   display: grid;
   isolation: isolate;
   min-height: 86vh;
@@ -3219,11 +3321,11 @@
 }
 
 .hero-cloud {
-  background: var(--landing-haze);
+  background: var(--landing-snow);
   border-radius: var(--radius-pill);
   display: block;
   height: 26px;
-  opacity: var(--opacity-tint-15);
+  opacity: var(--opacity-tint-70);
   position: absolute;
 }
 
@@ -3255,12 +3357,31 @@
   width: 100%;
 }
 
-.hero-layer path {
-  fill: var(--landing-ground-alt);
-}
+/* No blanket fill for paths inside a layer. This rule dates from when a layer
+   held exactly one silhouette; now each holds a landform plus its detail paths,
+   and at (0,1,1) it outranked every one of `.hero-tree`, `.hero-bush`,
+   `.hero-rock`, `.hero-bloom`, `.hero-snow` and `.hero-hill-deep` at (0,1,0). All
+   six were in the DOM, at the right coordinates, painted the colour of the sand
+   they stood on. Each layer names its own landform below instead. */
 
-.hero-layer-far path { fill: var(--landing-haze); opacity: var(--opacity-tint-12); }
-.hero-layer-mid path { fill: var(--landing-route-soft); opacity: var(--opacity-tint-30); }
+/* `:first-child`, and it is load-bearing rather than tidy. Each group holds its
+   landform first and its detail paths after, and a bare `.hero-hills > path` is
+   (0,1,1) where `.hero-tree` is (0,1,0) — so the group rule was painting the
+   trees, the deep hill, the bushes, the rocks and the blossom in the landform's
+   own colour. Every one of them was in the DOM, at the right coordinates, and
+   invisible. Restricting each group rule to the one path it is actually for
+   stops it reaching the details at all, which is a narrower fix than out-
+   specifying it and cannot be undone by adding another detail later. */
+.hero-range-far > path:first-child { fill: var(--landing-peak-far); }
+.hero-range-mid > path:first-child { fill: var(--landing-peak-mid); }
+.hero-range-near > path:first-child { fill: var(--landing-ground-alt); }
+.hero-hills > path:first-child { fill: var(--landing-hill); }
+.hero-hill-deep { fill: var(--landing-hill-deep); }
+.hero-tree { fill: var(--landing-tree); }
+.hero-bush { fill: var(--landing-tree-light); }
+.hero-rock { fill: var(--landing-rock); }
+.hero-bloom { fill: var(--landing-bloom); }
+.hero-snow { fill: var(--landing-snow); }
 
 .hero-route {
   stroke: var(--landing-route);
@@ -3282,9 +3403,15 @@
     to { stroke-dashoffset: -44; }
   }
 
+  /* The clouds were declared as moving and were not, in any way a person could
+     see: 28px of travel over 68 to 84 seconds is under half a pixel a second.
+     They cross the sky now — a full traverse, each at its own speed, so the
+     parallax between them stays legible — and the drift is a `translate` rather
+     than a transform so it composes with the pointer parallax already on
+     `.hero-cloud` instead of overwriting it. */
   @keyframes hero-cloud-drift {
-    from { translate: -10px 0; }
-    to { translate: 18px 5px; }
+    from { translate: -22vw 0; }
+    to { translate: 118vw 8px; }
   }
 
   @keyframes hero-twinkle {
@@ -3297,7 +3424,7 @@
   }
 
   .hero-cloud {
-    animation: hero-cloud-drift var(--drift-seconds) ease-in-out infinite alternate;
+    animation: hero-cloud-drift var(--drift-seconds) linear infinite;
   }
 
   .hero-spark {
@@ -3525,7 +3652,9 @@
   display: grid;
   gap: 12px;
   max-width: 26rem;
+  overflow: hidden;
   padding: 18px 20px;
+  position: relative;
   transform: rotate(-0.8deg);
   transition:
     filter var(--duration-hover) var(--ease-standard),
@@ -3914,6 +4043,24 @@
 
 .lab-step-card {
   position: relative;
+}
+
+/* The connector follows the layout. Written as a horizontal dotted rule across
+   four columns, it was correct until the stepper became a single column, and a
+   line drawn across a stacked list is worse than none — so it runs down the
+   numbers instead, in the same dotted route language, and each orientation is
+   scoped to the layout that actually produces it. */
+@media (min-width: 861px) {
+  .lab-stepper-grid::before {
+    border-left: 2px dotted var(--landing-route-soft);
+    border-top: none;
+    bottom: 42px;
+    height: auto;
+    left: 37px;
+    right: auto;
+    top: 42px;
+    width: 0;
+  }
 }
 
 /* The chosen stage points at the panel it fills. Pressing a card changed

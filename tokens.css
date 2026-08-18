@@ -94,6 +94,10 @@
   --opacity-tint-15: 0.082;
   --opacity-tint-30: 0.188;
   --opacity-tint-40: 0.251;
+  /* Painted cloud, not a tint of one. The hero sky is pale, so a cloud at the
+     15% step was indistinguishable from it — the shapes were there and could not
+     be seen. */
+  --opacity-tint-70: 0.7;
   --opacity-dim: 0.35;
   --opacity-dim-strong: 0.4;
   --opacity-disabled: 0.45;
@@ -497,6 +501,37 @@ button:disabled {
   /* The reference's own grass, unaltered. Dark text reads 6.99 on it and the
      cream panels separate at 2.43, which is a change of material rather than a
      change of shade — the point of the band. */
+  /* The hero sky and its mountains. The reference opens on a bright cyan sky with
+     layered blue-green peaks standing over a warm sand foreground, and that
+     composition — cool distance, warm ground — is most of why its hero reads as
+     somewhere rather than as a header. Drawn here rather than taken: these are
+     paths in `.hero-scene`, so they cost no request and work offline.
+
+     Only two ranges are blue. A third, nearer and darker, was measured at 3.32
+     against body text and dropped; the foreground stays `--landing-ground-alt`,
+     which is also what the reference does — sand in front, water and peaks
+     behind. Body text clears 5.11 on the darkest range that remains. */
+  --landing-sky-high: #cdeef5;
+  --landing-sky-low: #e9f6f0;
+  --landing-peak-far: #a8c9d3;
+  --landing-peak-mid: #78a6b7;
+  --landing-snow: #fdfcf4;
+
+  /* The planted layer. The reference's hero is not sky-and-rock — there is a
+     green shoulder under the peaks, a treeline on it, and scattered foliage in
+     the foreground, and that middle band is what stops the scene reading as two
+     flat silhouettes.
+
+     Only the pale hill runs full width. Everything darker sits to the right of
+     the copy column, because the treeline green measures 2.69 against body text
+     and the deep hill 3.86 — legible scenery has to stay off the reading side. */
+  --landing-hill: #9dbf6a;
+  --landing-hill-deep: #6f9447;
+  --landing-tree: #55793a;
+  --landing-tree-light: #6f9a4c;
+  --landing-rock: #c4bdae;
+  --landing-bloom: #f0a6a0;
+
   --landing-grass: #8cab21;
   /* The paper grain. The reference's grounds are painted, so none of them is a
      flat fill — there is always tooth in them. This is two hairline gradients at

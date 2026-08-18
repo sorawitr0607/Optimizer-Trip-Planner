@@ -104,6 +104,35 @@ const PROPS = {
       <circle cx="40" cy="36" r="10" />
     </>
   ),
+  suitcase: (
+    <>
+      <rect height="60" rx="3" width="96" x="18" y="34" />
+      <path d="M46 34 v-12 a6 6 0 0 1 6 -6 h28 a6 6 0 0 1 6 6 v12" />
+      <path d="M18 56 h96" />
+    </>
+  ),
+  boardingPass: (
+    <>
+      <path d="M6 26 h118 v52 h-118 z" />
+      <path d="M90 26 v52" strokeDasharray="5 4" />
+      <path d="M16 42 h56 M16 56 h38" />
+      <circle cx="107" cy="46" r="7" />
+    </>
+  ),
+  foldedMap: (
+    <>
+      <path d="M8 26 L48 14 L88 30 L126 16 L126 82 L88 96 L48 80 L8 92 Z" />
+      <path d="M48 14 v66 M88 30 v66" strokeDasharray="5 4" />
+      <path d="M24 52 q18 -12 36 2 t34 -6" />
+    </>
+  ),
+  luggageTag: (
+    <>
+      <path d="M34 12 h64 a8 8 0 0 1 8 8 v52 a8 8 0 0 1 -8 8 h-64 l-22 -34 z" />
+      <circle cx="30" cy="46" r="7" />
+      <path d="M52 36 h40 M52 52 h28" />
+    </>
+  ),
   stamp: (
     <>
       <path d="M8 8 h80 v80 h-80 z" strokeDasharray="6 5" />
@@ -506,7 +535,16 @@ export function TripsPage() {
 
   return (
     // derives-from: element 5 .hero-content as .landing-hero
-    <main className="landing">
+    <main
+      className="landing"
+      onPointerMove={(e) => {
+        // One handler for the page. The hero writes these on itself as well, which
+        // simply wins inside the hero; every other scene's props read them here.
+        const rect = e.currentTarget.getBoundingClientRect();
+        e.currentTarget.style.setProperty("--drift-x", String((e.clientX - rect.left) / rect.width - 0.5));
+        e.currentTarget.style.setProperty("--drift-y", String((e.clientY - rect.top) / rect.height - 0.5));
+      }}
+    >
       {/* -------------------------------------------------------------
           TOP BAR & UTILITY NAVIGATION (Hack the North style)
           ------------------------------------------------------------- */}
@@ -602,14 +640,49 @@ export function TripsPage() {
         </div>
 
         {/* Ambient Top SVG Silhouette Route */}
+        <img alt="" aria-hidden="true" className="scene-art scene-art-hero" loading="lazy" src="/illustrations/travel-mode.svg" />
         <div aria-hidden="true" className="hero-scene">
           <svg preserveAspectRatio="none" viewBox="0 0 1200 480">
-            <g className="hero-layer hero-layer-far" style={{ "--depth": 0.15 } as React.CSSProperties}>
-              <path d="M0,320 Q300,220 600,280 T1200,240 L1200,480 L0,480 Z" />
+            {/* Two ranges, far hazier than near, which is the whole trick to depth
+                in a flat drawing — and the reason they carry different `--depth`
+                values, so the pointer parallax separates them as well. */}
+            <g className="hero-layer hero-range-far" style={{ "--depth": 0.12 } as React.CSSProperties}>
+              <path d="M0,306 L88,252 L146,284 L238,208 L326,278 L408,238 L498,292 L598,242 L688,288 L778,226 L878,284 L978,246 L1078,290 L1158,256 L1200,286 L1200,480 L0,480 Z" />
+              <path
+                className="hero-snow"
+                d="M238,208 L262,229 L250,232 L238,226 L226,233 L214,229 Z M778,226 L802,247 L790,250 L778,244 L766,251 L754,247 Z"
+              />
             </g>
-            <g className="hero-layer hero-layer-mid" style={{ "--depth": 0.35 } as React.CSSProperties}>
-              <path d="M0,360 Q340,290 700,340 T1200,300 L1200,480 L0,480 Z" />
+            <g className="hero-layer hero-range-mid" style={{ "--depth": 0.26 } as React.CSSProperties}>
+              <path d="M0,356 L118,302 L208,338 L300,264 L398,332 L518,290 L618,346 L718,298 L838,342 L938,302 L1058,348 L1158,314 L1200,338 L1200,480 L0,480 Z" />
+              <path
+                className="hero-snow"
+                d="M300,264 L326,287 L313,290 L300,283 L287,291 L274,287 Z M718,298 L744,321 L731,324 L718,317 L705,325 L692,321 Z"
+              />
             </g>
+            {/* The warm foreground the ranges stand on. */}
+            {/* The planted middle band. Without it the scene is two silhouettes
+                and a beach; the reference's own hero has a green shoulder under
+                its peaks, a treeline on it, and foliage scattered in front. */}
+            <g className="hero-layer hero-hills" style={{ "--depth": 0.34 } as React.CSSProperties}>
+              <path d="M0,392 Q140,362 300,388 T620,380 T900,392 T1200,384 L1200,480 L0,480 Z" />
+              <path
+                className="hero-hill-deep"
+                d="M556,400 Q700,366 862,392 T1200,380 L1200,480 L556,480 Z"
+              />
+              {/* Trees keep to the right of the copy column: this green measures
+                  2.69 against body text, so it must never sit behind a word. */}
+              <path className="hero-tree" d="M628,364 l-8,17 h3 l-6,14 h6 l-5,10 h16 l-5,-10 h6 l-6,-14 h3 Z M666,354 l-7,21 h3 l-6,17 h5 l-4,12 h14 l-4,-12 h5 l-6,-17 h3 Z M694,357 l-7,20 h3 l-6,16 h5 l-4,11 h14 l-4,-11 h5 l-6,-16 h3 Z M731,356 l-7,20 h3 l-6,16 h5 l-4,12 h14 l-4,-12 h5 l-6,-16 h3 Z M773,368 l-7,15 h3 l-6,12 h5 l-4,9 h14 l-4,-9 h5 l-6,-12 h3 Z M801,361 l-10,18 h4 l-8,15 h7 l-6,10 h20 l-6,-10 h7 l-8,-15 h4 Z M829,367 l-7,16 h3 l-6,13 h5 l-4,9 h14 l-4,-9 h5 l-6,-13 h3 Z M872,361 l-7,18 h3 l-6,15 h5 l-4,10 h14 l-4,-10 h5 l-6,-15 h3 Z M916,371 l-8,14 h3 l-6,11 h6 l-5,8 h16 l-5,-8 h6 l-6,-11 h3 Z M960,373 l-11,13 h4 l-9,11 h8 l-7,7 h22 l-7,-7 h8 l-9,-11 h4 Z M1004,362 l-7,18 h3 l-6,14 h5 l-4,10 h14 l-4,-10 h5 l-6,-14 h3 Z M1037,373 l-11,13 h4 l-9,11 h8 l-7,7 h22 l-7,-7 h8 l-9,-11 h4 Z M1067,365 l-10,16 h4 l-8,13 h7 l-6,9 h20 l-6,-9 h7 l-8,-13 h4 Z M1097,357 l-7,20 h3 l-6,16 h5 l-4,11 h14 l-4,-11 h5 l-6,-16 h3 Z M1141,365 l-11,16 h4 l-9,13 h8 l-7,9 h22 l-7,-9 h8 l-9,-13 h4 Z M1172,371 l-11,14 h4 l-9,11 h8 l-7,8 h22 l-7,-8 h8 l-9,-11 h4 Z" />
+            </g>
+
+            {/* The warm foreground the whole scene stands on. */}
+            <g className="hero-layer hero-range-near" style={{ "--depth": 0.5 } as React.CSSProperties}>
+              <path d="M0,428 Q180,404 380,424 T760,418 T1200,426 L1200,480 L0,480 Z" />
+              <path className="hero-bush" d="M79,460 a17,17 0 0 1 34,0 z M120,462 a12,12 0 0 1 24,0 z M53,464 a11,11 0 0 1 22,0 z M255,468 a13,13 0 0 1 26,0 z M284,466 a16,16 0 0 1 32,0 z M990,465 a14,14 0 0 1 28,0 z M1031,468 a11,11 0 0 1 22,0 z" />
+              <path className="hero-rock" d="M419,474 q5,-13,13,-12 q9,-3,13,12 z M865,470 q6,-15,15,-14 q10,-3,15,14 z M690,478 q4,-10,10,-9 q7,-2,10,9 z" />
+              <path className="hero-bloom" d="M180,466 m-4,0 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 M214,458 m-4,0 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 M352,464 m-4,0 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 M388,470 m-4,0 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 M946,466 m-4,0 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 M1084,460 m-4,0 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 M520,470 m-4,0 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0" />
+            </g>
+
             <path
               className="hero-route"
               d="M 60,340 Q 300,250 540,320 T 1140,280"
@@ -782,6 +855,7 @@ export function TripsPage() {
           SECTION 2: "THE PAIN VS THE MATH" (Interactive Before/After)
           ------------------------------------------------------------- */}
       <section className="landing-section pain-math-section" id="pain-math">
+        <SceneProp kind="foldedMap" place="mid" />
         <SceneProp kind="compass" place="tl" />
         <SceneProp kind="stamp" place="br" />
         <div className="section-header">
@@ -856,6 +930,7 @@ export function TripsPage() {
           SECTION 3: 4-STAGE PRODUCT LABORATORY (Interactive Walkthrough)
           ------------------------------------------------------------- */}
       <section className="landing-section showcase-section" id="lab">
+        <SceneProp kind="suitcase" place="bl" />
         <img
           alt=""
           aria-hidden="true"
@@ -1067,6 +1142,7 @@ export function TripsPage() {
           SECTION 4: INTERACTIVE MULTI-CURRENCY BILL SPLIT SANDBOX
           ------------------------------------------------------------- */}
       <section className="landing-section split-sandbox-section" id="split-sandbox">
+        <SceneProp kind="luggageTag" place="tr" />
         <img
           alt=""
           aria-hidden="true"
@@ -1227,6 +1303,7 @@ export function TripsPage() {
           SECTION 5: 1-CLICK CURATED DESTINATION BLUEPRINTS
           ------------------------------------------------------------- */}
       <section className="landing-section presets-section" id="presets">
+        <SceneProp kind="boardingPass" place="bl" />
         <img
           alt=""
           aria-hidden="true"
@@ -1269,6 +1346,9 @@ export function TripsPage() {
           SECTION 6: WHY US (Comprehensive Comparison Table)
           ------------------------------------------------------------- */}
       <section className="landing-section comparison-section" id="comparison">
+        <img alt="" aria-hidden="true" className="scene-art" loading="lazy" src="/illustrations/decide-night.svg" />
+        <SceneProp kind="compass" place="tl" />
+        <SceneProp kind="suitcase" place="tr" />
         <div className="section-header">
           <span className="section-badge">{copy("landing_comparison_badge", language)}</span>
           <h2>{copy("landing_comparison_title", language)}</h2>
@@ -1345,6 +1425,7 @@ export function TripsPage() {
           SECTION 7: ACTION WORKSPACE (Creator Form + Saved Trips)
           ------------------------------------------------------------- */}
       <section className="landing-section action-workspace-section" id="start-a-trip">
+        <img alt="" aria-hidden="true" className="scene-art" loading="lazy" src="/illustrations/booking.svg" />
         <div className="section-header">
           <span className="section-badge">{copy("start_planning", language)}</span>
           <h2>{copy("landing_cta_section_title", language)}</h2>
@@ -1544,6 +1625,7 @@ export function TripsPage() {
           SECTION 8: FAQ ACCORDION (Objection Handling)
           ------------------------------------------------------------- */}
       <section className="landing-section faq-section" id="faq">
+        <SceneProp kind="stamp" place="br" />
         <img
           alt=""
           aria-hidden="true"
