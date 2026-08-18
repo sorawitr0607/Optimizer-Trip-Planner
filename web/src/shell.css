@@ -4812,44 +4812,60 @@
   padding: 24px;
 }
 
-/* The display face, landing only. The reference's headings are what carry most of
-   its warmth, and a geometric sans at the same sizes reads colder however the
-   colours are set — so the headings, the numbered stops and the eyebrow labels
-   take the rounded face and everything else keeps the house sans, which is still
-   the better face for reading.
+/* The display face, landing only — headings, the numbered stops and the eyebrow
+   labels take it, and everything else keeps the house sans, which is still the
+   better face for reading at body size.
 
-   `--weight-display` is 700 because that is the top of Fredoka's real axis. The
-   house `--weight-selected` is 800 and would be synthesised here. */
-
-/* Placed after every landing component rule on purpose. Written above them it
-   lost the weight to `.landing-hero h1`'s own `--weight-selected`, at equal
-   specificity, on source order alone — so the family applied, the 800 stood, and
-   the browser synthesised a bolder Fredoka than exists. That is the exact defect
-   D8 was written to stop, reintroduced by the change meant to honour it. */
-.landing-hero h1,
-.section-header h2,
-.benefit-card h3,
-.lab-step-card h4,
-.preset-card h4,
-.lab-preview-content h5,
+   Placed after every landing component rule on purpose. Written above them it
+   lost the weight to `.landing-hero h1`'s own `--weight-selected` at equal
+   specificity, on source order alone, and the previous face's axis stopped at 700
+   — so the family applied, the 800 stood, and the browser synthesised a weight
+   that did not exist. Geist's axis covers 800, so that particular trap is gone,
+   but the ordering stays: a display rule that loses to a component rule is a
+   silent defect either way. */
+/* Selected by element, not by a list of component classes. The first version
+   named nine classes and two headings added to the page an hour later — an
+   unclassed `<h3>` and `<h6>` — silently kept the body face, which is the same
+   failure `check_design_tokens.py` had when it held a hand-written tuple of
+   selectors: a list stops covering whatever is written after it. Every heading
+   inside `.landing` takes the display face, so new markup is covered by default
+   and the rule cannot fall behind the page. */
+.landing h1,
+.landing h2,
+.landing h3,
+.landing h4,
+.landing h5,
+.landing h6,
 .faq-question,
 .landing-nav-brand,
-.landing-badge,
-.section-badge,
-.lab-step-num,
 .hero-cta {
   font-family: var(--font-display);
   font-weight: var(--weight-display);
-  letter-spacing: 0.005em;
+  letter-spacing: -0.011em;
 }
 
-/* Rounded faces carry their weight visually, so display sizes need less tracking
-   than the geometric face wanted, not more. */
-.landing-hero h1,
-.section-header h2 {
-  letter-spacing: -0.005em;
+/* Tight tracking is most of what makes a grotesque read as current, and it has to
+   scale with the type: a value that looks right on a 17px card heading closes the
+   apertures on a 54px headline. The two display sizes get their own. */
+.landing .landing-hero h1 {
+  letter-spacing: -0.032em;
 }
 
+.landing .section-header h2 {
+  letter-spacing: -0.026em;
+}
+
+/* The eyebrows run uppercase, and uppercase wants the opposite treatment — the
+   letterforms have no ascenders or descenders to separate them, so they need air
+   rather than tightening. They take the face without the tracking rule above. */
+.landing-badge,
+.section-badge,
+.lab-step-num,
+.preview-tag {
+  font-family: var(--font-display);
+  font-weight: var(--weight-display);
+  letter-spacing: 0.06em;
+}
 
 .landing-footer-inner {
   align-items: center;

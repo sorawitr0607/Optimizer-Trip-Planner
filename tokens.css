@@ -17,29 +17,24 @@
 }
 
 /* The landing's display face, and it is a third family where D8 had settled on
-   two — so it is a deliberate reopening rather than an oversight. The reference
-   sets its headings in Castledown, a rounded, friendly, high-weight display face
-   that is commercial and cannot ship here; Plus Jakarta Sans is geometric and
-   reads noticeably cooler at display sizes, which was the largest remaining gap
-   after the palette was fixed. Fredoka is the closest open equivalent: rounded
-   terminals, generous counters, the same warmth.
+   two — a deliberate reopening rather than an oversight.
 
-   SIL OFL 1.1 like the other two, licence beside them in `OFL-Fredoka.txt`,
-   self-hosted at 29 KB — nothing is fetched at runtime, which is what keeps
-   `WF-034` intact.
+   This was briefly Fredoka, picked to match the rounded display face on the
+   reference site. The owner asked for modern, technical, SaaS instead, which is
+   a decision about what this product is rather than about what that site looks
+   like — so the typography now deliberately departs from the reference while the
+   palette, motion and layout language stay. Geist is Vercel's own face, drawn for
+   developer and product surfaces: near-neutral grotesque, flat terminals, tight
+   apertures, and it sits naturally beside the JetBrains Mono already carrying the
+   times and labels on this page.
 
-   **Its axis is 300-700, not 100-900.** The house display weight is
-   `--weight-selected: 800`, and asking for 800 here would have the browser
-   synthesise a bolder face — exactly the fault D8 exists to prevent. Every rule
-   that sets this family caps at 700; see `--weight-display`. */
-@font-face {
-  font-family: "Fredoka";
-  font-style: normal;
-  font-weight: 300 700;
-  font-display: swap;
-  src: url("/fonts/fredoka-latin-wght-normal.woff2") format("woff2-variations");
-}
+   SIL OFL 1.1 like the others, licence beside them in `OFL-Geist.txt`,
+   self-hosted at 29 KB — nothing fetched at runtime, so `WF-034` is intact.
 
+   Its axis is the full 100-900, which removes the trap Fredoka carried: that one
+   stopped at 700, so the house `--weight-selected: 800` synthesised a bolder face
+   than existed. Here 800 is a real instance and `--weight-display` can match the
+   house weight rather than work around it. */
 @font-face {
   font-family: "JetBrains Mono";
   font-style: normal;
@@ -302,9 +297,11 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   /* Landing display only. Falls back to the house sans, so nothing outside the
      landing changes and a failed font load degrades to what was there before. */
-  --font-display: "Fredoka", "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
-  /* The top of Fredoka's real axis. Not 800 — see the note above the @font-face. */
-  --weight-display: 700;
+  --font-display: "Geist", "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  /* A real instance on Geist's 100-900 axis, and the same value the rest of the
+     app uses for display type, so the landing and the stages no longer disagree
+     about what "heaviest" means. */
+  --weight-display: 800;
   /* The scale was lifted on 2026-08-10 after a UX audit measured the screens: on
      `/setup`, 36 of the 51 elements carrying their own text rendered at 11px or
      less, and the app is mostly times, money and evidence — the content that is
