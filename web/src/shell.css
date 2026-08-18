@@ -2713,7 +2713,7 @@
   stroke: currentColor;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 2.5;
+  stroke-width: 3;
   width: clamp(72px, 7.5vw, 108px);
   z-index: 0;
 }
@@ -2778,6 +2778,113 @@
   .scene-prop {
     display: none;
   }
+}
+
+/* ===========================================================================
+   THE PRESS, APPLIED TO THE WHOLE PAGE
+   =========================================================================== */
+
+/* The world's treatment is three separable things, and only one of them is unsafe
+   on text. The torn edge is a displacement filter, so it goes to SVG scenery and
+   nowhere near a word — run over a card it warps the sentences inside it into
+   nonsense. The other two travel everywhere: a print grain, and the paper-cut
+   border with its blurless shadow.
+
+   The grain is a tiled data-URI rather than a live filter. A full-page
+   `feTurbulence` re-rasterises on every scroll; a tile is rasterised once and
+   repeated by the compositor. It carries no colour of its own — turbulence
+   desaturated to grey — so it darkens whatever it is laid over rather than
+   tinting the page toward some hue the palette never chose. */
+.landing::after {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  content: "";
+  inset: 0;
+  mix-blend-mode: multiply;
+  opacity: 0.055;
+  pointer-events: none;
+  position: absolute;
+  z-index: 6;
+}
+
+/* Every surface on the page is a piece of paper laid on the scene: a light cut
+   border, and a hard shadow with no blur — the two things a real cut-out has, and
+   the same pair the landmarks already use. Written once here rather than added to
+   eighteen component rules, which is how eighteen surfaces come to disagree about
+   what a card looks like. */
+.benefit-card,
+.lab-step-card,
+.preset-card,
+.faq-item,
+.comparison-table,
+.split-sandbox-card,
+.hero-demo-card,
+.trip-list,
+.trip-form,
+.lab-preview-canvas {
+  border: 2px solid var(--landing-cut);
+  box-shadow: 0 4px 0 var(--landing-cut-shadow);
+}
+
+/* The small surfaces take the same idea at their own scale — a thinner cut and a
+   shorter drop, so a chip reads as a sticker rather than as a slab. */
+.landing-badge,
+.section-badge,
+.sim-chip,
+.preview-chip,
+.hero-tag-item,
+.hero-mini-pill,
+.pain-tab,
+.preset-badge,
+.preset-days {
+  border: 1.5px solid var(--landing-cut);
+  box-shadow: 0 2px 0 var(--landing-cut-shadow);
+}
+
+/* The halftone screen, on the surfaces large enough to show one. A repeating
+   radial gradient rather than the SVG pattern, because this lies under HTML
+   content and must not become a filter on the text above it. */
+.benefit-card::after,
+.lab-step-card::after,
+.preset-card::after,
+.split-sandbox-card::after,
+.hero-demo-card::after,
+.lab-preview-canvas::after {
+  background-image: radial-gradient(var(--landing-cut-line) 0.9px, transparent 1px);
+  background-size: 7px 7px;
+  /* `var(--radius-house)`, not `inherit`. D2 requires every radius on the page to
+     be a token, and `inherit` is not one — the gate caught it immediately. */
+  border-radius: var(--radius-house);
+  content: "";
+  inset: 0;
+  opacity: 0.55;
+  pointer-events: none;
+  position: absolute;
+  z-index: 0;
+}
+
+/* The screen needs a box to sit in, and the content needs to sit above it. */
+.benefit-card,
+.lab-step-card,
+.preset-card,
+.split-sandbox-card,
+.lab-preview-canvas {
+  position: relative;
+}
+
+.benefit-card > *,
+.lab-step-card > *,
+.preset-card > *,
+.split-sandbox-card > *,
+.lab-preview-canvas > *,
+.hero-demo-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* On the two scenes with their own dark ground a cream cut border is right, but
+   the shadow has to darken rather than lighten or the cards float. */
+.comparison-section .comparison-table {
+  box-shadow: 0 4px 0 var(--landing-night);
 }
 
 /* SCROLL-LINKED DEPTH.

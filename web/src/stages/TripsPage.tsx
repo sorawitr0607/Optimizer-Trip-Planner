@@ -367,6 +367,7 @@ function SceneProp({ kind, place }: { kind: keyof typeof PROPS; place: string })
     <svg
       aria-hidden="true"
       className={`scene-prop scene-prop-${place}`}
+      filter="url(#w-rough-fine)"
       fill="none"
       focusable="false"
       viewBox="0 0 132 104"
@@ -907,14 +908,14 @@ export function TripsPage() {
             {/* Two ranges, far hazier than near, which is the whole trick to depth
                 in a flat drawing — and the reason they carry different `--depth`
                 values, so the pointer parallax separates them as well. */}
-            <g className="hero-layer hero-range-far" style={{ "--depth": 0.12 } as React.CSSProperties}>
+            <g className="hero-layer hero-range-far" filter="url(#w-rough)" style={{ "--depth": 0.12 } as React.CSSProperties}>
               <path d="M0,306 L88,252 L146,284 L238,208 L326,278 L408,238 L498,292 L598,242 L688,288 L778,226 L878,284 L978,246 L1078,290 L1158,256 L1200,286 L1200,480 L0,480 Z" />
               <path
                 className="hero-snow"
                 d="M238,208 L262,229 L250,232 L238,226 L226,233 L214,229 Z M778,226 L802,247 L790,250 L778,244 L766,251 L754,247 Z"
               />
             </g>
-            <g className="hero-layer hero-range-mid" style={{ "--depth": 0.26 } as React.CSSProperties}>
+            <g className="hero-layer hero-range-mid" filter="url(#w-rough)" style={{ "--depth": 0.26 } as React.CSSProperties}>
               <path d="M0,356 L118,302 L208,338 L300,264 L398,332 L518,290 L618,346 L718,298 L838,342 L938,302 L1058,348 L1158,314 L1200,338 L1200,480 L0,480 Z" />
               <path
                 className="hero-snow"
@@ -925,7 +926,7 @@ export function TripsPage() {
             {/* The planted middle band. Without it the scene is two silhouettes
                 and a beach; the reference's own hero has a green shoulder under
                 its peaks, a treeline on it, and foliage scattered in front. */}
-            <g className="hero-layer hero-hills" style={{ "--depth": 0.34 } as React.CSSProperties}>
+            <g className="hero-layer hero-hills" filter="url(#w-rough)" style={{ "--depth": 0.34 } as React.CSSProperties}>
               <path d="M0,392 Q140,362 300,388 T620,380 T900,392 T1200,384 L1200,480 L0,480 Z" />
               <path
                 className="hero-hill-deep"
@@ -937,7 +938,7 @@ export function TripsPage() {
             </g>
 
             {/* The warm foreground the whole scene stands on. */}
-            <g className="hero-layer hero-range-near" style={{ "--depth": 0.5 } as React.CSSProperties}>
+            <g className="hero-layer hero-range-near" filter="url(#w-rough)" style={{ "--depth": 0.5 } as React.CSSProperties}>
               <path d="M0,428 Q180,404 380,424 T760,418 T1200,426 L1200,480 L0,480 Z" />
               <path className="hero-bush" d="M79,460 a17,17 0 0 1 34,0 z M120,462 a12,12 0 0 1 24,0 z M53,464 a11,11 0 0 1 22,0 z M255,468 a13,13 0 0 1 26,0 z M284,466 a16,16 0 0 1 32,0 z M990,465 a14,14 0 0 1 28,0 z M1031,468 a11,11 0 0 1 22,0 z" />
               <path className="hero-rock" d="M419,474 q5,-13,13,-12 q9,-3,13,12 z M865,470 q6,-15,15,-14 q10,-3,15,14 z M690,478 q4,-10,10,-9 q7,-2,10,9 z" />
@@ -949,6 +950,11 @@ export function TripsPage() {
               d="M 60,340 Q 300,250 540,320 T 1140,280"
               fill="none"
             />
+            {/* The same press as the world below: two screens at different
+                pitches, then the grain over everything, last. */}
+            <path className="w-screen" d="M0,356 L118,302 L208,338 L300,264 L398,332 L518,290 L618,346 L718,298 L838,342 L938,302 L1058,348 L1158,314 L1200,338 L1200,480 L0,480 Z" />
+            <path className="w-screen-coarse" d="M0,428 Q180,404 380,424 T760,418 T1200,426 L1200,480 L0,480 Z" />
+            <rect className="w-grain" filter="url(#w-grain)" height="480" width="1200" x="0" y="0" />
           </svg>
         </div>
 
