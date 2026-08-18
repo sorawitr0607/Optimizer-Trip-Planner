@@ -1558,8 +1558,25 @@ bug, every time.**
 ### The world, and what the art direction actually is
 
 The page is a scene in five layers — sky, distant, middle, ground, decorative front — with the
-four stages standing in it as **landmarks** rather than sitting beside it as cards. Sections
-below it carry a band of the same ground along their foot, so scrolling reads as walking on.
+four stages standing in it as **landmarks** rather than sitting beside it as cards.
+
+**Every section below it is a biome, and they are real ones**, which suits a travel planner and
+gives genuinely different silhouettes: alpine above the tree line where the argument is that
+constraints are hard, temperate deciduous for the walkthrough, mangrove wetland where shared
+money is untangled, reef and open ocean for the destination blueprints, desert for the
+comparison, savanna where a trip is set out across, and boreal forest at the end of the walk.
+Each carries far, mid and near landform, undergrowth, buildings, wildlife and water movement,
+and each tints its own layers — seven terrains want seven palettes, or the shapes differ and the
+page still reads the same.
+
+**Animals and bridges are drawn as line, not shape.** At this size a filled animal is a smudge
+and a two-stroke one still reads as an animal.
+
+**Four variants reused across seven sections is worse than a flat fill**, because the second half
+then looks like somewhere you have already been. It was built that way first. And swapping the
+*objects* is not enough on its own: three sections still shared one shape family — the same
+`Q…T…T` sweep with different numbers — so they read as one drawing however different their
+buildings were. Assert the terrain by command sequence, not by eye.
 
 Four drawn effects carry the whole style, none of them fetched, because `WF-034` forbids a
 remote asset and a bitmap grain would be one:
@@ -1595,6 +1612,22 @@ every screen baseline with it, since a capture suppresses transitions but leaves
 preferences alone. The hidden state is scoped to a class the script itself adds. Verified under
 `?baseline_theme=light` that every target renders at opacity 1.
 
+**An accent that fills a shape and an accent that inks a word cannot be one value.**
+`--landing-route` fills buttons and draws the route and is right at those sizes; set as small
+text on paper it measured 4.46 to 4.58 — over the line on paper alone, under it once the grain
+and the scenery behind were counted. `--landing-route-ink` is the darker half. This is the third
+time this file has recorded that split, after `--color-accent` and `--color-on-accent`.
+
+**A page grain costs contrast.** Multiplied grain darkens the ground under dark-on-light text by
+about a tenth of a contrast point everywhere, which was enough to put seven elements that
+measured fine in CSS just under 4.5 against real pixels. It came down from 0.055 to 0.04.
+
+**The phone is a different journey, not a smaller one.** Landmarks pinned to percentage
+coordinates overlap when the frame narrows, so below 860px they stack as full-width cards joined
+by the route down the column, at 68px targets. The scenery stays — it is the environment rather
+than decoration — and only the loose props and gutter illustrations go, since a phone has no
+gutters. Parallax halves: depth read through a 390px window is mostly motion.
+
 **The motion vocabulary is measured, not invented.** Hover 120-200ms, entrances 600-1000ms on
 `cubic-bezier(0.22, 1, 0.36, 1)`, the accordion on `grid-template-rows` at 300/220/0ms. Ambient
 drift moves nothing more than six pixels or 1.4°, and no two cycles share a period. **The
@@ -1613,6 +1646,43 @@ dependencies; a scroll library is a seventh. One passive scroll listener writing
 property and one `IntersectionObserver` do this job, and the animation stays in CSS where the
 compositor owns it. `lucide-react` was already a dependency, which is why the ~20 emoji that had
 been carrying meaning as sole markers could be replaced at no cost.
+
+### The contrast gate is blind to half of this page, and what to use instead
+
+`check_design_tokens.py` and any audit that walks ancestors for a `background-color` cannot see
+a **gradient**, an **SVG scene behind the text**, or a **translucent layer over it**. All three
+now exist on the landing, so those audits reported **0 failures on a page that plainly had
+unreadable text**. They are still right about tokens; they are not a readability check here.
+
+What works is measuring the pixels actually painted: hide the glyphs, photograph the page, and
+sample the real background under each text run. That found the true failures — the hero trust
+note at **2.39** and the preset action at **2.71** — which no amount of reading CSS would have.
+
+**It has two false-positive modes, both found by being wrong with it.** Sampling a fraction of
+the *element* box reads whatever is next to the text: a 424px label holding one short word
+reported its neighbours and produced failures that did not exist. Sample the text run —
+`Range.getClientRects()` — not the element. And a run containing an **icon** compares the icon
+against itself and returns ~1.0, which is how `.pain-tab` was reported at 1.0 while genuinely
+sitting at 5.6. Trust its large findings; check its marginal ones by hand.
+
+### When something is in the DOM at the right place and cannot be seen
+
+Four separate faults this round, and every one of them cost several wrong fixes aimed at
+geometry when the cause was the cascade:
+
+- `.hero-layer path` at (0,1,1) outranked `.hero-tree` at (0,1,0), so six drawn layers rendered
+  in the colour of the sand they stood on.
+- The reveal's hidden state was `.landing.motion-ready .landing-section .scene-env` (0,4,0) and
+  its revealed state `.landing-section.in-view .scene-env` (0,3,0). **Hidden always won**, so
+  every reveal target was permanently transparent.
+- `padding-bottom` written above `.landing-section { padding: 64px }` was reset by the shorthand,
+  leaving 33px of ground where 200px was intended.
+- `viewBox="0 60 …"` cut every shape above y=60, which was precisely the alpine summits and the
+  reef horizon.
+
+**Read the computed value first.** Opacity, fill and specificity are one query each; guessing at
+geometry is several rebuilds. Grep for *every* rule with a selector before editing one — twice
+this round a fix landed on a second, earlier block of the same name and did nothing.
 
 ### Vendored assets
 
@@ -1635,12 +1705,25 @@ that is hardest to catch because it reads like competence. Grep the landing for 
 
 ### Open
 
-The nav is still a conventional bar rather than sitting over the environment; the later sections
-have scenery under them but are not yet *locations*; mobile hides decoration rather than being
-recomposed as a vertical journey; and **16 hardcoded English UI strings** remain in the markup of
-`TripsPage.tsx` (it was 26 before later edits), which need Thai in the owner's own voice. Place
-names in the demo-data arrays above the component are correctly left untranslated — a city name
-is a geocoder query, never localised.
+The nav is still a conventional bar rather than sitting over the environment, and the later
+sections have scenery under them but are not yet *locations* in the way the four stages are.
+
+**The Thai on the landing is mine and has not been reviewed by the owner.** Twenty-eight strings
+were translated so the page stops rendering English at a Thai reader — verified at
+`?baseline_language=th` with 4,245 Thai characters and none of the English left — but accuracy is
+not the same as product voice, and `landing_lab_stage3_title` in particular is the sentence a
+Thai reader will judge the planner by.
+
+**The invented solver claims have now been removed twice.** The landing has twice advertised a
+"Mixed-Integer Linear Programming (ILP) Solver", once with a Branch-and-Cut solver, a 0.038s
+solve time, "544/544 constraints satisfied" and a "0.00% optimality gap" beside it. None of that
+exists: `optimizer.py` is a greedy baseline plus an insertion search, each variant re-checked by
+`validate_variant`. Grep the landing for `ILP`, `Branch`, `Optimality` and `Solve Time` before
+believing it describes this optimizer. A false claim that reads like competence is the hardest
+kind to notice on your own page.
+
+**The screen baselines still need re-approving on the owner's machine.** The landing has changed
+in almost every pixel across this round, and baselines are machine-specific by `WF-025`.
 
 ## A full flow on a fresh trip, 2026-08-18
 
