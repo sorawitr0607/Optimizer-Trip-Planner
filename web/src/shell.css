@@ -2901,12 +2901,8 @@
    started. No contrast audit can see that, which is why every one of them
    reported clean while the text was genuinely hard to read.
 
-   Capped in `em`, and **not** in `ch`, which is the trap here. `ch` is the width
-   of a zero glyph — measured in this face at 10.98px against an average lowercase
-   advance of 7.86px — so a `64ch` cap renders about **88** real characters, not
-   64, and the first attempt at this fix only moved the bullets from 108 to 92.
-   `em` scales with the type the same way but without the 40% zero-glyph error:
-   36em at 15px is 540px, which measures 69 characters in this face.
+   The values are `--measure-body` and `--measure-lead`, which carry the whole
+   explanation — including why `ch` is the wrong unit for this and cost a pass.
 
    `margin-inline: auto` keeps the centred blocks centred at their new width
    instead of pinning them to the left. */
@@ -2915,7 +2911,7 @@
 .faq-answer-inner p,
 .landing-section > p,
 .split-sandbox-card > p {
-  max-width: 36em;
+  max-width: var(--measure-body);
 }
 
 .landing-note,
@@ -2927,7 +2923,7 @@
    slightly wider measure — but still a bounded one. */
 .section-lead {
   margin-inline: auto;
-  max-width: 38em;
+  max-width: var(--measure-lead);
 }
 
 /* SCROLL-LINKED DEPTH.
@@ -3812,9 +3808,37 @@
    other section on the page sits in a measured, centred column. It takes the same
    rhythm as the rest, and the icons take the same inline treatment as every other
    inline label here. */
+/* The trust strip gets a frame, because it is the only running text on the page
+   still set straight onto scenery. Even at a correct measure, prose over a
+   textured ground is read against whatever the ground is doing underneath it —
+   the grain, the halftone, the terrain edge. Every other passage here already
+   sits on paper; this one now does too, with the same cut border and blurless
+   drop the rest of the surfaces use. */
+/* The frame makes this a fixed cream surface, so everything on it must take the
+   fixed ink too. Framed without this, the strip kept the section's `--text-primary`
+   — which flips — and in dark mode put near-white text on near-white paper at
+   1.07:1. That is the fourth time this stylesheet has produced the same fault: a
+   surface that does not flip cannot hold text from a token that does. Adding a
+   background is exactly the moment to check it. */
+.landing-trust-strip,
+.landing-trust-strip li {
+  color: var(--landing-text);
+}
+
+.landing-trust-strip .landing-note {
+  color: var(--landing-haze);
+}
+
 .landing-trust-strip {
+  background: var(--landing-cut);
+  border: 2px solid var(--landing-cut);
+  border-radius: var(--radius-house);
+  box-shadow: 0 4px 0 var(--landing-cut-shadow);
   margin: 32px auto 0;
   max-width: 48rem;
+  padding: 20px clamp(18px, 3vw, 28px);
+  position: relative;
+  z-index: 1;
 }
 
 .landing-bullets {

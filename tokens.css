@@ -319,6 +319,21 @@
 
      Sizes are in rem so a browser or OS text-size preference still scales them —
      the audit's older-traveller case is exactly the one that setting exists for. */
+  /* THE READING MEASURE, as a token so nobody has to rediscover the trap.
+
+     Running text wants 45-75 characters a line; past that the eye loses its place
+     returning to the left margin. The obvious unit for the rule is `ch` and it is
+     the wrong one: `ch` is the width of a zero glyph, measured in Plus Jakarta
+     Sans at 10.98px against an average lowercase advance of 7.86px, so a `64ch`
+     cap renders about **88** real characters. A cap written in `ch` will silently
+     be ~40% looser than it reads.
+
+     These are `em`, which scales with the type without the zero-glyph error, and
+     they are measured rather than guessed: 36em at 15px is 540px, which is 69
+     characters in this face. Use these; do not write a new measure by hand. */
+  --measure-body: 36em;
+  --measure-lead: 38em;
+
   --text-2xs: 0.75rem;    /* 12px — metadata only */
   --text-xs: 0.875rem;    /* 14px */
   --text-sm: 0.9375rem;   /* 15px */
