@@ -76,19 +76,19 @@ function SceneDefs() {
             edge a scalpel and a sheet of paper actually make. Seeds are fixed, so
             the tear is identical on every render — a baseline photographs this. */}
         <filter height="112%" id="w-rough" width="112%" x="-6%" y="-6%">
-          <feTurbulence baseFrequency="0.055 0.07" numOctaves="5" result="warp" seed="7" type="fractalNoise" />
+          <feTurbulence baseFrequency="0.055 0.07" numOctaves="2" result="warp" seed="7" type="fractalNoise" />
           <feDisplacementMap in="SourceGraphic" in2="warp" scale="7" xChannelSelector="R" yChannelSelector="G" />
         </filter>
 
         {/* A gentler tear for small objects, which a landform's displacement
             would dissolve outright. */}
         <filter height="120%" id="w-rough-fine" width="120%" x="-10%" y="-10%">
-          <feTurbulence baseFrequency="0.11" numOctaves="4" result="warp" seed="3" type="fractalNoise" />
+          <feTurbulence baseFrequency="0.11" numOctaves="2" result="warp" seed="3" type="fractalNoise" />
           <feDisplacementMap in="SourceGraphic" in2="warp" scale="2.6" xChannelSelector="R" yChannelSelector="G" />
         </filter>
 
         <filter id="w-grain">
-          <feTurbulence baseFrequency="0.72" numOctaves="4" seed="11" type="fractalNoise" />
+          <feTurbulence baseFrequency="0.72" numOctaves="2" seed="11" type="fractalNoise" />
           <feColorMatrix type="saturate" values="0" />
         </filter>
 
@@ -240,34 +240,39 @@ function SceneEnvironment({
             simply outside the frame. Stretching keeps the whole composition on
             screen, and abstract terrain is the one thing that tolerates it. */}
         <svg preserveAspectRatio="none" viewBox="0 0 1200 400">
-        <g filter="url(#w-rough)">
+        {/* One group per depth, with the filter ON the group and the parallax on
+            the same element. Written the other way round — paths translating
+            inside a shared filtered group — every scroll frame re-ran a
+            `feDisplacementMap` over the whole scene, because changing anything
+            inside a filtered subtree invalidates its cached result. There were 21
+            such elements across the page and the profile showed it: a 17ms median
+            with 70ms spikes. Filtered output can be cached and composited; the
+            filter only has to run when its own contents change, which is never. */}
+        <g className="sb-depth sb-d1" filter="url(#w-rough)">
           <path className="sb-far" d={env.far} />
           <path className="sb-screen" d={env.far} />
+        </g>
+        <g className="sb-depth sb-d2" filter="url(#w-rough)">
           <path className="sb-mid" d={env.mid} />
+        </g>
+        <g className="sb-depth sb-d3" filter="url(#w-rough)">
           <path className="sb-near" d={env.near} />
         </g>
-        <g filter="url(#w-rough-fine)">
+        <g className="sb-depth sb-d4" filter="url(#w-rough-fine)">
           <path className={env.detailClass} d={env.detail} />
-          {/* The things standing in this place. Buildings and rock take the solid
-              fill, trees and boats a lighter one, and birds and bridges are drawn
-              as line rather than shape — a bird at this scale is two strokes, and
-              filling it makes a blot. */}
           <path className="sb-solid" d={env.solid} />
+        </g>
+        <g className="sb-depth sb-d5" filter="url(#w-rough-fine)">
           <path className="sb-fine" d={env.fine} />
-          <path className="sb-line" d={env.line} fill="none" />
-          {/* Undergrowth: the small vegetation that makes a biome specific rather
-              than generic — shrubs and tufts, reeds in the wetland, coral on the
-              reef, pines in the taiga. */}
           <path className="sb-extra" d={env.extra} />
-          {/* What lives here, drawn as line: deer, camels, fish, a whale, a flag on
-              a summit. Line rather than fill because at this size a filled animal
-              is a smudge, and a two-stroke one still reads as an animal. */}
+          <path className="sb-line" d={env.line} fill="none" />
           <path className="sb-life" d={env.life} fill="none" />
-          {/* Water movement, where there is water. */}
           {env.water ? <path className="sb-ripple" d={env.water} fill="none" /> : null}
         </g>
         <path className="sb-path" d="M-20,372 Q260,346 520,360 T900,348 T1220,362" fill="none" />
-        <rect className="w-grain" filter="url(#w-grain)" height="400" width="1200" x="0" y="0" />
+        {/* No per-scene grain rect. Nine live `feTurbulence` rects were painting
+            the same texture the page already lays over everything as one tiled
+            image — the same effect, nine more filters to rasterise. */}
       </svg>
     </div>
   );
@@ -391,7 +396,7 @@ function Landmark({
                 landforms' tear, because these shapes are a tenth the size and a
                 landform's displacement would dissolve them. */}
             <filter height="124%" id="lm-rough" width="124%" x="-12%" y="-12%">
-              <feTurbulence baseFrequency="0.09" numOctaves="4" result="w" seed="5" type="fractalNoise" />
+              <feTurbulence baseFrequency="0.09" numOctaves="2" result="w" seed="5" type="fractalNoise" />
               <feDisplacementMap in="SourceGraphic" in2="w" scale="2.2" xChannelSelector="R" yChannelSelector="G" />
             </filter>
           </defs>

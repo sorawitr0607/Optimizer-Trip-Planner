@@ -2892,7 +2892,25 @@
   box-shadow: 0 4px 0 var(--landing-night);
 }
 
-/* MEASURE.
+/* `content-visibility: auto` was tried here and measured worse, which is worth
+   recording so it is not tried again. It skips paint for offscreen sections, but
+   on a page where every section carries a filtered scene it just defers that work
+   and then does it in one burst as the section scrolls in: p99 frame time went
+   from 70ms to 235ms and janky frames from 4 to 7. Deferring expensive work does
+   not make it cheaper; it makes it late, and late is what a scroll spike is.
+
+   What did help is structural and is in the scene markup: the filter sits on each
+   depth group and the parallax transform sits on that same group, so a filtered
+   result is rasterised once and then only composited. */
+
+/* A filtered scene is a fixed picture. Telling the compositor so lets it keep the
+   rasterised result on its own layer and translate it rather than repainting. */
+.scene-env {
+  contain: paint;
+  will-change: transform;
+}
+
+/* MEASURE./* MEASURE.
 
    Contrast was never what made these passages hard to read — the bullets under
    the trip form are near-black on cream, about as legible as ink gets. They ran
@@ -2940,12 +2958,12 @@
   --scroll-y: 0;
 }
 
-.scene-env .sb-far { translate: 0 calc(var(--scroll-y) * -7px); }
-.scene-env .sb-mid { translate: 0 calc(var(--scroll-y) * -14px); }
-.scene-env .sb-near { translate: 0 calc(var(--scroll-y) * -22px); }
-.scene-env .sb-tree,
-.scene-env .sb-bush,
-.scene-env .sb-water { translate: 0 calc(var(--scroll-y) * -30px); }
+/* Parallax on the filtered group, never on a path inside it. */
+.scene-env .sb-d1 { translate: 0 calc(var(--scroll-y) * -7px); }
+.scene-env .sb-d2 { translate: 0 calc(var(--scroll-y) * -14px); }
+.scene-env .sb-d3 { translate: 0 calc(var(--scroll-y) * -22px); }
+.scene-env .sb-d4 { translate: 0 calc(var(--scroll-y) * -28px); }
+.scene-env .sb-d5 { translate: 0 calc(var(--scroll-y) * -34px); }
 
 .w-distant { translate: 0 calc(var(--scroll-y) * -10px); }
 .w-middle { translate: 0 calc(var(--scroll-y) * -22px); }
@@ -3174,12 +3192,6 @@
 }
 
 /* They take a depth of their own, nearer than the ground behind them. */
-.scene-env .sb-extra { translate: 0 calc(var(--scroll-y) * -34px); }
-.scene-env .sb-life { translate: 0 calc(var(--scroll-y) * -38px); }
-.scene-env .sb-ripple { translate: 0 calc(var(--scroll-y) * -30px); }
-.scene-env .sb-solid { translate: 0 calc(var(--scroll-y) * -26px); }
-.scene-env .sb-fine { translate: 0 calc(var(--scroll-y) * -32px); }
-.scene-env .sb-line { translate: 0 calc(var(--scroll-y) * -12px); }
 
 /* The form's own labels. `--text-muted` is sized for a label beside a filled
    field on a plain surface; measured against the pixels actually painted on this
@@ -3572,8 +3584,7 @@
   .scene-env .sb-life,
   .scene-env .sb-ripple,
   .scene-env .sb-solid,
-  .scene-env .sb-fine { translate: 0 calc(var(--scroll-y) * -14px); }
-
+  
   /* The ground band shrinks with the viewport, but never disappears — losing it
      would turn the phone back into the stack of rectangles this all replaced. */
   .scene-env {
