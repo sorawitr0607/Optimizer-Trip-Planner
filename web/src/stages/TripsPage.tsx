@@ -126,6 +126,9 @@ const ENVIRONMENTS = {
     near: "M-40,300 L180,272 L360,300 L560,278 L780,302 L1000,276 L1240,298 L1240,400 L-40,400 Z",
     detail: "M300,40 L326,64 L313,68 L300,60 L287,70 L274,64 Z M742,56 L768,80 L755,84 L742,76 L729,86 L716,80 Z",
     detailClass: "sb-snow",
+    solid: "M116,318 q12,-39,34,-32 q26,-5,34,32 Z M190,326 q8,-25,22,-21 q16,-3,22,21 Z M274.0,300 L274.0,266 L300,245 L326.0,266 L326.0,300 Z M950,320 q10,-34,30,-28 q22,-4,30,28 Z M1026,328 q7,-23,20,-19 q15,-3,20,19 Z M1105,304 L1111,252 L1129,252 L1135,304 Z M1106,252 L1134,252 L1130,236 L1110,236 Z",
+    fine: "M392,262 l-9,18 h4 l-7,15 h6 l-5,11 h18 l-5,-11 h6 l-7,-15 h4 Z M430,248 l-10,22 h4 l-8,18 h7 l-6,12 h20 l-6,-12 h7 l-8,-18 h4 Z M880,272 l-9,17 h4 l-7,14 h6 l-5,10 h18 l-5,-10 h6 l-7,-14 h4 Z",
+    line: "M507,150 q6,-9,13,0 q6,-9,13,0 M566,132 q5,-7,10,0 q5,-7,10,0 M617,162 q6,-8,11,0 q6,-8,11,0",
   },
   /* Rolling and open — the walkthrough, where the journey is explained. */
   valley: {
@@ -134,6 +137,9 @@ const ENVIRONMENTS = {
     near: "M-40,312 Q240,282 500,308 T940,296 T1240,314 L1240,400 L-40,400 Z",
     detail: "M212,232 l-11,24 h4 l-9,20 h8 l-7,15 h30 l-7,-15 h8 l-9,-20 h4 Z M268,220 l-12,26 h5 l-10,22 h9 l-8,16 h32 l-8,-16 h9 l-10,-22 h5 Z M960,228 l-11,24 h4 l-9,20 h8 l-7,15 h30 l-7,-15 h8 l-9,-20 h4 Z M1016,236 l-11,22 h4 l-9,19 h8 l-7,14 h30 l-7,-14 h8 l-9,-19 h4 Z",
     detailClass: "sb-tree",
+    solid: "M201.0,318 L201.0,282 L230,260 L259.0,282 L259.0,318 Z M282.0,322 L282.0,296 L302,280 L322.0,296 L322.0,322 Z M985.0,320 L985.0,288 L1010,268 L1035.0,288 L1035.0,320 Z",
+    fine: "M120,268 l-10,19 h4 l-8,16 h7 l-6,11 h20 l-6,-11 h7 l-8,-16 h4 Z M162,254 l-11,23 h4 l-9,18 h8 l-7,13 h22 l-7,-13 h8 l-9,-18 h4 Z M408,274 l-9,18 h4 l-7,14 h6 l-5,10 h18 l-5,-10 h6 l-7,-14 h4 Z M452,262 l-10,21 h4 l-8,17 h7 l-6,12 h20 l-6,-12 h7 l-8,-17 h4 Z M900,274 l-9,18 h4 l-7,15 h6 l-5,11 h18 l-5,-11 h6 l-7,-15 h4 Z M1096,268 l-10,20 h4 l-8,16 h7 l-6,12 h20 l-6,-12 h7 l-8,-16 h4 Z",
+    line: "M588,146 q6,-8,12,0 q6,-8,12,0 M644,128 q5,-7,10,0 q5,-7,10,0",
   },
   /* A river runs through it — the section where money is split and settled. */
   river: {
@@ -142,6 +148,9 @@ const ENVIRONMENTS = {
     near: "M-40,336 Q260,310 520,332 T960,322 T1240,338 L1240,400 L-40,400 Z",
     detail: "M-40,292 Q200,268 420,290 T860,278 T1240,296 L1240,322 Q860,304 420,316 T-40,318 Z",
     detailClass: "sb-water",
+    solid: "M157.0,304 L157.0,274 L180,255 L203.0,274 L203.0,304 Z M1074,296 L1080,238 L1100,238 L1106,296 Z M1076,238 L1104,238 L1101,220 L1079,220 Z M406,330 q8,-28,24,-23 q18,-4,24,23 Z",
+    fine: "M643,320 q17,9,34,0 Z M660,317 L660,288 L681,312 Z M808,328 q12,7,24,0 Z M820,326 L820,305 L835,323 Z M120,258 l-9,18 h4 l-7,14 h6 l-5,10 h18 l-5,-10 h6 l-7,-14 h4 Z M1000,266 l-9,17 h4 l-7,14 h6 l-5,10 h18 l-5,-10 h6 l-7,-14 h4 Z",
+    line: "M476,306 q64,-40,128,0 M476,306 L476,320 M604,306 L604,320 M508,288 L508,312 M572,288 L572,312 M688,150 q6,-8,12,0 q6,-8,12,0 M742,134 q5,-7,10,0 q5,-7,10,0",
   },
   /* Soft dunes at the end of the walk, where the questions are answered. */
   dunes: {
@@ -150,6 +159,9 @@ const ENVIRONMENTS = {
     near: "M-40,340 Q300,318 600,336 T1240,340 L1240,400 L-40,400 Z",
     detail: "M420,330 a18,18 0 0 1 36,0 z M472,336 a12,12 0 0 1 24,0 z M840,332 a15,15 0 0 1 30,0 z",
     detailClass: "sb-bush",
+    solid: "M1063,318 L1069,252 L1091,252 L1097,318 Z M1065,252 L1095,252 L1091,233 L1069,233 Z M178.0,330 L178.0,302 L200,285 L222.0,302 L222.0,330 Z M538,340 q8,-25,22,-21 q16,-3,22,21 Z",
+    fine: "M300,290 l-8,15 h3 l-6,12 h6 l-5,9 h16 l-5,-9 h6 l-6,-12 h3 Z M866,344 q14,8,28,0 Z M880,341 L880,317 L898,338 Z",
+    line: "M468,158 q6,-8,12,0 q6,-8,12,0 M524,140 q5,-7,10,0 q5,-7,10,0 M629,166 q6,-8,11,0 q6,-8,11,0",
   },
 } as const;
 
@@ -163,7 +175,12 @@ function SceneEnvironment({
   const env = ENVIRONMENTS[variant];
   return (
     <div aria-hidden="true" className={`scene-env scene-env-${variant} ${flip ? "flip" : ""}`}>
-      <svg preserveAspectRatio="xMidYMax slice" viewBox="0 60 1200 340">
+      {/* `none`, not `slice`. Sliced into a section-tall box the 1200-wide
+            composition scaled 2.53x to cover and cropped to the middle 474 units
+            of its own width — every building and tree drawn near the edges was
+            simply outside the frame. Stretching keeps the whole composition on
+            screen, and abstract terrain is the one thing that tolerates it. */}
+        <svg preserveAspectRatio="none" viewBox="0 60 1200 340">
         <g filter="url(#w-rough)">
           <path className="sb-far" d={env.far} />
           <path className="sb-screen" d={env.far} />
@@ -172,6 +189,13 @@ function SceneEnvironment({
         </g>
         <g filter="url(#w-rough-fine)">
           <path className={env.detailClass} d={env.detail} />
+          {/* The things standing in this place. Buildings and rock take the solid
+              fill, trees and boats a lighter one, and birds and bridges are drawn
+              as line rather than shape — a bird at this scale is two strokes, and
+              filling it makes a blot. */}
+          <path className="sb-solid" d={env.solid} />
+          <path className="sb-fine" d={env.fine} />
+          <path className="sb-line" d={env.line} fill="none" />
         </g>
         <path className="sb-path" d="M-20,372 Q260,346 520,360 T900,348 T1220,362" fill="none" />
         <rect className="w-grain" filter="url(#w-grain)" height="400" width="1200" x="0" y="0" />

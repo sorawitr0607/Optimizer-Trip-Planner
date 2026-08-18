@@ -2931,22 +2931,28 @@
     translate: 0 18px;
   }
 
-  .landing-section.in-view .section-header,
-  .landing-section.in-view .scene-env,
-  .landing-world.in-view .world-copy,
-  .landing-world.in-view .landmark-place {
+  /* The revealed rule has to carry the same `.landing.motion-ready` prefix the
+     hidden one does. Without it the pair was (0,3,0) against (0,4,0) and the
+     hidden state simply won — every reveal target rendered permanently
+     transparent, which is why an environment measured as correctly positioned,
+     correctly sized, and invisible. Specificity, not geometry, and it cost four
+     wrong guesses at the geometry before I measured the computed opacity. */
+  .landing.motion-ready .landing-section.in-view .section-header,
+  .landing.motion-ready .landing-section.in-view .scene-env,
+  .landing.motion-ready .landing-world.in-view .world-copy,
+  .landing.motion-ready .landing-world.in-view .landmark-place {
     opacity: 1;
     translate: 0 0;
   }
 
   /* Scenery first, then the landmarks in reading order, then the copy. */
-  .landing-section.in-view .scene-env { transition-delay: 0ms; }
-  .landing-world.in-view .landmark-place:nth-child(1) { transition-delay: 120ms; }
-  .landing-world.in-view .landmark-place:nth-child(2) { transition-delay: 200ms; }
-  .landing-world.in-view .landmark-place:nth-child(3) { transition-delay: 280ms; }
-  .landing-world.in-view .landmark-place:nth-child(4) { transition-delay: 360ms; }
-  .landing-world.in-view .world-copy { transition-delay: 440ms; }
-  .landing-section.in-view .section-header { transition-delay: 140ms; }
+  .landing.motion-ready .landing-section.in-view .scene-env { transition-delay: 0ms; }
+  .landing.motion-ready .landing-world.in-view .landmark-place:nth-child(1) { transition-delay: 120ms; }
+  .landing.motion-ready .landing-world.in-view .landmark-place:nth-child(2) { transition-delay: 200ms; }
+  .landing.motion-ready .landing-world.in-view .landmark-place:nth-child(3) { transition-delay: 280ms; }
+  .landing.motion-ready .landing-world.in-view .landmark-place:nth-child(4) { transition-delay: 360ms; }
+  .landing.motion-ready .landing-world.in-view .world-copy { transition-delay: 440ms; }
+  .landing.motion-ready .landing-section.in-view .section-header { transition-delay: 140ms; }
 }
 
 /* The shared press. Draws nothing and must take no layout, but the definitions
@@ -2964,13 +2970,17 @@
 
    Behind everything and never takes a pointer. Kept quiet enough that the words
    in front of it never have to compete: these are grounds, not pictures. */
+/* The terrain occupies the ground band at the foot of its section, not the whole
+   height — the atmosphere above it is the section's own background, so stretching
+   one SVG over both would only thin the drawing out. Bottom-anchored and given a
+   real height, so the composition is always fully in frame. */
 .scene-env {
   bottom: 0;
+  height: clamp(260px, 27vw, 400px);
   left: 0;
   pointer-events: none;
   position: absolute;
   right: 0;
-  top: 0;
   z-index: 0;
 }
 
@@ -2993,6 +3003,20 @@
 .sb-bush { fill: var(--landing-tree-light); opacity: 0.4; }
 .sb-snow { fill: var(--landing-snow); opacity: 0.72; }
 .sb-water { fill: var(--landing-peak-mid); opacity: 0.34; }
+
+/* The things standing in a place. Buildings and rock read as the nearest solid
+   mass, trees and boats sit a step back, and the flying and spanning things are
+   line rather than shape — a bird at this scale is two strokes, and filling it
+   makes a blot. */
+.sb-solid { fill: var(--landing-tree); opacity: 0.3; }
+.sb-fine { fill: var(--landing-tree); opacity: 0.42; }
+
+.sb-line {
+  opacity: 0.34;
+  stroke: var(--landing-mark);
+  stroke-linecap: round;
+  stroke-width: 3;
+}
 .sb-screen { fill: url(#w-halftone); opacity: 0.34; }
 
 .sb-path {
@@ -3049,6 +3073,30 @@
     linear-gradient(to bottom, var(--landing-ground-alt) 0%, transparent 54%),
     var(--landing-ground);
 }
+
+/* Each place tints its own objects too, or a lighthouse on the dunes is painted
+   the same green as a barn in the valley. */
+.pain-math-section .sb-solid,
+.comparison-section .sb-solid { fill: var(--landing-rock); opacity: 0.42; }
+.split-sandbox-section .sb-solid { fill: var(--landing-peak-mid); opacity: 0.36; }
+.split-sandbox-section .sb-fine { fill: var(--landing-route); opacity: 0.34; }
+.faq-section .sb-solid,
+.action-workspace-section .sb-solid { fill: var(--landing-rock); opacity: 0.44; }
+.faq-section .sb-fine,
+.action-workspace-section .sb-fine { fill: var(--landing-route); opacity: 0.3; }
+
+.comparison-section .sb-solid,
+.comparison-section .sb-fine { fill: var(--landing-cream); opacity: 0.12; }
+
+.comparison-section .sb-line {
+  opacity: 0.16;
+  stroke: var(--landing-cream);
+}
+
+/* They take a depth of their own, nearer than the ground behind them. */
+.scene-env .sb-solid { translate: 0 calc(var(--scroll-y) * -26px); }
+.scene-env .sb-fine { translate: 0 calc(var(--scroll-y) * -32px); }
+.scene-env .sb-line { translate: 0 calc(var(--scroll-y) * -12px); }
 
 /* The working surface holds the real trip form, so its ground stays almost
    subliminal — an environment must never make a form harder to read. */
@@ -4518,6 +4566,35 @@
 .landing-section {
   padding: 64px clamp(16px, 5vw, 48px);
 }
+
+/* Room for the ground to show. A section whose content runs to its own bottom
+   edge leaves 33 pixels of clear band, so the terrain, the buildings and the
+   trees all render behind the card and none of them can be seen — which is how a
+   populated environment ends up looking exactly like a flat fill. Every scene
+   that carries one gets a strip of open ground beneath its content, which is also
+   what makes the walk between two sections read as continuous.
+
+   Not the working surface: that section is the trip form, and pushing it down the
+   page to show scenery under it would be decoration winning over the thing people
+   came to use. */
+.pain-math-section,
+.showcase-section,
+.split-sandbox-section,
+.presets-section,
+.comparison-section,
+.faq-section {
+  /* The floor is 200px because that is what the geometry needs, not a round
+     number: the objects sit about 119px above the section's bottom edge once the
+     viewBox is sliced, and a band shorter than that renders them behind the
+     content. Measured across all seven sections, not guessed. */
+  padding-bottom: clamp(200px, 15vw, 240px);
+}
+
+/* Placed after the shorthand above on purpose. Written before it, `padding: 64px`
+   reset the bottom every time and the band measured 32px in all seven sections —
+   the objects were in the DOM, at the right coordinates, and behind the cards.
+   That is the same source-order fault this file has now recorded four times. */
+
 
 .section-header {
   margin: 0 auto 36px;
