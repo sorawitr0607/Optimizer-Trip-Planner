@@ -3074,8 +3074,27 @@
     var(--landing-ground);
 }
 
-/* Each place tints its own objects too, or a lighthouse on the dunes is painted
-   the same green as a barn in the valley. */
+/* Seven terrains want seven palettes, or the shapes differ and the page still
+   reads the same. Rock is grey, water cool, the canyon warm-ochre, the harbour
+   blue-green, the camp deep forest. */
+.presets-section .sb-far { fill: var(--landing-peak-far); opacity: 0.36; }
+.presets-section .sb-mid { fill: var(--landing-peak-mid); opacity: 0.3; }
+.presets-section .sb-near { fill: var(--landing-hill-deep); opacity: 0.22; }
+.presets-section .sb-water { fill: var(--landing-peak-mid); opacity: 0.4; }
+
+.comparison-section .sb-far { fill: var(--landing-rock); }
+.comparison-section .sb-mid { fill: var(--landing-warn); }
+
+.action-workspace-section .sb-far { fill: var(--landing-peak-far); opacity: 0.4; }
+.action-workspace-section .sb-mid { fill: var(--landing-rock); opacity: 0.4; }
+.action-workspace-section .sb-water { fill: var(--landing-peak-mid); opacity: 0.3; }
+
+.faq-section .sb-far { fill: var(--landing-hill); opacity: 0.34; }
+.faq-section .sb-mid { fill: var(--landing-tree); opacity: 0.3; }
+.faq-section .sb-near { fill: var(--landing-hill-deep); opacity: 0.24; }
+
+/* Each place tints its own objects too, or a lighthouse on a shore is painted
+   the same green as a barn in a valley. */
 .pain-math-section .sb-solid,
 .comparison-section .sb-solid { fill: var(--landing-rock); opacity: 0.42; }
 .split-sandbox-section .sb-solid { fill: var(--landing-peak-mid); opacity: 0.36; }

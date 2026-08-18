@@ -119,49 +119,86 @@ function SceneDefs() {
  */
 const ENVIRONMENTS = {
   /* Exposed rock. This section argues that real constraints are hard, so it
-     stands somewhere with edges rather than somewhere soft. */
+     stands somewhere with edges. */
   cliffs: {
     far: "M-40,150 L110,58 L196,110 L300,40 L404,116 L520,64 L628,126 L742,56 L860,120 L972,70 L1090,128 L1240,84 L1240,400 L-40,400 Z",
     mid: "M-40,232 L140,168 L268,236 L392,158 L520,230 L660,176 L800,244 L930,170 L1070,238 L1240,186 L1240,400 L-40,400 Z",
     near: "M-40,300 L180,272 L360,300 L560,278 L780,302 L1000,276 L1240,298 L1240,400 L-40,400 Z",
     detail: "M300,40 L326,64 L313,68 L300,60 L287,70 L274,64 Z M742,56 L768,80 L755,84 L742,76 L729,86 L716,80 Z",
     detailClass: "sb-snow",
-    solid: "M116,318 q12,-39,34,-32 q26,-5,34,32 Z M190,326 q8,-25,22,-21 q16,-3,22,21 Z M274.0,300 L274.0,266 L300,245 L326.0,266 L326.0,300 Z M950,320 q10,-34,30,-28 q22,-4,30,28 Z M1026,328 q7,-23,20,-19 q15,-3,20,19 Z M1105,304 L1111,252 L1129,252 L1135,304 Z M1106,252 L1134,252 L1130,236 L1110,236 Z",
+    solid: "M116,318 q12,-39,34,-32 q26,-5,34,32 Z M190,326 q8,-25,22,-21 q16,-3,22,21 Z M274,300 L274,266 L300,245 L326,266 L326,300 Z M950,320 q10,-34,30,-28 q22,-4,30,28 Z M1105,304 L1111,252 L1129,252 L1135,304 Z M1106,252 L1134,252 L1130,236 L1110,236 Z",
     fine: "M392,262 l-9,18 h4 l-7,15 h6 l-5,11 h18 l-5,-11 h6 l-7,-15 h4 Z M430,248 l-10,22 h4 l-8,18 h7 l-6,12 h20 l-6,-12 h7 l-8,-18 h4 Z M880,272 l-9,17 h4 l-7,14 h6 l-5,10 h18 l-5,-10 h6 l-7,-14 h4 Z",
     line: "M507,150 q6,-9,13,0 q6,-9,13,0 M566,132 q5,-7,10,0 q5,-7,10,0 M617,162 q6,-8,11,0 q6,-8,11,0",
   },
   /* Rolling and open — the walkthrough, where the journey is explained. */
   valley: {
     far: "M-40,176 Q160,120 380,166 T780,146 T1240,178 L1240,400 L-40,400 Z",
-    mid: "M-40,244 Q200,196 440,238 T880,222 T1240,250 L1240,400 L-40,400 Z",
+    mid: "M-40,252 L160,228 Q300,190 440,232 L620,220 Q760,186 900,228 L1080,240 Q1170,232 1240,244 L1240,400 L-40,400 Z",
     near: "M-40,312 Q240,282 500,308 T940,296 T1240,314 L1240,400 L-40,400 Z",
-    detail: "M212,232 l-11,24 h4 l-9,20 h8 l-7,15 h30 l-7,-15 h8 l-9,-20 h4 Z M268,220 l-12,26 h5 l-10,22 h9 l-8,16 h32 l-8,-16 h9 l-10,-22 h5 Z M960,228 l-11,24 h4 l-9,20 h8 l-7,15 h30 l-7,-15 h8 l-9,-20 h4 Z M1016,236 l-11,22 h4 l-9,19 h8 l-7,14 h30 l-7,-14 h8 l-9,-19 h4 Z",
+    detail: "M212,256 l-10,21 h4 l-8,17 h7 l-6,12 h20 l-6,-12 h7 l-8,-17 h4 Z M268,240 l-11,24 h4 l-9,20 h8 l-7,14 h22 l-7,-14 h8 l-9,-20 h4 Z M960,252 l-10,22 h4 l-8,18 h7 l-6,12 h20 l-6,-12 h7 l-8,-18 h4 Z M1016,264 l-9,19 h4 l-7,16 h6 l-5,11 h18 l-5,-11 h6 l-7,-16 h4 Z",
     detailClass: "sb-tree",
-    solid: "M201.0,318 L201.0,282 L230,260 L259.0,282 L259.0,318 Z M282.0,322 L282.0,296 L302,280 L322.0,296 L322.0,322 Z M985.0,320 L985.0,288 L1010,268 L1035.0,288 L1035.0,320 Z",
-    fine: "M120,268 l-10,19 h4 l-8,16 h7 l-6,11 h20 l-6,-11 h7 l-8,-16 h4 Z M162,254 l-11,23 h4 l-9,18 h8 l-7,13 h22 l-7,-13 h8 l-9,-18 h4 Z M408,274 l-9,18 h4 l-7,14 h6 l-5,10 h18 l-5,-10 h6 l-7,-14 h4 Z M452,262 l-10,21 h4 l-8,17 h7 l-6,12 h20 l-6,-12 h7 l-8,-17 h4 Z M900,274 l-9,18 h4 l-7,15 h6 l-5,11 h18 l-5,-11 h6 l-7,-15 h4 Z M1096,268 l-10,20 h4 l-8,16 h7 l-6,12 h20 l-6,-12 h7 l-8,-16 h4 Z",
+    solid: "M201,318 L201,282 L230,260 L259,282 L259,318 Z M282,322 L282,296 L302,280 L322,296 L322,322 Z M985,320 L985,288 L1010,268 L1035,288 L1035,320 Z",
+    fine: "M120,268 l-10,19 h4 l-8,16 h7 l-6,11 h20 l-6,-11 h7 l-8,-16 h4 Z M408,274 l-9,18 h4 l-7,14 h6 l-5,10 h18 l-5,-10 h6 l-7,-14 h4 Z M452,262 l-10,21 h4 l-8,17 h7 l-6,12 h20 l-6,-12 h7 l-8,-17 h4 Z M1096,268 l-10,20 h4 l-8,16 h7 l-6,12 h20 l-6,-12 h7 l-8,-16 h4 Z",
     line: "M588,146 q6,-8,12,0 q6,-8,12,0 M644,128 q5,-7,10,0 q5,-7,10,0",
   },
-  /* A river runs through it — the section where money is split and settled. */
+  /* A river runs through it — where money is split and settled. */
   river: {
-    far: "M-40,182 Q180,138 400,176 T820,158 T1240,186 L1240,400 L-40,400 Z",
+    far: "M-40,196 Q120,164 260,182 L420,120 L520,196 Q700,168 880,188 L980,138 L1080,192 Q1170,178 1240,190 L1240,400 L-40,400 Z",
     mid: "M-40,256 Q220,214 460,250 T900,236 T1240,262 L1240,400 L-40,400 Z",
     near: "M-40,336 Q260,310 520,332 T960,322 T1240,338 L1240,400 L-40,400 Z",
     detail: "M-40,292 Q200,268 420,290 T860,278 T1240,296 L1240,322 Q860,304 420,316 T-40,318 Z",
     detailClass: "sb-water",
-    solid: "M157.0,304 L157.0,274 L180,255 L203.0,274 L203.0,304 Z M1074,296 L1080,238 L1100,238 L1106,296 Z M1076,238 L1104,238 L1101,220 L1079,220 Z M406,330 q8,-28,24,-23 q18,-4,24,23 Z",
+    solid: "M157,304 L157,274 L180,255 L203,274 L203,304 Z M1074,296 L1080,238 L1100,238 L1106,296 Z M1076,238 L1104,238 L1101,220 L1079,220 Z M406,330 q8,-28,24,-23 q18,-4,24,23 Z",
     fine: "M643,320 q17,9,34,0 Z M660,317 L660,288 L681,312 Z M808,328 q12,7,24,0 Z M820,326 L820,305 L835,323 Z M120,258 l-9,18 h4 l-7,14 h6 l-5,10 h18 l-5,-10 h6 l-7,-14 h4 Z M1000,266 l-9,17 h4 l-7,14 h6 l-5,10 h18 l-5,-10 h6 l-7,-14 h4 Z",
-    line: "M476,306 q64,-40,128,0 M476,306 L476,320 M604,306 L604,320 M508,288 L508,312 M572,288 L572,312 M688,150 q6,-8,12,0 q6,-8,12,0 M742,134 q5,-7,10,0 q5,-7,10,0",
+    line: "M476,306 q64,-40,128,0 M476,306 L476,320 M604,306 L604,320 M688,150 q6,-8,12,0 q6,-8,12,0 M742,134 q5,-7,10,0 q5,-7,10,0",
   },
-  /* Soft dunes at the end of the walk, where the questions are answered. */
-  dunes: {
-    far: "M-40,206 Q220,164 480,200 T940,184 T1240,208 L1240,400 L-40,400 Z",
-    mid: "M-40,272 Q260,240 540,266 T980,254 T1240,276 L1240,400 L-40,400 Z",
-    near: "M-40,340 Q300,318 600,336 T1240,340 L1240,400 L-40,400 Z",
-    detail: "M420,330 a18,18 0 0 1 36,0 z M472,336 a12,12 0 0 1 24,0 z M840,332 a15,15 0 0 1 30,0 z",
-    detailClass: "sb-bush",
-    solid: "M1063,318 L1069,252 L1091,252 L1097,318 Z M1065,252 L1095,252 L1091,233 L1069,233 Z M178.0,330 L178.0,302 L200,285 L222.0,302 L222.0,330 Z M538,340 q8,-25,22,-21 q16,-3,22,21 Z",
-    fine: "M300,290 l-8,15 h3 l-6,12 h6 l-5,9 h16 l-5,-9 h6 l-6,-12 h3 Z M866,344 q14,8,28,0 Z M880,341 L880,317 L898,338 Z",
-    line: "M468,158 q6,-8,12,0 q6,-8,12,0 M524,140 q5,-7,10,0 q5,-7,10,0 M629,166 q6,-8,11,0 q6,-8,11,0",
+  /* Separate islands in open sea. The blueprints section is a row of
+     destinations, and a destination is somewhere you cross water to reach. */
+  archipelago: {
+    far: "M30,214 q54,-108,120,-86 q72,9,120,86 Z M334,214 q43,-80,96,-64 q58,6,96,64 Z M620,214 q63,-130,140,-104 q84,10,140,104 Z M970,214 q50,-92,110,-74 q66,7,110,74 Z M-40,214 L1240,214 L1240,400 L-40,400 Z",
+    mid: "M194,268 q39,-65,86,-52 q52,5,86,52 Z M516,268 q47,-85,104,-68 q62,7,104,68 Z M870,268 q36,-58,80,-46 q48,5,80,46 Z M-40,268 L1240,268 L1240,400 L-40,400 Z",
+    near: "M-40,322 Q300,306 640,318 T1240,320 L1240,400 L-40,400 Z",
+    detail: "M-40,214 L1240,214 L1240,286 Q900,272 620,282 T-40,278 Z",
+    detailClass: "sb-water",
+    solid: "M130,200 L130,174 L150,158 L170,174 L170,200 Z M747,196 L752,152 L768,152 L773,196 Z M748,152 L772,152 L769,138 L751,138 Z",
+    fine: "M345,250 q15,8,30,0 Z M360,247 L360,222 L379,243 Z M548,262 q12,7,24,0 Z M560,260 L560,239 L575,257 Z M864,244 q16,9,32,0 Z M880,241 L880,214 L900,237 Z M1019,258 q11,6,22,0 Z M1030,256 L1030,237 L1044,253 Z",
+    line: "M228,132 q6,-8,12,0 q6,-8,12,0 M290,116 q5,-7,10,0 q5,-7,10,0 M868,140 q6,-8,12,0 q6,-8,12,0",
+  },
+  /* Flat-topped mesas and vertical walls. The comparison is the page's
+     argument, and an argument wants somewhere with two clear sides. */
+  canyon: {
+    far: "M-40,400 L-24,96 L174,96 L190,400 Z M250,400 L266,64 L454,64 L470,400 Z M560,400 L576,110 L744,110 L760,400 Z M860,400 L876,72 L1074,72 L1090,400 Z M1150,400 L1166,120 L1224,120 L1240,400 Z",
+    mid: "M120,400 L136,182 L314,182 L330,400 Z M430,400 L446,158 L624,158 L640,400 Z M780,400 L796,196 L964,196 L980,400 Z M1060,400 L1076,170 L1224,170 L1240,400 Z",
+    near: "M-40,300 L120,286 L340,302 L620,288 L900,304 L1240,292 L1240,400 L-40,400 Z",
+    detail: "M560,110 L760,110 L760,124 L560,124 Z M120,182 L330,182 L330,196 L120,196 Z",
+    detailClass: "sb-snow",
+    solid: "M179,296 L179,270 L200,254 L221,270 L221,296 Z M246,300 L246,280 L262,268 L278,280 L278,300 Z M854,306 q9,-30,26,-25 q20,-4,26,25 Z",
+    fine: "M420,262 l-8,14 h3 l-6,12 h6 l-5,8 h16 l-5,-8 h6 l-6,-12 h3 Z M1120,270 l-7,13 h3 l-6,10 h5 l-4,7 h14 l-4,-7 h5 l-6,-10 h3 Z",
+    line: "M408,142 q6,-8,12,0 q6,-8,12,0 M468,126 q5,-7,10,0 q5,-7,10,0 M989,150 q6,-8,11,0 q6,-8,11,0",
+  },
+  /* A bay, a breakwater and a town on the shore — the section where a trip
+     is actually started, so it is a place you set out from. */
+  harbour: {
+    far: "M-40,196 Q120,150 300,182 T640,166 T980,190 T1240,172 L1240,400 L-40,400 Z",
+    mid: "M-40,262 L180,248 L420,262 L700,250 L980,264 L1240,252 L1240,400 L-40,400 Z",
+    near: "M-40,344 Q220,330 460,340 T940,336 T1240,344 L1240,400 L-40,400 Z",
+    detail: "M-40,286 Q260,272 560,284 T1080,278 T1240,286 L1240,330 Q900,318 560,326 T-40,322 Z",
+    detailClass: "sb-water",
+    solid: "M98,258 L98,228 L120,209 L142,228 L142,258 Z M161,262 L161,240 L178,226 L195,240 L195,262 Z M208,258 L208,232 L228,216 L248,232 L248,258 Z M1136,250 L1141,200 L1159,200 L1164,250 Z M1137,200 L1163,200 L1159,185 L1141,185 Z",
+    fine: "M602,300 q18,10,36,0 Z M620,296 L620,266 L642,292 Z M747,308 q13,7,26,0 Z M760,305 L760,283 L776,302 Z M885,296 q15,8,30,0 Z M900,293 L900,268 L919,289 Z",
+    line: "M420,300 L1000,300 M420,300 L420,316 M1000,300 L1000,316 M548,146 q6,-8,12,0 q6,-8,12,0 M604,130 q5,-7,10,0 q5,-7,10,0",
+  },
+  /* The ridge here is forest rather than rock, with tents pitched under it.
+     The questions are the end of the walk, so this is where you make camp. */
+  camp: {
+    far: "M-40,214 Q80,196 180,204 Q320,108 470,206 Q560,232 640,212 Q790,116 940,208 Q1090,228 1240,206 L1240,400 L-40,400 Z",
+    mid: "M-40,258 L0,214 L40,260 L80,227 L120,264 L160,214 L200,259 L240,216 L280,261 L320,206 L360,254 L400,225 L440,260 L480,215 L520,262 L560,219 L600,264 L640,205 L680,253 L720,214 L760,256 L800,204 L840,253 L880,217 L920,264 L960,228 L1000,263 L1040,220 L1080,252 L1120,219 L1160,258 L1200,214 L1240,262 L1240,400 L-40,400 Z",
+    near: "M-40,330 Q260,314 540,326 T1240,330 L1240,400 L-40,400 Z",
+    detail: "M180,258 l-12,26 h5 l-10,21 h8 l-7,15 h24 l-7,-15 h8 l-10,-21 h5 Z M240,244 l-13,29 h5 l-10,24 h9 l-8,17 h26 l-8,-17 h9 l-10,-24 h5 Z M1000,254 l-12,27 h5 l-10,22 h8 l-7,15 h24 l-7,-15 h8 l-10,-22 h5 Z M1064,268 l-11,24 h4 l-9,19 h8 l-7,13 h22 l-7,-13 h8 l-9,-19 h4 Z",
+    detailClass: "sb-tree",
+    solid: "M410,322 L440,288 L470,322 Z M440,288 L432,322 L448,322 Z M496,326 L520,300 L544,326 Z M520,300 L513,326 L527,326 Z M859,320 L859,294 L880,278 L901,294 L901,320 Z",
+    fine: "M600,330 q7,-23,20,-19 q15,-3,20,19 Z M700,278 l-9,18 h4 l-7,15 h6 l-5,11 h18 l-5,-11 h6 l-7,-15 h4 Z M760,288 l-8,16 h3 l-6,13 h6 l-5,9 h16 l-5,-9 h6 l-6,-13 h3 Z",
+    line: "M348,152 q6,-8,12,0 q6,-8,12,0 M406,136 q5,-7,10,0 q5,-7,10,0 M809,158 q6,-8,11,0 q6,-8,11,0",
   },
 } as const;
 
@@ -1334,7 +1371,7 @@ export function TripsPage() {
           SECTION 3: 4-STAGE PRODUCT LABORATORY (Interactive Walkthrough)
           ------------------------------------------------------------- */}
       <section className="landing-section showcase-section" id="lab">
-        <SceneEnvironment flip variant="valley" />
+        <SceneEnvironment variant="valley" />
         <SceneProp kind="suitcase" place="bl" />
         <img
           alt=""
@@ -1840,7 +1877,7 @@ export function TripsPage() {
           SECTION 5: 1-CLICK CURATED DESTINATION BLUEPRINTS
           ------------------------------------------------------------- */}
       <section className="landing-section presets-section" id="presets">
-        <SceneEnvironment flip variant="valley" />
+        <SceneEnvironment variant="archipelago" />
         <SceneProp kind="boardingPass" place="bl" />
         <img
           alt=""
@@ -1884,7 +1921,7 @@ export function TripsPage() {
           SECTION 6: WHY US (Comprehensive Comparison Table)
           ------------------------------------------------------------- */}
       <section className="landing-section comparison-section" id="comparison">
-        <SceneEnvironment variant="cliffs" />
+        <SceneEnvironment variant="canyon" />
         <img alt="" aria-hidden="true" className="scene-art" loading="lazy" src="/illustrations/decide-night.svg" />
         <SceneProp kind="compass" place="tl" />
         <SceneProp kind="suitcase" place="tr" />
@@ -1964,7 +2001,7 @@ export function TripsPage() {
           SECTION 7: ACTION WORKSPACE (Creator Form + Saved Trips)
           ------------------------------------------------------------- */}
       <section className="landing-section action-workspace-section" id="start-a-trip">
-        <SceneEnvironment variant="dunes" />
+        <SceneEnvironment variant="harbour" />
         <img alt="" aria-hidden="true" className="scene-art" loading="lazy" src="/illustrations/booking.svg" />
         <div className="section-header">
           <span className="section-badge">{copy("start_planning", language)}</span>
@@ -2165,7 +2202,7 @@ export function TripsPage() {
           SECTION 8: FAQ ACCORDION (Objection Handling)
           ------------------------------------------------------------- */}
       <section className="landing-section faq-section" id="faq">
-        <SceneEnvironment flip variant="dunes" />
+        <SceneEnvironment variant="camp" />
         <SceneProp kind="stamp" place="br" />
         <img
           alt=""
