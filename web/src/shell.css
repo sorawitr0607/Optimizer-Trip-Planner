@@ -2780,6 +2780,122 @@
   }
 }
 
+/* SCROLL-LINKED DEPTH.
+
+   One scroll listener writes `--scroll-y` on `.landing` and every layer derives
+   its own travel from that times its own `--depth` — background least, foreground
+   most, which is the whole of a 2D parallax. Composed with the pointer drift the
+   props already read, so an object answers the mouse and the scroll at once.
+
+   Only `translate` is animated, so nothing here touches layout or paint; the
+   compositor owns it. `--scroll-y` defaults to 0, so with no script, reduced
+   motion, or a capture in progress, every layer sits exactly where it is drawn. */
+.landing {
+  --scroll-y: 0;
+}
+
+.scene-band .sb-far { translate: 0 calc(var(--scroll-y) * -8px); }
+.scene-band .sb-near { translate: 0 calc(var(--scroll-y) * -16px); }
+.scene-band .sb-tree,
+.scene-band .sb-bush { translate: 0 calc(var(--scroll-y) * -24px); }
+
+.w-distant { translate: 0 calc(var(--scroll-y) * -10px); }
+.w-middle { translate: 0 calc(var(--scroll-y) * -22px); }
+.w-ground { translate: 0 calc(var(--scroll-y) * -38px); }
+.w-front { translate: 0 calc(var(--scroll-y) * -56px); }
+
+/* REVEAL ORDER.
+
+   A scene arrives, then the places in it, then the words, then the small things —
+   never all at once, which is the difference between a world assembling and a
+   page fading in. The section holds the class permanently once seen: a reveal
+   that replays on every scroll-back reads as a glitch rather than as a story. */
+@media (prefers-reduced-motion: no-preference) {
+  .landing.motion-ready .landing-section .section-header,
+  .landing.motion-ready .landing-section .scene-band,
+  .landing.motion-ready .landing-world .world-copy,
+  .landing.motion-ready .landmark-place {
+    opacity: 0;
+    transition:
+      opacity 700ms var(--ease-reveal),
+      translate 700ms var(--ease-reveal);
+    translate: 0 18px;
+  }
+
+  .landing-section.in-view .section-header,
+  .landing-section.in-view .scene-band,
+  .landing-world.in-view .world-copy,
+  .landing-world.in-view .landmark-place {
+    opacity: 1;
+    translate: 0 0;
+  }
+
+  /* Scenery first, then the landmarks in reading order, then the copy. */
+  .landing-section.in-view .scene-band { transition-delay: 0ms; }
+  .landing-world.in-view .landmark-place:nth-child(1) { transition-delay: 120ms; }
+  .landing-world.in-view .landmark-place:nth-child(2) { transition-delay: 200ms; }
+  .landing-world.in-view .landmark-place:nth-child(3) { transition-delay: 280ms; }
+  .landing-world.in-view .landmark-place:nth-child(4) { transition-delay: 360ms; }
+  .landing-world.in-view .world-copy { transition-delay: 440ms; }
+  .landing-section.in-view .section-header { transition-delay: 140ms; }
+}
+
+/* The shared press. Draws nothing and must take no layout, but the definitions
+   have to be in the document for every scene's `url(#...)` to resolve. */
+.scene-defs {
+  height: 0;
+  position: absolute;
+  width: 0;
+}
+
+/* A band of ground along the foot of a section. The page below the world was a
+   stack of coloured rectangles, and a rectangle is where an illustrated journey
+   stops being one — so the same hills, treeline, screens and torn edge continue
+   under every section, with the route running on across them. Scenery: behind
+   everything, and it never takes a pointer. */
+.scene-band {
+  bottom: 0;
+  height: clamp(120px, 15vw, 190px);
+  left: 0;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  z-index: 0;
+}
+
+/* Mirrored on alternate sections so the same geometry does not read as a repeat
+   tiling down the page. */
+.scene-band.flip {
+  transform: scaleX(-1);
+}
+
+.scene-band svg {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+.sb-far { fill: var(--landing-hill); opacity: 0.42; }
+.sb-near { fill: var(--landing-hill-deep); opacity: 0.34; }
+.sb-tree { fill: var(--landing-tree); opacity: 0.4; }
+.sb-bush { fill: var(--landing-tree-light); opacity: 0.44; }
+.sb-screen { fill: url(#w-halftone); opacity: 0.4; }
+
+.sb-path {
+  opacity: 0.5;
+  stroke: var(--landing-route);
+  stroke-dasharray: 13 15;
+  stroke-linecap: round;
+  stroke-width: 4;
+}
+
+/* On the night scene the bands would vanish; they take its ink instead. */
+.comparison-section .sb-far,
+.comparison-section .sb-near {
+  fill: var(--landing-cream);
+  opacity: 0.08;
+}
+
 /* ===========================================================================
    THE ILLUSTRATED WORLD
    =========================================================================== */
@@ -2976,9 +3092,9 @@
 .lm-flag { fill: var(--landing-route); }
 .lm-plinth { fill: var(--landing-rock); }
 .lm-dial { fill: var(--landing-cut); }
+.lm-pupil { fill: var(--landing-mark); }
 .lm-needle { fill: var(--landing-route); }
-.lm-post,
-.landmark-art path.cut:not([class*="lm-"]) { stroke: var(--landing-tree); stroke-width: 7; }
+.lm-post { stroke: var(--landing-tree); stroke-width: 11; }
 .lm-board { fill: var(--landing-go); }
 .lm-board-alt { fill: var(--landing-warn); }
 

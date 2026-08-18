@@ -25,7 +25,7 @@ import {
   XCircle,
   Zap,
 } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 
 import { ApiError, rpc, type Journey, type SetupVocabulary, type Trip } from "../api/client";
@@ -33,6 +33,7 @@ import { copy, type Language } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
 import { DeleteTrip } from "../shared/DeleteTrip";
 import { useTheme } from "../shared/ThemeProvider";
+import { startWorldMotion } from "../shared/worldMotion";
 
 /** Sentinel for the typed fallback. Not a country code, so it cannot collide. */
 const TYPE_IT = "__type_it__";
@@ -52,6 +53,91 @@ const TICKER_ITEMS = [
   [Wallet, "landing_ticker_split"],
   [FileSpreadsheet, "landing_ticker_export"],
 ] as const;
+
+/**
+ * The press, defined once for the whole page.
+ *
+ * SVG filter and pattern ids are document-global, so every scene on this page
+ * references one set rather than carrying its own copy — which also means the
+ * grain, the screens and the tear are literally the same effects everywhere,
+ * and cannot drift apart between one band and the next.
+ *
+ * Rendered into a zero-size `<svg>`: it draws nothing itself and must not take
+ * layout, but the definitions have to be in the document for the references to
+ * resolve.
+ */
+function SceneDefs() {
+  return (
+    <svg aria-hidden="true" className="scene-defs" focusable="false">
+      <defs>
+        {/* Vector paths are exactly as straight as they are written, and nothing
+            reads as digitally sterile faster than a hillside with a perfect edge.
+            Displacing the outline by a few pixels of fractal noise gives the torn
+            edge a scalpel and a sheet of paper actually make. Seeds are fixed, so
+            the tear is identical on every render — a baseline photographs this. */}
+        <filter height="112%" id="w-rough" width="112%" x="-6%" y="-6%">
+          <feTurbulence baseFrequency="0.055 0.07" numOctaves="5" result="warp" seed="7" type="fractalNoise" />
+          <feDisplacementMap in="SourceGraphic" in2="warp" scale="7" xChannelSelector="R" yChannelSelector="G" />
+        </filter>
+
+        {/* A gentler tear for small objects, which a landform's displacement
+            would dissolve outright. */}
+        <filter height="120%" id="w-rough-fine" width="120%" x="-10%" y="-10%">
+          <feTurbulence baseFrequency="0.11" numOctaves="4" result="warp" seed="3" type="fractalNoise" />
+          <feDisplacementMap in="SourceGraphic" in2="warp" scale="2.6" xChannelSelector="R" yChannelSelector="G" />
+        </filter>
+
+        <filter id="w-grain">
+          <feTurbulence baseFrequency="0.72" numOctaves="4" seed="11" type="fractalNoise" />
+          <feColorMatrix type="saturate" values="0" />
+        </filter>
+
+        <pattern height="6" id="w-halftone" patternUnits="userSpaceOnUse" width="6">
+          <circle cx="1.5" cy="1.5" r="1.1" />
+        </pattern>
+
+        {/* One screen is a texture; two at different pitches and angles is a print. */}
+        <pattern height="11" id="w-halftone-coarse" patternTransform="rotate(24)" patternUnits="userSpaceOnUse" width="11">
+          <circle cx="2.6" cy="2.6" r="1.9" />
+        </pattern>
+      </defs>
+    </svg>
+  );
+}
+
+/**
+ * A band of ground running along the foot of a section.
+ *
+ * The page below the world was a stack of coloured rectangles, and a rectangle is
+ * where an illustrated journey stops being one. Each band carries the same two
+ * hill layers, the same treeline, the same screens and the same torn edge as the
+ * world above it, plus the dotted route continuing across — so scrolling reads as
+ * walking on rather than as paging through.
+ *
+ * Scenery, so `aria-hidden`, no pointer events, and behind everything.
+ */
+function SceneBand({ flip = false }: { flip?: boolean }) {
+  return (
+    <div aria-hidden="true" className={`scene-band ${flip ? "flip" : ""}`}>
+      <svg preserveAspectRatio="none" viewBox="0 0 1200 180">
+        <g filter="url(#w-rough)">
+          <path className="sb-far" d="M-40,86 Q150,52 360,80 T760,66 T1240,84 L1240,180 L-40,180 Z" />
+          <path className="sb-screen" d="M-40,86 Q150,52 360,80 T760,66 T1240,84 L1240,180 L-40,180 Z" />
+          <path className="sb-near" d="M-40,124 Q220,98 460,118 T900,106 T1240,122 L1240,180 L-40,180 Z" />
+        </g>
+        <g filter="url(#w-rough-fine)">
+          <path
+            className="sb-tree"
+            d="M188,112 l-8,17 h3 l-6,14 h6 l-5,10 h16 l-5,-10 h6 l-6,-14 h3 Z M232,104 l-9,19 h3 l-7,15 h7 l-5,11 h18 l-5,-11 h7 l-7,-15 h3 Z M980,110 l-8,17 h3 l-6,14 h6 l-5,10 h16 l-5,-10 h6 l-6,-14 h3 Z M1028,116 l-8,15 h3 l-6,13 h6 l-5,9 h16 l-5,-9 h6 l-6,-13 h3 Z"
+          />
+          <path className="sb-bush" d="M520,152 a16,16 0 0 1 32,0 z M566,156 a11,11 0 0 1 22,0 z M700,154 a13,13 0 0 1 26,0 z" />
+        </g>
+        <path className="sb-path" d="M-20,158 Q260,132 520,146 T900,134 T1220,148" fill="none" />
+        <rect className="w-grain" filter="url(#w-grain)" height="180" width="1200" x="0" y="0" />
+      </svg>
+    </div>
+  );
+}
 
 /**
  * The world, and its landmarks.
@@ -80,10 +166,14 @@ const LANDMARKS = [
     x: 13,
     y: 58,
     art: (
+      /* Storybook proportions rather than architectural ones: the boards are
+         nearly as wide as the object is tall and the post is a stub, because a
+         signpost drawn to scale reads as a diagram and a signpost drawn top-heavy
+         reads as a drawing of one. The same exaggeration runs through all four. */
       <>
-        <path className="cut" d="M30 96 L30 44" />
-        <path className="cut lm-sign" d="M8 20 L58 16 L66 30 L58 44 L8 40 Z" />
-        <path className="cut lm-sign-alt" d="M52 52 L4 56 L-2 66 L4 78 L52 74 Z" />
+        <path className="cut lm-post" d="M34 100 L34 52" />
+        <path className="cut lm-sign" d="M-6 8 L54 2 L70 24 L54 46 L-6 40 Z" />
+        <path className="cut lm-sign-alt" d="M60 54 L4 60 L-8 74 L4 88 L60 82 Z" />
       </>
     ),
   },
@@ -95,9 +185,10 @@ const LANDMARKS = [
     y: 44,
     art: (
       <>
-        <path className="cut lm-rock" d="M6 96 L18 52 L34 38 L52 50 L62 96 Z" />
-        <circle className="cut lm-lens" cx="34" cy="30" r="15" />
-        <path className="cut lm-flag" d="M34 15 L34 -8 L62 0 L34 8" />
+        <path className="cut lm-rock" d="M2 100 L14 74 L34 66 L54 74 L66 100 Z" />
+        <circle className="cut lm-lens" cx="34" cy="34" r="32" />
+        <circle className="cut lm-pupil" cx="34" cy="34" r="13" />
+        <path className="cut lm-flag" d="M34 2 L34 -14 L72 -4 L34 6" />
       </>
     ),
   },
@@ -109,9 +200,9 @@ const LANDMARKS = [
     y: 56,
     art: (
       <>
-        <path className="cut lm-plinth" d="M8 96 L14 66 L54 66 L60 96 Z" />
-        <circle className="cut lm-dial" cx="34" cy="40" r="26" />
-        <path className="cut lm-needle" d="M34 18 L44 40 L34 62 L24 40 Z" />
+        <path className="cut lm-plinth" d="M14 100 L20 82 L48 82 L54 100 Z" />
+        <circle className="cut lm-dial" cx="34" cy="42" r="38" />
+        <path className="cut lm-needle" d="M34 8 L48 42 L34 76 L20 42 Z" />
       </>
     ),
   },
@@ -123,9 +214,9 @@ const LANDMARKS = [
     y: 46,
     art: (
       <>
-        <path className="cut lm-post" d="M28 96 L28 40" />
-        <path className="cut lm-board" d="M4 12 L60 8 L60 36 L4 32 Z" />
-        <path className="cut lm-board-alt" d="M8 44 L58 40 L58 62 L8 58 Z" />
+        <path className="cut lm-post" d="M34 100 L34 56" />
+        <path className="cut lm-board" d="M-4 2 L70 -4 L70 30 L-4 24 Z" />
+        <path className="cut lm-board-alt" d="M2 36 L64 30 L64 62 L2 56 Z" />
       </>
     ),
   },
@@ -158,7 +249,7 @@ function Landmark({
         onClick={onOpen}
         type="button"
       >
-        <svg aria-hidden="true" className="landmark-art" focusable="false" viewBox="-4 -12 76 112">
+        <svg aria-hidden="true" className="landmark-art" focusable="false" viewBox="-14 -18 96 126">
           <defs>
             {/* The landmarks are cut paper too. They were the only objects in the
                 world still carrying machine-exact edges, which is precisely the
@@ -604,6 +695,12 @@ export function TripsPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   /** Which landmark has its card unfolded. One at a time, like a map legend. */
   const [openLandmark, setOpenLandmark] = useState<string | null>(null);
+  const worldRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!worldRef.current) return;
+    return startWorldMotion(worldRef.current);
+  }, []);
 
   const trips = useQuery({ queryKey: ["trips"], queryFn: () => rpc<Trip[]>("list_trips") });
   const vocabulary = useQuery({
@@ -667,6 +764,7 @@ export function TripsPage() {
     // derives-from: element 5 .hero-content as .landing-hero
     <main
       className="landing"
+      ref={worldRef}
       onPointerMove={(e) => {
         // One handler for the page. The hero writes these on itself as well, which
         // simply wins inside the hero; every other scene's props read them here.
@@ -675,6 +773,7 @@ export function TripsPage() {
         e.currentTarget.style.setProperty("--drift-y", String((e.clientY - rect.top) / rect.height - 0.5));
       }}
     >
+      <SceneDefs />
       {/* -------------------------------------------------------------
           TOP BAR & UTILITY NAVIGATION (Hack the North style)
           ------------------------------------------------------------- */}
@@ -986,51 +1085,6 @@ export function TripsPage() {
         {/* Layers 1-3 and 5 are scenery and say so; only the landmarks are content. */}
         <div aria-hidden="true" className="world-scenery">
           <svg className="world-svg" preserveAspectRatio="xMidYMax slice" viewBox="0 0 1200 620">
-            <defs>
-              {/* THE PRESS.
-
-                  Four effects, and between them they are the whole art direction:
-                  a halftone screen, a grain wash, an edge-roughening displacement
-                  and a soft shading pass. All drawn — `WF-034` forbids fetching a
-                  texture, and a bitmap grain would be one.
-
-                  The roughening is the load-bearing one. Vector paths are exactly
-                  as straight as they are written, and nothing reads as digitally
-                  sterile faster than a mountain with a perfect edge. Displacing
-                  every outline by a few pixels of fractal noise gives the torn,
-                  hand-cut edge that a scalpel and a sheet of paper actually make.
-                  `seed` is fixed so the tear is the same on every render — a
-                  screen baseline photographs this. */}
-              <filter id="w-rough" x="-6%" y="-6%" height="112%" width="112%">
-                <feTurbulence baseFrequency="0.055 0.07" numOctaves="5" result="warp" seed="7" type="fractalNoise" />
-                <feDisplacementMap in="SourceGraphic" in2="warp" scale="7" xChannelSelector="R" yChannelSelector="G" />
-              </filter>
-
-              {/* A gentler tear for the small objects, which would dissolve at the
-                  scale the landforms take. */}
-              <filter id="w-rough-fine" x="-10%" y="-10%" height="120%" width="120%">
-                <feTurbulence baseFrequency="0.11" numOctaves="4" result="warp" seed="3" type="fractalNoise" />
-                <feDisplacementMap in="SourceGraphic" in2="warp" scale="2.6" xChannelSelector="R" yChannelSelector="G" />
-              </filter>
-
-              {/* The grain. A full-frame noise wash laid over everything at low
-                  alpha, which is what stops flat fills reading as flat. */}
-              <filter id="w-grain">
-                <feTurbulence baseFrequency="0.72" numOctaves="4" seed="11" type="fractalNoise" />
-                <feColorMatrix type="saturate" values="0" />
-              </filter>
-
-              <pattern id="w-halftone" height="6" patternUnits="userSpaceOnUse" width="6">
-                <circle cx="1.5" cy="1.5" r="1.1" />
-              </pattern>
-
-              {/* A second screen at a different pitch and angle. One screen is a
-                  texture; two overlapping at different pitches is a print. */}
-              <pattern id="w-halftone-coarse" height="11" patternTransform="rotate(24)" patternUnits="userSpaceOnUse" width="11">
-                <circle cx="2.6" cy="2.6" r="1.9" />
-              </pattern>
-            </defs>
-
             {/* LAYER 2 — distant scenery */}
             <g className="w-layer w-distant" filter="url(#w-rough)" style={{ "--depth": 0.1 } as React.CSSProperties}>
               <path className="w-peak-far" d="M-40,300 L120,176 L210,244 L330,140 L452,250 L560,186 L680,262 L800,168 L930,252 L1040,190 L1160,258 L1240,214 L1240,620 L-40,620 Z" />
@@ -1101,6 +1155,7 @@ export function TripsPage() {
           SECTION 2: "THE PAIN VS THE MATH" (Interactive Before/After)
           ------------------------------------------------------------- */}
       <section className="landing-section pain-math-section" id="pain-math">
+        <SceneBand />
         <SceneProp kind="foldedMap" place="mid" />
         <SceneProp kind="compass" place="tl" />
         <SceneProp kind="stamp" place="br" />
@@ -1176,6 +1231,7 @@ export function TripsPage() {
           SECTION 3: 4-STAGE PRODUCT LABORATORY (Interactive Walkthrough)
           ------------------------------------------------------------- */}
       <section className="landing-section showcase-section" id="lab">
+        <SceneBand flip />
         <SceneProp kind="suitcase" place="bl" />
         <img
           alt=""
@@ -1388,6 +1444,7 @@ export function TripsPage() {
           SECTION 4: INTERACTIVE MULTI-CURRENCY BILL SPLIT SANDBOX
           ------------------------------------------------------------- */}
       <section className="landing-section split-sandbox-section" id="split-sandbox">
+        <SceneBand />
         <SceneProp kind="luggageTag" place="tr" />
         <img
           alt=""
@@ -1871,6 +1928,7 @@ export function TripsPage() {
           SECTION 8: FAQ ACCORDION (Objection Handling)
           ------------------------------------------------------------- */}
       <section className="landing-section faq-section" id="faq">
+        <SceneBand flip />
         <SceneProp kind="stamp" place="br" />
         <img
           alt=""
