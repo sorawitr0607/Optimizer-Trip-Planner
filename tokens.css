@@ -16,6 +16,30 @@
   src: url("/fonts/plus-jakarta-sans-latin-wght-normal.woff2") format("woff2-variations");
 }
 
+/* The landing's display face, and it is a third family where D8 had settled on
+   two — so it is a deliberate reopening rather than an oversight. The reference
+   sets its headings in Castledown, a rounded, friendly, high-weight display face
+   that is commercial and cannot ship here; Plus Jakarta Sans is geometric and
+   reads noticeably cooler at display sizes, which was the largest remaining gap
+   after the palette was fixed. Fredoka is the closest open equivalent: rounded
+   terminals, generous counters, the same warmth.
+
+   SIL OFL 1.1 like the other two, licence beside them in `OFL-Fredoka.txt`,
+   self-hosted at 29 KB — nothing is fetched at runtime, which is what keeps
+   `WF-034` intact.
+
+   **Its axis is 300-700, not 100-900.** The house display weight is
+   `--weight-selected: 800`, and asking for 800 here would have the browser
+   synthesise a bolder face — exactly the fault D8 exists to prevent. Every rule
+   that sets this family caps at 700; see `--weight-display`. */
+@font-face {
+  font-family: "Fredoka";
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url("/fonts/fredoka-latin-wght-normal.woff2") format("woff2-variations");
+}
+
 @font-face {
   font-family: "JetBrains Mono";
   font-style: normal;
@@ -169,8 +193,8 @@
      `--landing-mark` for the surfaces they also back made the headline and the lead
      dark text on the dark hero. Same lesson as the accent: a token that fills a
      surface *and* inks the text on another cannot be flipped by theme. */
-  --landing-page: #0f141a;
-  --landing-step: #19222d;
+  --landing-page: #1c1207;
+  --landing-step: #2a1d0e;
 }
 
 /* D6: one country-to-accent mapping. Unknown countries keep the house red (D3).
@@ -276,6 +300,11 @@
 
   --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* Landing display only. Falls back to the house sans, so nothing outside the
+     landing changes and a failed font load degrades to what was there before. */
+  --font-display: "Fredoka", "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  /* The top of Fredoka's real axis. Not 800 — see the note above the @font-face. */
+  --weight-display: 700;
   /* The scale was lifted on 2026-08-10 after a UX audit measured the screens: on
      `/setup`, 36 of the 51 elements carrying their own text rendered at 11px or
      less, and the app is mostly times, money and evidence — the content that is
@@ -304,6 +333,33 @@
 
   --ease-standard: ease;
   --ease-out: ease-out;
+
+  /* The motion system, read off hackthenorth.com rather than recalled — the page
+     was opened and every computed transition and animation counted. That site
+     runs on three curves and a short duration ladder, and the counts say which
+     is which: `filter, transform 0.15s ease` on 116 elements, `all 0.2s ease-out`
+     on 106, `transform 0.12s ease` on 73. So hover is 120-200ms, and every
+     entrance is 600-1000ms on `cubic-bezier(0.22, 1, 0.36, 1)`.
+
+     The one thing worth stating because it is a *restraint* rather than an
+     effect: that site has **no scroll-triggered reveals**. Sampled six sections
+     sitting more than a viewport below the fold and every one was already at
+     `opacity: 1`, `transform: none`, `animation: none`. Its motion budget is
+     spent on one orchestrated hero load and a couple of ambient loops, and
+     nothing else moves as you scroll. Do not add reveal-on-scroll here and call
+     it a match — it would be the opposite of one. */
+  --ease-reveal: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-micro: 120ms;
+  --duration-hover: 150ms;
+  --duration-reveal: 800ms;
+
+  /* Their hero sequences its illustrations about 0.35s apart across 4.28s. That
+     is right for artwork assembling itself and wrong for a value proposition:
+     our hero carries the sentence the product is judged on and the button the
+     page exists to get pressed, so the same sequencing runs at a fifth of the
+     step and is over in well under a second. */
+  --stagger-step: 70ms;
 }
 
 @custom-variant max-xl (@media (max-width: 1200px));
@@ -417,38 +473,81 @@ button:disabled {
 
      Named for their job, not their hue. The previous names (`amber`, `sand`) described
      colours, so repainting would have left tokens whose names contradicted their values. */
-  --landing-ink: #0f141a;
-  --landing-ink-soft: #19222d;
-  --landing-haze: #9db0c4;
-  --landing-mark: #dce8f5;
-  --landing-route: #7db0ff;
-  --landing-route-soft: #1e3a5f;
-  --landing-cream: #f2f7fc;
-  --landing-on-ink: #e6eef7;
-  --landing-page: #f4f7fa;
-  --landing-step: #e3ecf5;
-  /* Modern landing accents & glow tokens */
-  --landing-emerald: #10b981;
-  --landing-emerald-soft: #064e3b;
-  --landing-emerald-glow: rgb(16 185 129 / 35%);
-  --landing-amber: #f59e0b;
-  --landing-amber-soft: #78350f;
-  --landing-amber-glow: rgb(245 158 11 / 35%);
-  --landing-cyan: #06b6d4;
-  --landing-cyan-soft: #164e63;
-  --landing-cyan-glow: rgb(6 182 212 / 35%);
-  --landing-violet: #8b5cf6;
-  --landing-violet-soft: #4c1d95;
-  --landing-violet-glow: rgb(139 92 246 / 35%);
-  --landing-glass-bg: rgb(25 34 45 / 75%);
-  --landing-glass-border: rgb(157 176 196 / 25%);
+  /* Repainted light on the second pass, and the first pass is worth recording
+     because it was a measurement error rather than a taste one. Ranking the
+     reference's colours by painted area put #0f2412 on top, so this was built as
+     a dark page — but that number was carried by one very tall underwater
+     section. The deciding figure was in the text: dark brown #8e420b covers
+     10,685 characters of that site against cream's 4,925, so dark-on-light
+     outnumbers light-on-dark better than two to one. It is a warm paper site
+     with one night scene in it, and a uniformly dark page is not a match for it.
+
+     Cream and the hues are theirs; the two accents and the alternate band were
+     adjusted only for legibility. Their own #d8cf86 sand is too dark to carry an
+     accent — route reads 3.79 and go 3.67 on it — so the band is lightened to
+     #eee5c2, where the tightest pairing is go at 4.63. */
+  --landing-ground: #fdf7ce;
+  --landing-ground-alt: #eee5c2;
+  --landing-raised: #fffdf5;
+  --landing-text: #3d2b14;
+  --landing-mark: #1c1207;
+  --landing-haze: #6b5436;
+  --landing-cream: #fdf7ce;
+
+  /* The one dark scene. The reference runs a night/underwater stretch between
+     its daylight ones, and that rhythm is most of what stops a warm page turning
+     into an unbroken wash. Cream on it reads 15.12. */
+  /* The reference's own grass, unaltered. Dark text reads 6.99 on it and the
+     cream panels separate at 2.43, which is a change of material rather than a
+     change of shade — the point of the band. */
+  --landing-grass: #8cab21;
+  /* The paper grain. The reference's grounds are painted, so none of them is a
+     flat fill — there is always tooth in them. This is two hairline gradients at
+     3% of the accent, which is under the eye's threshold as a pattern and above
+     it as a texture. Alpha, so it can only live here. */
+  --landing-grain: rgb(160 74 12 / 3%);
+  --landing-grass-badge: rgb(253 247 206 / 45%);
+
+  --landing-night: #0f2412;
+  /* The night scene's own set. A ground this dark cannot borrow the paper
+     palette's accents — `--landing-go` at #46701a was picked to be read on cream
+     and disappears here — so the two semantic colours are the lighter members of
+     the same hue pair, and the surfaces are cream at low alpha rather than fresh
+     hexes, which is what keeps the section reading as the same material lit
+     differently. Alpha, so they can only live here. */
+  --landing-night-go: #9dbe28;
+  --landing-night-warn: #f0776a;
+  --landing-night-panel: rgb(255 253 245 / 6%);
+  --landing-night-line: rgb(253 247 206 / 22%);
+  --landing-night-rule: rgb(253 247 206 / 16%);
+  --landing-night-badge: rgb(253 247 206 / 14%);
+
+  /* Their burnt orange darkened just enough to be read as text on paper — #bd580f
+     is 4.24 on cream — and it still carries cream at 5.57 when used as a fill. */
+  --landing-route: #a04a0c;
+  --landing-route-soft: #f7dcc0;
+  --landing-page: #fdf7ce;
+  --landing-step: #eee5c2;
+  --landing-go: #46701a;
+  --landing-go-soft: #e3edc4;
+  --landing-warn: #b3321f;
+  --landing-warn-soft: #f8ddd6;
+  --landing-glass-bg: rgb(255 253 245 / 80%);
+  --landing-glass-border: rgb(160 74 12 / 30%);
   /* The tour scrim. Alpha has to live here: `rgba(` is a colour literal and the gate
      permits none outside this file, so a translucent overlay is only expressible as a
      token. Dark enough to push the screen back, sheer enough to keep it recognisable —
      the tour describes that screen, so hiding it entirely defeats the explanation. */
-  --landing-scrim: rgb(15 20 26 / 78%);
+  --landing-scrim: rgb(28 18 7 / 78%);
   /* The call-to-action glow. Alpha again, so it can only live here. */
-  --landing-glow: rgb(125 176 255 / 42%);
+  --landing-glow: rgb(160 74 12 / 26%);
+  /* The reference's chunky-button lip, measured on its own controls as
+     `rgba(0, 0, 0, 0.3) 0px -5px 0px 0px inset` — a hard, blurless inset along
+     the bottom edge that reads as a physical key with a lit top face. It suits
+     this repo unusually well: D2 already fixes the radius family and the house
+     shadow has been zero-blur hard offset since the donor. Alpha, so it can only
+     live here. */
+  --landing-lip: rgb(0 0 0 / 30%);
   /* The swipe deck's own tint and its two directional edges. A card that can be thrown
      has to look different from a card that cannot, and the edges say which way means
      what before the first drag. Alpha, so they can only live here. */

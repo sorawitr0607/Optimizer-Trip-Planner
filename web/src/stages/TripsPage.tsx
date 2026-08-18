@@ -10,6 +10,7 @@ import {
   Globe,
   ListChecks,
   MapPinned,
+  Users,
   Languages,
   Route,
   ShieldCheck,
@@ -603,9 +604,6 @@ export function TripsPage() {
                     onClick={() => setPacingMode(mode)}
                     type="button"
                   >
-                    {mode === "relaxed" && "🌱 "}
-                    {mode === "balanced" && "⚡ "}
-                    {mode === "marathon" && "🔥 "}
                     {mode === "relaxed" && copy("landing_pacing_relaxed", language)}
                     {mode === "balanced" && copy("landing_pacing_balanced", language)}
                     {mode === "marathon" && copy("landing_pacing_marathon", language)}
@@ -617,7 +615,7 @@ export function TripsPage() {
             {/* Dynamic Card Header */}
             <div className="hero-demo-head">
               <span className="demo-city-title">
-                📍 {selectedCityData.city}, {selectedCityData.country}
+                <MapPinned aria-hidden="true" size={13} /> {selectedCityData.city}, {selectedCityData.country}
               </span>
               <span className="hero-demo-badge">{selectedPacingData.walkKm} walk</span>
             </div>
@@ -627,7 +625,7 @@ export function TripsPage() {
               {selectedPacingData.stops.map((row, idx) =>
                 row.leg ? (
                   <li className="hero-demo-leg" key={`leg-${idx}`}>
-                    <span>🚶 {row.leg}</span>
+                    <span><Route aria-hidden="true" size={13} /> {row.leg}</span>
                   </li>
                 ) : (
                   <li
@@ -650,9 +648,9 @@ export function TripsPage() {
 
             {/* Live Constraints Verification Guarantee Strip */}
             <div className="hero-demo-footer">
-              <span className="sim-chip">✓ {copy("landing_sim_hours_ok", language)}</span>
-              <span className="sim-chip">✓ {copy("landing_sim_backtrack", language)}</span>
-              <span className="sim-chip">✓ {copy("landing_sim_lunch_ok", language)}</span>
+              <span className="sim-chip"><CheckCircle2 aria-hidden="true" size={13} /> {copy("landing_sim_hours_ok", language)}</span>
+              <span className="sim-chip"><CheckCircle2 aria-hidden="true" size={13} /> {copy("landing_sim_backtrack", language)}</span>
+              <span className="sim-chip"><CheckCircle2 aria-hidden="true" size={13} /> {copy("landing_sim_lunch_ok", language)}</span>
             </div>
           </div>
         </div>
@@ -663,15 +661,15 @@ export function TripsPage() {
           ------------------------------------------------------------- */}
       <div aria-hidden="true" className="landing-ticker">
         <div className="ticker-track">
-          <span className="ticker-item">⚡ 512+ Deterministic Tests Passing</span>
-          <span className="ticker-item">🛡️ 100% Offline & Private Local SQLite</span>
-          <span className="ticker-item">🧮 Pure Mixed-Integer Linear Programming (ILP)</span>
-          <span className="ticker-item">🗺️ Free OpenStreetMap Vector Tiles</span>
-          <span className="ticker-item">💸 Multi-Currency Bill Settlement Engine</span>
-          <span className="ticker-item">📑 6-Sheet Formatted Excel Exporter</span>
-          <span className="ticker-item">⚡ 512+ Deterministic Tests Passing</span>
-          <span className="ticker-item">🛡️ 100% Offline & Private Local SQLite</span>
-          <span className="ticker-item">🧮 Pure Mixed-Integer Linear Programming (ILP)</span>
+          <span className="ticker-item"><Zap aria-hidden="true" size={13} /> 638 Deterministic Tests Passing</span>
+          <span className="ticker-item"><ShieldCheck aria-hidden="true" size={13} /> 100% Offline &amp; Private Local SQLite</span>
+          <span className="ticker-item"><Calculator aria-hidden="true" size={13} /> Deterministic Solver, Independently Re-validated</span>
+          <span className="ticker-item"><Globe aria-hidden="true" size={13} /> Free OpenStreetMap Vector Tiles</span>
+          <span className="ticker-item"><Wallet aria-hidden="true" size={13} /> Multi-Currency Bill Settlement Engine</span>
+          <span className="ticker-item"><FileSpreadsheet aria-hidden="true" size={13} /> 6-Sheet Formatted Excel Exporter</span>
+          <span className="ticker-item"><Zap aria-hidden="true" size={13} /> 638 Deterministic Tests Passing</span>
+          <span className="ticker-item"><ShieldCheck aria-hidden="true" size={13} /> 100% Offline &amp; Private Local SQLite</span>
+          <span className="ticker-item"><Calculator aria-hidden="true" size={13} /> Deterministic Solver, Independently Re-validated</span>
         </div>
       </div>
 
@@ -764,6 +762,8 @@ export function TripsPage() {
             { num: 4, title: copy("stage_itinerary", language), desc: copy("landing_how_use", language), icon: ListChecks },
           ].map((st, i) => (
             <button
+              aria-controls="lab-preview-panel"
+              aria-pressed={activeLabStep === i}
               className={`lab-step-card ${activeLabStep === i ? "active" : ""}`}
               key={st.num}
               onClick={() => setActiveLabStep(i)}
@@ -780,16 +780,22 @@ export function TripsPage() {
         </div>
 
         {/* Live Lab Preview Canvas */}
-        <div className="lab-preview-canvas">
+        {/* The four buttons above choose what this shows, and nothing said so: they
+            carried no state and the panel had no name, so a screen reader announced
+            four identical controls and a silent change 200px below. `aria-pressed`
+            rather than a tab role deliberately — a `role="tab"` promises arrow-key
+            navigation and a roving tabindex, and a promise half-kept reads worse
+            than a plain button that simply says whether it is on. */}
+        <div aria-live="polite" className="lab-preview-canvas" id="lab-preview-panel">
           {activeLabStep === 0 && (
             <div className="lab-preview-content">
               <div className="preview-tag">STAGE 1: DISCOVERY & CONSTRAINTS</div>
               <h5>Smart Wizard: Dates, Pacing & Travel Party</h5>
               <div className="preview-chips-row">
-                <span className="preview-chip">📅 2026-09-12 → 2026-09-17</span>
-                <span className="preview-chip">👥 3 Travellers</span>
-                <span className="preview-chip">🚶 Max 6.0 km/day</span>
-                <span className="preview-chip">🍜 Lunch 12:00 - 13:30</span>
+                <span className="preview-chip"><CalendarClock aria-hidden="true" size={13} /> 2026-09-12 → 2026-09-17</span>
+                <span className="preview-chip"><Users aria-hidden="true" size={13} /> 3 Travellers</span>
+                <span className="preview-chip"><Route aria-hidden="true" size={13} /> Max 6.0 km/day</span>
+                <span className="preview-chip"><Utensils aria-hidden="true" size={13} /> Lunch 12:00 - 13:30</span>
               </div>
             </div>
           )}
@@ -798,20 +804,20 @@ export function TripsPage() {
               <div className="preview-tag">STAGE 2: CURATION & SWIPE DECK</div>
               <h5>Tinder-Style Candidate Card Swipe & Shortlisting</h5>
               <div className="preview-chips-row">
-                <span className="preview-chip green">💚 Kept: 14 Attractions</span>
-                <span className="preview-chip red">❌ Passed: 6 Attractions</span>
-                <span className="preview-chip">🗺️ Real OSM Geocodes</span>
+                <span className="preview-chip green"><CheckCircle2 aria-hidden="true" size={13} /> Kept: 14 Attractions</span>
+                <span className="preview-chip red"><XCircle aria-hidden="true" size={13} /> Passed: 6 Attractions</span>
+                <span className="preview-chip"><Globe aria-hidden="true" size={13} /> Real OSM Geocodes</span>
               </div>
             </div>
           )}
           {activeLabStep === 2 && (
             <div className="lab-preview-content">
-              <div className="preview-tag">STAGE 3: INTEGER LINEAR PROGRAMMING (ILP)</div>
-              <h5>Mathematical Branch-and-Bound Route Optimization</h5>
+              <div className="preview-tag">STAGE 3: DETERMINISTIC OPTIMIZATION</div>
+              <h5>Three Variants Built, Then Each Re-checked Independently</h5>
               <div className="preview-chips-row">
-                <span className="preview-chip">⚡ 0.04s Solve Time</span>
-                <span className="preview-chip">🛡️ 0 Schedule Conflicts</span>
-                <span className="preview-chip">📍 100% Timezone Correct</span>
+                <span className="preview-chip"><Timer aria-hidden="true" size={13} /> Three plan options in ~52s</span>
+                <span className="preview-chip"><ShieldCheck aria-hidden="true" size={13} /> 0 Schedule Conflicts</span>
+                <span className="preview-chip"><MapPinned aria-hidden="true" size={13} /> 100% Timezone Correct</span>
               </div>
             </div>
           )}
@@ -820,9 +826,9 @@ export function TripsPage() {
               <div className="preview-tag">STAGE 4: EXECUTION & WORKBOOKS</div>
               <h5>Interactive Day Timelines + 6-Sheet Formatted Excel (.xlsx)</h5>
               <div className="preview-chips-row">
-                <span className="preview-chip">📊 Timetable Sheet</span>
-                <span className="preview-chip">💰 Expenses & Split Ledger</span>
-                <span className="preview-chip">📅 Apple/Google .ics Export</span>
+                <span className="preview-chip"><FileSpreadsheet aria-hidden="true" size={13} /> Timetable Sheet</span>
+                <span className="preview-chip"><Wallet aria-hidden="true" size={13} /> Expenses &amp; Split Ledger</span>
+                <span className="preview-chip"><CalendarClock aria-hidden="true" size={13} /> Apple/Google .ics Export</span>
               </div>
             </div>
           )}
@@ -906,7 +912,9 @@ export function TripsPage() {
             </div>
 
             <div className="split-transfers-box">
-              <h6>⚡ Minimal Settlement Transfers (0ms Math):</h6>
+              <h6>
+                <Zap aria-hidden="true" size={13} /> Minimal Settlement Transfers
+              </h6>
               <ul className="split-transfers-list">
                 {jordanNet < 0 && (
                   <li>
@@ -955,7 +963,7 @@ export function TripsPage() {
               </div>
               <h4>{copy(p.tagKey, language)}</h4>
               <p className="preset-city">
-                📍 {p.city}, {p.country}
+                <MapPinned aria-hidden="true" size={13} /> {p.city}, {p.country}
               </p>
               <span className="preset-action">
                 {copy("start_planning", language)} <ArrowRight aria-hidden="true" size={14} />
@@ -1219,18 +1227,32 @@ export function TripsPage() {
           ].map((item, idx) => (
             <div className={`faq-item ${openFaq === idx ? "open" : ""}`} key={item.q}>
               <button
+                aria-controls={`faq-answer-${idx}`}
+                aria-expanded={openFaq === idx}
                 className="faq-question"
+                id={`faq-question-${idx}`}
                 onClick={() => setOpenFaq(openFaq === idx ? null : idx)}
                 type="button"
               >
                 <span>{copy(item.q, language)}</span>
                 <ChevronDown aria-hidden="true" className="faq-chevron" size={18} />
               </button>
-              {openFaq === idx && (
-                <div className="faq-answer">
+              {/* Always rendered, collapsed by CSS rather than unmounted — an
+                  answer that does not exist cannot animate open, and the
+                  reference's accordion is one of the few places it spends
+                  motion. `visibility` is transitioned to `hidden` at the end of
+                  the collapse, which is what keeps a closed answer out of the
+                  tab order and away from a screen reader. */}
+              <div
+                aria-labelledby={`faq-question-${idx}`}
+                className="faq-answer"
+                id={`faq-answer-${idx}`}
+                role="region"
+              >
+                <div className="faq-answer-inner">
                   <p>{copy(item.a, language)}</p>
                 </div>
-              )}
+              </div>
             </div>
           ))}
         </div>

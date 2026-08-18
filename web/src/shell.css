@@ -2617,7 +2617,14 @@
    which is what "replace only the first page" has to mean to be safe.
    --------------------------------------------------------------------------- */
 .landing {
-  background: var(--landing-ink);
+  background: var(--landing-ground);
+  /* The landing inks its own text, and this one declaration is what was missing.
+     `.landing` painted a permanently dark ground and then let every descendant
+     inherit `--text-primary`, which flips — so in light mode the whole page was
+     near-black text on near-black, measured at 1.02:1 to 1.11:1 across six of
+     the seven sections. The palette below is deliberately one scene in both
+     themes (see tokens.css), so the colour has to come from it too. */
+  color: var(--landing-text);
   display: grid;
   gap: 0;
   margin: 0;
@@ -2627,10 +2634,295 @@
   position: relative;
 }
 
+/* ORGANIC EDGES BETWEEN SCENES.
+
+   On the reference no two grounds meet in a straight line — sand runs into water
+   in a painted curve, grass into rock — and a hard horizontal rule is the single
+   clearest tell that a page is CSS boxes rather than a place. Each scene section
+   grows a wave of its own colour upward over the section above it.
+
+   The wave is a mask, not a picture, which is why it carries no colour: an SVG
+   path with no `fill` is black, and black in a mask means opaque. The colour
+   underneath is a token like everything else, so a scene that gets repainted
+   takes its own edge with it and the two cannot drift apart. */
+.presets-section,
+.comparison-section {
+  position: relative;
+}
+
+.presets-section::before,
+.comparison-section::before {
+  content: "";
+  height: 52px;
+  left: 0;
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 60' preserveAspectRatio='none'%3E%3Cpath d='M0,60 L0,26 C140,48 300,2 520,14 C760,27 980,0 1200,18 L1200,60 Z'/%3E%3C/svg%3E");
+  mask-repeat: no-repeat;
+  mask-size: 100% 100%;
+  position: absolute;
+  right: 0;
+  top: -51px;
+}
+
+.presets-section::before {
+  background: var(--landing-grass);
+}
+
+.comparison-section::before {
+  background: var(--landing-night);
+}
+
+/* The paper the whole page is printed on. */
+.landing {
+  background-image:
+    repeating-linear-gradient(45deg, var(--landing-grain) 0 1px, transparent 1px 4px),
+    repeating-linear-gradient(-45deg, var(--landing-grain) 0 1px, transparent 1px 7px);
+}
+
+/* The reference pins its photographs in frames that sit slightly off square, with
+   the shadow of a real object under them. The destination cards are the one place
+   here that is genuinely a stack of pictures, so they get that treatment — the
+   rotation alternates so the row reads as pinned rather than skewed, and it
+   straightens under the pointer, which is where the existing hover lift already
+   goes. */
+.preset-card {
+  box-shadow: 0 10px 24px var(--landing-glow);
+  transform: rotate(-0.9deg);
+}
+
+.preset-card:nth-child(even) {
+  transform: rotate(1.1deg);
+}
+
+.preset-card:hover,
+.preset-card:nth-child(even):hover {
+  transform: rotate(0deg) translateY(-3px);
+}
+
+/* ONE SATURATED SCENE.
+
+   The reference does not alternate two tints of paper — it moves through
+   environments, and a full-bleed saturated ground is the most recognisable of
+   them. This is that band: `--landing-grass` is the reference's own grass green,
+   unaltered from the value measured off it, and the
+   presets section takes it because a row of destinations is the most postcard-like
+   thing on the page.
+
+   Text on grass is dark, never orange — the accent reads 2.29 against it. Cards
+   stay cream and carry the accent themselves, which is the reference's own
+   arrangement: the ground is scenery, the paper is where the reading happens. */
+.presets-section .section-header h2 {
+  color: var(--landing-mark);
+}
+
+.presets-section .section-lead,
+.presets-section .section-badge {
+  color: var(--landing-text);
+}
+
+.presets-section .section-badge {
+  background: var(--landing-grass-badge);
+}
+
+.presets-section .preset-card {
+  background: var(--landing-raised);
+}
+
+/* ONE NIGHT SCENE.
+
+   The reference alternates daylight with a dark underwater stretch, and that
+   rhythm is most of what keeps a warm paper site from reading as an unbroken
+   wash. This is that one section: the comparison table, chosen because it is the
+   page's argument rather than its explanation, and a change of ground is what
+   makes an argument land.
+
+   Everything inside it is repainted rather than inherited — a section that
+   inverts its ground has to invert its ink with it, which is the fault this
+   stylesheet has already had to fix twice. */
+.comparison-section {
+  background: var(--landing-night);
+}
+
+.comparison-section .section-header h2,
+.comparison-section .comparison-table th,
+.comparison-section .good-cell,
+.comparison-section strong {
+  color: var(--landing-cream);
+}
+
+.comparison-section .section-lead,
+.comparison-section .bad-cell,
+.comparison-section .comparison-table td {
+  color: var(--landing-ground-alt);
+}
+
+.comparison-section .comparison-table {
+  background: var(--landing-night-panel);
+  border-color: var(--landing-night-line);
+}
+
+.comparison-section .comparison-table td,
+.comparison-section .comparison-table th {
+  border-bottom-color: var(--landing-night-rule);
+}
+
+/* The header row and the product's own column carry their own light fills, so
+   inverting the ground without inverting these left cream text on cream at 1:1 —
+   the same fault, one element deeper. A section that changes its ground has to
+   follow every surface inside it, not just the text. */
+.comparison-section .comparison-table th {
+  background: var(--landing-night-badge);
+}
+
+.comparison-section .comparison-table th.highlight-col,
+.comparison-section .comparison-table td.highlight-col {
+  background: var(--landing-route);
+}
+
+.comparison-section .comparison-table th.highlight-col {
+  color: var(--landing-cream);
+}
+
+.comparison-section .good-cell svg {
+  color: var(--landing-night-go);
+}
+
+.comparison-section .bad-cell svg {
+  color: var(--landing-night-warn);
+}
+
+.comparison-section .section-badge {
+  background: var(--landing-night-badge);
+  color: var(--landing-ground-alt);
+}
+
+/* The trust strip under the trip form had no rule at all — not one of these three
+   class names appeared in this stylesheet, so four benefit lines and two notes
+   rendered as unstyled block text running the full 1327px of the band while every
+   other section on the page sits in a measured, centred column. It takes the same
+   rhythm as the rest, and the icons take the same inline treatment as every other
+   inline label here. */
+.landing-trust-strip {
+  margin: 32px auto 0;
+  max-width: 48rem;
+}
+
+.landing-bullets {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+}
+
+.landing-bullets li {
+  align-items: center;
+  display: flex;
+  font-size: var(--text-sm);
+  gap: 10px;
+  line-height: 1.6;
+}
+
+/* This strip lives inside `.action-workspace-section`, which is the one band that
+   flips with the theme — so both of these take app tokens rather than the fixed
+   night-scene ones. Written with `--landing-haze` first, the note measured 1.47:1
+   on the cream light ground: the same fault this file already fixed once, made
+   again in a rule added afterwards. A fixed token below this line is a bug. */
+.landing-bullet-icon {
+  align-items: center;
+  color: var(--color-success);
+  display: inline-flex;
+}
+
+.landing-note {
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  margin: 0 0 6px;
+}
+
+/* ---------------------------------------------------------------------------
+   THE HERO'S OWN LOAD SEQUENCE
+
+   The reference spends almost its entire motion budget here — its hero assembles
+   over 4.28s at roughly a 0.35s step — and spends none of it on scroll. This is
+   that idea at product pace: the same reveal curve, the same rise-and-fade, the
+   same sequencing, stepped at `--stagger-step` so the whole hero has settled in
+   about 0.8s. The order is the reading order, which is also the order of
+   importance: badges, headline, lead, the button, then the evidence beside it.
+
+   Everything is `both`-filled, so an element is invisible before its turn rather
+   than flashing at full opacity and then animating. Nothing here is
+   scroll-triggered, deliberately — see the note in tokens.css.
+
+   Suppression is not written per rule: the capture seam in `main.tsx` injects
+   `*{animation:none!important}`, so no baseline can photograph a half-played
+   entrance, and the whole block sits behind `prefers-reduced-motion`. */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes hero-rise {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 20px, 0);
+    }
+
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .hero-badges-row,
+  .landing-hero h1,
+  .landing-lead,
+  .hero-cta-wrap,
+  .hero-tags-strip,
+  .hero-demo {
+    animation: hero-rise var(--duration-reveal) var(--ease-reveal) both;
+  }
+
+  .hero-badges-row { animation-delay: 0ms; }
+  .landing-hero h1 { animation-delay: var(--stagger-step); }
+  .landing-lead { animation-delay: calc(var(--stagger-step) * 2); }
+  .hero-cta-wrap { animation-delay: calc(var(--stagger-step) * 3); }
+  .hero-tags-strip { animation-delay: calc(var(--stagger-step) * 4); }
+
+  /* The demo card is the hero's evidence rather than its claim, so it arrives
+     last and travels a little further, which is what makes it read as settling
+     into place beside the copy rather than with it. */
+  .hero-demo {
+    animation-delay: calc(var(--stagger-step) * 3);
+    animation-duration: 1000ms;
+  }
+
+  /* The headline reveals a word at a time. `.hero-word` was already
+     `inline-block` for this, and each word carries its own delay *within* the
+     h1's own entrance — the two compose, so the line rises as a block while its
+     words arrive across it.
+
+     English only, and that is a language fact rather than an oversight: Thai
+     does not put spaces between words, so `landing_headline` is rendered whole
+     and simply takes the h1's own rise. Splitting it on spaces would cut the
+     sentence in the wrong places. */
+  .hero-word {
+    animation: hero-rise 700ms var(--ease-reveal) both;
+  }
+
+  .hero-word:nth-child(1) { animation-delay: calc(var(--stagger-step) * 1); }
+  .hero-word:nth-child(2) { animation-delay: calc(var(--stagger-step) * 1.6); }
+  .hero-word:nth-child(3) { animation-delay: calc(var(--stagger-step) * 2.2); }
+  .hero-word:nth-child(4) { animation-delay: calc(var(--stagger-step) * 2.8); }
+  .hero-word:nth-child(5) { animation-delay: calc(var(--stagger-step) * 3.4); }
+}
+
+/* `<small>` renders at the browser's own 0.8125em, which lands on 13px — a size
+   the scale does not contain. Six elements were sitting off it. */
+.landing small {
+  font-size: var(--text-2xs);
+}
+
 /* Navigation Header */
 .landing-nav {
   align-items: center;
-  background: var(--landing-ink);
+  background: var(--landing-ground);
   border-bottom: 1px solid var(--landing-glass-border);
   display: flex;
   justify-content: space-between;
@@ -2641,7 +2933,7 @@
 
 .landing-nav-brand {
   align-items: center;
-  color: var(--landing-cream);
+  color: var(--landing-mark);
   display: inline-flex;
   font-size: var(--text-sm);
   font-weight: var(--weight-selected);
@@ -2673,7 +2965,7 @@
   font-size: var(--text-xs);
   font-weight: var(--weight-secondary);
   padding: 4px 8px;
-  transition: color var(--duration-fast) var(--ease-out);
+  transition: color var(--duration-hover) var(--ease-out);
 }
 
 .landing-nav-links button:hover {
@@ -2696,10 +2988,10 @@
 
 .landing-controls button {
   align-items: center;
-  background: var(--landing-ink-soft);
+  background: var(--landing-ground-alt);
   border: 1px solid var(--landing-haze);
   border-radius: var(--radius-pill);
-  color: var(--landing-on-ink);
+  color: var(--landing-text);
   cursor: pointer;
   display: inline-flex;
   font-size: var(--text-xs);
@@ -2707,7 +2999,7 @@
   gap: 6px;
   min-height: 32px;
   padding: 4px 12px;
-  transition: border-color var(--duration-fast) var(--ease-out), background var(--duration-fast) var(--ease-out);
+  transition: border-color var(--duration-hover) var(--ease-out), background var(--duration-hover) var(--ease-out);
 }
 
 .landing-controls button:hover {
@@ -2722,7 +3014,7 @@
   --drift-x: 0;
   --drift-y: 0;
   align-items: center;
-  background: radial-gradient(circle at 50% 20%, var(--landing-route-soft) 0%, var(--landing-ink) 72%);
+  background: radial-gradient(circle at 50% 20%, var(--landing-route-soft) 0%, var(--landing-ground) 72%);
   display: grid;
   isolation: isolate;
   min-height: 86vh;
@@ -2786,7 +3078,7 @@
 }
 
 .hero-layer path {
-  fill: var(--landing-ink-soft);
+  fill: var(--landing-ground-alt);
 }
 
 .hero-layer-far path { fill: var(--landing-haze); opacity: var(--opacity-tint-12); }
@@ -2800,7 +3092,7 @@
 }
 
 .hero-spark {
-  background: var(--landing-cyan);
+  background: var(--landing-route);
   clip-path: polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%);
   height: 18px;
   position: absolute;
@@ -2829,7 +3121,7 @@
   background: var(--landing-route);
   border-radius: var(--radius-pill);
   box-shadow: 0 0 12px var(--landing-glow);
-  color: var(--landing-ink);
+  color: var(--landing-ground);
   display: inline-flex;
   font-size: var(--text-2xs);
   font-weight: var(--weight-selected);
@@ -2842,9 +3134,9 @@
 .hero-mini-pill {
   align-items: center;
   background: var(--landing-glass-bg);
-  border: 1px solid var(--landing-emerald);
+  border: 1px solid var(--landing-go);
   border-radius: var(--radius-pill);
-  color: var(--landing-emerald);
+  color: var(--landing-go);
   display: inline-flex;
   font-size: var(--text-2xs);
   font-weight: var(--weight-secondary);
@@ -2853,11 +3145,11 @@
 }
 
 .landing-hero h1 {
-  color: var(--landing-cream);
+  color: var(--landing-mark);
   font-size: clamp(2.1rem, 4.2vw + 1rem, 3.4rem);
   font-weight: var(--weight-selected);
   letter-spacing: -0.035em;
-  line-height: 1.06;
+  line-height: 1.14;
   margin: 0 auto 16px;
   max-width: 18ch;
   overflow-wrap: anywhere;
@@ -2870,8 +3162,8 @@
 
 .landing-lead {
   color: var(--landing-mark);
-  font-size: var(--text-md);
-  line-height: 1.55;
+  font-size: var(--text-lg);
+  line-height: 1.6;
   margin: 0 auto 24px;
   max-width: 52ch;
 }
@@ -2903,29 +3195,45 @@
   gap: 8px;
   padding: 12px 26px;
   text-decoration: none;
-  transition: transform var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
+  transition:
+    filter var(--duration-hover) var(--ease-standard),
+    transform var(--duration-hover) var(--ease-standard),
+    box-shadow var(--duration-hover) var(--ease-standard);
+}
+
+/* The lip is on the resting state, not the hover — a key has a thickness whether
+   or not a finger is on it, and pressing it is what takes the thickness away. */
+.hero-cta-primary,
+.preset-action {
+  box-shadow: inset 0 -4px 0 0 var(--landing-lip);
+}
+
+.hero-cta-primary:active {
+  box-shadow: inset 0 -1px 0 0 var(--landing-lip);
+  transform: translateY(1px);
 }
 
 .hero-cta-primary {
   background: var(--landing-route);
   border: 1px solid var(--landing-route);
   box-shadow: 0 4px 18px var(--landing-glow);
-  color: var(--landing-ink);
+  color: var(--landing-ground);
 }
 
 .hero-cta-primary:hover {
-  box-shadow: 0 6px 24px var(--landing-glow);
+  box-shadow: inset 0 -4px 0 0 var(--landing-lip), 0 6px 24px var(--landing-glow);
+  filter: brightness(1.06);
   transform: translateY(-2px);
 }
 
 .hero-cta-secondary {
   background: var(--landing-glass-bg);
   border: 1px solid var(--landing-glass-border);
-  color: var(--landing-cream);
+  color: var(--landing-mark);
 }
 
 .hero-cta-secondary:hover {
-  background: var(--landing-ink-soft);
+  background: var(--landing-ground-alt);
   border-color: var(--landing-mark);
   transform: translateY(-2px);
 }
@@ -2949,7 +3257,7 @@
 
 .hero-tag-item {
   align-items: center;
-  background: var(--landing-ink-soft);
+  background: var(--landing-ground-alt);
   border: 1px solid var(--landing-glass-border);
   border-radius: var(--radius-pill);
   color: var(--landing-haze);
@@ -3013,16 +3321,19 @@
   max-width: 26rem;
   padding: 18px 20px;
   transform: rotate(-0.8deg);
-  transition: transform var(--duration-fast) var(--ease-out);
+  transition:
+    filter var(--duration-hover) var(--ease-standard),
+    transform var(--duration-hover) var(--ease-standard);
   width: 100%;
 }
 
 .hero-demo-card:hover {
+  filter: brightness(1.04);
   transform: rotate(0deg) translateY(-3px);
 }
 
 .hero-demo-tabs {
-  background: var(--landing-ink);
+  background: var(--landing-ground);
   border: 1px solid var(--landing-glass-border);
   border-radius: var(--radius-house);
   display: grid;
@@ -3041,18 +3352,18 @@
   font-weight: var(--weight-secondary);
   padding: 6px 0;
   text-align: center;
-  transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
+  transition: background var(--duration-hover) var(--ease-out), color var(--duration-hover) var(--ease-out);
 }
 
 .hero-demo-tab.active {
   background: var(--landing-route);
-  color: var(--landing-ink);
+  color: var(--landing-ground);
   font-weight: var(--weight-selected);
 }
 
 .hero-pacing-bar {
   align-items: center;
-  background: var(--landing-ink-soft);
+  background: var(--landing-ground-alt);
   border-radius: var(--radius-house);
   display: flex;
   gap: 8px;
@@ -3075,24 +3386,24 @@
   background: transparent;
   border: 1px solid transparent;
   border-radius: var(--radius-house);
-  color: var(--landing-on-ink);
+  color: var(--landing-text);
   cursor: pointer;
   font-size: var(--text-2xs);
   padding: 3px 8px;
 }
 
 .pacing-btn.active {
-  background: var(--landing-ink);
+  background: var(--landing-ground);
   border-color: var(--landing-route);
-  color: var(--landing-cream);
+  color: var(--landing-mark);
   font-weight: var(--weight-selected);
 }
 
 .hero-demo-head {
   align-items: center;
-  color: var(--landing-cream);
+  color: var(--landing-mark);
   display: flex;
-  font-weight: var(--weight-selected);
+  font-weight: var(--weight-secondary);
   justify-content: space-between;
   margin: 0;
 }
@@ -3102,10 +3413,10 @@
 }
 
 .hero-demo-badge {
-  background: var(--landing-emerald-soft);
-  border: 1px solid var(--landing-emerald);
+  background: var(--landing-go-soft);
+  border: 1px solid var(--landing-go);
   border-radius: var(--radius-pill);
-  color: var(--landing-emerald);
+  color: var(--landing-go);
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   padding: 2px 8px;
@@ -3121,7 +3432,7 @@
 
 .hero-demo-row {
   align-items: baseline;
-  color: var(--landing-on-ink);
+  color: var(--landing-text);
   display: grid;
   font-size: var(--text-xs);
   gap: 10px;
@@ -3131,12 +3442,12 @@
 .hero-demo-row time {
   color: var(--landing-route);
   font-family: var(--font-mono);
-  font-size: var(--text-2xs);
+  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
 }
 
 .hero-demo-row.meal .hero-demo-name {
-  color: var(--landing-amber);
+  color: var(--landing-warn);
 }
 
 .hero-demo-kind {
@@ -3153,7 +3464,7 @@
   align-items: center;
   color: var(--landing-haze);
   display: grid;
-  font-size: var(--text-2xs);
+  font-size: var(--text-xs);
   gap: 8px;
   grid-template-columns: 3.4rem minmax(0, 1fr);
   padding-left: 0;
@@ -3174,9 +3485,9 @@
 }
 
 .sim-chip {
-  background: var(--landing-ink);
+  background: var(--landing-ground);
   border-radius: var(--radius-pill);
-  color: var(--landing-emerald);
+  color: var(--landing-go);
   font-size: var(--text-2xs);
   font-weight: var(--weight-secondary);
   padding: 2px 8px;
@@ -3186,7 +3497,7 @@
    LIVE MARQUEE TICKER (Hack the North aesthetic)
    --------------------------------------------------------------------------- */
 .landing-ticker {
-  background: var(--landing-ink-soft);
+  background: var(--landing-ground-alt);
   border-bottom: 1px solid var(--landing-glass-border);
   border-top: 1px solid var(--landing-glass-border);
   overflow: hidden;
@@ -3203,7 +3514,7 @@
 
 .ticker-item {
   align-items: center;
-  color: var(--landing-cream);
+  color: var(--landing-mark);
   display: inline-flex;
   font-family: var(--font-mono);
   font-size: var(--text-xs);
@@ -3245,7 +3556,7 @@
 }
 
 .section-header h2 {
-  color: var(--landing-cream);
+  color: var(--landing-mark);
   font-size: clamp(1.7rem, 3.2vw, 2.4rem);
   font-weight: var(--weight-selected);
   letter-spacing: -0.025em;
@@ -3254,8 +3565,8 @@
 
 .section-lead {
   color: var(--landing-haze);
-  font-size: var(--text-sm);
-  line-height: 1.55;
+  font-size: var(--text-base);
+  line-height: 1.6;
   margin: 0 auto;
   max-width: 52ch;
 }
@@ -3272,7 +3583,7 @@
 
 .pain-tab {
   align-items: center;
-  background: var(--landing-ink-soft);
+  background: var(--landing-ground-alt);
   border: 1px solid var(--landing-glass-border);
   border-radius: var(--radius-pill);
   color: var(--landing-haze);
@@ -3282,20 +3593,20 @@
   font-weight: var(--weight-secondary);
   gap: 6px;
   padding: 8px 18px;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: all var(--duration-hover) var(--ease-out);
 }
 
 .pain-tab.active-ai {
-  background: var(--color-danger-light);
-  border-color: var(--color-danger);
-  color: var(--color-danger);
+  background: var(--landing-warn-soft);
+  border-color: var(--landing-warn);
+  color: var(--landing-warn);
   font-weight: var(--weight-selected);
 }
 
 .pain-tab.active-opt {
-  background: var(--landing-emerald-soft);
-  border-color: var(--landing-emerald);
-  color: var(--landing-emerald);
+  background: var(--landing-go-soft);
+  border-color: var(--landing-go);
+  color: var(--landing-go);
   font-weight: var(--weight-selected);
 }
 
@@ -3314,27 +3625,27 @@
 }
 
 .benefit-card {
-  background: var(--landing-step);
+  background: var(--landing-raised);
   border: 1px solid var(--landing-glass-border);
   border-radius: var(--radius-house);
   box-shadow: var(--shadow-hard-sm);
   display: flex;
   flex-direction: column;
   padding: 24px;
-  transition: transform var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out);
+  transition: transform var(--duration-hover) var(--ease-out), border-color var(--duration-hover) var(--ease-out);
 }
 
 .pain-card-ai {
-  border-left: 4px solid var(--color-danger);
+  border-left: 4px solid var(--landing-warn);
 }
 
 .pain-card-opt {
-  border-left: 4px solid var(--landing-emerald);
+  border-left: 4px solid var(--landing-go);
 }
 
 .benefit-icon-box {
   align-items: center;
-  background: var(--landing-ink);
+  background: var(--landing-ground);
   border-radius: var(--radius-house);
   color: var(--landing-route);
   display: flex;
@@ -3345,16 +3656,16 @@
 }
 
 .benefit-card h3 {
-  color: var(--landing-cream);
-  font-size: var(--text-md);
-  font-weight: var(--weight-selected);
+  color: var(--landing-mark);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-secondary);
   margin: 0 0 8px;
 }
 
 .benefit-card p {
-  color: var(--landing-on-ink);
-  font-size: var(--text-xs);
-  line-height: 1.55;
+  color: var(--landing-text);
+  font-size: var(--text-sm);
+  line-height: 1.6;
   margin: 0;
 }
 
@@ -3362,7 +3673,7 @@
    SECTION 3: 4-STAGE PRODUCT LABORATORY
    --------------------------------------------------------------------------- */
 .showcase-section {
-  background: var(--landing-ink-soft);
+  background: var(--landing-ground-alt);
   border-top: 1px solid var(--landing-glass-border);
 }
 
@@ -3372,9 +3683,52 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
   margin: 0 auto 24px;
   max-width: 68rem;
+  position: relative;
+}
+
+/* The four stages are a sequence and nothing drew one — four identical cards in a
+   row, with the numbers as the only claim that their order meant anything. This
+   runs the planner's own route line through them: the same dotted vocabulary the
+   hero and the itinerary map already use for a walking leg, so "then" is seen
+   rather than read. The cards are opaque and come later in the DOM, so the line
+   shows only in the gaps between them, which is exactly where a leg belongs. The
+   inset stops it at the first and last number rather than running off both ends,
+   and `top` is the card's own padding plus half the number badge. */
+.lab-stepper-grid::before {
+  border-top: 2px dotted var(--landing-route-soft);
+  content: "";
+  left: 12.5%;
+  position: absolute;
+  right: 12.5%;
+  top: 29px;
+}
+
+.lab-step-card {
+  position: relative;
+}
+
+/* The chosen stage points at the panel it fills. Pressing a card changed
+   something two hundred pixels below with nothing joining the two, which is the
+   whole of why this section read as four buttons and an unrelated box. */
+.lab-step-card.active::after {
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 8px solid var(--landing-route);
+  bottom: -8px;
+  content: "";
+  height: 0;
+  left: 50%;
+  position: absolute;
+  transform: translateX(-50%);
+  width: 0;
 }
 
 @media (max-width: 860px) {
+  /* Two columns, so one horizontal line would cut across the row break. */
+  .lab-stepper-grid::before {
+    display: none;
+  }
+
   .lab-stepper-grid {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -3387,7 +3741,7 @@
 }
 
 .lab-step-card {
-  background: var(--landing-step);
+  background: var(--landing-raised);
   border: 1px solid var(--landing-glass-border);
   border-radius: var(--radius-house);
   cursor: pointer;
@@ -3395,7 +3749,7 @@
   flex-direction: column;
   padding: 18px;
   text-align: left;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: all var(--duration-hover) var(--ease-out);
 }
 
 .lab-step-card.active {
@@ -3415,7 +3769,7 @@
   align-items: center;
   background: var(--landing-route);
   border-radius: var(--radius-pill);
-  color: var(--landing-ink);
+  color: var(--landing-ground);
   display: flex;
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
@@ -3426,21 +3780,21 @@
 }
 
 .lab-step-card h4 {
-  color: var(--landing-cream);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-selected);
+  color: var(--landing-mark);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-secondary);
   margin: 0 0 6px;
 }
 
 .lab-step-card p {
-  color: var(--landing-on-ink);
-  font-size: var(--text-xs);
+  color: var(--landing-text);
+  font-size: var(--text-sm);
   line-height: 1.4;
   margin: 0;
 }
 
 .lab-preview-canvas {
-  background: var(--landing-ink);
+  background: var(--landing-ground);
   border: 1px solid var(--landing-route);
   border-radius: var(--radius-house);
   margin: 0 auto;
@@ -3457,7 +3811,7 @@
 }
 
 .lab-preview-content h5 {
-  color: var(--landing-cream);
+  color: var(--landing-mark);
   font-size: var(--text-md);
   margin: 0 0 14px;
 }
@@ -3469,16 +3823,16 @@
 }
 
 .preview-chip {
-  background: var(--landing-step);
+  background: var(--landing-raised);
   border: 1px solid var(--landing-glass-border);
   border-radius: var(--radius-pill);
-  color: var(--landing-on-ink);
+  color: var(--landing-text);
   font-size: var(--text-xs);
   padding: 5px 12px;
 }
 
-.preview-chip.green { color: var(--landing-emerald); border-color: var(--landing-emerald); }
-.preview-chip.red { color: var(--color-danger); border-color: var(--color-danger); }
+.preview-chip.green { color: var(--landing-go); border-color: var(--landing-go); }
+.preview-chip.red { color: var(--landing-warn); border-color: var(--landing-warn); }
 
 /* ---------------------------------------------------------------------------
    SECTION 4: BILL SPLIT SANDBOX
@@ -3488,7 +3842,7 @@
 }
 
 .split-sandbox-card {
-  background: var(--landing-step);
+  background: var(--landing-raised);
   border: 1px solid var(--landing-glass-border);
   border-radius: var(--radius-house);
   display: grid;
@@ -3516,13 +3870,13 @@
 }
 
 .split-input-row label {
-  color: var(--landing-cream);
+  color: var(--landing-mark);
   font-size: var(--text-xs);
 }
 
 .input-affix {
   align-items: center;
-  background: var(--landing-ink);
+  background: var(--landing-ground);
   border: 1px solid var(--landing-glass-border);
   border-radius: var(--radius-house);
   display: flex;
@@ -3538,7 +3892,7 @@
 .input-affix input {
   background: transparent;
   border: none;
-  color: var(--landing-cream);
+  color: var(--landing-mark);
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   padding: 8px 10px;
@@ -3546,7 +3900,7 @@
 }
 
 .split-sandbox-results {
-  background: var(--landing-ink);
+  background: var(--landing-ground);
   border: 1px solid var(--landing-route);
   border-radius: var(--radius-house);
   display: flex;
@@ -3573,7 +3927,7 @@
 }
 
 .split-val {
-  color: var(--landing-emerald);
+  color: var(--landing-go);
   font-family: var(--font-mono);
   font-size: var(--text-lg);
   font-weight: var(--weight-selected);
@@ -3595,9 +3949,9 @@
 
 .split-transfers-list li {
   align-items: center;
-  background: var(--landing-ink-soft);
+  background: var(--landing-ground-alt);
   border-radius: var(--radius-house);
-  color: var(--landing-on-ink);
+  color: var(--landing-text);
   display: flex;
   font-size: var(--text-xs);
   justify-content: space-between;
@@ -3612,9 +3966,10 @@
 /* ---------------------------------------------------------------------------
    SECTION 5: 1-CLICK CURATED DESTINATION BLUEPRINTS
    --------------------------------------------------------------------------- */
+/* The grass band. No `border-top`: the wave above this section is its edge, and a
+   hairline underneath it would draw the straight line the wave exists to avoid. */
 .presets-section {
-  background: var(--landing-ink-soft);
-  border-top: 1px solid var(--landing-glass-border);
+  background: var(--landing-grass);
 }
 
 .presets-grid {
@@ -3638,7 +3993,7 @@
 }
 
 .preset-card {
-  background: var(--landing-step);
+  background: var(--landing-raised);
   border: 1px solid var(--landing-glass-border);
   border-radius: var(--radius-house);
   cursor: pointer;
@@ -3646,12 +4001,13 @@
   flex-direction: column;
   padding: 20px;
   text-align: left;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: all var(--duration-hover) var(--ease-out);
 }
 
 .preset-card:hover {
   border-color: var(--landing-route);
   box-shadow: 0 8px 24px var(--landing-glow);
+  filter: brightness(1.05);
   transform: translateY(-3px);
 }
 
@@ -3678,14 +4034,14 @@
 }
 
 .preset-card h4 {
-  color: var(--landing-cream);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-selected);
+  color: var(--landing-mark);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-secondary);
   margin: 0 0 6px;
 }
 
 .preset-city {
-  color: var(--landing-on-ink);
+  color: var(--landing-text);
   font-size: var(--text-xs);
   margin: 0 0 16px;
 }
@@ -3714,7 +4070,7 @@
 }
 
 .comparison-table {
-  background: var(--landing-step);
+  background: var(--landing-raised);
   border: 1px solid var(--landing-glass-border);
   border-collapse: collapse;
   border-radius: var(--radius-house);
@@ -3731,13 +4087,13 @@
 }
 
 .comparison-table th {
-  background: var(--landing-ink);
-  color: var(--landing-cream);
-  font-weight: var(--weight-selected);
+  background: var(--landing-ground);
+  color: var(--landing-mark);
+  font-weight: var(--weight-secondary);
 }
 
 .comparison-table td {
-  color: var(--landing-on-ink);
+  color: var(--landing-text);
 }
 
 .comparison-table th.highlight-col,
@@ -3746,22 +4102,29 @@
 }
 
 .bad-cell {
-  align-items: center;
-  color: var(--color-danger);
-  display: flex;
+  color: var(--landing-warn);
   gap: 8px;
 }
 
 .good-cell {
-  align-items: center;
-  color: var(--landing-cream);
-  display: flex;
+  color: var(--landing-mark);
   font-weight: var(--weight-secondary);
   gap: 8px;
 }
 
+/* Tailwind's preflight sets `svg { display: block }`, so an icon in a table cell
+   takes a line of its own and `vertical-align` has nothing to act on. Inline-block
+   puts it back on the text's line, which is the whole reason the cells had been
+   given `display: flex` — the fix that had cost them their column. */
+.good-cell svg,
+.bad-cell svg {
+  display: inline-block;
+  margin-right: 8px;
+  vertical-align: -3px;
+}
+
 .good-cell svg {
-  color: var(--landing-emerald);
+  color: var(--landing-go);
 }
 
 /* ---------------------------------------------------------------------------
@@ -3769,6 +4132,12 @@
    --------------------------------------------------------------------------- */
 .action-workspace-section {
   background: var(--landing-page);
+  /* The one band that opts out of the night scene, and it has to say so. This
+     section holds the real trip form, so it takes `--landing-page`, which is one
+     of the two tokens that flip by theme — and with the ground flipping, the
+     text must flip with it rather than inherit the light ink `.landing` sets for
+     the dark sections above. */
+  color: var(--text-primary);
   border-top: 1px solid var(--landing-glass-border);
 }
 
@@ -3795,7 +4164,7 @@
 
 .landing .stage-card {
   background: var(--bg-card);
-  border-color: var(--landing-ink);
+  border-color: var(--landing-ground);
 }
 
 .trip-list a {
@@ -3817,7 +4186,11 @@
 }
 
 .trip-list-resume {
-  color: var(--landing-route-soft);
+  /* The house link colour, not `--landing-route-soft`. That token is a fill —
+     it backs the section badge — and used as text on this card it measured
+     1.48:1. This link sits inside the app's own working surface, so it takes the
+     app's accent like every other link there. */
+  color: var(--color-accent);
   font-size: var(--text-sm);
   font-weight: var(--weight-secondary);
   text-align: right;
@@ -3834,8 +4207,8 @@
 }
 
 .trip-form .setup-primary {
-  background: var(--landing-ink);
-  border: 1px solid var(--landing-ink);
+  background: var(--landing-ground);
+  border: 1px solid var(--landing-ground);
   border-radius: var(--radius-pill);
   box-shadow: var(--shadow-hard-sm);
   color: var(--landing-mark);
@@ -3859,7 +4232,7 @@
    SECTION 8: FAQ ACCORDION
    --------------------------------------------------------------------------- */
 .faq-section {
-  background: var(--landing-ink);
+  background: var(--landing-ground);
   border-top: 1px solid var(--landing-glass-border);
 }
 
@@ -3871,11 +4244,11 @@
 }
 
 .faq-item {
-  background: var(--landing-step);
+  background: var(--landing-raised);
   border: 1px solid var(--landing-glass-border);
   border-radius: var(--radius-house);
   overflow: hidden;
-  transition: border-color var(--duration-fast) var(--ease-out);
+  transition: border-color var(--duration-hover) var(--ease-out);
 }
 
 .faq-item.open {
@@ -3886,11 +4259,11 @@
   align-items: center;
   background: transparent;
   border: none;
-  color: var(--landing-cream);
+  color: var(--landing-mark);
   cursor: pointer;
   display: flex;
-  font-size: var(--text-sm);
-  font-weight: var(--weight-selected);
+  font-size: var(--text-md);
+  font-weight: var(--weight-secondary);
   justify-content: space-between;
   padding: 16px 20px;
   text-align: left;
@@ -3899,20 +4272,56 @@
 
 .faq-chevron {
   color: var(--landing-route);
-  transition: transform var(--duration-fast) var(--ease-out);
+  transition: transform var(--duration-hover) var(--ease-out);
 }
 
 .faq-item.open .faq-chevron {
   transform: rotate(180deg);
 }
 
+/* The accordion, and this is the reference's own technique rather than a
+   lookalike: it transitions `grid-template-rows` from 0fr to 1fr, which is the
+   one way to animate to a height nobody has measured. Its three durations were
+   read off the site — 0.3s on the rows with `cubic-bezier(0.16, 1, 0.3, 1)`,
+   0.22s on opacity, and 0s on visibility — and they are reproduced exactly.
+
+   `visibility` is the accessibility half. It flips to `hidden` with no duration,
+   so a collapsed answer leaves the tab order and the accessibility tree instead
+   of sitting there at zero height, still focusable and still read aloud. */
 .faq-answer {
-  border-top: 1px solid var(--landing-ink);
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 300ms var(--ease-expo),
+    opacity 220ms var(--ease-standard),
+    visibility 0s linear 300ms;
+  visibility: hidden;
+}
+
+.faq-item.open .faq-answer {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transition:
+    grid-template-rows 300ms var(--ease-expo),
+    opacity 220ms var(--ease-standard),
+    visibility 0s linear;
+  visibility: visible;
+}
+
+/* A grid row of 0fr still shows its content unless the child clips it. */
+.faq-answer-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.faq-item.open .faq-answer-inner {
+  border-top: 1px solid var(--landing-ground);
   padding: 14px 20px 18px;
 }
 
-.faq-answer p {
-  color: var(--landing-on-ink);
+.faq-answer-inner p {
+  color: var(--landing-text);
   font-size: var(--text-xs);
   line-height: 1.6;
   margin: 0;
@@ -3921,11 +4330,71 @@
 /* ---------------------------------------------------------------------------
    LANDING FOOTER
    --------------------------------------------------------------------------- */
+/* The landing's inline labels carry drawn icons now rather than emoji, and an SVG
+   dropped onto a text baseline sits low and crowds the word after it. One rule
+   aligns every one of them, placed after the individual chip rules so it wins on
+   source order without raising specificity. `flex-shrink: 0` matters on the
+   narrow chips, where the icon would otherwise be squeezed to a sliver before
+   the text wrapped. */
+.preview-chip,
+.sim-chip,
+.demo-city-title,
+.preset-city,
+.hero-demo-leg > span,
+.split-sandbox-card h6 {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.landing svg {
+  flex-shrink: 0;
+}
+
 .landing-footer {
-  background: var(--landing-ink);
+  background: var(--landing-ground);
   border-top: 1px solid var(--landing-glass-border);
   padding: 24px;
 }
+
+/* The display face, landing only. The reference's headings are what carry most of
+   its warmth, and a geometric sans at the same sizes reads colder however the
+   colours are set — so the headings, the numbered stops and the eyebrow labels
+   take the rounded face and everything else keeps the house sans, which is still
+   the better face for reading.
+
+   `--weight-display` is 700 because that is the top of Fredoka's real axis. The
+   house `--weight-selected` is 800 and would be synthesised here. */
+
+/* Placed after every landing component rule on purpose. Written above them it
+   lost the weight to `.landing-hero h1`'s own `--weight-selected`, at equal
+   specificity, on source order alone — so the family applied, the 800 stood, and
+   the browser synthesised a bolder Fredoka than exists. That is the exact defect
+   D8 was written to stop, reintroduced by the change meant to honour it. */
+.landing-hero h1,
+.section-header h2,
+.benefit-card h3,
+.lab-step-card h4,
+.preset-card h4,
+.lab-preview-content h5,
+.faq-question,
+.landing-nav-brand,
+.landing-badge,
+.section-badge,
+.lab-step-num,
+.hero-cta {
+  font-family: var(--font-display);
+  font-weight: var(--weight-display);
+  letter-spacing: 0.005em;
+}
+
+/* Rounded faces carry their weight visually, so display sizes need less tracking
+   than the geometric face wanted, not more. */
+.landing-hero h1,
+.section-header h2 {
+  letter-spacing: -0.005em;
+}
+
 
 .landing-footer-inner {
   align-items: center;
