@@ -290,19 +290,34 @@ export function TripsPage() {
           <button className="hero-cta" onClick={startPlanning} type="button">
             {copy("start_planning", language)} <ArrowRight aria-hidden="true" size={17} />
           </button>
-          <ul className="landing-bullets">
-            {BULLETS.map(([Icon, code]) => (
-              <li key={code}>
-                <span className="landing-bullet-icon">
-                  <Icon aria-hidden="true" size={17} />
-                </span>
-                {copy(code, language)}
-              </li>
-            ))}
-          </ul>
-          <p className="landing-note">{copy("landing_local_note", language)}</p>
-          <p className="landing-note">{copy("landing_free_note", language)}</p>
         </div>
+      </section>
+
+      {/* What it does, and what it costs — **below** the hero rather than inside it.
+          Measured at 1280x800 before the move: the call to action sat at 323px and was
+          followed by 306px of bullets and notes, all above the fold, so the one thing
+          this page asks anybody to do was the middle of the view rather than its end.
+          The article's argument is single focus — "only give the visitor 2 options: buy
+          or leave" — and its hero is three elements: headline, supporting image, call to
+          action. These are its Section 2 and its trust copy, so they read after the fold,
+          where a visitor who wants more arrives looking for exactly this.
+
+          Kept on the hero's own ground rather than restyled: they are written light-on-ink
+          and the band continues the scene, so scrolling reveals more of one page instead
+          of crossing into a different one. */}
+      <section className="landing-solutions">
+        <ul className="landing-bullets">
+          {BULLETS.map(([Icon, code]) => (
+            <li key={code}>
+              <span className="landing-bullet-icon">
+                <Icon aria-hidden="true" size={17} />
+              </span>
+              {copy(code, language)}
+            </li>
+          ))}
+        </ul>
+        <p className="landing-note">{copy("landing_local_note", language)}</p>
+        <p className="landing-note">{copy("landing_free_note", language)}</p>
       </section>
 
       <div className="landing-columns">

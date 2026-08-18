@@ -1438,6 +1438,36 @@ cascading render.
 an owner lands on for the rest of the trip, and the sidebar lists those five without ever
 saying what any of them does.
 
+## The hero carries three things, 2026-08-18
+
+Read Courey Wong's "How To Design A Killer Landing Page" in a browser, top to bottom. Its
+argument is **single focus** — a landing page has one thing it wants the visitor to do,
+and "only give the visitor 2 options: buy or leave" — and its hero is exactly three
+elements: headline, supporting image, call to action.
+
+Ours carried six. Measured at 1280x800 before the change: headline at 138, lead at 214,
+**call to action at 323**, then a four-item feature list and two notes running to 702 —
+**306px of other content above the fold, all of it below the one button**. The thing the
+page asks anybody to do was the middle of the view rather than its end.
+
+The list and the notes are the article's Section 2 and its trust copy, so they now sit in
+a `landing-solutions` band **below** the fold, where a visitor who wants more arrives
+looking for exactly them. The call to action is now the last thing above the fold at 458,
+with a 54-pixel sliver of the next band showing — enough to say there is more, not enough
+to compete. Verified afterwards that the one action still works: it scrolls the form into
+view and focuses its first control.
+
+The band keeps the hero's own ground rather than being restyled. Its contents are written
+light-on-ink and the working half below is light, so moving them onto that surface would
+have made them unreadable; continuing the gradient means scrolling reveals more of one
+page instead of crossing a seam into another.
+
+**What was left alone, deliberately.** The headline already follows the article's own
+framework — big idea, end result, transformation — and its sub-headline already describes
+what you get, which is what the article asks a sub-headline to do. Rewriting the owner's
+product copy was not what "apply this to the hero" asked for, and the structure was the
+part that was actually wrong.
+
 ## The hero is the night map now, 2026-08-18
 
 Repainted at the owner's asking. The golden-hour palette sampled from two travel sites for

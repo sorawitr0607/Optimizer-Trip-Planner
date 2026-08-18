@@ -2906,6 +2906,28 @@
   max-width: 58ch;
 }
 
+/* The band under the fold. It carries the hero's ground so the scene continues rather
+   than stopping at a seam — the bullets and notes inside it are written light-on-ink and
+   would be unreadable on the working half's light surface. Its gradient picks up where
+   the hero's leaves off, at that gradient's far end. */
+.landing-solutions {
+  background: linear-gradient(180deg, var(--landing-route-soft) 0%, var(--landing-ink) 100%);
+  display: grid;
+  gap: 14px;
+  justify-items: center;
+  padding: 40px clamp(16px, 5vw, 40px) 48px;
+}
+
+.landing-solutions .landing-bullets {
+  max-width: 46rem;
+  width: 100%;
+}
+
+.landing-solutions .landing-note {
+  max-width: 46rem;
+  text-align: center;
+}
+
 .landing-bullets {
   display: grid;
   gap: 10px;
