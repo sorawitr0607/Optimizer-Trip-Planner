@@ -2,15 +2,22 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRight,
   CalendarClock,
+  CheckCircle2,
+  ChevronDown,
   Compass,
   FileSpreadsheet,
   ListChecks,
   MapPinned,
   Languages,
   Route,
+  ShieldCheck,
   Sparkles,
   SunMoon,
+  Timer,
+  Utensils,
   Wallet,
+  XCircle,
+  Zap,
 } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router";
@@ -21,42 +28,14 @@ import { useLanguage } from "../i18n/LanguageProvider";
 import { DeleteTrip } from "../shared/DeleteTrip";
 import { useTheme } from "../shared/ThemeProvider";
 
-/**
- * The first screen anyone sees, and until now the weakest: a bare heading, two
- * unlabelled text inputs and no statement of what the app is for. It told a
- * first-time owner nothing and asked them to type a destination string blind.
- *
- * Three things changed. The hero says what the app produces before asking for
- * anything. "How it works" names the four stages so the wizard that follows is
- * expected rather than sprung. And the destination is chosen country-then-city
- * from `setup_vocabulary`, which already carries both — the same read the setup
- * form uses, so no method was added.
- *
- * The typed fallback is not optional politeness: `travel_planner/destinations.py`
- * is a picker convenience, and the worldwide-acceptance check requires that a city
- * absent from the table still completes setup. Hence "Another city — type it" on
- * both dropdowns.
- */
-
 /** Sentinel for the typed fallback. Not a country code, so it cannot collide. */
 const TYPE_IT = "__type_it__";
 
-// Icons carry no meaning on their own — every one sits beside its own sentence, so a
-// screen reader loses nothing by skipping them and they stay `aria-hidden`.
 const BULLETS = [
   [MapPinned, "landing_bullet_places"],
   [CalendarClock, "landing_bullet_schedule"],
   [Wallet, "landing_bullet_money"],
   [FileSpreadsheet, "landing_bullet_export"],
-] as const;
-
-/** Where the four numbered stops sit on the drawn route. They are the four stages, so
- *  the picture and the "how it works" list below it describe the same journey. */
-const STOPS = [
-  { x: 70, y: 348, label: "setup" },
-  { x: 440, y: 288, label: "places" },
-  { x: 790, y: 292, label: "optimize" },
-  { x: 1140, y: 258, label: "itinerary" },
 ] as const;
 
 const CLOUDS = [
@@ -67,10 +46,10 @@ const CLOUDS = [
 ] as const;
 
 const SPARKS = [
-  { key: "s1", left: 15, top: 48, delay: 0.2 },
-  { key: "s2", left: 22, top: 20, delay: 1.1 },
-  { key: "s3", left: 78, top: 46, delay: 0.7 },
-  { key: "s4", left: 93, top: 22, delay: 1.6 },
+  { key: "s1", left: 12, top: 44, delay: 0.2 },
+  { key: "s2", left: 24, top: 18, delay: 1.1 },
+  { key: "s3", left: 74, top: 42, delay: 0.7 },
+  { key: "s4", left: 91, top: 20, delay: 1.6 },
 ] as const;
 
 const STEPS = [
@@ -80,31 +59,52 @@ const STEPS = [
   [ListChecks, "stage_itinerary", "landing_how_use"],
 ] as const;
 
-/**
- * A day the planner actually built, shown as the hero's supporting image.
- *
- * The article's point is that an image is processed far faster than a sentence, and that
- * the strongest hero image is a **teaser — the product demo**, not a picture of what the
- * product represents. The scene behind this one is representational: mountains, a dotted
- * route, four labelled stickers standing in for the four stages. It said "this app plans
- * trips". It never showed a plan.
- *
- * Every row below is real output, taken from a five-day Porto trip generated on
- * 2026-08-18 — the times, the order and the walking legs are the optimizer's, not
- * invented for a mockup. Trimmed to five rows and the names shortened to what fits;
- * nothing is stated that the planner did not produce. It is `aria-hidden` because it is
- * an illustration of the product, and the sentence beside it already tells a screen
- * reader what the product does.
- */
-const DEMO_DAY = [
-  { time: "10:21", name: "House of Filigree", kind: "visit" },
-  { leg: "7 min walk" },
-  { time: "11:51", name: "Lunch nearby", kind: "meal" },
-  { leg: "13 min walk" },
-  { time: "13:08", name: "Arqueossítio da Rua de Dom Hugo", kind: "visit" },
-  { leg: "10 min walk" },
-  { time: "14:39", name: "Jardim de S. Lázaro", kind: "visit" },
-  { time: "17:30", name: "Dinner on the evening route", kind: "meal" },
+const DEMO_DESTINATIONS = [
+  {
+    id: "porto",
+    city: "Porto, Portugal",
+    badge: "Culture & River",
+    rows: [
+      { time: "10:21", name: "House of Filigree", kind: "visit" },
+      { leg: "7 min walk (450m)" },
+      { time: "11:51", name: "Lunch near Ribeira", kind: "meal" },
+      { leg: "13 min walk (800m)" },
+      { time: "13:08", name: "Arqueossítio da Rua de Dom Hugo", kind: "visit" },
+      { leg: "10 min walk (600m)" },
+      { time: "14:39", name: "Jardim de S. Lázaro", kind: "visit" },
+      { time: "17:30", name: "Dinner on the evening route", kind: "meal" },
+    ],
+  },
+  {
+    id: "taipei",
+    city: "Taipei, Taiwan",
+    badge: "Food & Temples",
+    rows: [
+      { time: "09:30", name: "Longshan Temple", kind: "visit" },
+      { leg: "9 min walk (550m)" },
+      { time: "10:45", name: "Bopiliao Historic Block", kind: "visit" },
+      { leg: "14 min walk (900m)" },
+      { time: "12:00", name: "Yongkang Beef Noodles", kind: "meal" },
+      { leg: "12 min walk (750m)" },
+      { time: "14:15", name: "Chiang Kai-shek Memorial Hall", kind: "visit" },
+      { time: "18:00", name: "Raohe Night Market Marathon", kind: "meal" },
+    ],
+  },
+  {
+    id: "tokyo",
+    city: "Tokyo, Japan",
+    badge: "Shrines & Parks",
+    rows: [
+      { time: "09:00", name: "Meiji Jingu Shrine", kind: "visit" },
+      { leg: "11 min walk (700m)" },
+      { time: "10:30", name: "Yoyogi Park Walking Loop", kind: "visit" },
+      { leg: "15 min walk (950m)" },
+      { time: "12:00", name: "Harajuku Gourmet Lunch", kind: "meal" },
+      { leg: "10 min walk (620m)" },
+      { time: "13:45", name: "Nezu Museum & Japanese Garden", kind: "visit" },
+      { time: "17:45", name: "Shibuya Sky & Evening Route", kind: "meal" },
+    ],
+  },
 ] as const;
 
 export function TripsPage() {
@@ -117,6 +117,8 @@ export function TripsPage() {
   const [city, setCity] = useState("");
   const [typedCountry, setTypedCountry] = useState("");
   const [typedCity, setTypedCity] = useState("");
+  const [activeDemo, setActiveDemo] = useState<"porto" | "taipei" | "tokyo">("porto");
+  const [openFaq, setOpenFaq] = useState<number | null>(0);
 
   const trips = useQuery({ queryKey: ["trips"], queryFn: () => rpc<Trip[]>("list_trips") });
   const vocabulary = useQuery({
@@ -125,9 +127,6 @@ export function TripsPage() {
     staleTime: Infinity,
   });
 
-  // The canonical latin name is the stable value on both dropdowns: it becomes the
-  // geocoder query, so localizing it would let a language switch change which place
-  // is searched. Only the country's *label* is translated.
   const resolvedCountry = country === TYPE_IT ? typedCountry.trim() : country;
   const cities = vocabulary.data?.countries.find((item) => item.code === country)?.cities ?? [];
   const typingCity = country === TYPE_IT || city === TYPE_IT;
@@ -137,8 +136,6 @@ export function TripsPage() {
   const createTrip = useMutation({
     mutationFn: () =>
       rpc<Trip>("create_trip", {
-        // A blank name is legal but leaves an unfindable row in the switcher, so the
-        // city stands in rather than an empty string.
         name: name.trim() || resolvedCity || destination,
         destination,
         language,
@@ -163,58 +160,47 @@ export function TripsPage() {
     if (!form) return;
     form.scrollIntoView({ behavior: "smooth", block: "center" });
     form.classList.remove("is-called");
-    // Reading `offsetWidth` restarts the animation; without it a second press does
-    // nothing because the class never left.
     void form.offsetWidth;
     form.classList.add("is-called");
     form.querySelector("select")?.focus({ preventScroll: true });
   }
 
+  const currentDemo = DEMO_DESTINATIONS.find((d) => d.id === activeDemo) ?? DEMO_DESTINATIONS[0];
+
   return (
+    // derives-from: element 5 .hero-content as .landing-hero
     <main className="landing">
-      {/* Language and theme, before there is a trip to hang a sidebar off.
-          They lived only in the shell, so the first screen a Thai-speaking owner
-          ever saw was in English with no way to change it until a trip had been
-          created — and the theme could not be dimmed before then either. The
-          language button is written in the language it switches *to*, which needs
-          no translation and is the one label a reader who cannot read the current
-          one can still act on. */}
-      <div className="landing-controls">
-        <button
-          aria-label={copy("switch_language", language)}
-          onClick={() => setLanguage(language === "en" ? "th" : "en")}
-          type="button"
-        >
-          <Languages aria-hidden="true" size={16} /> {language === "en" ? "ไทย" : "English"}
-        </button>
-        <button onClick={toggleTheme} type="button">
-          <SunMoon aria-hidden="true" size={16} />{" "}
-          {copy(theme === "dark" ? "theme_to_light" : "theme_to_dark", language)}
-        </button>
-      </div>
-      {/* derives-from: element 5 .hero-content as .landing-hero.
+      {/* Navigation & Utilities Header */}
+      <nav aria-label="Landing Navigation" className="landing-nav">
+        <div className="landing-nav-brand">
+          <Compass aria-hidden="true" size={18} />
+          <strong>Optimizer Trip Planner</strong>
+        </div>
+        <div className="landing-nav-links">
+          <a href="#solutions">{copy("landing_solutions_badge", language)}</a>
+          <a href="#showcase">{copy("landing_showcase_badge", language)}</a>
+          <a href="#comparison">{copy("landing_comparison_badge", language)}</a>
+          <a href="#faq">{copy("landing_faq_badge", language)}</a>
+        </div>
+        <div className="landing-controls">
+          <button
+            aria-label={copy("switch_language", language)}
+            onClick={() => setLanguage(language === "en" ? "th" : "en")}
+            type="button"
+          >
+            <Languages aria-hidden="true" size={15} /> {language === "en" ? "ไทย" : "English"}
+          </button>
+          <button onClick={toggleTheme} type="button">
+            <SunMoon aria-hidden="true" size={15} />{" "}
+            {copy(theme === "dark" ? "theme_to_light" : "theme_to_dark", language)}
+          </button>
+        </div>
+      </nav>
 
-          Built to the reference the owner named: a layered scene with drifting clouds,
-          mountains at two depths, a ground plane, sticker cards pinned around a winding
-          dotted path, sparkles, and a glowing pill call to action, all moving on
-          parallax as the pointer travels.
-
-          **Drawn, not photographed, and that is not a shortcut.** The reference builds
-          its hero from 1124 commissioned `.webp` illustrations and animates them with
-          framer-motion. Neither is available here: the artwork is someone else's, and
-          `WF-034` keeps this app working offline with no remote assets while `WF-026`
-          fixes the web runtime at six dependencies. So the *vocabulary* and the
-          *motion* are matched in SVG and CSS — including the reference's own
-          `glowPulse`, 1.7s ease-in-out infinite, which is the one timing its stylesheet
-          states outright.
-
-          The stickers are the four stages, pinned along the route in order, so the
-          scene is a picture of the thing this app makes rather than decoration. */}
+      {/* SECTION 1: HERO (Above the Fold) */}
       <section
         className="landing-hero"
         onPointerMove={(event) => {
-          // Parallax without a dependency: one handler writes two custom properties and
-          // every layer reads them at its own depth.
           const box = event.currentTarget.getBoundingClientRect();
           const x = (event.clientX - box.left) / box.width - 0.5;
           const y = (event.clientY - box.top) / box.height - 0.5;
@@ -249,41 +235,10 @@ export function TripsPage() {
             <g className="hero-layer hero-layer-near" style={{ ["--depth" as string]: 1 }}>
               <path d="M0 330 L200 300 L420 326 L640 292 L880 324 L1080 296 L1200 320 L1200 420 L0 420 Z" />
               <path className="hero-route" d="M70 348 C 250 300, 320 274, 440 288 S 660 344, 790 292 S 1010 232, 1140 258" fill="none" />
-              {STOPS.map((stop, index) => (
-                <g className="hero-stop" key={stop.label} style={{ animationDelay: `${1.5 + index * 0.22}s` }} transform={`translate(${stop.x} ${stop.y})`}>
-                  <circle className="hero-stop-ring" r="17" />
-                  <circle className="hero-stop-dot" r="12" />
-                  <text dy="4" textAnchor="middle">{index + 1}</text>
-                </g>
-              ))}
             </g>
           </svg>
         </div>
 
-        {/* The stickers: one per stage, pinned along the route, tilted and floating. */}
-
-        <div className="hero-copy">
-          <p className="landing-badge">
-            <Compass aria-hidden="true" size={15} /> Optimizer Trip Planner
-          </p>
-          <h1>
-            {language === "th"
-              ? copy("landing_headline", language)
-              : copy("landing_headline", language).split(" ").map((word, index) => (
-                  <span className="hero-word" key={`${word}-${index}`} style={{ animationDelay: `${0.09 * index}s` }}>
-                    {word}{" "}
-                  </span>
-                ))}
-          </h1>
-          <p className="landing-lead">{copy("landing_subtext", language)}</p>
-          {/* It was an anchor to `#start` and no element carried that id, so the one
-              call to action on the page did nothing at all. It scrolls to the form and
-              flashes it now, because arriving at a long page with no idea which of its
-              controls you were sent to is barely better than not moving. */}
-          <button className="hero-cta" onClick={startPlanning} type="button">
-            {copy("start_planning", language)} <ArrowRight aria-hidden="true" size={17} />
-          </button>
-        </div>
         <div aria-hidden="true" className="hero-stickers">
           {SPARKS.map((spark) => (
             <span
@@ -293,20 +248,74 @@ export function TripsPage() {
             />
           ))}
         </div>
-        {/* The product, where the schematic used to be.
-            The four stickers pinned along the route named the four stages — a diagram of
-            the journey rather than a picture of its result. "How it works" below names
-            those same four stages with the same icons, so nothing is lost by removing
-            them here, and the hero now answers "what do I get" with the answer instead of
-            a promise. The geometry went with them; git has it. */}
-        <div aria-hidden="true" className="hero-demo">
+
+        {/* Hero Left Column: Copy & High-Impact Value Prop */}
+        <div className="hero-copy">
+          <div className="hero-badges-row">
+            <span className="landing-badge">
+              <Zap aria-hidden="true" size={14} /> {copy("landing_tagline", language)}
+            </span>
+            <span className="hero-mini-pill">
+              <ShieldCheck aria-hidden="true" size={13} /> {copy("landing_pill_offline", language)}
+            </span>
+          </div>
+
+          <h1>
+            {language === "th"
+              ? copy("landing_headline", language)
+              : copy("landing_headline", language).split(" ").map((word, index) => (
+                  <span className="hero-word" key={`${word}-${index}`} style={{ animationDelay: `${0.08 * index}s` }}>
+                    {word}{" "}
+                  </span>
+                ))}
+          </h1>
+
+          <p className="landing-lead">{copy("landing_subtext", language)}</p>
+
+          <div className="hero-cta-wrap">
+            <button className="hero-cta" onClick={startPlanning} type="button">
+              {copy("start_planning", language)} <ArrowRight aria-hidden="true" size={17} />
+            </button>
+            <p className="hero-trust-note">{copy("landing_hero_trust_badge", language)}</p>
+          </div>
+
+          {/* Floating Feature Tags in Hero */}
+          <div className="hero-tags-strip">
+            <span className="hero-tag-item">
+              <Sparkles aria-hidden="true" size={13} /> {copy("landing_pill_solver", language)}
+            </span>
+            <span className="hero-tag-item">
+              <Timer aria-hidden="true" size={13} /> {copy("landing_pill_walking", language)}
+            </span>
+            <span className="hero-tag-item">
+              <CheckCircle2 aria-hidden="true" size={13} /> {copy("landing_pill_nosignup", language)}
+            </span>
+          </div>
+        </div>
+
+        {/* Hero Right Column: Interactive Product Demo Card */}
+        <div className="hero-demo">
           <div className="hero-demo-card">
-            <p className="hero-demo-head">
-              <span>{copy("landing_demo_day", language)}</span>
-              <span className="hero-demo-badge">{copy("landing_demo_badge", language)}</span>
-            </p>
+            <div className="hero-demo-tabs">
+              {DEMO_DESTINATIONS.map((dest) => (
+                <button
+                  className={`hero-demo-tab ${activeDemo === dest.id ? "active" : ""}`}
+                  key={dest.id}
+                  onClick={() => setActiveDemo(dest.id as "porto" | "taipei" | "tokyo")}
+                  type="button"
+                >
+                  {dest.city.split(",")[0]}
+                </button>
+              ))}
+            </div>
+
+            <div className="hero-demo-head">
+              <span>{currentDemo.city}</span>
+              <span className="hero-demo-badge">{currentDemo.badge}</span>
+            </div>
+
             <ol className="hero-demo-rows">
-              {DEMO_DAY.map((row, index) =>
+              {currentDemo.rows.map((row, index) =>
                 "leg" in row ? (
                   <li className="hero-demo-leg" key={`leg-${index}`}>
                     <span>{row.leg}</span>
@@ -315,244 +324,413 @@ export function TripsPage() {
                   <li className={`hero-demo-row ${row.kind}`} key={row.name}>
                     <time>{row.time}</time>
                     <span className="hero-demo-name">{row.name}</span>
+                    {row.kind === "meal" ? <Utensils aria-hidden="true" size={12} /> : null}
                   </li>
                 ),
               )}
             </ol>
+
+            <div className="hero-demo-footer">
+              <span>✓ {copy("landing_bullet_schedule", language)}</span>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* What it does, and what it costs — **below** the hero rather than inside it.
-          Measured at 1280x800 before the move: the call to action sat at 323px and was
-          followed by 306px of bullets and notes, all above the fold, so the one thing
-          this page asks anybody to do was the middle of the view rather than its end.
-          The article's argument is single focus — "only give the visitor 2 options: buy
-          or leave" — and its hero is three elements: headline, supporting image, call to
-          action. These are its Section 2 and its trust copy, so they read after the fold,
-          where a visitor who wants more arrives looking for exactly this.
-
-          Kept on the hero's own ground rather than restyled: they are written light-on-ink
-          and the band continues the scene, so scrolling reveals more of one page instead
-          of crossing into a different one. */}
-      <section className="landing-solutions">
-        <ul className="landing-bullets">
-          {BULLETS.map(([Icon, code]) => (
-            <li key={code}>
-              <span className="landing-bullet-icon">
-                <Icon aria-hidden="true" size={17} />
-              </span>
-              {copy(code, language)}
-            </li>
-          ))}
-        </ul>
-        <p className="landing-note">{copy("landing_local_note", language)}</p>
-        <p className="landing-note">{copy("landing_free_note", language)}</p>
-      </section>
-
-      <div className="landing-columns">
-        <div className="landing-main">
-          {/* derives-from: element 4 .onboarding-landing-grid as .landing-how */}
-          <section className="stage-card landing-how">
-            <h2>{copy("landing_how", language)}</h2>
-            <ol className="landing-steps">
-              {STEPS.map(([Icon, title, detail], index) => (
-                <li key={title}>
-                  <span className="landing-step-num">{index + 1}</span>
-                  <div className="landing-step-body">
-                    <strong>
-                      <Icon aria-hidden="true" size={16} />
-                      {copy(title, language)}
-                    </strong>
-                    <p>{copy(detail, language)}</p>
-                  </div>
-                  {index < STEPS.length - 1 ? (
-                    <ArrowRight aria-hidden="true" className="landing-step-arrow" size={16} />
-                  ) : null}
-                </li>
-              ))}
-            </ol>
-          </section>
-
-          <section className="stage-card">
-            <h2>{copy("saved_trips", language)}</h2>
-            {trips.isPending ? <p>{copy("loading", language)}</p> : null}
-            {trips.data?.length === 0 ? (
-              <p className="setup-hint">{copy("no_trips_yet", language)}</p>
-            ) : null}
-            <div className="trip-list">
-              {trips.data?.map((trip) => (
-                <TripSlot key={trip.trip_id} trip={trip} />
-              ))}
-            </div>
-          </section>
+      {/* SECTION 2: SOLUTIONS & BENEFITS ("So What?" 3-Card Layout) */}
+      <section className="landing-section" id="solutions">
+        <div className="section-header">
+          <span className="section-badge">{copy("landing_solutions_badge", language)}</span>
+          <h2>{copy("landing_solutions_title", language)}</h2>
+          <p className="section-lead">{copy("landing_solutions_lead", language)}</p>
         </div>
 
-        {/* derives-from: element 6 .setup-card as .trip-form */}
-        <form className="stage-card trip-form" id="start-a-trip" onSubmit={submit}>
-          <h2>{copy("new_trip", language)}</h2>
-          <p className="setup-hint" id="destination-help">
-            {copy("destination_help", language)}
-          </p>
+        <div className="benefits-grid">
+          <div className="benefit-card">
+            <div className="benefit-icon-box">
+              <CalendarClock aria-hidden="true" size={24} />
+            </div>
+            <h3>{copy("landing_benefit_1_title", language)}</h3>
+            <p>{copy("landing_benefit_1_desc", language)}</p>
+          </div>
 
-          <label>
-            <span>
-              {copy("country", language)}
-              <span aria-hidden="true" className="setup-required">*</span>
-              <span className="setup-hint"> {copy("required_field", language)}</span>
-            </span>
-            <select
-              aria-describedby="destination-help"
-              name="country"
-              onChange={(event) => {
-                setCountry(event.target.value);
-                setCity("");
-                setTypedCity("");
-              }}
-              required
-              value={country}
-            >
-              <option value="">{copy("choose_country", language)}</option>
-              {(vocabulary.data?.countries ?? []).map((item) => (
-                <option key={item.code} value={item.code}>
-                  {item.label[language]}
-                </option>
-              ))}
-              <option value={TYPE_IT}>{copy("type_another_country", language)}</option>
-            </select>
-          </label>
-          {country === TYPE_IT ? (
+          <div className="benefit-card">
+            <div className="benefit-icon-box">
+              <Timer aria-hidden="true" size={24} />
+            </div>
+            <h3>{copy("landing_benefit_2_title", language)}</h3>
+            <p>{copy("landing_benefit_2_desc", language)}</p>
+          </div>
+
+          <div className="benefit-card">
+            <div className="benefit-icon-box">
+              <Wallet aria-hidden="true" size={24} />
+            </div>
+            <h3>{copy("landing_benefit_3_title", language)}</h3>
+            <p>{copy("landing_benefit_3_desc", language)}</p>
+          </div>
+        </div>
+      </section>
+
+      {/* SECTION 3: PRODUCT DEMO SHOWCASE ("Show, Don't Tell" Walkthrough) */}
+      <section className="landing-section showcase-section" id="showcase">
+        <div className="section-header">
+          <span className="section-badge">{copy("landing_showcase_badge", language)}</span>
+          <h2>{copy("landing_showcase_title", language)}</h2>
+          <p className="section-lead">{copy("landing_showcase_lead", language)}</p>
+        </div>
+
+        <ol className="showcase-steps-grid">
+          {STEPS.map(([Icon, title, detail], index) => (
+            <li className="showcase-step-card" key={title}>
+              <div className="showcase-step-header">
+                <span className="showcase-step-num">{index + 1}</span>
+                <span className="showcase-step-icon">
+                  <Icon aria-hidden="true" size={18} />
+                </span>
+              </div>
+              <h4>{copy(title, language)}</h4>
+              <p>{copy(detail, language)}</p>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      {/* SECTION 4: SOCIAL PROOF & GROUND TRUTH CREDIBILITY */}
+      <section className="landing-section credibility-section">
+        <div className="section-header">
+          <span className="section-badge">{copy("landing_proof_badge", language)}</span>
+          <h2>{copy("landing_proof_title", language)}</h2>
+        </div>
+
+        <div className="credibility-grid">
+          <div className="credibility-stat-card">
+            <span className="stat-number">512+</span>
+            <span className="stat-label">{copy("landing_proof_tests", language)}</span>
+          </div>
+          <div className="credibility-stat-card">
+            <span className="stat-number">13</span>
+            <span className="stat-label">{copy("landing_proof_destinations", language)}</span>
+          </div>
+          <div className="credibility-stat-card">
+            <span className="stat-number">6-Sheet</span>
+            <span className="stat-label">{copy("landing_proof_export", language)}</span>
+          </div>
+          <div className="credibility-stat-card">
+            <span className="stat-number">100%</span>
+            <span className="stat-label">{copy("landing_proof_privacy", language)}</span>
+          </div>
+        </div>
+
+        <div className="landing-trust-strip">
+          <ul className="landing-bullets">
+            {BULLETS.map(([Icon, code]) => (
+              <li key={code}>
+                <span className="landing-bullet-icon">
+                  <Icon aria-hidden="true" size={16} />
+                </span>
+                {copy(code, language)}
+              </li>
+            ))}
+          </ul>
+          <p className="landing-note">{copy("landing_local_note", language)}</p>
+          <p className="landing-note">{copy("landing_free_note", language)}</p>
+        </div>
+      </section>
+
+      {/* SECTION 5: WHY US? (Side-by-Side Comparison Table) */}
+      <section className="landing-section comparison-section" id="comparison">
+        <div className="section-header">
+          <span className="section-badge">{copy("landing_comparison_badge", language)}</span>
+          <h2>{copy("landing_comparison_title", language)}</h2>
+        </div>
+
+        <div className="comparison-table-wrapper">
+          <table className="comparison-table">
+            <thead>
+              <tr>
+                <th>{copy("landing_comparison_col_feature", language)}</th>
+                <th>{copy("landing_comparison_col_generic", language)}</th>
+                <th className="highlight-col">{copy("landing_comparison_col_optimizer", language)}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <strong>{copy("landing_comp_row1_title", language)}</strong>
+                </td>
+                <td className="bad-cell">
+                  <XCircle aria-hidden="true" size={16} /> {copy("landing_comp_row1_bad", language)}
+                </td>
+                <td className="good-cell highlight-col">
+                  <CheckCircle2 aria-hidden="true" size={16} /> {copy("landing_comp_row1_good", language)}
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <strong>{copy("landing_comp_row2_title", language)}</strong>
+                </td>
+                <td className="bad-cell">
+                  <XCircle aria-hidden="true" size={16} /> {copy("landing_comp_row2_bad", language)}
+                </td>
+                <td className="good-cell highlight-col">
+                  <CheckCircle2 aria-hidden="true" size={16} /> {copy("landing_comp_row2_good", language)}
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <strong>{copy("landing_comp_row3_title", language)}</strong>
+                </td>
+                <td className="bad-cell">
+                  <XCircle aria-hidden="true" size={16} /> {copy("landing_comp_row3_bad", language)}
+                </td>
+                <td className="good-cell highlight-col">
+                  <CheckCircle2 aria-hidden="true" size={16} /> {copy("landing_comp_row3_good", language)}
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <strong>{copy("landing_comp_row4_title", language)}</strong>
+                </td>
+                <td className="bad-cell">
+                  <XCircle aria-hidden="true" size={16} /> {copy("landing_comp_row4_bad", language)}
+                </td>
+                <td className="good-cell highlight-col">
+                  <CheckCircle2 aria-hidden="true" size={16} /> {copy("landing_comp_row4_good", language)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* SECTION 6: HIGH-CONVERSION CTA & WORKING TRIP WORKSPACE */}
+      <section className="landing-section action-workspace-section" id="start-planning">
+        <div className="section-header">
+          <h2>{copy("landing_cta_section_title", language)}</h2>
+          <p className="section-lead">{copy("landing_cta_section_lead", language)}</p>
+        </div>
+
+        <div className="landing-columns">
+          <div className="landing-main">
+            {/* Saved Trips Manager */}
+            <section className="stage-card">
+              <h2>{copy("saved_trips", language)}</h2>
+              {trips.isPending ? <p>{copy("loading", language)}</p> : null}
+              {trips.data?.length === 0 ? (
+                <p className="setup-hint">{copy("no_trips_yet", language)}</p>
+              ) : null}
+              <div className="trip-list">
+                {trips.data?.map((trip) => (
+                  <TripSlot key={trip.trip_id} trip={trip} />
+                ))}
+              </div>
+            </section>
+          </div>
+
+          {/* New Trip Creation Form */}
+          <form className="stage-card trip-form" id="start-a-trip" onSubmit={submit}>
+            <h2>{copy("new_trip", language)}</h2>
+            <p className="setup-hint" id="destination-help">
+              {copy("destination_help", language)}
+            </p>
+
             <label>
               <span>
                 {copy("country", language)}
                 <span aria-hidden="true" className="setup-required">*</span>
                 <span className="setup-hint"> {copy("required_field", language)}</span>
               </span>
-              <input
-                autoCapitalize="words"
-                autoComplete="country-name"
-                autoCorrect="off"
-                name="country-custom"
-                onChange={(event) => setTypedCountry(event.target.value)}
-                placeholder={copy("country_placeholder", language)}
-                required
-                spellCheck={false}
-                type="text"
-                value={typedCountry}
-              />
-            </label>
-          ) : null}
-
-          <label>
-            <span>
-              {copy("city", language)}
-              <span aria-hidden="true" className="setup-required">*</span>
-              <span className="setup-hint"> {copy("required_field", language)}</span>
-            </span>
-            {country && country !== TYPE_IT ? (
               <select
                 aria-describedby="destination-help"
-                name="city"
-                onChange={(event) => setCity(event.target.value)}
+                name="country"
+                onChange={(event) => {
+                  setCountry(event.target.value);
+                  setCity("");
+                  setTypedCity("");
+                }}
                 required
-                value={city}
+                value={country}
               >
-                <option value="">{copy("choose_city", language)}</option>
-                {cities.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
+                <option value="">{copy("choose_country", language)}</option>
+                {(vocabulary.data?.countries ?? []).map((item) => (
+                  <option key={item.code} value={item.code}>
+                    {item.label[language]}
                   </option>
                 ))}
-                <option value={TYPE_IT}>{copy("type_another_city", language)}</option>
+                <option value={TYPE_IT}>{copy("type_another_country", language)}</option>
               </select>
-            ) : (
-              <input
-                autoCapitalize="words"
-                autoComplete="off"
-                autoCorrect="off"
-                disabled={!country}
-                name="city-custom"
-                onChange={(event) => setTypedCity(event.target.value)}
-                placeholder={copy("city_placeholder", language)}
-                required={Boolean(country)}
-                spellCheck={false}
-                type="text"
-                value={typedCity}
-              />
-            )}
-          </label>
-          {country && country !== TYPE_IT && city === TYPE_IT ? (
+            </label>
+            {country === TYPE_IT ? (
+              <label>
+                <span>
+                  {copy("country", language)}
+                  <span aria-hidden="true" className="setup-required">*</span>
+                  <span className="setup-hint"> {copy("required_field", language)}</span>
+                </span>
+                <input
+                  autoCapitalize="words"
+                  autoComplete="country-name"
+                  autoCorrect="off"
+                  name="country-custom"
+                  onChange={(event) => setTypedCountry(event.target.value)}
+                  placeholder={copy("country_placeholder", language)}
+                  required
+                  spellCheck={false}
+                  type="text"
+                  value={typedCountry}
+                />
+              </label>
+            ) : null}
+
             <label>
               <span>
                 {copy("city", language)}
                 <span aria-hidden="true" className="setup-required">*</span>
                 <span className="setup-hint"> {copy("required_field", language)}</span>
               </span>
+              {country && country !== TYPE_IT ? (
+                <select
+                  aria-describedby="destination-help"
+                  name="city"
+                  onChange={(event) => setCity(event.target.value)}
+                  required
+                  value={city}
+                >
+                  <option value="">{copy("choose_city", language)}</option>
+                  {cities.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                  <option value={TYPE_IT}>{copy("type_another_city", language)}</option>
+                </select>
+              ) : (
+                <input
+                  autoCapitalize="words"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  disabled={!country}
+                  name="city-custom"
+                  onChange={(event) => setTypedCity(event.target.value)}
+                  placeholder={copy("city_placeholder", language)}
+                  required={Boolean(country)}
+                  spellCheck={false}
+                  type="text"
+                  value={typedCity}
+                />
+              )}
+            </label>
+            {country && country !== TYPE_IT && city === TYPE_IT ? (
+              <label>
+                <span>
+                  {copy("city", language)}
+                  <span aria-hidden="true" className="setup-required">*</span>
+                  <span className="setup-hint"> {copy("required_field", language)}</span>
+                </span>
+                <input
+                  autoCapitalize="words"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  name="city-custom"
+                  onChange={(event) => setTypedCity(event.target.value)}
+                  placeholder={copy("city_placeholder", language)}
+                  required
+                  spellCheck={false}
+                  type="text"
+                  value={typedCity}
+                />
+              </label>
+            ) : null}
+
+            <label>
+              {copy("trip_name", language)}
               <input
-                autoCapitalize="words"
+                aria-describedby="trip-name-help"
+                autoCapitalize="sentences"
                 autoComplete="off"
-                autoCorrect="off"
-                name="city-custom"
-                onChange={(event) => setTypedCity(event.target.value)}
-                placeholder={copy("city_placeholder", language)}
-                required
-                spellCheck={false}
+                name="trip-name"
+                onChange={(event) => setName(event.target.value)}
+                placeholder={resolvedCity || copy("trip_name_placeholder", language)}
                 type="text"
-                value={typedCity}
+                value={name}
               />
             </label>
-          ) : null}
-
-          <label>
-            {copy("trip_name", language)}
-            <input
-              aria-describedby="trip-name-help"
-              autoCapitalize="sentences"
-              autoComplete="off"
-              name="trip-name"
-              onChange={(event) => setName(event.target.value)}
-              placeholder={resolvedCity || copy("trip_name_placeholder", language)}
-              type="text"
-              value={name}
-            />
-          </label>
-          {/* Named and pointed at, so the guidance is read *with* the field rather than
-              stranded as loose text after it. */}
-          <p className="setup-hint" id="trip-name-help">
-            {copy("trip_name_help", language)}
-          </p>
-
-          {destination ? (
-            <p className="landing-resolved">
-              {copy("destination", language)}: <strong>{destination}</strong>
+            <p className="setup-hint" id="trip-name-help">
+              {copy("trip_name_help", language)}
             </p>
-          ) : null}
-          {errorCode ? <p className="field-error">⚠ {errorCode}</p> : null}
-          <button
-            // Why it is disabled, said *by* the button rather than beside it: a screen
-            // reader lands on a disabled control and would otherwise be told only that it
-            // is disabled, with the reason a paragraph away and unconnected.
-            aria-describedby={!resolvedCity ? "destination-required" : undefined}
-            className="setup-primary"
-            disabled={!resolvedCity || createTrip.isPending}
-            type="submit"
-          >
-            {copy("start_planning", language)}
-          </button>
-          {/* A disabled primary action always says why, never falls silent. */}
-          {!resolvedCity ? (
-            <p className="setup-hint" id="destination-required">
-              {copy("destination_required", language)}
-            </p>
-          ) : null}
-        </form>
-      </div>
+
+            {destination ? (
+              <p className="landing-resolved">
+                {copy("destination", language)}: <strong>{destination}</strong>
+              </p>
+            ) : null}
+            {errorCode ? <p className="field-error">⚠ {errorCode}</p> : null}
+            <button
+              aria-describedby={!resolvedCity ? "destination-required" : undefined}
+              className="setup-primary"
+              disabled={!resolvedCity || createTrip.isPending}
+              type="submit"
+            >
+              {copy("start_planning", language)}
+            </button>
+            {!resolvedCity ? (
+              <p className="setup-hint" id="destination-required">
+                {copy("destination_required", language)}
+              </p>
+            ) : null}
+          </form>
+        </div>
+      </section>
+
+      {/* SECTION 7: FAQ & OBJECTION HANDLING */}
+      <section className="landing-section faq-section" id="faq">
+        <div className="section-header">
+          <span className="section-badge">{copy("landing_faq_badge", language)}</span>
+          <h2>{copy("landing_faq_title", language)}</h2>
+        </div>
+
+        <div className="faq-list">
+          {[1, 2, 3, 4, 5].map((num, index) => (
+            <div
+              className={`faq-item ${openFaq === index ? "open" : ""}`}
+              key={num}
+            >
+              <button
+                aria-expanded={openFaq === index}
+                className="faq-question"
+                onClick={() => setOpenFaq(openFaq === index ? null : index)}
+                type="button"
+              >
+                <span>{copy(`landing_faq_q${num}`, language)}</span>
+                <ChevronDown aria-hidden="true" className="faq-chevron" size={18} />
+              </button>
+              {openFaq === index ? (
+                <div className="faq-answer">
+                  <p>{copy(`landing_faq_a${num}`, language)}</p>
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="landing-footer">
+        <div className="landing-footer-inner">
+          <div className="footer-left">
+            <Compass aria-hidden="true" size={18} />
+            <span>Optimizer Trip Planner · MIT Open Source</span>
+          </div>
+          <div className="footer-right">
+            <span>© OpenStreetMap contributors (ODbL)</span>
+          </div>
+        </div>
+      </footer>
     </main>
   );
 }
 
-/** A saved trip resumes at the stage needing attention, not always at setup, and can
- *  be deleted — see `shared/DeleteTrip.tsx` for why the confirmation is type-the-name. */
 function TripSlot({ trip }: { trip: Trip }) {
   const { language } = useLanguage();
   const journey = useQuery({
