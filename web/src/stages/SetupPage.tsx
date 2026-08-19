@@ -340,7 +340,7 @@ export function SetupPage() {
                   suits the wizard rather than being a limitation to fix. */}
               <button
                 aria-current={number === step ? "step" : undefined}
-                disabled={number >= step}
+                disabled={number >= step || save.isPending}
                 onClick={() => go(number)}
                 type="button"
               >
@@ -849,7 +849,7 @@ export function SetupPage() {
 
       <div className="setup-actions">
         {step > 1 ? (
-          <button onClick={() => go(step - 1)} type="button">
+          <button disabled={save.isPending} onClick={() => go(step - 1)} type="button">
             {copy("back", language)}
           </button>
         ) : null}
@@ -877,6 +877,12 @@ export function SetupPage() {
           </button>
         )}
       </div>
+      {save.isPending ? (
+        <p aria-live="polite" aria-busy="true" className="thinking">
+          <span className="thinking-dot" />
+          <span>{copy("saving_step", language)}</span>
+        </p>
+      ) : null}
       {/* A disabled primary action always says why, never falls silent. */}
       {step === STEP_COUNT && values.main_style.length === 0 ? (
         <p className="setup-hint">{copy("main_required", language)}</p>

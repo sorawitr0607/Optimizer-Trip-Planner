@@ -35,6 +35,7 @@ export function StayPage() {
   const [flash, setFlash] = useState<string | null>(null);
   /** Null until the ranking has been run at all. */
   const [outcome, setOutcome] = useState<"ranked" | "unrankable" | null>(null);
+  const [ranking, setRanking] = useState(false);
 
   const base = useQuery({
     queryKey: ["accommodation_base", tripId],
@@ -117,7 +118,12 @@ export function StayPage() {
         ) : null}
       </div>
 
-      <div className="evidence-card">
+      {/* Put away while the areas rank. This card asks the same question the ranking is
+          answering -- "where are you staying" -- so leaving it up during a wait of tens
+          of seconds invites typing an address that the list about to appear will make
+          irrelevant. `hidden` rather than unmounting, so a half-typed query survives a
+          ranking that comes back empty. */}
+      <div className="evidence-card" hidden={ranking}>
         <strong>{copy("accommodation_base_title", language)}</strong>
         <span className="setup-hint" id="base-help">
           {copy("accommodation_base_help", language)}
@@ -178,6 +184,7 @@ export function StayPage() {
         language={language}
         onChosen={() => navigate(`/trips/${tripId}/optimize`)}
         onOutcome={setOutcome}
+        onRanking={setRanking}
         tripId={tripId}
       />
 

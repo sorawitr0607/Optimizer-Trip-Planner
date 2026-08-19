@@ -566,7 +566,7 @@ const SPARKS = [
 type PacingMode = "relaxed" | "balanced" | "marathon";
 
 interface DemoCity {
-  id: "porto" | "taipei" | "tokyo" | "reykjavik";
+  id: "porto" | "taipei" | "tokyo" | "interlaken";
   city: string;
   country: string;
   badge: string;
@@ -746,49 +746,55 @@ const DEMO_DESTINATIONS: DemoCity[] = [
     },
   },
   {
-    id: "reykjavik",
-    city: "Reykjavík",
-    country: "Iceland",
-    badge: "Waterfalls & Geysers",
-    currency: "ISK (kr)",
+    // Interlaken, not Reykjavík. The preset promised waterfalls and glaciers from
+    // a country the setup form cannot accept: the picker offers 32 countries and
+    // Iceland is not among them, so anyone who liked this card arrived at a form
+    // that could not build it. Switzerland is offered, Interlaken is one of its
+    // cities, and the valley keeps the card honest -- Trümmelbach is ten glacial
+    // waterfalls inside a mountain and Jungfraujoch stands on a glacier.
+    id: "interlaken",
+    city: "Interlaken",
+    country: "Switzerland",
+    badge: "Waterfalls & Glaciers",
+    currency: "CHF (Fr)",
     pacing: {
       relaxed: {
         walkKm: "2.4 km",
         stopsCount: 3,
         stops: [
-          { time: "10:00", name: "Hallgrímskirkja Bell Tower View", kind: "visit" },
-          { leg: "10 min town walk (600m)", time: "", name: "", kind: "visit" },
-          { time: "12:00", name: "Harpa Concert Hall & Warm Rye Lunch", kind: "meal" },
-          { leg: "25 min scenic drive", time: "", name: "", kind: "visit" },
-          { time: "14:30", name: "Sky Lagoon Geothermal Soak", kind: "visit" },
+          { time: "10:00", name: "Harder Kulm Funicular Viewpoint", kind: "visit" },
+          { leg: "12 min funicular", time: "", name: "", kind: "visit" },
+          { time: "12:00", name: "Lakeside Lunch at Höhematte Park", kind: "meal" },
+          { leg: "20 min valley train", time: "", name: "", kind: "visit" },
+          { time: "14:30", name: "Lauterbrunnen Valley Waterfalls", kind: "visit" },
         ],
       },
       balanced: {
         walkKm: "4.2 km",
         stopsCount: 5,
         stops: [
-          { time: "09:30", name: "Old Harbor & Whale Fjord View", kind: "visit" },
+          { time: "09:30", name: "Lake Thun Pier & Aare River Walk", kind: "visit" },
           { leg: "9 min walk (600m)", time: "", name: "", kind: "visit" },
-          { time: "11:00", name: "Hallgrímskirkja Architectural View", kind: "visit" },
-          { time: "12:30", name: "Icelandic Lamb Stew at Café Loki", kind: "meal" },
+          { time: "11:00", name: "Harder Kulm Panorama Terrace", kind: "visit" },
+          { time: "12:30", name: "Rösti & Alpine Cheese at Höhematte", kind: "meal" },
           { leg: "12 min walk (750m)", time: "", name: "", kind: "visit" },
-          { time: "14:00", name: "National Museum of Iceland", kind: "visit" },
-          { time: "17:30", name: "Blue Lagoon Evening Geothermal Bath", kind: "meal" },
+          { time: "14:00", name: "Trümmelbach Falls Glacier Cascades", kind: "visit" },
+          { time: "17:30", name: "Staubbach Falls in Evening Light", kind: "meal" },
         ],
       },
       marathon: {
         walkKm: "7.0 km",
         stopsCount: 7,
         stops: [
-          { time: "08:30", name: "Tjörnin Lake Bird Sanctuary Loop", kind: "visit" },
+          { time: "08:30", name: "Aare River Loop from Interlaken Ost", kind: "visit" },
           { leg: "8 min walk", time: "", name: "", kind: "visit" },
-          { time: "09:45", name: "Hallgrímskirkja & Old Town Streets", kind: "visit" },
+          { time: "09:45", name: "Harder Kulm Ridge Trail", kind: "visit" },
           { leg: "11 min walk", time: "", name: "", kind: "visit" },
-          { time: "11:15", name: "Harpa & Coastal Sculpture Walk", kind: "visit" },
-          { time: "12:30", name: "Fresh Catch Fish & Chips Lunch", kind: "meal" },
-          { leg: "20 min transit", time: "", name: "", kind: "visit" },
-          { time: "14:00", name: "Perlan Museum & Ice Cave Simulation", kind: "visit" },
-          { time: "17:30", name: "Geothermal Lagoon & Northern Lights Hunt", kind: "meal" },
+          { time: "11:15", name: "Höhematte Park & Alpine Panorama", kind: "visit" },
+          { time: "12:30", name: "Lakeside Fish Lunch at Brienz", kind: "meal" },
+          { leg: "20 min mountain railway", time: "", name: "", kind: "visit" },
+          { time: "14:00", name: "Jungfraujoch Ice Palace & Glacier", kind: "visit" },
+          { time: "17:30", name: "Grindelwald Valley at Sunset", kind: "meal" },
         ],
       },
     },
@@ -821,12 +827,12 @@ const PRESETS = [
     tagKey: "landing_preset_porto",
   },
   {
-    country: "Iceland",
-    city: "Reykjavík",
-    name: "Iceland 5-Day Nature & Glaciers",
-    badge: "Geothermal",
+    country: "Switzerland",
+    city: "Interlaken",
+    name: "Switzerland 5-Day Waterfalls & Glaciers",
+    badge: "Alpine",
     days: "5 Days",
-    tagKey: "landing_preset_reykjavik",
+    tagKey: "landing_preset_interlaken",
   },
 ] as const;
 
@@ -853,11 +859,11 @@ const SWIPE_CANDIDATES = [
     meta: "⭐ 4.9 · Open 24 Hours · Free Entry",
   },
   {
-    city: "Reykjavík",
-    country: "Iceland",
-    name: "Hallgrímskirkja Bell Tower View",
-    tag: "Panoramic Landmark",
-    meta: "⭐ 4.8 · Open 09:00 - 17:00 · Elevator Pass ISK 1,400",
+    city: "Interlaken",
+    country: "Switzerland",
+    name: "Trümmelbach Falls Glacier Cascades",
+    tag: "Ten Falls Inside a Mountain",
+    meta: "⭐ 4.7 · Open 09:00 - 17:00 · Ticketed Entry",
   },
 ] as const;
 
@@ -874,7 +880,7 @@ export function TripsPage() {
   const [typedCity, setTypedCity] = useState("");
 
   // Interactive Simulator State
-  const [activeCityId, setActiveCityId] = useState<"porto" | "taipei" | "tokyo" | "reykjavik">("porto");
+  const [activeCityId, setActiveCityId] = useState<"porto" | "taipei" | "tokyo" | "interlaken">("porto");
   const [pacingMode, setPacingMode] = useState<PacingMode>("balanced");
 
   // Interactive Pain/Math Tabs

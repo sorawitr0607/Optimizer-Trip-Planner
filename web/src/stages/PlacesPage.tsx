@@ -161,6 +161,9 @@ export function PlacesPage() {
   const [firstCardDone, setFirstCardDone] = useState(false);
   /** Decisions taken out of the current page, which is what makes the page end. */
   const [decidedHere, setDecidedHere] = useState(0);
+  // Decided in this session but not yet confirmed by a refetch. Emptied naturally: once
+  // the stored choices carry the same ids, the union below is unchanged by it.
+  const [justDecided, setJustDecided] = useState<Set<string>>(() => new Set());
   // The coverage report is collapsed on arrival and holds the audit table and the
   // raw provider JSON. `<details>` hides its contents; it does not avoid building
   // them, so both were mounted on every visit to this screen. Rendering them on
@@ -322,6 +325,24 @@ export function PlacesPage() {
         action,
         reason: reason ?? null,
       }),
+    // The card leaves *now*, not when the server says so. `decided` was read only from
+    // the stored choices, so a swipe held the same card through the write and the
+    // refetch that follows it -- against a hosted database that is a visible pause with
+    // the decided place still on screen, which reads as the swipe not having taken.
+    onMutate: ({ placeId }) => {
+      const id = placeId ?? selectedId;
+      if (id) setJustDecided((current) => new Set(current).add(id));
+    },
+    // Put it back if the write failed. An optimistic removal that cannot be undone is
+    // how a place disappears from the deck without ever being recorded against the trip.
+    onError: (_error, { placeId }) => {
+      const id = placeId ?? selectedId;
+      setJustDecided((current) => {
+        const next = new Set(current);
+        next.delete(id);
+        return next;
+      });
+    },
     onSuccess: async () => {
       setFlash("choice_saved");
       await refreshReads();
@@ -330,6 +351,16 @@ export function PlacesPage() {
   const clearChoice = useMutation({
     mutationFn: (placeId?: string) =>
       rpc<null>("clear_candidate_choice", { trip_id: tripId, place_id: placeId ?? selectedId }),
+    // Undeciding has to clear the optimistic mark too, or a place put back stays hidden
+    // until the page is reloaded.
+    onMutate: (placeId) => {
+      const id = placeId ?? selectedId;
+      setJustDecided((current) => {
+        const next = new Set(current);
+        next.delete(id);
+        return next;
+      });
+    },
     onSuccess: async () => {
       setFlash("choice_cleared");
       await refreshReads();
@@ -350,7 +381,10 @@ export function PlacesPage() {
   // photo could not start until they pressed it. The queue is known in advance, so
   // the window ahead of the deck is fetched in one call while the current card is
   // being read. Free — Wikidata and Wikipedia, no key and no charge.
-  const decided = new Set((choices.data ?? []).map((item) => item.place_id));
+  const decided = new Set([
+    ...(choices.data ?? []).map((item) => item.place_id),
+    ...justDecided,
+  ]);
   // The selected lane, not `main_queue`: the deck deals from whichever lane is picked,
   // so prefetching the other one would warm cards nobody is about to see.
   // The look-ahead only. The visible card has its own request above — leading this list
@@ -1056,6 +1090,12 @@ export function PlacesPage() {
             >
               {copy("stage_optimize", language)} →
             </button>
+            {finishChoosing.isPending ? (
+        <p aria-live="polite" aria-busy="true" className="thinking">
+          <span className="thinking-dot" />
+          <span>{copy("confirming_places", language)}</span>
+        </p>
+      ) : null}
             <button onClick={() => setShortlistOpen(false)} type="button">
               {copy("close", language)}
             </button>
@@ -1166,6 +1206,14 @@ export function PlacesPage() {
       <div className="optimize-actions">
         <button className="setup-primary" disabled={!selectedChoices.length || finishChoosing.isPending} onClick={() => finishChoosing.mutate()} type="button">{copy("stage_optimize", language)}</button>
       </div>
+      {/* The press writes the selection, refreshes the journey and then navigates. That
+          is a real wait, and a disabled button is the same picture as a broken one. */}
+      {finishChoosing.isPending ? (
+        <p aria-live="polite" aria-busy="true" className="thinking">
+          <span className="thinking-dot" />
+          <span>{copy("confirming_places", language)}</span>
+        </p>
+      ) : null}
       {!selectedChoices.length ? <p className="setup-hint">{copyFrom("OPTIMIZER_CODE_TEXT", "no_places_chosen", language)}</p> : null}
     </section>
   );

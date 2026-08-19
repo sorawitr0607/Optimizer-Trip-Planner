@@ -32,14 +32,23 @@ export interface StayAreasProps {
   onOutcome?: (outcome: "ranked" | "unrankable") => void;
   /** Called once an area has been adopted as the base, so the page can move on. */
   onChosen?: () => void;
+  /** Told while the ranking runs, so the page can put away the controls that ask the
+   *  same question a different way. */
+  onRanking?: (busy: boolean) => void;
 }
 
-export function StayAreas({ tripId, language, onOutcome, onChosen }: StayAreasProps) {
+export function StayAreas({ tripId, language, onOutcome, onChosen, onRanking }: StayAreasProps) {
   const queryClient = useQueryClient();
   const recommend = useMutation<StayAreaReport, Error, void>({
     mutationFn: () => rpc<StayAreaReport>("recommend_areas", { trip_id: tripId }),
+    // Ranking reads the transit graph and takes a while. The page above this is a form
+    // for the *other* way of answering the same question, so leaving it up invites
+    // filling in an address that the ranking is about to make irrelevant -- the same
+    // reasoning `/optimize` already applies to its pace picker.
+    onMutate: () => onRanking?.(true),
     onSuccess: (report) => onOutcome?.(report.areas.length ? "ranked" : "unrankable"),
     onError: () => onOutcome?.("unrankable"),
+    onSettled: () => onRanking?.(false),
   });
   const chooseArea = useMutation({
     mutationFn: (area: { name: string; latitude: number; longitude: number }) =>
@@ -73,6 +82,21 @@ export function StayAreas({ tripId, language, onOutcome, onChosen }: StayAreasPr
       >
         {recommend.isPending ? copy("loading", language) : copy("rank_areas", language)}
       </button>
+      {recommend.isPending ? (
+        <p aria-live="polite" aria-busy="true" className="thinking">
+          <span className="thinking-dot" />
+          <span>{copy("ranking_areas", language)}</span>
+        </p>
+      ) : null}
+      {/* Choosing an area geocodes it before it can be stored, so the tick is a network
+          round trip and not a local toggle. It disabled itself and said nothing, which
+          reads as a tick that did not take. */}
+      {chooseArea.isPending ? (
+        <p aria-live="polite" aria-busy="true" className="thinking">
+          <span className="thinking-dot" />
+          <span>{copy("saving_area", language)}</span>
+        </p>
+      ) : null}
 
       {/* The refusal's own words. This printed `areas_amenities_unavailable` for *every*
           failure — the message for a partial success, where travel time and metro access
