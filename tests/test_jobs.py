@@ -86,3 +86,32 @@ class JobQueueTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class JobQueueGuardsTest(unittest.TestCase):
+    """The two guards added after the audit."""
+
+    def setUp(self) -> None:
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.queue = JobQueue(SQLiteStore(Path(self.directory.name) / "g.sqlite3"))
+
+    def test_the_same_work_is_not_queued_twice(self) -> None:
+        """30-90s of a free public service, bought once."""
+        first = self.queue.enqueue("discover_places", "T1")
+        self.assertEqual(self.queue.enqueue("discover_places", "T1"), first)
+
+    def test_a_different_payload_is_different_work(self) -> None:
+        plain = self.queue.enqueue("discover_places", "T1")
+        forced = self.queue.enqueue("discover_places", "T1", {"force_refresh": True})
+        self.assertNotEqual(plain, forced)
+
+    def test_work_that_already_finished_may_be_queued_again(self) -> None:
+        first = self.queue.enqueue("discover_places", "T1")
+        self.queue.claim("w")
+        self.queue.complete(first, {"ok": True})
+        self.assertNotEqual(self.queue.enqueue("discover_places", "T1"), first)
+
+    def test_a_payload_may_only_carry_arguments_the_operation_takes(self) -> None:
+        with self.assertRaises(ValueError):
+            self.queue.enqueue("discover_places", "T1", {"database_path": "/etc/passwd"})

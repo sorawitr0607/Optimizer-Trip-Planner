@@ -24,6 +24,7 @@ and the two would drift the first time a column was added to one of them.
 from __future__ import annotations
 
 import re
+import threading
 from contextlib import contextmanager
 from typing import Any, Iterator
 
@@ -97,12 +98,22 @@ def postgres_schema() -> str:
 
 
 def _to_pg_placeholders(sql: str) -> str:
-    """`?` becomes `%s`, but never inside a quoted string.
+    """`?` becomes `%s`, and every literal `%` is doubled.
 
-    A literal question mark in copy would otherwise be read as a parameter and the
-    statement would fail with a count mismatch — confusing, and far from the edit
-    that caused it. `%` is doubled for the same reason, since psycopg reads it as
-    the start of a placeholder.
+    Both halves are load-bearing and both were got wrong before being measured.
+
+    `?` is translated outside quoted strings only, or a literal question mark in
+    copy would be read as a parameter and fail with a count mismatch, far from the
+    edit that caused it.
+
+    `%` is doubled **everywhere, including inside string literals, and regardless
+    of whether this particular statement binds anything**. psycopg scans the whole
+    query for placeholders whenever a parameters argument is passed, and
+    `_Connection.execute` always passes one even when it is empty. So `LIKE
+    '%abc%'` raises "only '%s', '%b', '%t' are allowed as placeholders, got '%a'",
+    and a bare `100 % 7` raises "incomplete placeholder". Doubling unconditionally
+    is the only rule that satisfies both; a version conditional on having
+    parameters was tried and broke the second case.
     """
     out: list[str] = []
     in_string = False
@@ -112,7 +123,7 @@ def _to_pg_placeholders(sql: str) -> str:
             out.append(character)
         elif character == "?" and not in_string:
             out.append("%s")
-        elif character == "%" and not in_string:
+        elif character == "%":
             out.append("%%")
         else:
             out.append(character)
@@ -172,11 +183,28 @@ class PostgresStore(SQLiteStore):
     def __init__(self, url: str) -> None:
         self.url = url
         self._pool: Any = None
+        self._pool_lock = threading.Lock()
+        # F3: `SQLiteStore.__init__` sets `self.path`, and several inherited
+        # methods reach for it. Both that use it here are overridden, so nothing
+        # breaks today — but a method added upstream tomorrow would fail with an
+        # AttributeError far from its cause. The attribute exists and says what it
+        # is instead.
+        self.path = f"<postgres {url.rsplit('@', 1)[-1].split('?')[0]}>"
         self._initialize()
 
     def _ensure_pool(self) -> Any:
+        # Checked twice around a lock. `api/` serves on a threading server, so two
+        # requests really can arrive here together; unlocked, both would see None
+        # and each build a pool, and one of them would then be leaked with its
+        # connections still open.
         if self._pool is not None:
             return self._pool
+        with self._pool_lock:
+            if self._pool is not None:
+                return self._pool
+            return self._build_pool()
+
+    def _build_pool(self) -> Any:
         from psycopg.rows import dict_row
         from psycopg_pool import ConnectionPool
 

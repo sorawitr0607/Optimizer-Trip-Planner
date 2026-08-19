@@ -33,6 +33,16 @@ HANDLERS: dict[str, str] = {
     "refresh_routes": "refresh_routes",
 }
 
+#: The payload keys each operation will accept, because `method(**payload)` on an
+#: unchecked dict is a way to reach arguments the caller was never offered. The
+#: same reasoning as the API's literal method allowlist: name what is permitted
+#: rather than filtering what is not.
+PAYLOAD_KEYS: dict[str, frozenset[str]] = {
+    "discover_places": frozenset({"force_refresh"}),
+    "generate_plan_preview": frozenset({"time_limit_seconds", "allow_paid"}),
+    "refresh_routes": frozenset({"limit"}),
+}
+
 QUEUED, RUNNING, DONE, FAILED = "queued", "running", "done", "failed"
 
 #: A job still `running` after this long is assumed to belong to a worker that
@@ -78,14 +88,37 @@ class JobQueue:
 
     def enqueue(self, kind: str, trip_id: str, payload: dict | None = None,
                 max_attempts: int = 3) -> str:
+        """Queue the work, or return the job already doing it.
+
+        Discovery is 30-90 seconds of a free public service and an optimize is
+        about 52 of solver time. Two presses of a button, or a retry after a slow
+        response, would otherwise buy the same answer twice — and this app's own
+        rule is that `Find places` is a one-press control for exactly that reason.
+        An identical operation already queued or running for the same trip is
+        returned rather than duplicated.
+        """
         if kind not in HANDLERS:
             raise ValueError(f"{kind} is not an enqueueable operation")
+        payload = payload or {}
+        unexpected = set(payload) - PAYLOAD_KEYS[kind]
+        if unexpected:
+            raise ValueError(f"{kind} does not take {sorted(unexpected)}")
+
+        with self.store.connect() as connection:
+            existing = connection.execute(
+                "SELECT id FROM jobs WHERE trip_id = ? AND kind = ? AND payload_json = ?"
+                " AND status IN (?, ?) ORDER BY created_at LIMIT 1",
+                (trip_id, kind, json.dumps(payload), QUEUED, RUNNING),
+            ).fetchone()
+            if existing is not None:
+                return existing["id"]
+
         job_id = "job_" + uuid.uuid4().hex
         with self.store.connect() as connection:
             connection.execute(
                 "INSERT INTO jobs (id, kind, trip_id, payload_json, status, attempts,"
                 " max_attempts, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (job_id, kind, trip_id, json.dumps(payload or {}), QUEUED, 0,
+                (job_id, kind, trip_id, json.dumps(payload), QUEUED, 0,
                  max_attempts, _now()),
             )
         return job_id
