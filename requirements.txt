@@ -1,0 +1,6 @@
+# Dependencies of the serverless function only. The local app still runs on one
+# runtime dependency; these are what `api/rpc.py` needs to reach Postgres, and
+# they are listed here rather than in pyproject.toml so that stays true.
+psycopg[binary]>=3.3
+psycopg-pool>=3.3
+xlsxwriter>=3.2.9

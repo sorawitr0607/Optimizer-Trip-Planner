@@ -1,0 +1,15 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "builds": [
+    { "src": "web/package.json", "use": "@vercel/static-build", "config": { "distDir": "dist" } },
+    { "src": "api/rpc.py", "use": "@vercel/python" }
+  ],
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api/rpc.py" },
+    { "src": "/assets/(.*)", "dest": "/web/dist/assets/$1" },
+    { "src": "/fonts/(.*)", "dest": "/web/dist/fonts/$1" },
+    { "src": "/illustrations/(.*)", "dest": "/web/dist/illustrations/$1" },
+    { "src": "/(.*\\.(?:svg|png|ico|webmanifest|woff2))", "dest": "/web/dist/$1" },
+    { "src": "/(.*)", "dest": "/web/dist/index.html" }
+  ]
+}
