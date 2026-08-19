@@ -34,3 +34,11 @@ data/gtfs/*.zip
 
 # A downloaded GTFS feed: gigabytes of someone else's data, and not ours to redistribute.
 /gtfs/
+
+# Private keys never belong in a repository, least of all a public one.
+*.key
+*.pem
+*.ppk
+id_rsa*
+id_ed25519*
+!*.key.pub
