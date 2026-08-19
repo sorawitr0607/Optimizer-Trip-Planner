@@ -25,7 +25,7 @@ import {
   XCircle,
   Zap,
 } from "lucide-react";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 
 import { ApiError, rpc, type Journey, type SetupVocabulary, type Trip } from "../api/client";
@@ -104,6 +104,44 @@ function SceneDefs() {
     </svg>
   );
 }
+
+/** One biome's paths. The entries differ in shape -- only some have water -- so
+ *  this is their union rather than a hand-written interface that would have to be
+ *  kept in step with the table. */
+type Environment = (typeof ENVIRONMENTS)[keyof typeof ENVIRONMENTS];
+
+/** The five depths, back to front: which press each is pulled through, and what
+ *  it draws. A table rather than five hand-written blocks, because the only thing
+ *  that differs between them is those two answers. */
+const DEPTHS: {
+  depth: number;
+  filter: string;
+  children: (env: Environment) => ReactNode;
+}[] = [
+  { depth: 1, filter: "w-rough", children: (env) => (
+    <>
+      <path className="sb-far" d={env.far} />
+      <path className="sb-screen" d={env.far} />
+    </>
+  ) },
+  { depth: 2, filter: "w-rough", children: (env) => <path className="sb-mid" d={env.mid} /> },
+  { depth: 3, filter: "w-rough", children: (env) => <path className="sb-near" d={env.near} /> },
+  { depth: 4, filter: "w-rough-fine", children: (env) => (
+    <>
+      <path className={env.detailClass} d={env.detail} />
+      <path className="sb-solid" d={env.solid} />
+    </>
+  ) },
+  { depth: 5, filter: "w-rough-fine", children: (env) => (
+    <>
+      <path className="sb-fine" d={env.fine} />
+      <path className="sb-extra" d={env.extra} />
+      <path className="sb-line" d={env.line} fill="none" />
+      <path className="sb-life" d={env.life} fill="none" />
+      {env.water ? <path className="sb-ripple" d={env.water} fill="none" /> : null}
+    </>
+  ) },
+];
 
 /**
  * The environment a section stands in.
@@ -239,41 +277,36 @@ function SceneEnvironment({
             of its own width — every building and tree drawn near the edges was
             simply outside the frame. Stretching keeps the whole composition on
             screen, and abstract terrain is the one thing that tolerates it. */}
-        <svg preserveAspectRatio="none" viewBox="0 0 1200 400">
-        {/* One group per depth, with the filter ON the group and the parallax on
-            the same element. Written the other way round — paths translating
-            inside a shared filtered group — every scroll frame re-ran a
-            `feDisplacementMap` over the whole scene, because changing anything
-            inside a filtered subtree invalidates its cached result. There were 21
-            such elements across the page and the profile showed it: a 17ms median
-            with 70ms spikes. Filtered output can be cached and composited; the
-            filter only has to run when its own contents change, which is never. */}
-        <g className="sb-depth sb-d1" filter="url(#w-rough)">
-          <path className="sb-far" d={env.far} />
-          <path className="sb-screen" d={env.far} />
-        </g>
-        <g className="sb-depth sb-d2" filter="url(#w-rough)">
-          <path className="sb-mid" d={env.mid} />
-        </g>
-        <g className="sb-depth sb-d3" filter="url(#w-rough)">
-          <path className="sb-near" d={env.near} />
-        </g>
-        <g className="sb-depth sb-d4" filter="url(#w-rough-fine)">
-          <path className={env.detailClass} d={env.detail} />
-          <path className="sb-solid" d={env.solid} />
-        </g>
-        <g className="sb-depth sb-d5" filter="url(#w-rough-fine)">
-          <path className="sb-fine" d={env.fine} />
-          <path className="sb-extra" d={env.extra} />
-          <path className="sb-line" d={env.line} fill="none" />
-          <path className="sb-life" d={env.life} fill="none" />
-          {env.water ? <path className="sb-ripple" d={env.water} fill="none" /> : null}
-        </g>
+      {/* One *element* per depth, each holding its own `<svg>`, and the parallax
+          on the element rather than on anything inside the drawing.
+
+          This was a `<g>` per depth inside one shared `<svg>`, with the filter and
+          the translate on the same group. The comment here used to claim that made
+          the filtered output cacheable. It does not, and that is why scrolling
+          still hitched: Blink does not give an element *inside* an `<svg>` its own
+          compositor layer, so a moving `<g>` has nowhere to be cached. Every frame
+          re-rastered the whole scene and re-ran `feTurbulence` and
+          `feDisplacementMap` for all five depths — measured at 11.2 megapixels of
+          filtered surface across the page.
+
+          An HTML element *can* be promoted. Each depth now rasterises once, filter
+          and all, and scrolling moves finished layers on the compositor instead of
+          redrawing them. */}
+      {DEPTHS.map(({ depth, filter, children }) => (
+        <div className={`sb-layer sb-d${depth}`} key={depth}>
+          <svg preserveAspectRatio="none" viewBox="0 0 1200 400">
+            <g filter={`url(#${filter})`}>{children(env)}</g>
+          </svg>
+        </div>
+      ))}
+      {/* The route is unfiltered and does not travel, so it needs neither a filter
+          nor a layer of its own -- but it must still sit above the five depths. */}
+      <svg className="sb-route" preserveAspectRatio="none" viewBox="0 0 1200 400">
         <path className="sb-path" d="M-20,372 Q260,346 520,360 T900,348 T1220,362" fill="none" />
-        {/* No per-scene grain rect. Nine live `feTurbulence` rects were painting
-            the same texture the page already lays over everything as one tiled
-            image — the same effect, nine more filters to rasterise. */}
       </svg>
+      {/* No per-scene grain rect. Nine live `feTurbulence` rects were painting
+          the same texture the page already lays over everything as one tiled
+          image — the same effect, nine more filters to rasterise. */}
     </div>
   );
 }

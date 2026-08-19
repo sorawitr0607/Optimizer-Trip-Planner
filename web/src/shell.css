@@ -3053,6 +3053,30 @@
   width: 100%;
 }
 
+/* Each depth is its own element stacked in the same box, holding one `<svg>`.
+   The five used to be `<g>`s inside a single drawing, which is the arrangement
+   that made scrolling expensive: Blink will not give an element inside an `<svg>`
+   its own compositor layer, so a filtered group that moves has nowhere to cache
+   its result and the whole scene re-rasterises -- re-running `feTurbulence` and
+   `feDisplacementMap` -- on every frame. An HTML element can be promoted, so each
+   depth is now rasterised once and merely moved afterwards. */
+.sb-layer,
+.sb-route {
+  inset: 0;
+  position: absolute;
+}
+
+@media (min-width: 861px) {
+  /* The promotion itself. Kept off small screens on purpose: a phone recomposes
+     these scenes shorter and shallower anyway, and five extra layers per section
+     is memory it has less of. `motion-ready` scopes it to the case where the
+     layers actually move -- reduced-motion and screen captures never set it, and
+     a layer that never moves is only a cost. */
+  .landing.motion-ready .sb-layer {
+    will-change: transform;
+  }
+}
+
 .sb-far { fill: var(--landing-hill); opacity: 0.3; }
 .sb-mid { fill: var(--landing-hill-deep); opacity: 0.26; }
 .sb-near { fill: var(--landing-tree); opacity: 0.16; }
@@ -3576,15 +3600,21 @@
     white-space: normal;
   }
 
-  /* Depth through a 390px window is mostly motion, so halve every layer's travel. */
-  .scene-env .sb-far { translate: 0 calc(var(--scroll-y) * -3px); }
-  .scene-env .sb-mid { translate: 0 calc(var(--scroll-y) * -6px); }
-  .scene-env .sb-near { translate: 0 calc(var(--scroll-y) * -10px); }
-  .scene-env .sb-extra,
-  .scene-env .sb-life,
-  .scene-env .sb-ripple,
-  .scene-env .sb-solid,
-  
+  /* Depth through a 390px window is mostly motion, so halve every layer's travel.
+
+     Two things were wrong here. The rules named the paths rather than the layers,
+     so they moved content *inside* a filtered group -- the exact invalidation this
+     restructure exists to remove -- and because the group above them kept its full
+     desktop travel, the two distances added rather than replaced. And the list
+     ended in a comma, which quietly joined `.sb-extra`, `.sb-life`, `.sb-ripple`
+     and `.sb-solid` to the `.scene-env` rule below: those four were being handed a
+     `height` and no travel at all. */
+  .scene-env .sb-d1 { translate: 0 calc(var(--scroll-y) * -3px); }
+  .scene-env .sb-d2 { translate: 0 calc(var(--scroll-y) * -6px); }
+  .scene-env .sb-d3 { translate: 0 calc(var(--scroll-y) * -10px); }
+  .scene-env .sb-d4 { translate: 0 calc(var(--scroll-y) * -14px); }
+  .scene-env .sb-d5 { translate: 0 calc(var(--scroll-y) * -17px); }
+
   /* The ground band shrinks with the viewport, but never disappears — losing it
      would turn the phone back into the stack of rectangles this all replaced. */
   .scene-env {
