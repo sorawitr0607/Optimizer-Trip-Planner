@@ -31,3 +31,6 @@ dev = [
 
 [tool.uv]
 package = false
+
+[tool.vercel]
+entrypoint = "api.rpc:handler"
