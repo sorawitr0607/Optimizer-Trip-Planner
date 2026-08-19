@@ -2218,6 +2218,132 @@ relocked behind a button that did not exist when they chose. And the button navi
 whether or not the mark is written — `onSettled`, not `onSuccess` — because a trip that
 cannot record the mark must not be stranded on the screen by it.
 
+## The hosted port, 2026-08-19: Postgres, a job queue, and what still cannot deploy
+
+The owner asked for Vercel + Supabase. **Read the last paragraph of this section
+before assuming any of it is deployable** — the database and queue work is done
+and verified; the hosting layer is not written.
+
+### One seam, because the dependency rule paid off
+
+`sqlite3` is imported in exactly one file, `actions.py` touches no SQL, and the
+storage surface is 63 methods that all funnel through a single `connect()`. So
+`PostgresStore` (`travel_planner/pgstore.py`) **subclasses `SQLiteStore` and
+replaces only that method** — not one of the 65 statements is rewritten, and the
+two backends cannot drift apart in behaviour. The Postgres DDL is *derived from*
+`store.SCHEMA` at import; `supabase/schema.sql` is generated from it, never
+hand-edited, because a second schema is a second source of truth.
+
+`open_store()` picks the backend: `TOURIST_DB_URL` selects Postgres, absence of it
+selects the file. Verified against the live database — trips, setup, ledger and
+delete all round-trip, the snapshot sha256 re-verifies on read (so canonical JSON
+survives the driver byte-for-byte, Thai included), and the append-only guards
+still refuse UPDATE and DELETE with the original message.
+
+### `TOURIST_DB_URL` is a loaded gun, and it went off twice
+
+`open_store` reads that variable and **ignores the path it was handed**. A shell
+that exports it therefore redirects anything that builds a store, including tests.
+
+That is not hypothetical. It happened twice while building this:
+
+1. A test suite run with the variable exported wrote **96 test trips** with their
+   setups, choices, discovery runs and split rows into the owner's hosted
+   database — and **seven fabricated rows into the append-only `paid_usage`
+   ledger**, including `google_places` charges at US$0.025 that were never made.
+   The ledger read US$5.1505 against a true US$5.0745.
+2. The guard added for that lived in `tests/__init__.py`, which only covers code
+   importing the tests package. `scripts/check_reference_coverage.py` builds its
+   own `PlannerActions`, so the very next full gate run wrote a `Coverage probe`
+   trip into the hosted database.
+
+The variable is now cleared in **three** places: `tests/__init__.py`,
+`scripts/check.py`, and `check_reference_coverage.py` itself. **Any new script
+that builds a store for verification must clear it too.** A guard at one entry
+point is not a guard.
+
+Cleaning up cost something worth recording: removing ledger rows required dropping
+the unconditional delete trigger for exactly one statement and restoring it
+immediately. A ledger must never be quietly edited; those rows were fabrications,
+not history, and that is the only reason it was right.
+
+### Region beat every code change available
+
+Pooling was added first and was worth it — `store.py` calls `connect()` once per
+operation by design, and a Neon handshake cost **2.58 seconds** every time.
+`PostgresStore` holds a `psycopg_pool` pool, double-check-locked because `api/`
+serves on a threading server. Verified reusing: 16 requests over 2 connections.
+
+But pooling cannot touch distance. Same code, same pool, only the region differs:
+
+| | Supabase `ap-southeast-1` | Neon `us-east-1` |
+|---|---|---|
+| round trip, open connection | **42 ms** | **278 ms** |
+| read | 108 ms | 788 ms |
+| delete (5 statements) | 922 ms | 6242 ms |
+
+**Reads 7.3x faster, deletes 6.8x faster, from moving the database to the region
+its users are in.** A five-statement operation from Bangkok to Virginia could
+never have beaten about 1.4 seconds however the code was written. Treat region as
+a performance decision, not a default.
+
+### The job queue is deliberately outside `SCHEMA_VERSION`
+
+Discovery is 30-90s and a full proposal ~52s; a measured flow took 210. No
+serverless request survives that, so `travel_planner/jobs.py` holds the work and
+`travel_planner/worker.py` drains it.
+
+`SCHEMA_VERSION` gates whether stored *planning* data is readable, and bumping it
+makes `store.py` refuse to migrate until the database has been copied — which
+`PostgresStore._copy_before_bump` **refuses outright**, correctly, because a
+hosted database is not a file and the equivalent is a branch or a dump. A queue
+holds no planning truth and can be rebuilt, so it carries its own idempotent DDL
+and leaves the version alone. **Do not bump `SCHEMA_VERSION` against a hosted
+database** until the owner has decided what the backup step is.
+
+The claim is `FOR UPDATE SKIP LOCKED` on Postgres, which is what makes more than
+one worker safe. Proven rather than asserted: 24 jobs, 6 threads racing, every job
+claimed exactly once, four each. SQLite has no such clause and does not need one.
+
+Nothing local changed. The desktop app blocks for 52 seconds and always has.
+
+### What an audit of all this found
+
+Attacking it rather than re-reading it found five defects, four fixed:
+
+- **The `%` rule took three attempts.** psycopg scans the whole query for
+  placeholders whenever a parameters argument is passed — inside string literals,
+  and even when that tuple is empty, which the wrapper always passes. So `LIKE
+  '%abc%'` raised `only '%s', '%b', '%t' are allowed`, and a fix conditional on
+  having parameters then broke a bare `100 % 7` with `incomplete placeholder`.
+  Every literal `%` is doubled unconditionally. No current query contains one, so
+  this was a landmine, not an outage.
+- The pool was built without a lock; two threads would each have made one.
+- `PostgresStore` never called `super().__init__`, so `self.path` did not exist.
+- The queue would buy the same 30-90s answer twice; an identical operation already
+  queued or running is now returned instead.
+- `run_one` splatted an unchecked payload into the handler; each operation now
+  names the arguments it accepts, for the same reason the API dispatches from a
+  literal allowlist.
+
+### What still cannot deploy
+
+**There is nothing in this repository that Vercel can import and run.** `api/` is
+still a `ThreadingHTTPServer`; there is no `vercel.json`, no serverless entry
+point, no build configuration. What exists is the substrate — schema, store port,
+pooling, region, queue, worker — which any hosting choice would need and none of
+which is sufficient.
+
+Two facts shape whatever comes next. `PlannerActions` holds no session state, so
+the fast RPCs genuinely can run as serverless functions; the remaining work is an
+HTTP adapter, not a redesign. And **the worker is a long-lived process, which
+Vercel has no home for** — a container or small VM is required somewhere, so
+"Vercel + Supabase" alone cannot run this app.
+
+`psycopg` and `psycopg-pool` are **dev** dependencies. Python runtime dependencies
+are one (`xlsxwriter`); making the app talk to Postgres in production makes them
+three, which is a decision to take deliberately rather than by drift.
+
 ## Public release boundary
 
 The current application is local-only and single-owner. Do not make `PlannerHandler`, the SQLite
@@ -2242,7 +2368,7 @@ verification, so the UI correctly says **about** US$0.002. **The ledger over-rep
 tenfold prices; `paid_usage` is append-only by design, the error is in the safe direction, and it decays
 as new rows use the measured price.
 
-`TOURIST_DB_PATH` (default `data/tourist.sqlite3`), `TOURIST_NOMINATIM_URL`, `TOURIST_OVERPASS_URL`,
+`TOURIST_DB_URL` (unset by default; when set it selects Postgres and **overrides the path**, see the hosted-port section above), `TOURIST_DB_PATH` (default `data/tourist.sqlite3`), `TOURIST_NOMINATIM_URL`, `TOURIST_OVERPASS_URL`,
 `TOURIST_USER_AGENT`, `TOURIST_GTFS_PATH` (default
 `data/gtfs/transit.zip`; a GTFS zip read locally for transit legs — see `WF-038`). Providers still read keys from `os.environ` and nowhere else — that is what keeps
 a key out of every snapshot, export and log. `credentials.load_local_credentials()` (called once from `api.main()`)
