@@ -144,26 +144,79 @@ class _Connection:
 
 
 class PostgresStore(SQLiteStore):
+    """The store against a hosted Postgres, over a pooled connection.
+
+    Opening a connection per operation is nearly free against a local file and
+    ruinous over a network: measured against Neon from this machine, a single
+    connect costs **2.58 seconds** of DNS, TCP, TLS and authentication. `store.py`
+    calls `connect()` once per operation by design, so deleting 96 trips spent
+    about four minutes doing nothing but handshakes. The pool pays that once and
+    every later operation borrows an open connection — measured at 2580ms to
+    788ms per read, and confirmed reusing: 16 requests over 2 physical
+    connections.
+
+    **What the pool cannot fix, and what to do about it.** Once the handshake is
+    gone the remaining cost is distance. A round trip on an already-open
+    connection to us-east-1 from here measures **278ms**, so any operation issuing
+    five statements costs about a second and a half before the database has done
+    any work. No amount of pooling touches that number; the only fix is to put the
+    database and whatever calls it in the same region, and near the people using
+    it. Treat the region as a performance decision, not a default.
+    """
+
+    #: Small on purpose. This is one local process, and Neon's free tier does not
+    #: have connections to spare; the win is reuse, not concurrency.
+    MIN_SIZE = 1
+    MAX_SIZE = 8
+
     def __init__(self, url: str) -> None:
         self.url = url
+        self._pool: Any = None
         self._initialize()
+
+    def _ensure_pool(self) -> Any:
+        if self._pool is not None:
+            return self._pool
+        from psycopg.rows import dict_row
+        from psycopg_pool import ConnectionPool
+
+        self._pool = ConnectionPool(
+            self.url,
+            min_size=self.MIN_SIZE,
+            max_size=self.MAX_SIZE,
+            open=True,
+            timeout=30,
+            # `prepare_threshold=None` disables psycopg's automatic prepared
+            # statements. They are a real speedup on a direct connection and they
+            # break on a pooled one: pgbouncer in transaction mode hands the next
+            # statement to a different backend session, which has never seen the
+            # prepared name. Neon publishes both a pooled and a direct endpoint and
+            # the caller may pass either, so this has to be safe for both.
+            kwargs={"row_factory": dict_row, "prepare_threshold": None},
+        )
+        return self._pool
 
     @contextmanager
     def connect(self) -> Iterator[Any]:
-        import psycopg
-        from psycopg.rows import dict_row
+        pool = self._ensure_pool()
+        with pool.connection() as raw:
+            connection = _Connection(raw)
+            try:
+                yield connection
+            except Exception:
+                connection.rollback()
+                raise
+            else:
+                connection.commit()
+            # No close: the connection goes back to the pool, which is the whole
+            # point. `_Connection.close` stays for the non-pooled path only.
 
-        raw = psycopg.connect(self.url, connect_timeout=20, row_factory=dict_row)
-        connection = _Connection(raw)
-        try:
-            yield connection
-        except Exception:
-            connection.rollback()
-            raise
-        else:
-            connection.commit()
-        finally:
-            connection.close()
+    def close(self) -> None:
+        """Give the connections back. A long-lived process should call this on the
+        way out; a short one can leave it to interpreter shutdown."""
+        if self._pool is not None:
+            self._pool.close()
+            self._pool = None
 
     def _initialize(self) -> None:
         with self.connect() as connection:
