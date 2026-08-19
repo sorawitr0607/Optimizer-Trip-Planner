@@ -906,10 +906,24 @@ async function post(
       body: JSON.stringify(payload),
       signal: controller.signal,
     });
-    const value = (await response.json()) as unknown;
+    const body = await response.text();
+    let value: unknown = null;
+    if (body.trim()) {
+      try {
+        value = JSON.parse(body) as unknown;
+      } catch {
+        value = body;
+      }
+    }
     if (!response.ok) {
-      const error = value as { code?: string; detail?: unknown };
-      throw new ApiError(error.code ?? "internal_error", error.detail);
+      const error = value && typeof value === "object" ? (value as { code?: string; detail?: unknown }) : null;
+      throw new ApiError(
+        error?.code ?? `http_${response.status}`,
+        error?.detail ?? (typeof value === "string" && value.trim() ? value : response.statusText || "The API returned an empty response"),
+      );
+    }
+    if (value === null) {
+      throw new ApiError("empty_response", "The API returned an empty response");
     }
     return { status: response.status, value };
   } finally {
