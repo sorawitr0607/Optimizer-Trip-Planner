@@ -14,11 +14,14 @@ has; `actions.py` is untouched by any of this.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import signal
 import sys
+import threading
 import time
 import uuid
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from .actions import PlannerActions
 from .jobs import JobQueue, run_one
@@ -31,11 +34,44 @@ IDLE_SLEEP_SECONDS = 2.0
 REAP_EVERY_SECONDS = 60.0
 
 
+def serve_health(port: int, state: dict) -> None:
+    """Answer any GET with the worker's state, from a daemon thread.
+
+    A worker needs no HTTP surface, and locally it has none. This exists for one
+    situation: a host whose free tier only runs *web services*, which requires
+    something listening on `$PORT` or the deploy is judged to have failed. The
+    queue is still drained by the loop below; this only proves the process is up,
+    and gives a keep-alive ping somewhere to land on a host that idles a service
+    out when nothing connects.
+    """
+
+    class Health(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802 - the runtime requires this name
+            body = json.dumps(state, default=str).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *_: object) -> None:
+            # A keep-alive ping every few minutes would otherwise be most of the log.
+            pass
+
+    ThreadingHTTPServer(("0.0.0.0", port), Health).serve_forever()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Drain the planner's job queue.")
     parser.add_argument("--database", default=os.environ.get("TOURIST_DB_PATH", "data/tourist.sqlite3"))
     parser.add_argument("--once", action="store_true",
                         help="run a single job if one is waiting, then exit")
+    # Defaults to $PORT, which is how a host tells a web service where to listen.
+    # Unset -- the normal case, including every local run -- means no HTTP at all.
+    parser.add_argument("--health-port", type=int,
+                        default=int(os.environ.get("PORT", "0") or 0),
+                        help="also answer GET on this port, for hosts that only "
+                             "keep a listening service alive (default: $PORT)")
     arguments = parser.parse_args(argv)
 
     actions = PlannerActions(arguments.database)
@@ -54,7 +90,15 @@ def main(argv: list[str] | None = None) -> int:
     signal.signal(signal.SIGINT, request_stop)
     signal.signal(signal.SIGTERM, request_stop)
 
+    state = {"worker": worker_id, "store": type(actions.store).__name__,
+             "jobs_run": 0, "last": None, "status": "starting"}
+    if arguments.health_port:
+        threading.Thread(target=serve_health, args=(arguments.health_port, state),
+                         daemon=True).start()
+        print(f"health endpoint on :{arguments.health_port}", flush=True)
+
     print(f"worker {worker_id} draining {type(actions.store).__name__}", flush=True)
+    state["status"] = "idle"
     last_reap = 0.0
     while not stopping:
         now = time.monotonic()
@@ -74,6 +118,9 @@ def main(argv: list[str] | None = None) -> int:
             continue
 
         seconds = time.monotonic() - started
+        state["jobs_run"] += 1
+        state["last"] = {"kind": job["kind"], "status": job["status"],
+                         "seconds": round(seconds, 1)}
         print(f"{job['kind']} {job['id']} -> {job['status']} in {seconds:.1f}s"
               + (f" ({job['error']})" if job.get("error") else ""), flush=True)
         if arguments.once:
