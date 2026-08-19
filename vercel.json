@@ -4,9 +4,5 @@
   "outputDirectory": "web/dist",
   "functions": {
     "api/rpc.py": { "maxDuration": 60 }
-  },
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/rpc" },
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
-  ]
+  }
 }

@@ -32,12 +32,15 @@ dev = [
 [tool.uv]
 package = false
 
-# Do not add a `tool.vercel` entrypoint to this file. Declaring one puts the
-# project into Vercel's framework-preset mode, and the documentation is explicit
-# about what that means: "Vercel then runs your app as Vercel Functions and routes
-# every request to it." Every request means every request -- /, /favicon.svg and
-# the stylesheet included -- so the built frontend is never served and the whole
-# site answers 500. It has been added twice now, once by me and once by a v0 pull
-# request, because the build error suggests it. The build error is about this
-# file; a blank site is what it costs. api/ holds one function file, and Vercel
-# maps that by path without being told.
+# Required: the build fails without it, with "No python entrypoint found in
+# default locations". File-based functions under /api -- which would have left the
+# built frontend on the CDN and put only the API in a function -- are not offered
+# to this project, and removing the package that made api/ look like a module did
+# not change that.
+#
+# The cost is in the documentation: "Vercel then runs your app as Vercel Functions
+# and routes every request to it." Every request, so api/rpc.py serves the
+# stylesheet and the favicon too, through `static_response`. Deleting these two
+# lines does not restore the CDN; it only stops the project building.
+[tool.vercel]
+entrypoint = "api.rpc:handler"

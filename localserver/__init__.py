@@ -9,6 +9,7 @@ import gzip
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import inspect
 import json
+import mimetypes
 import os
 from pathlib import Path, PurePosixPath
 import re
@@ -268,6 +269,57 @@ def error_response(error: Exception) -> tuple[int, dict[str, Any]]:
 #: The three files a trip can be downloaded as. Named once, because both ways of
 #: asking for one have to agree about what is allowed.
 DOWNLOAD_KINDS = ("workbook.xlsx", "money.xlsx", "checklist.ics")
+
+
+#: Types the standard library does not know, and a browser is strict about.
+_EXTRA_TYPES = {".woff2": "font/woff2", ".webmanifest": "application/manifest+json"}
+
+#: Widened with a charset, because a browser guesses latin-1 otherwise and the
+#: catalogue is bilingual.
+_TEXTUAL = {"application/javascript", "application/json", "image/svg+xml"}
+
+
+def static_response(path: str, root: Path | None = None) -> tuple[int, bytes, str, str]:
+    """Serve one file from the built frontend: (status, body, type, cache).
+
+    Shared with `api/rpc.py`. On Vercel this application is a single Python
+    entrypoint, and the documentation is plain about what that means -- "Vercel
+    then runs your app as Vercel Functions and routes every request to it" -- so
+    the function is asked for the stylesheet and the favicon as well as the API.
+    There is no configuration that splits them: file-based functions under /api,
+    which would have left the static build on the CDN, are not offered to this
+    project. Rather than a second, subtly different copy of the rules, both
+    callers use this one.
+
+    `assets/` is content-hashed by the build, so it is immutable and the edge can
+    keep it for a year -- which is what stops a function invocation per asset per
+    request. Everything else revalidates.
+    """
+
+    root = (root or WEB_DIST).resolve()
+    target = (root / path.lstrip("/")).resolve()
+    # The SPA fallback is for *routes*, and a route has no file extension. Sending
+    # index.html for every miss meant `/favicon.ico` answered 200 with the whole
+    # application as its body -- which a browser discards, so the tab kept the
+    # blank default and the app looked unfinished for a reason no log showed.
+    if path == "/" or (not target.is_file() and not PurePosixPath(path).suffix):
+        target = root / "index.html"
+    try:
+        relative = target.relative_to(root)
+    except ValueError:
+        # `..` climbing out of the build directory.
+        return 404, b"not found", "text/plain; charset=utf-8", "no-store"
+    if not target.is_file():
+        return 404, b"not found", "text/plain; charset=utf-8", "no-store"
+
+    suffix = target.suffix.lower()
+    content_type = _EXTRA_TYPES.get(suffix) or mimetypes.guess_type(str(target))[0] \
+        or "application/octet-stream"
+    if content_type.startswith("text/") or content_type in _TEXTUAL:
+        content_type += "; charset=utf-8"
+    cache = ("public, max-age=31536000, immutable"
+             if relative.parts[:1] == ("assets",) else "no-cache")
+    return 200, target.read_bytes(), content_type, cache
 
 
 def _download(actions: PlannerActions, target: str) -> tuple[bytes, str, str]:

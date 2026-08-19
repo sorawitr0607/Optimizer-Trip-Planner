@@ -28,7 +28,9 @@ scripts/
 supabase/
 .venv/
 web/node_modules/
-web/dist/
+# web/dist is NOT excluded: the function serves it. It is gitignored, so it is
+# absent at upload and created by the build, and Python functions bundle whatever
+# is reachable by then.
 docs/
 *.md
 !README.md

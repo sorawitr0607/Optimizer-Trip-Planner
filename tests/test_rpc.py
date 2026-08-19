@@ -128,6 +128,50 @@ class RpcOverHttpTest(unittest.TestCase):
             status = error.code
         self.assertNotEqual(status, 501)
 
+    def get(self, path):
+        try:
+            with urllib.request.urlopen(f"{self.base}{path}") as response:
+                return response.status, response.headers, response.read()
+        except urllib.error.HTTPError as error:
+            return error.code, error.headers, error.read()
+
+    def test_the_function_serves_the_built_frontend(self):
+        # On Vercel a declared entrypoint takes every route, so this function is
+        # the whole site: if it does not answer here, the page is blank.
+        status, headers, body = self.get("/")
+        self.assertEqual(status, 200)
+        self.assertTrue(headers["Content-Type"].startswith("text/html"))
+        self.assertIn(b"<div id=\"root\"", body)
+
+    def test_a_client_route_falls_back_to_the_application(self):
+        status, _, body = self.get("/trips/whatever")
+        self.assertEqual(status, 200)
+        self.assertIn(b"<div id=\"root\"", body)
+
+    def test_a_missing_asset_is_404_rather_than_the_whole_application(self):
+        # Answering 200 with index.html for /favicon.ico is why the tab once kept
+        # the blank default icon with nothing in any log to say why.
+        status, _, _ = self.get("/assets/does-not-exist.js")
+        self.assertEqual(status, 404)
+
+    def test_hashed_assets_are_immutable_so_the_edge_answers_for_them(self):
+        assets = sorted((Path("web/dist/assets")).glob("*.js"))
+        self.assertTrue(assets, "build the web app first")
+        status, headers, _ = self.get(f"/assets/{assets[0].name}")
+        self.assertEqual(status, 200)
+        self.assertIn("immutable", headers["Cache-Control"])
+
+    def test_the_document_is_not_cached_so_a_deploy_is_seen(self):
+        _, headers, _ = self.get("/")
+        self.assertEqual(headers["Cache-Control"], "no-cache")
+
+    def test_no_climbing_out_of_the_build_directory(self):
+        for attempt in ("/../../.env", "/../../pyproject.toml", "/../../localserver/__init__.py"):
+            status, _, body = self.get(attempt)
+            self.assertEqual(status, 404, attempt)
+            self.assertNotIn(b"TOURIST_DB_URL", body)
+            self.assertNotIn(b"entrypoint", body)
+
     def test_an_unknown_download_is_404(self):
         try:
             with urllib.request.urlopen(f"{self.base}/api/export/trip_x/nope.txt") as r:

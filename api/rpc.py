@@ -35,7 +35,7 @@ from urllib.parse import urlsplit
 
 # `_download` is private to the package, and this is the package. Importing it
 # beats a second copy of the export route regex.
-from localserver import ACTIONS, _download, dispatch, error_response
+from localserver import ACTIONS, _download, dispatch, error_response, static_response
 from travel_planner.actions import PlannerActions
 from travel_planner.jobs import HANDLERS, JobQueue
 
@@ -152,6 +152,22 @@ class handler(BaseHTTPRequestHandler):
         this method BaseHTTPRequestHandler answers 501 and all three downloads are
         dead on the hosted deployment while working locally.
         """
+
+        path = urlsplit(self.path).path
+        if not path.startswith("/api/"):
+            # Everything that is not the API: the built frontend. This function is
+            # the whole site here, because a declared Python entrypoint takes every
+            # route and Vercel offers this project no way to keep the static build
+            # on the CDN beside it. Hashed assets go out immutable so the edge
+            # answers for them and this is not an invocation per file per visit.
+            status, body, content_type, cache = static_response(path)
+            self.send_response(status)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", cache)
+            self.end_headers()
+            self.wfile.write(body)
+            return
 
         try:
             actions, _ = _planner()
