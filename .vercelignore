@@ -39,3 +39,6 @@ docs/
 # build log.
 .env
 secrets.local.json
+
+# Deployment helpers, not needed by the web function.
+deploy/
