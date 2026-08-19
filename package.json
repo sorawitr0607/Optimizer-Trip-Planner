@@ -1,0 +1,13 @@
+{
+  "name": "optimizer-trip-planner",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "install": "npm --prefix web ci && uv sync --no-dev",
+    "dev": "sh -c 'uv run python -m localserver & api_pid=$!; trap \"kill $api_pid 2>/dev/null || true\" EXIT INT TERM; npm --prefix web run dev'",
+    "build": "npm --prefix web run build",
+    "typecheck": "npm --prefix web run typecheck",
+    "lint": "npm --prefix web run lint",
+    "test": "npm --prefix web run test"
+  }
+}
