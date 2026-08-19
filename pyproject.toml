@@ -32,5 +32,12 @@ dev = [
 [tool.uv]
 package = false
 
-[tool.vercel]
-entrypoint = "api.rpc:handler"
+# Do not add a `tool.vercel` entrypoint to this file. Declaring one puts the
+# project into Vercel's framework-preset mode, and the documentation is explicit
+# about what that means: "Vercel then runs your app as Vercel Functions and routes
+# every request to it." Every request means every request -- /, /favicon.svg and
+# the stylesheet included -- so the built frontend is never served and the whole
+# site answers 500. It has been added twice now, once by me and once by a v0 pull
+# request, because the build error suggests it. The build error is about this
+# file; a blank site is what it costs. api/ holds one function file, and Vercel
+# maps that by path without being told.

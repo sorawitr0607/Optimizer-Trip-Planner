@@ -907,8 +907,13 @@ async function post(
       signal: controller.signal,
     });
     const body = await response.text();
+    // Whether a body arrived, kept apart from what it parsed to: `null` is a real
+    // answer here. delete_trip, clear_candidate_choice, delete_cost_item and
+    // discard_revision_draft all return it on success, and reading a parsed null
+    // as "empty" makes every successful delete throw.
+    const hasBody = body.trim().length > 0;
     let value: unknown = null;
-    if (body.trim()) {
+    if (hasBody) {
       try {
         value = JSON.parse(body) as unknown;
       } catch {
@@ -922,7 +927,7 @@ async function post(
         error?.detail ?? (typeof value === "string" && value.trim() ? value : response.statusText || "The API returned an empty response"),
       );
     }
-    if (value === null) {
+    if (!hasBody) {
       throw new ApiError("empty_response", "The API returned an empty response");
     }
     return { status: response.status, value };
