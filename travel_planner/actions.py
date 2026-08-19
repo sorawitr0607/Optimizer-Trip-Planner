@@ -61,7 +61,7 @@ from .providers import (
 )
 from .ranking import build_ranking, validate_choice, _distance_metres
 from .setup import build_setup_payload
-from .store import SQLiteStore
+from .store import SQLiteStore, open_store
 from .transit import MAX_ACCESS_METRES, WALK_METRES_PER_MINUTE, metres as transit_metres
 
 
@@ -128,7 +128,7 @@ class PlannerActions:
         card_provider: Any = None,
         interpreter: Any = None,
     ) -> None:
-        self.store = SQLiteStore(database_path)
+        self.store = open_store(database_path)
         self.place_provider = place_provider
         self.route_provider = route_provider
         # Injected the same way every other provider is, so a test can hand over a

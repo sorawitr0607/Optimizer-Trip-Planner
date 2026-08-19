@@ -1,31 +1,23 @@
--- Optimizer Trip Planner — Postgres schema, translated from travel_planner/store.py
+-- Optimizer Trip Planner — Postgres schema.
 --
--- Generated from the SQLite SCHEMA at SCHEMA_VERSION 14. Three translations are
--- judgement rather than syntax and are marked below; everything else is mechanical.
+-- GENERATED from `travel_planner.pgstore.postgres_schema()`, which derives it from
+-- `store.SCHEMA`. Do not edit by hand: a second hand-written schema is a second
+-- source of truth, and the two drift the first time a column is added to one.
+-- Regenerate with:  uv run python -c "from travel_planner.pgstore import postgres_schema; print(postgres_schema())"
 --
---   1. `PRAGMA user_version` has no Postgres equivalent, so the version lives in a
---      `schema_meta` row. `store.py`'s "copy the database before an irreversible
---      bump" rule cannot be a file copy against a hosted database -- it becomes a
---      branch or a dump, and that is an operating decision, not one this file can
---      encode.
---
---   2. SQLite writes booleans as `INTEGER CHECK (col IN (0,1))` because it has no
---      boolean type. Postgres does. Every read path in store.py that compares a
---      flag against 0/1 has to be checked against this.
---
---   3. SQLite's `RAISE(ABORT, ...)` inside a trigger body has no direct form. Each
---      rule becomes a PL/pgSQL function raising the identical message, so any
---      caller matching on that text keeps working.
+-- The one translation worth knowing is the one deliberately NOT made: SQLite has
+-- no boolean and writes flags as `INTEGER CHECK (col IN (0,1))`. Promoting those
+-- to a real `boolean` was tried and breaks, because `store.py` binds `int(flag)`
+-- and Postgres refuses a smallint for a boolean column. The column keeps the shape
+-- the code writes; a real boolean is a change to store.py, not to this file.
 
--- (1)
+
 CREATE TABLE IF NOT EXISTS schema_meta (
     key text PRIMARY KEY,
     value text NOT NULL
 );
-INSERT INTO schema_meta (key, value) VALUES ('schema_version', '14')
-    ON CONFLICT (key) DO NOTHING;
 
--- Tables.
+
 CREATE TABLE IF NOT EXISTS trips (
     id text PRIMARY KEY,
     name text NOT NULL,
@@ -64,7 +56,7 @@ CREATE TABLE IF NOT EXISTS trip_setups (
     trip_id text PRIMARY KEY,
     snapshot_json text NOT NULL,
     snapshot_sha256 text NOT NULL,
-    confirmed boolean NOT NULL,
+    confirmed bigint NOT NULL CHECK (confirmed IN (0, 1)),
     updated_at text NOT NULL,
     FOREIGN KEY (trip_id) REFERENCES trips(id)
 );
@@ -126,7 +118,7 @@ CREATE TABLE IF NOT EXISTS checklist_items (
     origin text NOT NULL CHECK (origin IN ('generated', 'manual')),
     snapshot_json text NOT NULL,
     snapshot_sha256 text NOT NULL,
-    dismissed boolean NOT NULL,
+    dismissed bigint NOT NULL CHECK (dismissed IN (0, 1)),
     created_at text NOT NULL,
     updated_at text NOT NULL,
     UNIQUE (trip_id, generated_key),
@@ -284,15 +276,14 @@ CREATE TABLE IF NOT EXISTS plan_revisions (
     FOREIGN KEY (trip_id) REFERENCES trips(id)
 );
 
--- (3) Append-only guards.
+
+
 CREATE OR REPLACE FUNCTION refuse_write() RETURNS trigger AS $$
 BEGIN
     RAISE EXCEPTION '%', TG_ARGV[0];
 END;
 $$ LANGUAGE plpgsql;
 
--- A whole-trip deletion may remove otherwise immutable history. SQLite expressed
--- that as a `WHEN NOT EXISTS` guard on the trigger; this is the same test.
 CREATE OR REPLACE FUNCTION refuse_write_unless_trip_deleting() RETURNS trigger AS $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM trip_deletions WHERE trip_id = OLD.trip_id) THEN
@@ -302,7 +293,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Triggers.
 DROP TRIGGER IF EXISTS paid_usage_no_update ON paid_usage;
 CREATE TRIGGER paid_usage_no_update BEFORE UPDATE ON paid_usage
     FOR EACH ROW EXECUTE FUNCTION refuse_write('paid usage entries are immutable');
@@ -334,4 +324,3 @@ CREATE TRIGGER discovery_runs_no_update BEFORE UPDATE ON discovery_runs
 DROP TRIGGER IF EXISTS discovery_runs_no_delete ON discovery_runs;
 CREATE TRIGGER discovery_runs_no_delete BEFORE DELETE ON discovery_runs
     FOR EACH ROW EXECUTE FUNCTION refuse_write_unless_trip_deleting('discovery runs are immutable');
-

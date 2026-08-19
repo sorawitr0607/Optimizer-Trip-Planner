@@ -7,6 +7,7 @@ from datetime import date
 from hashlib import sha256
 from pathlib import Path
 import shutil
+import os
 import sqlite3
 from uuid import uuid4
 from typing import Any, Iterator
@@ -345,6 +346,26 @@ BEGIN
     SELECT RAISE(ABORT, 'discovery runs are immutable');
 END;
 """
+
+
+def open_store(database_path: str | Path) -> "SQLiteStore":
+    """Pick the backend from the environment, defaulting to the file on disk.
+
+    `TOURIST_DB_URL` selects Postgres and nothing else does, so every existing
+    caller, every test and every script keeps the SQLite path it already had. The
+    hosted database is opt-in by presence of a URL rather than by a flag, because
+    a flag can be set without a destination and then fails somewhere less obvious.
+
+    Imported lazily: `psycopg` is not a runtime dependency of the local app, and
+    importing it at module scope would make the whole planner refuse to start on a
+    machine that has never needed it.
+    """
+    url = os.environ.get("TOURIST_DB_URL", "").strip()
+    if not url:
+        return SQLiteStore(database_path)
+    from .pgstore import PostgresStore
+
+    return PostgresStore(url)
 
 
 class SQLiteStore:
