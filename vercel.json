@@ -7,7 +7,6 @@
     "api/rpc.py": { "maxDuration": 60 }
   },
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/rpc" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }

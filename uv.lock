@@ -177,6 +177,8 @@ name = "tourist-planner"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "psycopg", extra = ["binary"] },
+    { name = "psycopg-pool" },
     { name = "xlsxwriter" },
 ]
 
@@ -184,19 +186,19 @@ dependencies = [
 dev = [
     { name = "openpyxl" },
     { name = "pillow" },
-    { name = "psycopg", extra = ["binary"] },
-    { name = "psycopg-pool" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "xlsxwriter", specifier = ">=3.2.9" }]
+requires-dist = [
+    { name = "psycopg", extras = ["binary"], specifier = ">=3.3.4" },
+    { name = "psycopg-pool", specifier = ">=3.3.1" },
+    { name = "xlsxwriter", specifier = ">=3.2.9" },
+]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "openpyxl", specifier = ">=3.1" },
     { name = "pillow", specifier = ">=11" },
-    { name = "psycopg", extras = ["binary"], specifier = ">=3.3.4" },
-    { name = "psycopg-pool", specifier = ">=3.3.1" },
 ]
 
 [[package]]

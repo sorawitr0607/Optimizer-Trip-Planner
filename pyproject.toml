@@ -4,10 +4,19 @@ version = "0.1.0"
 description = "Local, evidence-aware personal travel planner"
 license = { text = "MIT" }
 requires-python = ">=3.12"
-# One. `xlsxwriter` exists only because slice 5 renders a workbook. Streamlit
-# went with the POC at S6; the local API is a stdlib ThreadingHTTPServer and the
-# browser dependencies live in web/package.json.
+# `xlsxwriter` exists only because slice 5 renders a workbook. Streamlit went with
+# the POC at S6; the local API is a stdlib ThreadingHTTPServer and the browser
+# dependencies live in web/package.json.
+#
+# The two psycopg lines are the hosted deployment, and they are here rather than
+# only in requirements.txt because Vercel reads this file. Which of the two it
+# installs from is not something this repo controls, so both list the same three
+# packages; a deployment that installs from the wrong one and finds no driver
+# fails at the first request, not at build time. Running locally still touches
+# none of it -- `open_store` returns SQLite unless TOURIST_DB_URL is set.
 dependencies = [
+    "psycopg-pool>=3.3.1",
+    "psycopg[binary]>=3.3.4",
     "xlsxwriter>=3.2.9",
 ]
 
@@ -18,9 +27,13 @@ dependencies = [
 dev = [
     "openpyxl>=3.1",
     "pillow>=11",
-    "psycopg-pool>=3.3.1",
-    "psycopg[binary]>=3.3.4",
 ]
 
 [tool.uv]
 package = false
+
+# Vercel's Python runtime needs to be told which object serves requests: it found
+# `handler` in api/rpc.py but will not guess. `handler` is a
+# BaseHTTPRequestHandler subclass, the same shape the local server uses.
+[tool.vercel]
+entrypoint = "api.rpc:handler"
