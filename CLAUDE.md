@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 npm --prefix web install                                             # first web run only
-uv run --locked python -m api                                        # production shell on 127.0.0.1:8765
+uv run --locked python -m localserver                                        # production shell on 127.0.0.1:8765
 uv run --locked python scripts/check.py                              # every free Python + web gate
 uv run --locked python -m unittest discover -s tests -p 'test_*.py'  # 538 tests, ~13s
 uv run --locked python -m unittest tests.test_optimizer.OptimizerCoreTest.test_safe_route_and_weather_fallback_are_selected  # one test
@@ -1208,7 +1208,7 @@ that cost off screen instead.
 ## The build stamp, and the bug that made the last round unreadable
 
 Six rounds produced reports of fixes "not working" that had been verified working minutes
-earlier, and every one turned out to be a browser holding an older bundle. `python -m api`
+earlier, and every one turned out to be a browser holding an older bundle. `python -m localserver`
 rebuilds **only at startup**, and only when a source is newer than `dist/index.html`, so a
 server left running never picks anything up — and a tab left open holds the old JavaScript
 even after it does. Neither side could tell which build was on screen, so each round spent
@@ -1216,7 +1216,7 @@ its first hour re-diagnosing something already fixed.
 
 The sidebar now prints `build <timestamp>`, stamped by `vite.config.ts`. **If it does not
 match the build that was just made, nothing about behaviour is worth discussing yet.** The
-recipe is: stop the server, `uv run --locked python -m api`, hard-reload the browser.
+recipe is: stop the server, `uv run --locked python -m localserver`, hard-reload the browser.
 
 **And one of those reports was real, from my own edit the round before.** `firstCardWait`
 — which holds the discovery skeleton until the first card is ready — was written as a

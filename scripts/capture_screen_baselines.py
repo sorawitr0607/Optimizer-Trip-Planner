@@ -206,7 +206,7 @@ def main() -> int:
     args = parser.parse_args()
 
     if not alive(args.base):
-        raise SystemExit(f"FAILED: nothing serving at {args.base} — start `python -m api` first")
+        raise SystemExit(f"FAILED: nothing serving at {args.base} — start `python -m localserver` first")
 
     target = BASELINES if args.approve else CURRENT
     target.mkdir(parents=True, exist_ok=True)

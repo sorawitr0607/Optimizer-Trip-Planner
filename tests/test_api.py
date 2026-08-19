@@ -12,7 +12,7 @@ import unittest
 from unittest.mock import patch
 import zipfile
 
-from api import ACTIONS, REFUSAL_STATUS, PlannerHTTPServer, dispatch, jsonable
+from localserver import ACTIONS, REFUSAL_STATUS, PlannerHTTPServer, dispatch, jsonable
 from travel_planner.actions import PlannerActions
 from travel_planner.core import (
     CandidateChoice,
@@ -300,7 +300,7 @@ class SocketGuardTest(unittest.TestCase):
         status, _, _ = self.request("GET", "/api/delete_trip")
         self.assertEqual(404, status)
         self.assertIsNotNone(self.actions.get_trip(trip.trip_id))
-        with patch("api._download", return_value=(b"file", "application/octet-stream", "trip.bin")):
+        with patch("localserver._download", return_value=(b"file", "application/octet-stream", "trip.bin")):
             status, headers, body = self.request("GET", "/api/export/t/workbook.xlsx")
         self.assertEqual(200, status)
         self.assertEqual(b"file", body)

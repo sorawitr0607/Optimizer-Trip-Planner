@@ -393,7 +393,7 @@ class ActivationGateTest(unittest.TestCase):
         self.assertEqual("unknown_plan_variant", caught.exception.code)
 
     def test_the_screen_can_map_every_refusal_it_shows_to_a_status(self) -> None:
-        from api import REFUSAL_STATUS
+        from localserver import REFUSAL_STATUS
 
         for code in (
             "preview_missing",

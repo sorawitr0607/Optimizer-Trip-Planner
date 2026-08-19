@@ -35,7 +35,7 @@ from urllib.parse import urlsplit
 
 # `_download` is private to the package, and this is the package. Importing it
 # beats a second copy of the export route regex.
-from api import ACTIONS, _download, dispatch, error_response
+from localserver import ACTIONS, _download, dispatch, error_response
 from travel_planner.actions import PlannerActions
 from travel_planner.jobs import HANDLERS, JobQueue
 
@@ -155,7 +155,7 @@ class handler(BaseHTTPRequestHandler):
 
         try:
             actions, _ = _planner()
-            body, content_type, filename = _download(actions, urlsplit(self.path).path)
+            body, content_type, filename = _download(actions, self.path)
         except Exception as error:  # transport boundary
             self._send(*error_response(error))
             return

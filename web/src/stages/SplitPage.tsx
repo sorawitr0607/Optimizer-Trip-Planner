@@ -190,7 +190,7 @@ export function SplitPage() {
           well and tells you nothing, so the link was an invitation to a blank file. */}
       <div className="money-export">
         {summary.data.rows > 0 ? (
-          <a className="primary-link" download href={`/api/export/${encodeURIComponent(tripId)}/money.xlsx`}>
+          <a className="primary-link" download href={`/api/export?trip=${encodeURIComponent(tripId)}&kind=money.xlsx`}>
             {copy("money_workbook", language)}
           </a>
         ) : (

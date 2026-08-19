@@ -49,7 +49,7 @@ uv sync --locked
 ### 3. Launch the application
 
 ```bash
-uv run --locked python -m api
+uv run --locked python -m localserver
 ```
 
 The app will be available at **`http://127.0.0.1:8765`**.

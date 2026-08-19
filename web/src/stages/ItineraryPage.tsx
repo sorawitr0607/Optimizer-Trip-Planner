@@ -524,8 +524,12 @@ export function ItineraryPage() {
   if (!day) return <p>{copy("no_schedule", language)}</p>;
   const totals = day.totals;
   const versionTag = plan.stamp.plan_version_id.replace(/^plan_/, "").slice(0, 12);
-  const workbook = `/api/export/${encodeURIComponent(tripId)}/workbook.xlsx`;
-  const calendar = `/api/export/${encodeURIComponent(tripId)}/checklist.ics`;
+  // Query form, not path form. A hosted deployment routes every /api/* through
+  // one function with a rewrite, and a rewrite replaces the path -- so a download
+  // whose path carried the trip and the format would arrive asking for nothing.
+  // The query survives it. Both spellings work; the local server serves either.
+  const workbook = `/api/export?trip=${encodeURIComponent(tripId)}&kind=workbook.xlsx`;
+  const calendar = `/api/export?trip=${encodeURIComponent(tripId)}&kind=checklist.ics`;
 
   return (
     <section className="stage-card itinerary-screen">

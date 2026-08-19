@@ -281,8 +281,8 @@ describe("ItineraryPage", () => {
     }
     expect(html).toContain("Fallback for this half-day");
     expect(html.indexOf("Fallback for this half-day")).toBeGreaterThan(html.indexOf("Longshan Temple"));
-    expect(html).toContain(`/api/export/${TRIP}/workbook.xlsx`);
-    expect(html).toContain(`/api/export/${TRIP}/checklist.ics`);
+    expect(html).toContain(`/api/export?trip=${TRIP}&amp;kind=workbook.xlsx`);
+    expect(html).toContain(`/api/export?trip=${TRIP}&amp;kind=checklist.ics`);
     const mapHtml = render(<ItineraryPage />, "en", undefined, "?view=map");
     expect(mapHtml).toContain('href="https://www.google.com/maps/search/?api=1&amp;query=');
     expect((mapHtml.match(/https:\/\/www\.google\.com\/maps\/search\/\?api=1&amp;query=/g) ?? []).length).toBe(2);

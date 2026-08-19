@@ -14,7 +14,7 @@ from pathlib import Path, PurePosixPath
 import re
 import subprocess
 from typing import Any
-from urllib.parse import unquote, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 from travel_planner.actions import PlannerActions, PlannerRefusal
 from travel_planner.copy import OPTIMIZER_CODE_TEXT, TEXT
@@ -265,13 +265,40 @@ def error_response(error: Exception) -> tuple[int, dict[str, Any]]:
     return 500, {"code": "internal_error"}
 
 
-def _download(actions: PlannerActions, path: str) -> tuple[bytes, str, str]:
+#: The three files a trip can be downloaded as. Named once, because both ways of
+#: asking for one have to agree about what is allowed.
+DOWNLOAD_KINDS = ("workbook.xlsx", "money.xlsx", "checklist.ics")
+
+
+def _download(actions: PlannerActions, target: str) -> tuple[bytes, str, str]:
+    """Build one export. `target` is a request path, with or without its query.
+
+    Two spellings are accepted for the same download:
+
+        /api/export/<trip>/workbook.xlsx        the path form
+        /api/export?trip=<trip>&kind=workbook.xlsx    the query form
+
+    The path form is the honest one and the local server only ever produces it.
+    The query form exists because a hosted deployment routes every /api/* through
+    a single function with a rewrite, and a rewrite replaces the path -- so a
+    download whose path carries the trip and the format arrives asking for
+    nothing. RPC calls survive that on a header; a download cannot, because it is
+    an `<a download>` link the browser follows with no headers of ours on it.
+    A query string is not rewritten, so it still says which file was wanted.
+    """
+
+    split = urlsplit(target)
     match = re.fullmatch(
-        r"/api/export/([^/]+)/(workbook\.xlsx|money\.xlsx|checklist\.ics)", path
+        r"/api/export/([^/]+)/(workbook\.xlsx|money\.xlsx|checklist\.ics)", split.path
     )
-    if match is None:
-        raise PlannerRefusal("unknown_download")
-    trip_id, kind = unquote(match.group(1)), match.group(2)
+    if match is not None:
+        trip_id, kind = unquote(match.group(1)), match.group(2)
+    else:
+        query = parse_qs(split.query)
+        trip_id = (query.get("trip") or [""])[0]
+        kind = (query.get("kind") or [""])[0]
+        if not trip_id or kind not in DOWNLOAD_KINDS:
+            raise PlannerRefusal("unknown_download")
     trip = actions.get_trip(trip_id)
     labels = _labels(trip.language if trip else "en")
     name = re.sub(r"[^A-Za-z0-9._-]+", "-", trip.name if trip else "trip").strip("-") or "trip"
@@ -416,7 +443,7 @@ class PlannerHandler(SimpleHTTPRequestHandler):
         path = urlsplit(self.path).path
         if path.startswith("/api/"):
             try:
-                body, content_type, filename = _download(self.server.actions, path)
+                body, content_type, filename = _download(self.server.actions, self.path)
                 self.send_response(200)
                 self.send_header("Content-Type", content_type)
                 self.send_header("Content-Disposition", f'attachment; filename="{filename}"')

@@ -31,9 +31,3 @@ dev = [
 
 [tool.uv]
 package = false
-
-# Vercel's Python runtime needs to be told which object serves requests: it found
-# `handler` in api/rpc.py but will not guess. `handler` is a
-# BaseHTTPRequestHandler subclass, the same shape the local server uses.
-[tool.vercel]
-entrypoint = "api.rpc:handler"
