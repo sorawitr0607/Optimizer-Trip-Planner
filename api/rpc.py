@@ -39,6 +39,16 @@ from localserver import ACTIONS, _download, dispatch, error_response, static_res
 from travel_planner.actions import PlannerActions
 from travel_planner.jobs import HANDLERS, JobQueue
 
+class ConfigurationError(RuntimeError):
+    """The deployment is missing something it cannot run without.
+
+    Separate from every other failure because it is the one a person can fix, and
+    because it is by far the likeliest thing to be wrong on a first deploy. Folded
+    into the generic 500 it reads as "internal_error", which says nothing and
+    sends whoever is debugging to the wrong place -- it did exactly that here.
+    """
+
+
 #: Enqueued rather than run. Exactly the operations the queue knows how to run,
 #: derived from it rather than restated, so the two cannot drift.
 DEFERRED = frozenset(HANDLERS)
@@ -55,11 +65,23 @@ def _planner() -> tuple[PlannerActions, JobQueue]:
         if not os.environ.get("TOURIST_DB_URL", "").strip():
             # Failing loudly beats writing a trip to a disk that is about to be
             # discarded, which looks like success and loses the data.
-            raise RuntimeError(
-                "TOURIST_DB_URL is required: a serverless function has no durable disk"
+            raise ConfigurationError(
+                "TOURIST_DB_URL is not set. A serverless function has no durable "
+                "disk, so the planner needs a Postgres URL to reach its data."
             )
-        _actions = PlannerActions(os.environ.get("TOURIST_DB_PATH", "unused-on-postgres"))
-        _queue = JobQueue(_actions.store)
+        try:
+            _actions = PlannerActions(os.environ.get("TOURIST_DB_PATH", "unused-on-postgres"))
+            _queue = JobQueue(_actions.store)
+        except Exception as error:
+            # Reaching the database is configuration too: a URL that is set but
+            # wrong fails here, and "internal_error" would hide which of the two
+            # it was. The class name goes out; the message does not, because a
+            # driver puts the host, the user and sometimes the password in it.
+            _actions = None
+            raise ConfigurationError(
+                f"the database could not be reached ({type(error).__name__}); "
+                "check TOURIST_DB_URL"
+            ) from error
     assert _queue is not None
     return _actions, _queue
 
@@ -124,6 +146,25 @@ class handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(encoded)
 
+    def _fail(self, error: Exception) -> None:
+        """Answer an exception. The same mapping the local server uses, plus enough
+        to tell a misconfigured deployment from a broken one.
+
+        Collapsing everything to 500 here once hid `paid_cap_reached` behind
+        "internal_error"; leaving 500 with no detail then hid a missing
+        environment variable behind it too.
+        """
+
+        if isinstance(error, ConfigurationError):
+            self._send(503, {"code": "not_configured", "detail": {"message": str(error)}})
+            return
+        status, body = error_response(error)
+        if status == 500:
+            # The class name only. An exception's message is written for a log,
+            # not for the internet, and a driver's includes the connection string.
+            body = {**body, "detail": {"type": type(error).__name__}}
+        self._send(status, body)
+
     def do_POST(self) -> None:  # noqa: N802 - the runtime requires this name
         # SECURITY CONTROL, carried over from the local server: application/json
         # is not CORS-safelisted, so requiring it keeps a cross-site form from
@@ -140,9 +181,7 @@ class handler(BaseHTTPRequestHandler):
             status, body = handle(_method(self), payload)
             self._send(status, body)
         except Exception as error:  # transport boundary
-            # The same mapping the local server uses. Collapsing everything to 500
-            # here once hid `paid_cap_reached` behind "internal_error".
-            self._send(*error_response(error))
+            self._fail(error)
 
     def do_GET(self) -> None:  # noqa: N802 - the runtime requires this name
         """The three export downloads, which are links rather than RPC calls.
@@ -173,7 +212,7 @@ class handler(BaseHTTPRequestHandler):
             actions, _ = _planner()
             body, content_type, filename = _download(actions, self.path)
         except Exception as error:  # transport boundary
-            self._send(*error_response(error))
+            self._fail(error)
             return
         self.send_response(200)
         self.send_header("Content-Type", content_type)

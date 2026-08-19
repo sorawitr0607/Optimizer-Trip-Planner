@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import threading
 import unittest
+import unittest.mock
 import urllib.error
 import urllib.request
 from http.server import ThreadingHTTPServer
@@ -127,6 +128,36 @@ class RpcOverHttpTest(unittest.TestCase):
         except urllib.error.HTTPError as error:
             status = error.code
         self.assertNotEqual(status, 501)
+
+    def test_a_missing_database_url_says_so(self):
+        # What a first deploy looks like when the environment variable was not set.
+        # It answered "internal_error" with no detail, which sent the debugging to
+        # the wrong place for an hour.
+        actions, queue = rpc._actions, rpc._queue
+        rpc._actions = rpc._queue = None
+        try:
+            status, body = self.call("list_trips")
+        finally:
+            rpc._actions, rpc._queue = actions, queue
+        self.assertEqual(status, 503)
+        self.assertEqual(body["code"], "not_configured")
+        self.assertIn("TOURIST_DB_URL", body["detail"]["message"])
+
+    def test_an_unexpected_failure_names_its_type_but_not_its_message(self):
+        # A driver's error message carries the host, the user and sometimes the
+        # password. The class name is enough to debug from and safe to publish.
+        actions = rpc._actions
+        broken = unittest.mock.Mock()
+        broken.list_trips.side_effect = ZeroDivisionError("secret://user:pw@host/db")
+        rpc._actions = broken
+        try:
+            status, body = self.call("list_trips")
+        finally:
+            rpc._actions = actions
+        self.assertEqual(status, 500)
+        self.assertEqual(body["code"], "internal_error")
+        self.assertEqual(body["detail"]["type"], "ZeroDivisionError")
+        self.assertNotIn("secret://", json.dumps(body))
 
     def get(self, path):
         try:
