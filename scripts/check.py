@@ -4,6 +4,16 @@
 from __future__ import annotations
 
 from pathlib import Path
+# No stage of this gate may touch a hosted database. `open_store` selects Postgres
+# from `TOURIST_DB_URL` and ignores the path it was handed, so a shell that
+# happens to export it silently redirects every stage that builds a store. That is
+# not hypothetical: it put a "Coverage probe" trip into the owner's hosted database
+# on the run that found this. The suite has the same guard in `tests/__init__.py`;
+# this covers the stages that are plain scripts and never import that package.
+import os as _os
+
+_os.environ.pop("TOURIST_DB_URL", None)
+
 import subprocess
 import sys
 from time import monotonic

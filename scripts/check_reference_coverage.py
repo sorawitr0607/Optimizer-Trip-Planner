@@ -34,6 +34,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from io import BytesIO
+# A verification script builds throwaway trips, so it must never be pointed at a
+# hosted database. See the same guard in `scripts/check.py` and `tests/__init__.py`.
+import os as _os
+
+_os.environ.pop("TOURIST_DB_URL", None)
+
 import json
 from pathlib import Path
 import sys
