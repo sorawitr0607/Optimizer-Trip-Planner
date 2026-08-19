@@ -6,14 +6,39 @@ relying on any of it.**
 
 ## Done, and verified against a real database
 
-- `schema.sql` translates all **22 tables** and **8 triggers** from
-  `travel_planner/store.py` at `SCHEMA_VERSION 14`.
-- Applied cleanly to Postgres 17.10.
-- The append-only contract was tested against the live database, not reasoned
-  about: updating a plan version is refused, deleting one is refused, and
-  deleting it *does* succeed once a `trip_deletions` marker exists. **3 of 3
-  behaviours match the SQLite contract**, including the identical error text, so
-  any caller matching on that message keeps working.
+The hosted database is **Supabase Postgres 17.6 in `ap-southeast-1`**. It began on
+Neon in `us-east-1` and was moved for one measured reason, recorded below.
+
+- `schema.sql` carries all **22 tables** and **8 triggers** at `SCHEMA_VERSION 14`,
+  and is generated from `travel_planner.pgstore.postgres_schema()` so it cannot
+  drift from `store.SCHEMA`.
+- `PostgresStore` subclasses `SQLiteStore` and replaces only `connect()`, so none
+  of the 65 statements is rewritten and the backends cannot diverge in behaviour.
+- **The data is migrated and content-verified**: 7023 `paid_usage` rows and 293
+  `provider_cache` rows, sha256 digests over every column identical to the SQLite
+  source, ledger exactly US$5.0745.
+- The append-only contract was tested against the live database rather than
+  reasoned about: UPDATE and DELETE on the ledger are refused with the original
+  message, and a guarded delete succeeds once a `trip_deletions` marker exists.
+
+### Region is a performance decision, not a default
+
+Measured from the owner's machine, same code, same pool, only the region differs:
+
+| operation | Supabase `ap-southeast-1` | Neon `us-east-1` |
+|---|---|---|
+| connection handshake | 472 ms | 2580 ms |
+| round trip, open connection | **42 ms** | **278 ms** |
+| read | 108 ms | 788 ms |
+| write | 110 ms | 777 ms |
+| delete (5 statements) | 922 ms | 6242 ms |
+
+Connection pooling was added first and was worth it — it removed a 2.58s
+handshake from every single operation, since `store.py` calls `connect()` once per
+operation by design. But pooling cannot touch distance. Once the handshake is
+gone, every statement still costs one round trip, so a five-statement operation
+from Bangkok to Virginia could never beat about 1.4 seconds. Moving the database
+to the same continent as its users was worth more than any code change here.
 
 ## Three translations that are judgement, not syntax
 
@@ -46,8 +71,28 @@ relying on any of it.**
   capped at one (`xlsxwriter`) by decision; making the app talk to Postgres in
   production makes psycopg the second, which is a decision to take deliberately.
 
-## Left alone on purpose
+## An incident worth keeping
 
-The database already contained an unrelated `quiz_results` table. Nothing here
-touches it. "Replace all the data" was taken to mean this project's tables, not
-somebody else's.
+While building the port, `TOURIST_DB_URL` was exported in the shell that ran the
+test suite. `open_store` selects Postgres from that variable and **ignores the
+path it was handed**, so all 544 tests silently redirected onto the hosted
+database: 96 test trips with their child rows, and seven fabricated rows in the
+append-only ledger including `google_places` charges at US$0.025 that were never
+made. The ledger read US$5.1505 against a true US$5.0745.
+
+Everything was removed and the ledger restored, which required dropping the
+unconditional delete guard for exactly one statement and putting it straight back
+— recorded because a ledger must never be quietly edited.
+
+`tests/__init__.py` now clears `TOURIST_DB_URL`, exactly as it already clears
+`TOURIST_LOCAL_SECRETS`, and for the same reason: a test must not be able to reach
+a real one. Verified by running the full suite with the variable exported and
+finding zero rows written.
+
+## Secrets
+
+No connection string or key is committed anywhere in this repository. Everything
+was passed through the shell for the session that needed it. The Supabase
+`service_role` key and JWT secret in particular bypass row-level security and sign
+tokens respectively; if they have ever been pasted somewhere they should be
+rotated in Supabase → Settings → API.
