@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import re
 import threading
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from contextlib import contextmanager
 from typing import Any, Iterator
 
@@ -160,6 +161,36 @@ class _Connection:
 _SCHEMA_LOCK_KEY = 0x706C616E  # "plan"
 
 
+#: Query parameters that hosting providers append for other people's tooling.
+#: libpq validates its connection options strictly and rejects anything it does
+#: not recognise, so one of these turns a perfectly good URL into a hard failure
+#: before a socket is opened -- `invalid URI query parameter: "pgbouncer"`, from
+#: the URL Supabase and Vercel hand you as POSTGRES_URL. `pgbouncer=true` is a
+#: Prisma instruction; the equivalent here is `prepare_threshold=None`, which the
+#: pool below already sets. The rest belong to Prisma or asyncpg.
+_FOREIGN_PARAMS = frozenset({
+    "pgbouncer", "connection_limit", "pool_timeout", "schema",
+    "statement_cache_size", "supa",
+})
+
+
+def normalise_url(url: str) -> str:
+    """Drop connection parameters that belong to another driver.
+
+    Copying the provider's URL as-is is the obvious thing to do, and it is what
+    their dashboard invites -- so accepting it is this function's whole purpose.
+    Everything libpq does understand is passed through untouched, `sslmode`
+    included, because dropping that would quietly downgrade the connection.
+    """
+
+    split = urlsplit(url)
+    if not split.query:
+        return url
+    kept = [(k, v) for k, v in parse_qsl(split.query, keep_blank_values=True)
+            if k not in _FOREIGN_PARAMS]
+    return urlunsplit(split._replace(query=urlencode(kept)))
+
+
 class PostgresStore(SQLiteStore):
     """The store against a hosted Postgres, over a pooled connection.
 
@@ -187,7 +218,7 @@ class PostgresStore(SQLiteStore):
     MAX_SIZE = 8
 
     def __init__(self, url: str) -> None:
-        self.url = url
+        self.url = normalise_url(url)
         self._pool: Any = None
         self._pool_lock = threading.Lock()
         # F3: `SQLiteStore.__init__` sets `self.path`, and several inherited
