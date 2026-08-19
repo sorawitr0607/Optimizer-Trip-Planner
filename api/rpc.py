@@ -31,8 +31,12 @@ import os
 from http.server import BaseHTTPRequestHandler
 from typing import Any
 
-from api import ACTIONS, dispatch
-from travel_planner.actions import PlannerActions, PlannerRefusal
+from urllib.parse import urlsplit
+
+# `_download` is private to the package, and this is the package. Importing it
+# beats a second copy of the export route regex.
+from api import ACTIONS, _download, dispatch, error_response
+from travel_planner.actions import PlannerActions
 from travel_planner.jobs import HANDLERS, JobQueue
 
 #: Enqueued rather than run. Exactly the operations the queue knows how to run,
@@ -58,6 +62,25 @@ def _planner() -> tuple[PlannerActions, JobQueue]:
         _queue = JobQueue(_actions.store)
     assert _queue is not None
     return _actions, _queue
+
+
+def _method(handler: BaseHTTPRequestHandler) -> str:
+    """Which RPC this is, from the path, with the header as the fallback.
+
+    The path is the source of truth and matches the local server exactly. The
+    header exists because a platform rewrite points every `/api/*` at this one
+    function, and if a platform ever forwards the *rewritten* path rather than the
+    requested one, every call would arrive asking for the method named "rpc". The
+    client sends both, so that failure is recoverable instead of total. A custom
+    header is also not CORS-safelisted, so it carries the same cross-site property
+    the Content-Type check relies on.
+    """
+
+    path = urlsplit(handler.path).path
+    tail = path.rsplit("/", 1)[-1] if path.startswith("/api/") else ""
+    if tail and tail not in ("rpc", "rpc.py"):
+        return tail
+    return handler.headers.get("X-Planner-Method", "").strip()
 
 
 def handle(method: str, payload: dict[str, Any]) -> tuple[int, Any]:
@@ -114,10 +137,32 @@ class handler(BaseHTTPRequestHandler):
             if not isinstance(payload, dict):
                 self._send(400, {"code": "body_must_be_an_object"})
                 return
-            path = self.path.split("?", 1)[0]
-            status, body = handle(path.rsplit("/", 1)[-1], payload)
+            status, body = handle(_method(self), payload)
             self._send(status, body)
-        except PlannerRefusal as refusal:
-            self._send(409, {"code": refusal.code})
         except Exception as error:  # transport boundary
-            self._send(500, {"code": "internal_error", "detail": str(error)[:300]})
+            # The same mapping the local server uses. Collapsing everything to 500
+            # here once hid `paid_cap_reached` behind "internal_error".
+            self._send(*error_response(error))
+
+    def do_GET(self) -> None:  # noqa: N802 - the runtime requires this name
+        """The three export downloads, which are links rather than RPC calls.
+
+        `<a download href="/api/export/.../workbook.xlsx">` is an ordinary browser
+        navigation: no JSON body, no custom header, and no way to add one. Without
+        this method BaseHTTPRequestHandler answers 501 and all three downloads are
+        dead on the hosted deployment while working locally.
+        """
+
+        try:
+            actions, _ = _planner()
+            body, content_type, filename = _download(actions, urlsplit(self.path).path)
+        except Exception as error:  # transport boundary
+            self._send(*error_response(error))
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)

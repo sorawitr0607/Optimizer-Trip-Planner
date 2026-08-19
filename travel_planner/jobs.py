@@ -82,6 +82,18 @@ class JobQueue:
         # name rather than on isinstance, which would be true for both.
         self.is_postgres = type(store).__name__ == "PostgresStore"
         with self.store.connect() as connection:
+            # Same reason as PostgresStore._initialize: a serverless deployment
+            # builds a queue on every cold start, and re-running the DDL each time
+            # is a round trip and a catalogue lock for a table that is almost
+            # always already there. One cheap existence check instead.
+            present = connection.execute(
+                "SELECT to_regclass('public.jobs') IS NOT NULL AS present"
+                if self.is_postgres
+                else "SELECT COUNT(*) AS present FROM sqlite_master "
+                "WHERE type = 'table' AND name = 'jobs'"
+            ).fetchone()
+            if present and present["present"]:
+                return
             for statement in DDL.strip().split(";"):
                 if statement.strip():
                     connection.execute(statement)

@@ -154,6 +154,12 @@ class _Connection:
         self._raw.close()
 
 
+#: Arbitrary but fixed, and shared by every process that might build the schema.
+#: Postgres advisory locks are a flat namespace of integers, so the only rule is
+#: that nothing else in this database uses the same one.
+_SCHEMA_LOCK_KEY = 0x706C616E  # "plan"
+
+
 class PostgresStore(SQLiteStore):
     """The store against a hosted Postgres, over a pooled connection.
 
@@ -246,17 +252,59 @@ class PostgresStore(SQLiteStore):
             self._pool.close()
             self._pool = None
 
+    @staticmethod
+    def _stored_version(connection: Any) -> int:
+        """The recorded schema version, or 0 when the database is still empty.
+
+        `to_regclass` answers for a table that does not exist by returning NULL
+        rather than raising, which matters because a failed statement aborts the
+        surrounding transaction in Postgres -- so "ask forgiveness" would cost a
+        second connection every time.
+        """
+
+        row = connection.execute(
+            "SELECT to_regclass('public.schema_meta') IS NOT NULL AS present"
+        ).fetchone()
+        if not row or not row["present"]:
+            return 0
+        row = connection.execute(
+            "SELECT value FROM schema_meta WHERE key = 'schema_version'"
+        ).fetchone()
+        return int(row["value"]) if row else 0
+
     def _initialize(self) -> None:
+        """Create the schema, but only when it is not already there.
+
+        `SQLiteStore` runs the DDL on every open, which against a local file is
+        too cheap to think about. Against a hosted Postgres it is 49 statements
+        taking catalogue locks, and a serverless deployment opens a store on every
+        cold start -- so this ran per invocation. Two costs, one real hazard: the
+        round trip, the lock churn, and concurrent `CREATE TABLE IF NOT EXISTS`
+        racing on `pg_type_typname_nsp_index`, which is a documented Postgres
+        unique violation rather than a no-op. Two cold starts arriving together is
+        the ordinary case on a platform that scales by starting processes.
+
+        So: one cheap read, and return if the schema is current. Only the process
+        that finds it stale takes the advisory lock and writes, and it re-reads
+        under the lock because another process may have finished while it waited.
+        """
+
         with self.connect() as connection:
-            connection.executescript(postgres_schema())
-            row = connection.execute(
-                "SELECT value FROM schema_meta WHERE key = 'schema_version'"
-            ).fetchone()
-            version = int(row["value"]) if row else 0
+            if self._stored_version(connection) == SCHEMA_VERSION:
+                return
+
+        with self.connect() as connection:
+            # Transaction-scoped, so it is released by the commit or the rollback
+            # at the end of this block whatever happens inside it.
+            connection.execute("SELECT pg_advisory_xact_lock(?)", (_SCHEMA_LOCK_KEY,))
+            version = self._stored_version(connection)
+            if version == SCHEMA_VERSION:
+                return
             if version > SCHEMA_VERSION:
                 raise RuntimeError(
                     f"Database schema {version} is newer than supported {SCHEMA_VERSION}"
                 )
+            connection.executescript(postgres_schema())
             if 0 < version < SCHEMA_VERSION:
                 self._copy_before_bump(version)
             connection.execute(

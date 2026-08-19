@@ -235,6 +235,36 @@ def _labels(language: str) -> dict[str, str]:
     return TEXT[chosen] | OPTIMIZER_CODE_TEXT[chosen]
 
 
+def error_response(error: Exception) -> tuple[int, dict[str, Any]]:
+    """Map one exception to its status and body.
+
+    Shared with `api/rpc.py`, which serves the same contract from a serverless
+    function. It lived as a method on the local handler until the hosted entry
+    point grew its own copy, and the copy was already wrong in a way that mattered:
+    `ProviderBudgetExceeded` is not a `PlannerRefusal`, so it fell to the generic
+    500 and the screen said "internal_error" when the truth was that the paid cap
+    had been reached. A budget stop the operator cannot see is the one failure this
+    application must never have.
+    """
+
+    if isinstance(error, PlannerRefusal):
+        if error.code in ("unknown_action", "unknown_download"):
+            return 404, {"code": error.code}
+        return REFUSAL_STATUS.get(error.code, 409), {
+            "code": error.code,
+            "detail": error.detail,
+        }
+    if isinstance(error, BadRequest):
+        return 400, {"code": "bad_request", "detail": {"message": str(error)}}
+    if isinstance(error, ProviderBudgetExceeded):
+        return 402, {"code": "paid_cap_reached", "detail": {"message": str(error)}}
+    if isinstance(error, ProviderUnavailable):
+        return 503, {"code": "provider_unavailable", "detail": {"message": str(error)}}
+    if isinstance(error, RevisionInterpretationUnavailable):
+        return 503, {"code": error.cause, "detail": {"message": str(error)}}
+    return 500, {"code": "internal_error"}
+
+
 def _download(actions: PlannerActions, path: str) -> tuple[bytes, str, str]:
     match = re.fullmatch(
         r"/api/export/([^/]+)/(workbook\.xlsx|money\.xlsx|checklist\.ics)", path
@@ -350,25 +380,10 @@ class PlannerHandler(SimpleHTTPRequestHandler):
         )
 
     def _error(self, error: Exception) -> None:
-        if isinstance(error, PlannerRefusal):
-            if error.code == "unknown_action" or error.code == "unknown_download":
-                self._json(404, {"code": error.code})
-            else:
-                self._json(
-                    REFUSAL_STATUS.get(error.code, 409),
-                    {"code": error.code, "detail": error.detail},
-                )
-        elif isinstance(error, BadRequest):
-            self._json(400, {"code": "bad_request", "detail": {"message": str(error)}})
-        elif isinstance(error, ProviderBudgetExceeded):
-            self._json(402, {"code": "paid_cap_reached", "detail": {"message": str(error)}})
-        elif isinstance(error, ProviderUnavailable):
-            self._json(503, {"code": "provider_unavailable", "detail": {"message": str(error)}})
-        elif isinstance(error, RevisionInterpretationUnavailable):
-            self._json(503, {"code": error.cause, "detail": {"message": str(error)}})
-        else:
+        status, body = error_response(error)
+        if status == 500:
             self.log_error("Unhandled API error: %s", error)
-            self._json(500, {"code": "internal_error"})
+        self._json(status, body)
 
     def do_POST(self) -> None:
         # SECURITY CONTROL: application/json is not CORS-safelisted. Do not relax.
@@ -496,6 +511,7 @@ def main(argv: list[str] | None = None) -> None:
 
 __all__ = (
     "ACTIONS",
+    "error_response",
     "PlannerHTTPServer",
     "dispatch",
     "ensure_web_build",

@@ -1,0 +1,39 @@
+# What NOT to upload. Without this the deploy carries 275 MB of tracked files,
+# and @vercel/python bundles the project directory into the function -- against a
+# 250 MB unzipped limit. The deploy fails, and the error names the limit rather
+# than the four PDFs responsible.
+#
+# Runtime needs exactly three things from outside travel_planner/ and api/:
+# i18n/copy.json, tokens.css, and web/ (built by the static build). Everything
+# below is development material.
+
+# 248 MB of hand-made reference itineraries -- read only by
+# scripts/check_reference_coverage.py, never at runtime. This one line is most of
+# the saving.
+data/
+
+# The local SQLite database lives in data/ and is excluded with it, which is
+# correct: a serverless function has no durable disk, and api/rpc.py refuses to
+# start without TOURIST_DB_URL rather than writing to one.
+
+# Transit feeds, 7.1 GB. Already gitignored, so a Git import never sees them --
+# listed anyway because a `vercel deploy` from this directory would.
+gtfs/
+
+# Development artefacts.
+graphify-out/
+artifacts/
+tests/
+scripts/
+supabase/
+.venv/
+web/node_modules/
+web/dist/
+docs/
+*.md
+!README.md
+
+# Secrets, belt and braces: both are gitignored, and neither should ever reach a
+# build log.
+.env
+secrets.local.json

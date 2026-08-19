@@ -867,23 +867,74 @@ export class ApiError extends Error {
   }
 }
 
-export async function rpc<T>(method: string, payload: Record<string, unknown> = {}): Promise<T> {
+/** How often to ask whether a queued job has finished. Discovery is 30-90s and a
+ *  proposal about 52s, so a poll a second is roughly sixty questions for one
+ *  answer; 1.5s keeps it under forty and still feels immediate at the end. */
+const JOB_POLL_MS = 1_500;
+
+/** Give up on a queued job after five minutes. Longer than the slowest measured
+ *  operation by a wide margin, so this fires when the worker is *down* rather
+ *  than when the work is merely slow -- which is the case worth reporting, since
+ *  nothing on Vercel runs the worker. */
+const JOB_TIMEOUT_MS = 300_000;
+
+interface JobEnvelope {
+  job_id: string;
+  status: "queued" | "running" | "done" | "failed";
+  error: string | null;
+  result: unknown;
+}
+
+async function post(
+  method: string,
+  payload: Record<string, unknown>,
+  timeoutMs: number,
+): Promise<{ status: number; value: unknown }> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 120_000);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(`/api/${method}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        // Belt and braces for a hosted deployment, where one rewrite points every
+        // /api/* at a single function. If a platform ever forwards the rewritten
+        // path instead of the requested one, the server reads the method here
+        // rather than dispatching every call to the same wrong name.
+        "X-Planner-Method": method,
+      },
       body: JSON.stringify(payload),
       signal: controller.signal,
     });
-    const value = (await response.json()) as T | { code?: string; detail?: unknown };
+    const value = (await response.json()) as unknown;
     if (!response.ok) {
       const error = value as { code?: string; detail?: unknown };
       throw new ApiError(error.code ?? "internal_error", error.detail);
     }
-    return value as T;
+    return { status: response.status, value };
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+export async function rpc<T>(method: string, payload: Record<string, unknown> = {}): Promise<T> {
+  const first = await post(method, payload, 120_000);
+
+  // 202 means the server queued the work instead of doing it. Three operations
+  // are too slow for a serverless function's time limit, so they return a job id
+  // and a worker runs them elsewhere. Polling lives here rather than at each call
+  // site: every caller wants the answer, not the receipt, and the local server --
+  // which runs the same work inline and answers 200 -- never reaches this branch.
+  if (first.status !== 202) return first.value as T;
+
+  const { job_id: jobId } = first.value as { job_id: string };
+  const deadline = Date.now() + JOB_TIMEOUT_MS;
+  for (;;) {
+    await new Promise((resume) => setTimeout(resume, JOB_POLL_MS));
+    const { value } = await post("job_status", { job_id: jobId }, 30_000);
+    const job = value as JobEnvelope;
+    if (job.status === "done") return job.result as T;
+    if (job.status === "failed") throw new ApiError(job.error ?? "job_failed", { job_id: jobId });
+    if (Date.now() > deadline) throw new ApiError("job_timeout", { job_id: jobId });
   }
 }
