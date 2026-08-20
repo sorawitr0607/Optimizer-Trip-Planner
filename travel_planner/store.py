@@ -445,12 +445,38 @@ class SQLiteStore:
             )
         return trip
 
-    def list_trips(self) -> list[Trip]:
+    def list_trips(self, owner: str | None = None) -> list[Trip]:
+        """Every trip, or just one owner's.
+
+        `owner=None` still returns everything, which is what the exporters, the
+        gates and a local single-user run all want. The transport passes an owner
+        so ten people sharing a deployment do not read each other's lists.
+        """
+
         with self.connect() as connection:
             rows = connection.execute(
-                "SELECT * FROM trips ORDER BY created_at DESC, id DESC"
+                "SELECT * FROM trips WHERE owner_token = ?"
+                " ORDER BY created_at DESC, id DESC"
+                if owner
+                else "SELECT * FROM trips ORDER BY created_at DESC, id DESC",
+                (owner,) if owner else (),
             ).fetchall()
         return [self._trip(row) for row in rows]
+
+    def trip_owner(self, trip_id: str) -> str | None:
+        """Who owns this trip, or None for a trip that predates owners."""
+
+        with self.connect() as connection:
+            row = connection.execute(
+                "SELECT owner_token FROM trips WHERE id = ?", (trip_id,)
+            ).fetchone()
+        return None if row is None else (row["owner_token"] or None)
+
+    def set_trip_owner(self, trip_id: str, owner: str) -> None:
+        with self.connect() as connection:
+            connection.execute(
+                "UPDATE trips SET owner_token = ? WHERE id = ?", (owner, trip_id)
+            )
 
     def get_trip(self, trip_id: str) -> Trip | None:
         with self.connect() as connection:

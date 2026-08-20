@@ -261,7 +261,8 @@
       "AREA_TIMES_ARE_WALKING_ONLY": "No metro network is published for this destination, so these are the neighbourhoods around the places you chose, ranked by walking time between them",
       "owner_accepted_straight_line": "Straight-line walking estimate you accepted, deliberately over-stated",
       "LATE_MEAL_NOT_ACCEPTED": "This meal would still be running after your meal window closes, and you asked to avoid late meals.",
-      "QUEUE_LONGER_THAN_ACCEPTED": "The queue here is longer than you said you would accept."
+      "QUEUE_LONGER_THAN_ACCEPTED": "The queue here is longer than you said you would accept.",
+      "not_your_trip": "This trip belongs to someone else on this deployment. Your own trips are on the home screen."
     },
     "th": {
       "broader_replan_required": "ต้องวางแผนใหม่ในภาพกว้าง — วันนี้รับเพิ่มไม่ไหว",
@@ -402,7 +403,8 @@
       "AREA_TIMES_ARE_WALKING_ONLY": "จุดหมายนี้ไม่มีข้อมูลเครือข่ายรถไฟฟ้า จึงจัดอันดับย่านรอบสถานที่ที่คุณเลือก ตามเวลาเดินระหว่างกัน",
       "owner_accepted_straight_line": "ค่าประมาณการเดินแบบเส้นตรงที่คุณยอมรับ ซึ่งตั้งใจให้สูงกว่าจริง",
       "LATE_MEAL_NOT_ACCEPTED": "มื้อนี้จะยังไม่จบเมื่อเลยช่วงเวลามื้ออาหารของคุณ และคุณเลือกหลีกเลี่ยงมื้อดึก",
-      "QUEUE_LONGER_THAN_ACCEPTED": "คิวที่นี่นานกว่าที่คุณระบุว่ารับได้"
+      "QUEUE_LONGER_THAN_ACCEPTED": "คิวที่นี่นานกว่าที่คุณระบุว่ารับได้",
+      "not_your_trip": "ทริปนี้เป็นของผู้ใช้อื่นในระบบนี้ ทริปของคุณอยู่ที่หน้าแรก"
     }
   },
   "REJECTION_TEXT": {
@@ -1198,7 +1200,7 @@
       "landing_headline": "Plan trips around real-world constraints",
       "landing_subtext": "Tell it who is going and what you like. It finds places, surfaces evidence gaps, and builds a day-by-day timetable you can inspect, revise, and export.",
       "landing_tagline": "Evidence-Aware Trip Optimizer",
-      "landing_hero_trust_badge": "Free core · Trip data stored locally · No account",
+      "landing_hero_trust_badge": "Free core · No account · Your trips stay yours",
       "landing_pill_offline": "Local-first & private",
       "landing_nav_story": "Why it works",
       "landing_nav_demo": "Product tour",
@@ -1271,7 +1273,7 @@
       "landing_faq_q4": "Can I export my plan to Excel or calendar apps?",
       "landing_faq_a4": "Yes. You can generate a 6-sheet formatted Excel workbook (.xlsx) and a standard iCalendar (.ics) feed with one click.",
       "landing_faq_q5": "Where is my data stored?",
-      "landing_faq_a5": "All trip data is saved in a local SQLite file (data/tourist.sqlite3) on your computer. No accounts, tracking, or cloud logins required.",
+      "landing_faq_a5": "No accounts, no tracking, no logins. Run it yourself and every trip stays in a local SQLite file on your machine. On a shared deployment your browser keeps a random token instead, so your trips are separated from everyone else's — it is a convenience, not a password, so treat a shared link as shared.",
       "landing_pacing_relaxed": "Relaxed & Cultural",
       "landing_pacing_balanced": "Smart Balanced",
       "landing_pacing_marathon": "High-Pace Explorer",
@@ -2316,7 +2318,7 @@
       "landing_headline": "วางแผนเที่ยวตามข้อจำกัดในโลกจริง",
       "landing_subtext": "บอกว่าไปกันกี่คนและชอบแบบไหน ระบบจะค้นสถานที่ แสดงช่องว่างของหลักฐาน และสร้างตารางรายวันที่คุณตรวจ แก้ และส่งออกได้",
       "landing_tagline": "ระบบวางแผนเที่ยวที่คำนวณตามจริง",
-      "landing_hero_trust_badge": "ระบบหลักใช้ฟรี · ข้อมูลทริปอยู่ในเครื่อง · ไม่ต้องมีบัญชี",
+      "landing_hero_trust_badge": "ใช้ฟรี · ไม่ต้องสมัคร · ทริปของคุณเป็นของคุณ",
       "landing_pill_offline": "เก็บข้อมูลในเครื่องเป็นหลัก",
       "landing_nav_story": "ทำไมจึงได้ผล",
       "landing_nav_demo": "ชมการทำงาน",
@@ -2389,7 +2391,7 @@
       "landing_faq_q4": "ส่งออกไปยัง Excel หรือแอปปฏิทินได้ไหม?",
       "landing_faq_a4": "ได้ สามารถดาวน์โหลดไฟล์ Excel 6 ชีต (.xlsx) ที่จัดรูปแบบสวยงาม และไฟล์ปฏิทิน (.ics) สำหรับนำเข้า Apple/Google Calendar ได้ในคลิกเดียว",
       "landing_faq_q5": "ข้อมูลการเดินทางถูกเก็บไว้ที่ไหน?",
-      "landing_faq_a5": "ข้อมูลทั้งหมดถูกเก็บไว้ในไฟล์ SQLite ภายในเครื่องของคุณ (data/tourist.sqlite3) ไม่จำเป็นต้องสมัครบัญชีหรือล็อกอินใด ๆ",
+      "landing_faq_a5": "ไม่มีบัญชี ไม่มีการติดตาม ไม่ต้องเข้าสู่ระบบ หากคุณรันเองข้อมูลทริปทั้งหมดอยู่ในไฟล์ SQLite บนเครื่องของคุณ หากใช้ระบบร่วมกัน เบราว์เซอร์ของคุณจะเก็บโทเคนแบบสุ่มไว้แทน ทริปของคุณจึงแยกจากผู้อื่น ทั้งนี้เป็นเพียงความสะดวก ไม่ใช่รหัสผ่าน",
       "landing_pacing_relaxed": "ผ่อนคลาย เน้นวัฒนธรรม",
       "landing_pacing_balanced": "สมดุล ฉลาดจัดสรร",
       "landing_pacing_marathon": "จัดเต็ม สายลุย",

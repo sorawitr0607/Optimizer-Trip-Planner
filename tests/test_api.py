@@ -127,7 +127,8 @@ class DispatchContractTest(unittest.TestCase):
         self.assertNotIn("record_paid_call", ACTIONS)
         self.assertIn("check_paid_call", ACTIONS)
         self.assertIn("build_export_snapshot", ACTIONS)
-        self.assertEqual(38, len(REFUSAL_STATUS))
+        # 39 since `not_your_trip`, which is 403 rather than the default 409.
+        self.assertEqual(39, len(REFUSAL_STATUS))
 
     def test_the_split_ledger_is_reachable_but_deletion_is_not(self) -> None:
         for name in (

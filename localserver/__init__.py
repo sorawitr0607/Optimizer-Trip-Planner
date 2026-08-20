@@ -21,6 +21,7 @@ from travel_planner.actions import PlannerActions, PlannerRefusal
 from travel_planner.copy import OPTIMIZER_CODE_TEXT, TEXT
 from travel_planner.core import FrozenSnapshot
 from travel_planner.credentials import load_local_credentials
+from travel_planner.owners import claim_unowned
 from travel_planner.wire import jsonable
 from travel_planner.exporters import (
     checklist_ics,
@@ -157,6 +158,7 @@ ACTIONS = (
 )
 
 REFUSAL_STATUS = {
+    "not_your_trip": 403,
     "unknown_trip": 404,
     "unknown_candidate": 404,
     "unknown_plan_variant": 404,
@@ -207,15 +209,55 @@ class BadRequest(ValueError):
     pass
 
 
-def dispatch(actions: PlannerActions, method: str, payload: Mapping[str, Any]) -> Any:
+def dispatch(
+    actions: PlannerActions,
+    method: str,
+    payload: Mapping[str, Any],
+    *,
+    owner: str | None = None,
+) -> Any:
+    """Run one allowlisted method, scoped to its caller.
+
+    `owner` is the one place ten people sharing a deployment are kept apart. It is
+    checked here rather than in the methods because 108 of them take a `trip_id` and
+    every one of those is the same question -- and a check written 108 times is a
+    check that will be missing from the 109th. `payload` carries the trip id for all
+    of them, so one comparison covers the surface.
+
+    Omitting `owner` scopes nothing, which is what a local single-user run, the
+    exporters and the gates all want.
+    """
+
     if method not in ACTIONS:
         raise PlannerRefusal("unknown_action")
     action = getattr(actions, method)
+
+    if owner:
+        # Trips that predate owners belong to whoever arrives first: this deployment's
+        # owner is the person who deployed it, so opening the site once before sharing
+        # the link is what settles them. A second caller finds nothing to claim.
+        if method == "list_trips":
+            claim_unowned(actions.store, owner)
+        trip_id = payload.get("trip_id")
+        if isinstance(trip_id, str) and trip_id:
+            held = actions.store.trip_owner(trip_id)
+            if held is None:
+                actions.store.set_trip_owner(trip_id, owner)
+            elif held != owner:
+                # Not `unknown_trip`: saying "no such trip" to hide the difference
+                # would be a lie the URL already contradicts.
+                raise PlannerRefusal("not_your_trip", trip_id=trip_id)
+        if method == "list_trips":
+            return jsonable(action(owner=owner))
+
     try:
         inspect.signature(action).bind(**payload)
     except TypeError as error:
         raise BadRequest(str(error)) from error
-    return jsonable(action(**payload))
+    result = action(**payload)
+    if owner and method == "create_trip" and getattr(result, "trip_id", None):
+        actions.store.set_trip_owner(result.trip_id, owner)
+    return jsonable(result)
 
 
 def _labels(language: str) -> dict[str, str]:
@@ -469,7 +511,8 @@ class PlannerHandler(SimpleHTTPRequestHandler):
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
             if not isinstance(payload, Mapping):
                 raise BadRequest("request body must be a JSON object")
-            self._json(200, dispatch(self.server.actions, method, payload))
+            owner = (self.headers.get("X-Planner-Owner") or "").strip() or None
+            self._json(200, dispatch(self.server.actions, method, payload, owner=owner))
         except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as error:
             self._error(BadRequest(str(error)) if not isinstance(error, PlannerRefusal) else error)
         except Exception as error:  # transport boundary

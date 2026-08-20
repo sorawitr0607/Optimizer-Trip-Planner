@@ -867,6 +867,33 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Who this browser is, for a deployment more than one person uses.
+ *
+ * A random value kept in `localStorage`, sent on every call, and that is the whole
+ * mechanism -- no account, which is the product's promise, and no login to build.
+ * It is not a credential and is not offered as one: whoever holds the token holds
+ * the trips, exactly as whoever holds a share link holds what it points at. What it
+ * fixes is the accidental case, which was the entire problem. Without it
+ * `list_trips` returned every visitor's trips and `/` opened inside whichever was
+ * newest -- someone else's travellers, ages and accommodation address.
+ *
+ * `crypto.randomUUID` where it exists; a random string where it does not, because
+ * the value only has to be unlikely to collide across ten people.
+ */
+const OWNER_KEY = "planner.owner";
+
+function ownerToken(): string {
+  if (typeof localStorage === "undefined") return "";
+  const held = localStorage.getItem(OWNER_KEY);
+  if (held) return held;
+  const minted = typeof crypto?.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `own_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+  localStorage.setItem(OWNER_KEY, minted);
+  return minted;
+}
+
 /** How often to ask whether a queued job has finished. Discovery is 30-90s and a
  *  proposal about 52s, so a poll a second is roughly sixty questions for one
  *  answer; 1.5s keeps it under forty and still feels immediate at the end. */
@@ -902,6 +929,7 @@ async function post(
         // path instead of the requested one, the server reads the method here
         // rather than dispatching every call to the same wrong name.
         "X-Planner-Method": method,
+        "X-Planner-Owner": ownerToken(),
       },
       body: JSON.stringify(payload),
       signal: controller.signal,

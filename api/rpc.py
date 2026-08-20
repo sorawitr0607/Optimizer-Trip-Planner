@@ -105,7 +105,9 @@ def _method(handler: BaseHTTPRequestHandler) -> str:
     return handler.headers.get("X-Planner-Method", "").strip()
 
 
-def handle(method: str, payload: dict[str, Any]) -> tuple[int, Any]:
+def handle(
+    method: str, payload: dict[str, Any], owner: str | None = None
+) -> tuple[int, Any]:
     """Run or enqueue one call. Returns the status and the body."""
     actions, queue = _planner()
 
@@ -130,7 +132,7 @@ def handle(method: str, payload: dict[str, Any]) -> tuple[int, Any]:
 
     if method not in ACTIONS:
         return 404, {"code": "unknown_action"}
-    return 200, dispatch(actions, method, payload)
+    return 200, dispatch(actions, method, payload, owner=owner)
 
 
 class handler(BaseHTTPRequestHandler):
@@ -178,7 +180,13 @@ class handler(BaseHTTPRequestHandler):
             if not isinstance(payload, dict):
                 self._send(400, {"code": "body_must_be_an_object"})
                 return
-            status, body = handle(_method(self), payload)
+            status, body = handle(
+                _method(self), payload,
+                # Who is asking. A random value the browser keeps; not a credential,
+                # and not offered as one -- it separates ten people's trips, which is
+                # the actual problem, and copying someone's token is copying a link.
+                (self.headers.get("X-Planner-Owner") or "").strip() or None,
+            )
             self._send(status, body)
         except Exception as error:  # transport boundary
             self._fail(error)

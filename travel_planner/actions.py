@@ -61,6 +61,7 @@ from .providers import (
 )
 from .ranking import build_ranking, validate_choice, _distance_metres
 from .setup import build_setup_payload
+from .owners import ensure_owner_column
 from .store import SQLiteStore, open_store
 from .transit import MAX_ACCESS_METRES, WALK_METRES_PER_MINUTE, metres as transit_metres
 
@@ -129,6 +130,10 @@ class PlannerActions:
         interpreter: Any = None,
     ) -> None:
         self.store = open_store(database_path)
+        # Additive and outside SCHEMA_VERSION, so a hosted database is not asked to
+        # migrate -- see travel_planner/owners.py for why that matters. Returns after
+        # one read once the column is there.
+        ensure_owner_column(self.store)
         self.place_provider = place_provider
         self.route_provider = route_provider
         # Injected the same way every other provider is, so a test can hand over a
@@ -162,8 +167,8 @@ class PlannerActions:
             )
         )
 
-    def list_trips(self) -> list[Trip]:
-        return self.store.list_trips()
+    def list_trips(self, owner: str | None = None) -> list[Trip]:
+        return self.store.list_trips(owner)
 
     def get_trip(self, trip_id: str) -> Trip | None:
         return self.store.get_trip(trip_id)
