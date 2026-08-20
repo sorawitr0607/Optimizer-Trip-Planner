@@ -3663,3 +3663,117 @@ of suspicion at 0.11ms, before the real cost was found in paint.
   the platform serves from this origin, and `WF-026` fixes the runtime at six dependencies — the
   rule GSAP was refused under. `main.tsx` appends it in production only, and never under the
   capture flag, because a capture observes the app rather than operating it.
+
+## What driving the deployed app found that reading it did not
+
+A full dry run — create a trip, discover, choose, stay, build, activate, audit — found
+five faults in one sitting. None was visible in the source, and two were caused by
+fixes made earlier the same day. The entries below are ordered by how much they cost.
+
+**The worker had no provider keys, so no route was ever measured.** `localserver` calls
+`load_local_credentials()` at startup; the worker did not. Started with
+`TOURIST_DB_URL` alone — which is what its own documented command says to do — it had
+no `OPENROUTESERVICE_API_KEY`, so every `refresh_routes` job raised "not configured",
+every leg came back unverified, every place was reconciled out on `ROUTE_UNVERIFIED`,
+and the only offer left on screen was to accept a walking estimate *for routes that had
+never been asked about*. Confirmed on the running process before changing anything.
+**Anything that calls a provider must load credentials, and say how many it loaded**,
+because a keyless worker is otherwise invisible until a plan comes back empty three
+minutes later.
+
+**A slow operation that is not queued dies at the gateway.** `recommend_areas` asks
+Overpass for amenity counts around every candidate neighbourhood and ran inline in a
+function capped at 60s, so the stage answered `http_504` on the deployment and worked
+perfectly locally where nothing caps it. It was missed because it is the only slow
+operation that is not part of discovery or the optimize. `DEFERRED` is derived from
+`HANDLERS`, so queueing it was a one-line edit and the client's existing 202-and-poll
+path picked it up unchanged.
+
+**The job payload allowlist permitted keys its handlers reject.** `generate_plan_preview`
+accepted `allow_paid` and `refresh_routes` accepted `limit`; neither method has such a
+parameter, so a client that trusted the published allowlist got a failed job with
+`got an unexpected keyword argument`. Which is what an allowlist is for.
+`tests/test_jobs.py` now checks every allowed key against its handler's signature.
+
+**A busy router is not a finding about the walk.** The Overpass client has
+`_attempt_block` and retries a 5xx; the walking-route client raised on the first
+`HTTPError`, so places were lost to a rate limit. Three attempts, four seconds apart,
+and only for 429 and 5xx — 400 and 404 are the endpoint saying "not this", and repeating
+those spends the budget to be refused identically.
+
+**"No record of this place" is not "the provider is unavailable".** An empty
+`places:searchText` match list raised `ProviderUnavailable`, which the transport turned
+into 503 — so a complete, correct answer about a place Google has never heard of read as
+infrastructure failing, and invited pressing a paid button again to be told the same
+thing twice. `ProviderNoMatch` subclasses it, so every existing `except` still catches
+it, and `error_response` tests for it first: 404 `place_not_in_provider`.
+
+### Driving the API is not driving the app
+
+Worth stating on its own, because it inverted a conclusion. A hand-rolled sequence of
+API calls — setup, discover, choose, stay, generate — left every variant `unavailable`
+on `ROUTE_UNVERIFIED`. Pressing the actual button produced three provisional variants
+with places scheduled. The button's `autoResolveAndGenerate` orchestrates timezone
+verification, assumed windows, route collection *and* the generate as one sequence, and
+reproducing that by hand quietly omitted part of it. **An audit that drives the API will
+declare the app broken and be wrong.** Press buttons.
+
+### Measurement that answers the wrong question is worse than none
+
+`cmux browser <surface> viewport 390 844` gives a genuine logical viewport, and
+`document.scrollWidth` against `innerWidth` is an objective overflow test. Both are
+sound. Twice in one session they were pointed at the wrong thing and produced confident,
+useless results:
+
+- The shortlist was reported fixed after measuring `.shortlist`, the panel. The element
+  that would not follow the page was `.shortlist-handle`, which was never looked at.
+- The landing page reported `scrollWidth: 373` at 390 wide — true, and taken as "no
+  overflow anywhere", while the offending section was below the fold and not yet laid
+  out, and the check excluded everything inside an `<svg>` as a false positive.
+
+Owner screenshots found both. **A screenshot is evidence about what someone sees; a
+measurement is evidence about what was measured.** When they disagree, the screenshot is
+describing the product.
+
+### Two bugs introduced while fixing others
+
+Both are the same shape — a fix aimed at a symptom, applied to the wrong level.
+
+**The deck's page was a count, and a decision shrank it.** `main_queue` drops decided
+places server-side, so `slice(0, shown)` handed back fresh cards forever and the page
+could never end. The fix subtracted the decisions from the window — which made a
+decision cost a card the owner had not seen, so after fifteen decisions the deck showed
+five places and announced "every unseen place has had a decision". A count cannot
+express "this page of places" when the list underneath it is shrinking; the window is
+now the places themselves, held by id.
+
+**The landmark field was made worse by being sized.** Giving `.landmark-place`
+`width: 100%` removed an empty band by turning every landmark into a full-width square
+with a small drawing adrift in it. A scene positioned by coordinate cannot survive
+390px at any size — on a phone it is not a scene, it is a list.
+
+### One action, one control — three attempts
+
+The `/optimize` accept control has now been wrong three times, each time by the same
+mechanism: a second button appearing that runs `autoResolveAndGenerate` under a
+different label. Two buttons for one payment choice; then a standalone `.optimize-resolve`
+block beside the unfit section's control; then the primary button *borrowing*
+`accept_all_criteria` whenever a proposal existed. **Before adding a control here, grep
+for `autoResolveAndGenerate.mutate()` and count the call sites.** Accepting belongs
+inside "places that did not make the plan", where the failure is described; the primary
+button only ever builds.
+
+And the distinction the labels kept blurring: opening hours are *assumed* — an invention
+that cannot fail — while routes are *measured* by asking a router that can refuse. So
+"the route is not verified" can follow choosing "assume hours free" with neither being
+wrong, and a label promising "measure routes" over-promises for half of what it does.
+
+### Sharing one deployment
+
+`dispatch` is the only place trip ownership is checked, because 108 methods take a
+`trip_id` and a check written 108 times is one that will be missing from the 109th.
+`payload` carries the trip id for all of them. The token is a random value the browser
+keeps in `localStorage` — not a credential, and not offered as one; it separates ten
+people's trips, which was the actual problem. Two consequences worth knowing: trips are
+per-browser, so the same person in a second browser sees an empty list, and the spend cap
+is global, so any visitor can spend the owner's keys.
