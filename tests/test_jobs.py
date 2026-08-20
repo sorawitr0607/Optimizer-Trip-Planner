@@ -174,3 +174,35 @@ class QueuedResultShapeTest(unittest.TestCase):
         self.assertEqual(stored["candidates"]["sha256"], snapshot.sha256)
 
 
+
+
+class PayloadAllowlistTest(unittest.TestCase):
+    """A key the allowlist permits must be one its method accepts.
+
+    Found by driving the deployment rather than by reading: enqueueing
+    `generate_plan_preview` with `allow_paid` -- which the allowlist permitted --
+    failed the job with `got an unexpected keyword argument`. `refresh_routes` had
+    the same hole with `limit`. Both were keys that had been thought about and never
+    existed, and the only way to hit either was to be a client that trusted the
+    allowlist. Which is the whole point of publishing one.
+    """
+
+    def test_every_allowed_key_is_accepted_by_its_handler(self):
+        import inspect
+
+        from travel_planner.actions import PlannerActions
+        from travel_planner.jobs import HANDLERS, PAYLOAD_KEYS
+
+        for kind, method in HANDLERS.items():
+            accepted = set(inspect.signature(getattr(PlannerActions, method)).parameters)
+            for key in PAYLOAD_KEYS.get(kind, ()):
+                with self.subTest(kind=kind, key=key):
+                    self.assertIn(key, accepted)
+
+    def test_every_handler_has_an_allowlist_entry(self):
+        # A missing entry is not a licence to pass anything; `run_one` splats only what
+        # the allowlist names, so an absent key set must mean "trip_id and nothing else".
+        from travel_planner.jobs import HANDLERS, PAYLOAD_KEYS
+
+        for kind in HANDLERS:
+            self.assertIn(kind, PAYLOAD_KEYS)

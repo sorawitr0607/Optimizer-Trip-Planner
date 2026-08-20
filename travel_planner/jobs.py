@@ -41,8 +41,8 @@ HANDLERS: dict[str, str] = {
 #: rather than filtering what is not.
 PAYLOAD_KEYS: dict[str, frozenset[str]] = {
     "discover_places": frozenset({"force_refresh"}),
-    "generate_plan_preview": frozenset({"time_limit_seconds", "allow_paid"}),
-    "refresh_routes": frozenset({"limit"}),
+    "generate_plan_preview": frozenset({"time_limit_seconds"}),
+    "refresh_routes": frozenset(),
 }
 
 QUEUED, RUNNING, DONE, FAILED = "queued", "running", "done", "failed"
