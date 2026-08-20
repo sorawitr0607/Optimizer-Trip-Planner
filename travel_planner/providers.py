@@ -1430,6 +1430,13 @@ class OsmAreaAmenitiesProvider:
 
 
 class OpenRouteServiceProvider:
+    #: Three tries and a pause between them. Bounded on purpose: routes are fetched
+    #: per pair of places, so an unbounded retry over a shortlist of twenty would keep
+    #: a free endpoint busy for minutes and earn a longer rate limit than it started
+    #: with. Matches the pause the Overpass client already waits.
+    ATTEMPTS = 3
+    RETRY_PAUSE_SECONDS = 4
+
     """Foot-walking routes from OpenRouteService, normalized for the planner.
 
     A route from here is a plain transfer: it carries no experience evidence, so
@@ -1480,20 +1487,38 @@ class OpenRouteServiceProvider:
             f"{self.directions_url}?{query}",
             headers={"Authorization": key, "User-Agent": self.user_agent},
         )
-        try:
-            with urlopen(request, timeout=30) as response:
-                payload = json.load(response)
-        except HTTPError as error:
-            # Never let a URL or header carrying the key reach the message.
-            raise ProviderUnavailable(
-                f"OpenRouteService returned HTTP {error.code}"
-            ) from None
-        except (URLError, TimeoutError) as error:
-            raise ProviderUnavailable(
-                f"OpenRouteService is unreachable: {type(error).__name__}"
-            ) from None
-        except json.JSONDecodeError:
-            raise ProviderUnavailable("OpenRouteService returned invalid JSON") from None
+        # Retried, because the Overpass side already knows to and this side did not.
+        # A busy router is a technical failure, not a finding about the walk -- but the
+        # optimizer cannot tell the difference: a leg with no travel time becomes
+        # `ROUTE_UNVERIFIED` and its places go unscheduled. So an owner lost places to
+        # a rate limit and was offered "accept a walking estimate" for a route the
+        # router would have answered a few seconds later.
+        #
+        # Only what is worth asking again. 429 and 5xx are the endpoint saying "not
+        # now"; 400 and 404 are it saying "not this", and repeating those spends the
+        # budget to be refused identically.
+        payload = None
+        for attempt in range(self.ATTEMPTS):
+            try:
+                with urlopen(request, timeout=30) as response:
+                    payload = json.load(response)
+                break
+            except HTTPError as error:
+                worth_retrying = error.code == 429 or 500 <= error.code < 600
+                if not worth_retrying or attempt == self.ATTEMPTS - 1:
+                    # Never let a URL or header carrying the key reach the message.
+                    raise ProviderUnavailable(
+                        f"OpenRouteService returned HTTP {error.code}"
+                    ) from None
+            except (URLError, TimeoutError) as error:
+                if attempt == self.ATTEMPTS - 1:
+                    raise ProviderUnavailable(
+                        f"OpenRouteService is unreachable: {type(error).__name__}"
+                    ) from None
+            except json.JSONDecodeError:
+                # A malformed body will be malformed again; nothing to wait for.
+                raise ProviderUnavailable("OpenRouteService returned invalid JSON") from None
+            sleep(self.RETRY_PAUSE_SECONDS)
         return self.normalize(payload, origin=origin, destination=destination)
 
     def normalize(

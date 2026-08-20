@@ -12,6 +12,7 @@ about it directly. Anything else is decoration.
 
 from __future__ import annotations
 
+import json
 import re
 import unittest
 from pathlib import Path
@@ -64,3 +65,60 @@ class AvoidTagsReachThePlannerTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RouteRetryTest(unittest.TestCase):
+    """A busy router must be asked again; a refusing one must not.
+
+    A leg with no travel time becomes `ROUTE_UNVERIFIED` and its places go
+    unscheduled, so an owner lost places to a rate limit and was offered "accept a
+    walking estimate" for a route the router would have answered seconds later. The
+    Overpass client already retried; this one did not.
+    """
+
+    def _provider(self):
+        import os
+
+        from travel_planner.providers import OpenRouteServiceProvider
+
+        os.environ.setdefault("OPENROUTESERVICE_API_KEY", "test-key")
+        return OpenRouteServiceProvider()
+
+    def test_a_rate_limit_is_retried_and_can_succeed(self):
+        from unittest.mock import patch
+        from urllib.error import HTTPError
+
+        calls = []
+
+        def flaky(request, timeout=None):  # noqa: ARG001
+            calls.append(1)
+            if len(calls) < 3:
+                raise HTTPError("http://ors", 429, "Too Many Requests", {}, None)
+            raise json.JSONDecodeError("stop here", "", 0)
+
+        provider = self._provider()
+        with patch("travel_planner.providers.urlopen", flaky), \
+                patch("travel_planner.providers.sleep", lambda _s: None):
+            with self.assertRaises(Exception):
+                provider.route(origin={"latitude": 0, "longitude": 0},
+                               destination={"latitude": 1, "longitude": 1})
+        # Two refusals were waited out rather than accepted.
+        self.assertEqual(3, len(calls))
+
+    def test_a_bad_request_is_not_retried(self):
+        from unittest.mock import patch
+        from urllib.error import HTTPError
+
+        calls = []
+
+        def refuses(request, timeout=None):  # noqa: ARG001
+            calls.append(1)
+            raise HTTPError("http://ors", 400, "Bad Request", {}, None)
+
+        provider = self._provider()
+        with patch("travel_planner.providers.urlopen", refuses), \
+                patch("travel_planner.providers.sleep", lambda _s: None):
+            with self.assertRaises(Exception):
+                provider.route(origin={"latitude": 0, "longitude": 0},
+                               destination={"latitude": 1, "longitude": 1})
+        self.assertEqual(1, len(calls))
