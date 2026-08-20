@@ -9156,3 +9156,20 @@
     overflow-y: auto;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   The landmark field needs room above it.
+
+   Measured at 1024, 1180 and 1280: `.world-copy`'s `.section-lead` ended at exactly
+   the y where `.world-landmarks` began -- a zero-pixel gap, `margin-bottom: 0` meeting
+   `margin-top: 0`. The boxes only touched, which is why a box-overlap test came back
+   clean, but touching is enough: the lead's descenders sit in the landmark art and the
+   "Places" label reads as printed over the sentence above it.
+
+   On the copy rather than the field, because the field is a positioned scene whose
+   children are placed by coordinate -- giving it a top margin moves the scene and
+   every landmark in it, and the sentence is what needs the clearance.
+   --------------------------------------------------------------------------- */
+.landing-world .world-copy .section-lead {
+  margin-bottom: clamp(28px, 4vw, 56px);
+}
