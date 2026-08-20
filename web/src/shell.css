@@ -9066,6 +9066,45 @@
     width: 100%;
   }
 
+  /* Measured on the itinerary at 390px: the document scrolled to 561 while the
+     viewport was 390. Two causes, both the classic ones.
+
+     A data table cannot be made narrow -- its columns are its content -- so it gets
+     its own horizontal scroll instead of pushing the page sideways. The rule the
+     whole app should follow: wide content scrolls inside its own box, the body never
+     scrolls sideways. */
+  .money-table,
+  .split-table,
+  .plan-table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  /* The day stepper carried the previous and next dates inside its labels and would
+     not shrink, so one button measured 561px on its own. The date is the widest part
+     and the least necessary -- the current day is stated above it -- so the buttons
+     wrap and shrink, and the arrows carry the meaning. */
+  .day-stepper {
+    gap: 6px;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .day-stepper button {
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Nothing in the app may push the document sideways. This is the backstop, not the
+     fix -- the fix is each wide thing owning its own scroll, above. */
+  body {
+    overflow-x: hidden;
+  }
+
   /* The deck's own vertical gestures fought the page. `pan-y` hands vertical
      movement back to the document and keeps horizontal for the card, so swiping the
      deck sideways still works and swiping the page up still scrolls it. */
