@@ -1179,9 +1179,15 @@ class PlannerActions:
         preview = self.store.get_optimization_preview(trip_id)
         if preview is None:
             raise PlannerRefusal("preview_missing")
-        current_input = freeze_snapshot(self._optimizer_input(trip_id))
-        if current_input.sha256 != preview.optimizer_input.sha256:
-            raise PlannerRefusal("preview_stale")
+        current = self._optimizer_input(trip_id)
+        stored = preview.optimizer_input.as_dict()
+        if _plan_digest(current) != _plan_digest(stored):
+            # Say *what* moved. This refused with an empty detail, so the only report
+            # possible was "it always says stale" -- true, and impossible to act on.
+            raise PlannerRefusal(
+                "preview_stale",
+                changed=sorted(_changed_sections(stored, current)),
+            )
         proposal = preview.proposal.as_dict()
         variant = next(
             (item for item in proposal.get("variants", []) if item["variant_id"] == variant_id),
@@ -4260,6 +4266,51 @@ def _simple_interval(value: Any) -> dict[str, str] | None:
     if not match or match.group(1) >= match.group(2):
         return None
     return {"start": match.group(1), "end": match.group(2)}
+
+
+#: Provenance, not substance. These say where a fact came from and when, and none of
+#: them can change a schedule -- but they are inside the optimizer input, so a digest
+#: over the whole thing moves every time evidence is re-fetched. That is why activating
+#: a preview built seconds earlier refused as stale: the free build path refreshes
+#: opening hours and routes, each write stamps a new `retrieved_at`, and the guard read
+#: a new timestamp as a changed plan.
+_VOLATILE_KEYS = frozenset({"retrieved_at", "expires_at", "fetched_at", "cached_at"})
+
+
+def _without_volatile(value: Any) -> Any:
+    """The same structure with provenance stamps removed, at every depth."""
+
+    if isinstance(value, Mapping):
+        return {
+            key: _without_volatile(item)
+            for key, item in value.items()
+            if key not in _VOLATILE_KEYS
+        }
+    if isinstance(value, (list, tuple)):
+        return [_without_volatile(item) for item in value]
+    return value
+
+
+def _plan_digest(payload: Mapping[str, Any]) -> str:
+    """What the plan actually depends on, as a digest.
+
+    Still strict about everything that matters -- the places, the windows and their
+    values, the routes, the thresholds, the dates. A place added, a preference changed
+    or a window moved all still invalidate a preview, which is the whole point of the
+    guard. Only "when did we last ask" is excluded.
+    """
+
+    return freeze_snapshot(_without_volatile(payload)).sha256
+
+
+def _changed_sections(stored: Mapping[str, Any], current: Mapping[str, Any]) -> set[str]:
+    """Which top-level sections differ, ignoring provenance. For the refusal detail."""
+
+    left, right = _without_volatile(stored), _without_volatile(current)
+    return {
+        key for key in set(left) | set(right)
+        if left.get(key) != right.get(key)
+    }
 
 
 def _comfort_thresholds(owner: dict[str, Any]) -> dict[str, Any]:
