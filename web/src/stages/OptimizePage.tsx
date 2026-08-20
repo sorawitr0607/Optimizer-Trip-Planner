@@ -113,6 +113,10 @@ export function OptimizePage() {
   // already happened — and re-pressing throws away the draft below it. They come back on
   // a deliberate "Build them again", which is the only moment they mean anything.
   const [rebuilding, setRebuilding] = useState(false);
+  // How to fill the missing opening hours, asked only on the **first** build. Once a
+  // plan exists the question is no longer "how should this be paid for" but "will you
+  // take this plan with the gaps it has", which is one button and not a choice.
+  const [hoursChoice, setHoursChoice] = useState<"assume" | "verified">("assume");
 
   const trips = useQuery({ queryKey: ["trips"], queryFn: () => rpc<Trip[]>("list_trips") });
   const choices = useQuery({
@@ -410,7 +414,47 @@ export function OptimizePage() {
               Buying verified hours has not gone anywhere; it lives on Check trip
               facts, which is the screen about evidence. It was never this screen's
               question. */}
-          {evidence.data.needing_hours ? (
+          {/* Two different questions, and they were being asked with one control.
+
+              Landing here for the first time, the question is how to fill the missing
+              hours -- assume them free, or buy them confirmed. That is a real choice
+              with a price attached and it belongs here, as a choice.
+
+              Coming back with a plan already built, it is not. The question then is
+              whether to accept the plan with the gaps it has, which is one button and a
+              statement of what those gaps are. Collapsing the first case into the
+              second removed a decision the owner wanted; that was my misreading. */}
+          {evidence.data.needing_hours && !proposal ? (
+            <fieldset className="evidence-choice">
+              <legend>{copy("before_hours_choice", language)}</legend>
+              <label>
+                <input
+                  checked={hoursChoice === "assume"}
+                  name="hours-choice"
+                  onChange={() => setHoursChoice("assume")}
+                  type="radio"
+                  value="assume"
+                />
+                <span>{copy("auto_resolve_free", language)}</span>
+              </label>
+              <label>
+                <input
+                  checked={hoursChoice === "verified"}
+                  name="hours-choice"
+                  onChange={() => setHoursChoice("verified")}
+                  type="radio"
+                  value="verified"
+                />
+                <span>
+                  {copyFormat("before_buy_hours", language, {
+                    cost: evidence.data.verified.estimate_usd.toFixed(3),
+                  })}
+                </span>
+              </label>
+            </fieldset>
+          ) : null}
+          {/* Rebuilding an existing plan: the gap is stated, not re-negotiated. */}
+          {evidence.data.needing_hours && proposal ? (
             <p className="field-error" role="status">
               ⚠ {copyFormat("missing_criteria_warning", language, {
                 needing: evidence.data.needing_hours,
@@ -439,17 +483,19 @@ export function OptimizePage() {
           className="setup-primary"
           disabled={considered.length === 0 || building}
           onClick={() => {
-            // No branch on how to pay any more: this screen builds, free, and the
-            // priced alternative lives on the evidence screen where it belongs.
             if (!evidence.data?.needing_hours) return generate.mutate();
+            // The paid route only on a first build, where it was offered.
+            if (!proposal && hoursChoice === "verified") return buyThenGenerate.mutate();
             return autoResolveAndGenerate.mutate();
           }}
           type="button"
         >
           {building
-            ? copy("optimizing", language)
+            ? copy(buyThenGenerate.isPending ? "before_buying" : "optimizing", language)
             : copy(
-                evidence.data?.needing_hours ? "accept_all_criteria" : "generate_plan",
+                evidence.data?.needing_hours && proposal
+                  ? "accept_all_criteria"
+                  : "generate_plan",
                 language,
               )}
         </button>

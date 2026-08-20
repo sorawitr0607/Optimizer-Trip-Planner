@@ -9020,3 +9020,57 @@
   text-align: left;
   text-decoration: underline;
 }
+
+/* ---------------------------------------------------------------------------
+   Mobile: the shortlist drawer, and the landmark cards.
+
+   Reported twice, so stated in one place rather than patched in three.
+   --------------------------------------------------------------------------- */
+@media (max-width: 860px) {
+  /* A drawer on a phone is the screen, not a 420px panel inset by 16px on every
+     side. It kept its rounded card inset while covering almost everything anyway,
+     which is what "not overlay and pin-point" describes: neither a panel nor a
+     sheet. It is a sheet now -- full width, off the bottom, its own scroll -- and
+     the z-index from the desktop rule carries, so the landing grain no longer
+     paints over it. */
+  .shortlist {
+    border-radius: var(--radius) var(--radius) 0 0;
+    bottom: 0;
+    left: 0;
+    max-height: 82vh;
+    right: 0;
+    top: auto;
+    width: 100%;
+  }
+
+  /* The landmark cards. Each is a button holding drawn art and a label, laid out for
+     a pointer that can hover — on a phone the art keeps its desktop aspect while the
+     column narrows, so every box gained the band of empty ground reported as "a lot of
+     space and white indent". The art scales with the box instead. */
+  .landmark-place {
+    width: 100%;
+  }
+
+  .landmark-art {
+    aspect-ratio: 4 / 3;
+    height: auto;
+    width: 100%;
+  }
+
+  /* Opened detail was laid out beside the landmark and had nowhere to go at this
+     width, so it ran outside the frame. Under it, and inside it. */
+  .landmark-card {
+    inset: auto 0 0 0;
+    max-width: 100%;
+    position: relative;
+    width: 100%;
+  }
+
+  /* The deck's own vertical gestures fought the page. `pan-y` hands vertical
+     movement back to the document and keeps horizontal for the card, so swiping the
+     deck sideways still works and swiping the page up still scrolls it. */
+  .place-deck-card,
+  .place-deck-photo {
+    touch-action: pan-y;
+  }
+}
