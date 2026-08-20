@@ -1626,7 +1626,8 @@
       "accept_all_criteria": "Accept all criteria and build the plan — free",
       "missing_criteria_warning": "{needing} of {places} places have no confirmed opening hours. Building now assumes 09:00–18:00 for them and measures walking routes. Verified hours stay a separate, priced choice on Check trip facts.",
       "routes_unverified_warning": "The route and travel time are not verified.",
-      "accept_walking_estimate": "Accept a walking estimate and rebuild"
+      "accept_walking_estimate": "Accept a walking estimate and rebuild",
+      "accept_criteria_rebuild": "Accept criteria and rebuild"
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -2750,7 +2751,8 @@
       "accept_all_criteria": "ยอมรับเกณฑ์ทั้งหมดและสร้างแผน — ฟรี",
       "missing_criteria_warning": "สถานที่ {needing} จาก {places} แห่งยังไม่มีเวลาเปิดที่ยืนยันแล้ว การสร้างแผนตอนนี้จะใช้ 09:00–18:00 แทน และวัดเส้นทางเดิน ส่วนเวลาเปิดที่ยืนยันแล้วเป็นตัวเลือกแบบมีค่าใช้จ่ายในหน้าตรวจข้อมูลทริป",
       "routes_unverified_warning": "เส้นทางและเวลาเดินทางยังไม่ได้รับการยืนยัน",
-      "accept_walking_estimate": "ยอมรับค่าประมาณการเดินและสร้างแผนใหม่"
+      "accept_walking_estimate": "ยอมรับค่าประมาณการเดินและสร้างแผนใหม่",
+      "accept_criteria_rebuild": "ยอมรับเกณฑ์และสร้างแผนใหม่"
     }
   }
 }

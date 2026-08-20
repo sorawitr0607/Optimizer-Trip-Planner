@@ -424,7 +424,12 @@ export function OptimizePage() {
               whether to accept the plan with the gaps it has, which is one button and a
               statement of what those gaps are. Collapsing the first case into the
               second removed a decision the owner wanted; that was my misreading. */}
-          {evidence.data.needing_hours && !proposal ? (
+          {/* Whenever the build controls are up -- a first build *or* a rebuild. Gated
+              on `!proposal` this disappeared the moment a plan existed, so pressing
+              "build again" offered the button and not the choice, which is the missing
+              assume-free reported after the last change. "Before building the three
+              variants" includes building them a second time. */}
+          {evidence.data.needing_hours && showBuildControls ? (
             <fieldset className="evidence-choice">
               <legend>{copy("before_hours_choice", language)}</legend>
               <label>
@@ -454,7 +459,7 @@ export function OptimizePage() {
             </fieldset>
           ) : null}
           {/* Rebuilding an existing plan: the gap is stated, not re-negotiated. */}
-          {evidence.data.needing_hours && proposal ? (
+          {evidence.data.needing_hours && proposal && !rebuilding ? (
             <p className="field-error" role="status">
               ⚠ {copyFormat("missing_criteria_warning", language, {
                 needing: evidence.data.needing_hours,
@@ -744,24 +749,6 @@ export function OptimizePage() {
               </button>
             </div>
           ) : null}
-          {/* Not offered when the blocker is a comfort budget: fetching more routes
-              cannot move a walking threshold, so this button promised work that could not
-              possibly help — and being the only control near the failure, it was pressed.
-              Reported as "why does this appear again". */}
-          {!activationAllowed && !evidence.data?.needing_hours && !comfortOnly.length ? (
-            <div className="optimize-resolve">
-              <button
-                className="setup-primary auto-resolve-retry-btn"
-                disabled={autoResolveAndGenerate.isPending}
-                onClick={() => autoResolveAndGenerate.mutate()}
-                type="button"
-              >
-                {autoResolveAndGenerate.isPending ? copy("loading", language) : autoResolveLabel}
-              </button>
-              <small className="setup-hint">{copy("auto_resolve_note", language)}</small>
-              {autoResolveAndGenerate.isPending ? <BuildProgress language={language} /> : null}
-            </div>
-          ) : null}
 
           {/* Every place that did not make it, with the way out beside it. The table
               below says *what* happened; this says what to do about it, which is what
@@ -812,6 +799,10 @@ export function OptimizePage() {
                     choice covers hours, and this covers what the measuring could not
                     reach. Replacing the label rather than adding a second control, so
                     one action is never two buttons on one screen. */}
+                {/* The only control that runs this mutation, and it lives here because
+                    here is where the failure is described. It fixes every listed place
+                    at once; the per-place drop below it stays, for the one place that
+                    will not come good however the legs are estimated. */}
                 {needsRoutes && !autoResolveAndGenerate.isPending ? (
                   <>
                     <p className="field-error" role="status">
@@ -822,7 +813,7 @@ export function OptimizePage() {
                       onClick={() => autoResolveAndGenerate.mutate()}
                       type="button"
                     >
-                      {copy("accept_walking_estimate", language)}
+                      {copy("accept_criteria_rebuild", language)}
                     </button>
                   </>
                 ) : null}
