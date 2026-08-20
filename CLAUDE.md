@@ -3499,3 +3499,167 @@ Already decided, and binding on any future implementation:
   contract, the POC-retirement decision, the webapp stack, the information architecture, and the parity
   gate. Consult them instead of re-reading 2458 lines of `index.css` — and read the correction block at the
   top of the token contract before trusting its counts or its Tailwind config draft.
+
+## Running on Vercel, and the five things that only showed up there
+
+The hosted port was written before it was ever deployed. Deploying it found five faults,
+none of which a local run could have shown, and each one is worth knowing before touching
+the deployment again.
+
+**There is no configuration that keeps the frontend on the CDN.** Vercel's Python runtime
+demands an entrypoint — the build fails with "No python entrypoint found in default
+locations" without `[tool.vercel] entrypoint` in `pyproject.toml` — and the documentation is
+plain about what declaring one means: *"Vercel then runs your app as Vercel Functions and
+routes every request to it."* Every request, so `/`, `/favicon.svg` and the stylesheet all
+arrive at `api/rpc.py`. File-based functions under `/api`, which would have left the static
+build on the CDN, are not offered to this project; the runtime gates that on project
+creation date, the same way the build log picks a pnpm version. Reducing `api/` to one file
+and removing its `__init__.py` did not change it, which is what proved the point rather than
+the guess that preceded it.
+
+So the function serves the site. `static_response` in `localserver/__init__.py` is shared
+with the local server rather than written twice, which carries its rules across: `index.html`
+only for extensionless routes, so a missing `/favicon.ico` is a 404 and not 200 with the
+whole application as its body. The cost is an invocation per file and the mitigation is in
+those same rules — `assets/` is content-hashed by the build, goes out `immutable`, and the
+edge answers for it. Only the document and the API reach Python on a normal visit. The
+traversal guard is tested (`/../../.env` and a source file both 404 with nothing of their
+contents in the body), because that server used to be bound to localhost and is now on the
+internet with the environment file inside its tree.
+
+**Two lines in `vercel.json` were worth more than every optimisation before them.** The
+function ran in `iad1` while Supabase sits in `ap-southeast-1`: `x-vercel-id:
+sin1::iad1::`. Measured against the deployment, `list_trips` — one query — took **975ms**,
+`build_export_snapshot` **10.9 seconds**, `active_plan_drift` **22**. All three answered 200;
+nothing was broken. `regions: ["sin1"]` puts the function beside the data. This had also
+quietly cancelled an earlier win: moving off Neon for a 42ms round trip was measured from a
+laptop in Thailand, not from a function in Virginia, and pooling removed the handshake but
+could do nothing about the distance per query. **When a hosted read feels slow, check
+`x-vercel-id` before profiling anything.**
+
+**`installCommand` replaces the whole install phase.** Three builds created a virtual
+environment and then ran only `npm --prefix web ci`, so `psycopg` was never installed and the
+function failed on import — `FUNCTION_INVOCATION_FAILED`, before any of our code, which is
+why the response was a platform error page rather than our JSON. The build command does the
+web install now and the Python runtime is left to install its own dependencies. `psycopg`
+also moved from the dev group into `[project] dependencies`, because Vercel installs with
+`uv` and a production sync skips dev groups.
+
+**The provider's own URL is not accepted by the driver.** `POSTGRES_URL` from Supabase and
+Vercel ends in `&pgbouncer=true`, which is a Prisma instruction; libpq validates connection
+options strictly and refuses the URI while parsing it, before any socket. `pgstore.normalise_url`
+drops that and the other foreign parameters and passes everything libpq understands through
+untouched — `sslmode` especially, since dropping it would downgrade the connection silently.
+What `pgbouncer=true` asks for is already done here by `prepare_threshold=None`.
+
+**A misconfigured deployment must say so.** Every failure in `_planner()` used to answer 500
+`internal_error`, which sent an hour of debugging to the wrong place. A missing or unreachable
+database is now 503 `not_configured` naming the variable, and an unexpected failure carries
+the exception *class* — never its message, because a driver puts the host, the user and
+sometimes the password in there and this endpoint is public.
+
+### The queue is a second wire protocol, and it was not one
+
+`dispatch()` returns `jsonable(action(...))`. The job queue stored what the action returned
+through `json.dumps(..., default=str)` — and `default=str` does not decline a dataclass, it
+stringifies it. So `discover_places` reached the browser as its own Python repr inside a JSON
+string, and the screen indexing `.candidates.data` reported "Cannot read properties of
+undefined (reading 'data')" while the worker logged the job done in 33.6 seconds. The work was
+never the problem.
+
+`jsonable` now lives in `travel_planner/wire.py` and both callers use it. **Anything that can
+return a result to a client has to go through it.** It sat in the transport layer, which was
+correct while HTTP was the only route out; a second route was added and left to approximate.
+
+The worker also gained `--health-port`, defaulting to `$PORT`, so it can run on a free tier
+that only hosts web services. It turns itself on exactly where it is needed and stays off
+everywhere else, because nothing else sets `PORT`. `deploy/oracle/setup.sh` installs it as a
+systemd unit; `TimeoutStopSec` is 120 because shutdown is cooperative and discovery takes 90.
+
+### A preview was stale by construction
+
+`activate_plan_preview` compared a digest of the whole optimizer input, and that input carries
+provenance: `_optimizer_input` writes `retrieved_at` onto every provider-sourced opening fact.
+The free build path refreshes hours and routes before optimising, each write stamps a new time,
+and the worker builds from what it read at that moment — so the digest moved on its own and a
+preview built seconds earlier refused as `preview_stale`, with an empty detail. Reported as "it
+always says stale", which was exactly true.
+
+`_plan_digest` strips `retrieved_at`, `expires_at`, `fetched_at` and `cached_at` at every depth
+and hashes the rest. The guard keeps its teeth and `tests/test_preview_staleness.py` checks both
+directions: a place added, a window moved, a threshold tightened and a changed trip window all
+still invalidate a preview. Only "when did we last ask" stopped counting. The refusal also names
+which sections differ, because a guard that cannot say what it saw can only be reported as
+always firing.
+
+### Preferences that were never wired, and how to tell
+
+`late_meals` and `heavy_crowds` sat on the setup form for months and reached nothing. There are
+exactly two routes into the engine — a tag becomes a threshold in `_comfort_thresholds`, or the
+optimizer asks `_dislikes` about it by name — and `tests/test_avoid_tags_reach_the_planner.py`
+now fails any avoid tag taking neither. **Add a fact before adding a chip.**
+
+`heavy_crowds` is instructive about how to wire one. The first attempt dropped high-crowd-risk
+places, mirroring the tourist-trap gate, and `sha-ferry-crowd-buffer` rejected it: that recorded
+Shanghai trip's acceptable outcomes are "scheduled with at least twenty minutes of boarding
+buffer and the crowd consequence made visible", or a refusal carrying `CROWD_AND_BOARDING_RISK`.
+Dropping the place was never among them. The chip sets the two thresholds that fixture carries,
+and the engine's existing crowd handling does the rest — the numbers are copied from the
+regression, not chosen. **The historic catalogue is the specification for behaviour it covers.**
+
+### Why an unknown place ranks highly, and what it costs to fix
+
+`FORMULA_WEIGHTS` gives `group_preference_fit` 30 of 100 and `evidence_quality` 5, and
+preference fit is computed from the OpenStreetMap category alone. So a place with one tag and
+nothing else — no hours, no article, no photograph — takes the full 30 while losing a fraction
+of the 5; a Wikidata entity is worth 0.5. The ranking is deliberately blind to fame, which is
+why the top of a good list is exactly where Wikimedia's coverage runs out: Commons carries
+photographs for places that have a Wikidata entity. The two owner reports "why does a place
+with no data score highly" and "90% of the top 20 have no photograph" are one fact seen twice.
+
+The answer taken was not to reweight the formula — that changes every plan and the 27
+regressions — but to buy photographs where the free sources came up short, for shortlisted
+places only, at US$0.052 each from the same rate card the cap enforces. Sequentially, because
+`_spend` checks the cap per call and a parallel burst would commit past a limit each call
+individually respected.
+
+### Scroll: an SVG group cannot be given a compositor layer
+
+The landing page's parallax was five filtered `<g>` elements inside one `<svg>`, with a comment
+claiming their filtered output could be cached and composited. It cannot: Blink does not promote
+an element *inside* an `<svg>`, so a moving group has nowhere to cache and the whole scene
+re-rasterised — re-running `feTurbulence` and `feDisplacementMap` — every frame. Measured on the
+running page: 11.19 megapixels of filtered surface, 39 parallax layers themselves filtered and 21
+more inside a filtered subtree.
+
+Each depth is now its own HTML element holding its own `<svg>`, with the translate on the
+element, promoted under `min-width: 861px` and `motion-ready`. Elements moving inside a filter:
+21 before, 0 after. Two things that came out of reading that block: the mobile rules translated
+the *paths* rather than the layers, so their travel added to the desktop group's instead of
+replacing it, and a trailing comma had joined four selectors to the `.scene-env` height rule, so
+four layers were handed a `height` and no travel at all.
+
+Worth recording about measurement: the automation surface reports `visibilityState: "hidden"`
+and served **zero** rAF callbacks in two seconds, so frame timings cannot be taken there. What
+can be measured is style-recalc cost synchronously — which is how the custom property was cleared
+of suspicion at 0.11ms, before the real cost was found in paint.
+
+### Smaller things the deployment taught
+
+- **The landing page may only advertise trips the form can build.** It offered "Iceland 5-Day
+  Nature & Glaciers" and the picker has 32 countries, none of them Iceland, so the card ended at
+  a form that could not accept it. `tests/test_landing_presets.py` reads the pairs out of the TSX
+  and checks each against `destinations.py`.
+- **A placeholder that reappears reads as the page blinking.** The deck's gallery held one
+  painted url, so every tap re-showed the pulsing skeleton, including for photographs already in
+  cache. It holds a set now.
+- **Optimistic where the server is the only source of truth.** The deck read `decided` from the
+  stored choices alone, so a swipe held its card through the write *and* the refetch. Optimistic,
+  and reversed on failure — a card that vanishes without being recorded is the worse bug.
+- **Feedback belongs beside the control that started the work.** Four buttons on `/optimize`
+  start the same ~210s job and three showed only "Loading" on their own label while the progress
+  panel rendered a few hundred lines of markup above them.
+- **Speed Insights needs no dependency.** `@vercel/speed-insights` is a wrapper around one script
+  the platform serves from this origin, and `WF-026` fixes the runtime at six dependencies — the
+  rule GSAP was refused under. `main.tsx` appends it in production only, and never under the
+  capture flag, because a capture observes the app rather than operating it.
