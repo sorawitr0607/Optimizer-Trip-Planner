@@ -416,7 +416,16 @@ export function PlacesPage() {
         place_id: selectedId,
         language,
       }),
-    onSuccess: (value) => setInsights((current) => ({ ...current, [selectedId]: value })),
+    onSuccess: async (value) => {
+      setInsights((current) => ({ ...current, [selectedId]: value }));
+      // The photographs were bought and then nothing asked for them. `insights` holds
+      // the rating and the reviews, but the gallery is read from `place_summaries` --
+      // so the card kept showing no picture, and the button offering to buy pictures
+      // kept offering, because `thinlyPictured` is computed from that same query. One
+      // invalidation makes the photographs appear and the button withdraw, which is
+      // the same fact observed twice.
+      await queryClient.invalidateQueries({ queryKey: ["place_summaries", tripId] });
+    },
   });
 
   // "Image loading very slow" was mostly not the network: a card showed a button
