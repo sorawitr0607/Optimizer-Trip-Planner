@@ -6902,7 +6902,10 @@
   gap: 6px;
   list-style: none;
   margin: 0;
-  max-height: 240px;
+  /* 240px held about one and a half rows once each one carried its own picture and
+     sentence rather than a collapsed name, so the list scrolled from the first entry.
+     Tied to the viewport rather than fixed, because the deck beside it already is. */
+  max-height: clamp(240px, 46vh, 560px);
   overflow-y: auto;
   padding: 0;
 }
@@ -6927,20 +6930,27 @@
 }
 
 .deck-reconsider-name {
+  /* A `<button>` since the rows stopped collapsing, so the user-agent border,
+     background and centring all have to go; it selects the place, it is not a box. */
+  background: none;
+  border: 0;
   cursor: pointer;
   font-size: var(--text-sm);
   font-weight: var(--weight-secondary);
+  padding: 0;
+  text-align: left;
+  width: 100%;
 }
 
 /* Beside the name, not under it. An open row used to push every row below it down, and
    on a fifteen-place list that loses the reader's place — the opposite of what a
    reconsider list is for. The row becomes two columns while it is open: the name and its
    button on the left, everything the owner is deciding on to the right of them. */
-.deck-reconsider-row.open {
+.deck-reconsider-row {
   grid-template-columns: minmax(0, 1fr);
 }
 
-.deck-reconsider-row.open .deck-reconsider-detail {
+.deck-reconsider-detail {
   display: grid;
   gap: 10px;
   grid-template-columns: minmax(120px, 1fr) minmax(0, 2fr);

@@ -243,12 +243,15 @@ describe("PlaceDeck", () => {
     expect(html).toContain("Add to list");
   });
 
-  it("opens a passed place to show what it was", () => {
+  it("shows a passed place without being asked to expand it", () => {
     // A name twenty cards later is not enough to change a mind on: the picture and the
-    // sentence are what the decision was made on, and both are already in hand.
+    // sentence are what the decision was made on, and both are already in hand. They
+    // used to sit behind a `<details>`, which spent a click on finding out whether the
+    // click was worth spending -- so the assertion is now that there is no disclosure
+    // to open, and the evidence is simply present.
     const html = render(SUMMARY, ["explore"], RANKING.lanes.main_queue, ["first"]);
 
-    expect(html).toContain("<details");
+    expect(html).not.toContain("<details");
     expect(html).toContain("A landmark tower with an observation deck.");
     expect(html).toContain("commons.example/one.jpg");
   });

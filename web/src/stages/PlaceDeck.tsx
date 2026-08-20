@@ -198,7 +198,14 @@ export function PlaceDeck({
 }: PlaceDeckProps) {
   const [cursor, setCursor] = useState(0);
   const [photo, setPhoto] = useState(0);
-  const [photoLoaded, setPhotoLoaded] = useState<string | null>(null);
+  // *Every* photograph that has painted, not just the most recent one. Holding a
+  // single url meant the pulsing placeholder came back on every tap through the
+  // gallery -- including for pictures already decoded and sitting in the browser
+  // cache -- so tapping quickly through a card read as the page blinking. A set
+  // answers the question actually being asked: has *this* one arrived before.
+  const [painted, setPainted] = useState<ReadonlySet<string>>(() => new Set());
+  const markLoaded = (url: string) =>
+    setPainted((current) => (current.has(url) ? current : new Set(current).add(url)));
   const [drag, setDrag] = useState<Drag | null>(null);
   const [leaving, setLeaving] = useState<Intent>(null);
   // A drag that ends over the photo used to advance the gallery as well as decide.
@@ -224,13 +231,13 @@ export function PlaceDeck({
   function markPainted(element: HTMLImageElement, url: string | null) {
     if (!url) return;
     if (typeof element.decode !== "function") {
-      setPhotoLoaded(url);
+      markLoaded(url);
       return;
     }
     element
       .decode()
       .catch(() => undefined)
-      .finally(() => setPhotoLoaded(url));
+      .finally(() => markLoaded(url));
   }
 
   const decided = new Set(choices.map((choice) => choice.place_id));
@@ -279,7 +286,8 @@ export function PlaceDeck({
   // one thing the owner cannot un-see: the swipe decision is made on the photograph, so
   // showing the text first invites a decision on half the evidence. Only the first
   // photo gates the card — tapping through the gallery must not blank it again.
-  const cardPending = summaryLoading || (Boolean(currentPhoto) && photoLoaded !== currentPhoto && photoIndex === 0);
+  const cardPending = summaryLoading
+    || (Boolean(currentPhoto) && !painted.has(currentPhoto!) && photoIndex === 0);
   // Report the card in front, so the panel beside the deck tracks it.
 
   // The gallery index belongs to the card, so it resets with the card.
@@ -448,27 +456,34 @@ export function PlaceDeck({
                       className={`deck-reconsider-row${openRow === c.place_id ? " open" : ""}`}
                       key={c.place_id}
                     >
-                      {/* Opening a row also selects the place, so the panel beside the
-                          deck shows its full card — score, breakdown, gallery and all —
-                          rather than this row's thumbnail being the whole of what a
-                          reconsideration is decided on. Reusing that panel beats
-                          building a second one that could describe the place differently. */}
-                      <details
-                        className="deck-reconsider-detail"
-                        onToggle={(event) => {
-                          const open = event.currentTarget.open;
-                          setOpenRow(open ? c.place_id : null);
-                          if (open) onCardChange?.(c.place_id);
-                        }}
-                      >
-                        <summary className="deck-reconsider-name">{nameOf(c.place_id)}</summary>
+                      {/* Open, always. This was a `<details>`: a place you had already
+                          skipped once needed a click before it would say what it was,
+                          which is a click spent finding out whether the click was worth
+                          it. The picture and the sentence are the whole basis for
+                          reconsidering, so they are simply there.
+
+                          Selecting the place still happens, so the panel beside the deck
+                          shows its full card -- score, breakdown, gallery -- rather than
+                          this row's thumbnail being the whole of what the decision rests
+                          on. It moves to the name, which stays a button for that reason. */}
+                      <div className="deck-reconsider-detail">
+                        <button
+                          className="deck-reconsider-name"
+                          onClick={() => {
+                            setOpenRow(c.place_id);
+                            onCardChange?.(c.place_id);
+                          }}
+                          type="button"
+                        >
+                          {nameOf(c.place_id)}
+                        </button>
                         <div className="deck-reconsider-about">
                           {photo ? (
                             <img alt={nameOf(c.place_id)} decoding="async" loading="lazy" src={photo} />
                           ) : null}
                           <p>{prose || copy("no_description_yet", language)}</p>
                         </div>
-                      </details>
+                      </div>
                       <button
                         className="deck-reconsider-btn"
                         onClick={() => onDecide(c.place_id, "interested", null)}
@@ -679,7 +694,7 @@ export function PlaceDeck({
                 rather than replaces, so the image is still fetched eagerly and nothing
                 below it moves when the bytes land. */}
             <span className="place-deck-photo-frame">
-              {photoLoaded === currentPhoto ? null : (
+              {!currentPhoto || painted.has(currentPhoto) ? null : (
                 <span aria-hidden="true" className="skeleton skeleton-photo" />
               )}
               <img
@@ -691,7 +706,7 @@ export function PlaceDeck({
                 draggable={false}
                 fetchPriority="high"
                 loading="eager"
-                onError={() => setPhotoLoaded(currentPhoto)}
+                onError={() => currentPhoto && markLoaded(currentPhoto)}
                 onLoad={(event) => markPainted(event.currentTarget, currentPhoto)}
                 // A photograph already in the browser cache can finish before React
                 // attaches `onLoad`, and that handler then never fires — which would

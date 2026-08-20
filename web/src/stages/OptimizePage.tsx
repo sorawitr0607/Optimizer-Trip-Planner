@@ -504,8 +504,13 @@ export function OptimizePage() {
         </>
       ) : null}
 
+      {/* Hidden while a rebuild runs, at the owner's asking: the previous attempt's
+          variants, unfit list and reasons all stay on screen otherwise, and reading
+          them during a wait of minutes invites acting on an answer that is being
+          replaced. `hidden` rather than unmounting, so a failed rebuild leaves the
+          plan that did work exactly as it was. */}
       {proposal ? (
-        <>
+        <div hidden={building}>
           <p className="money-note money-note-plain">
             <span>{copy("plan_draft_note", language)}</span>
           </p>
@@ -545,7 +550,7 @@ export function OptimizePage() {
               {copy("open_evidence", language)}
             </Link>
           </details>
-        </>
+        </div>
       ) : null}
 
       {/* All variants share one route snapshot, so its acceptance sits at draft level
@@ -761,17 +766,25 @@ export function OptimizePage() {
                     **over-stated** straight line instead: the plan gains slack rather
                     than losing a place, and the estimate is marked so nothing downstream
                     can mistake it for something a router said. */}
+                {/* The same mutation the primary control runs, so it now carries the
+                    same label and the same note. It used to say "Measure the missing
+                    routes and rebuild", which named one of the three things it does and
+                    read as a second, different action -- two buttons for one behaviour,
+                    reported as redundant and confusing. */}
                 {needsRoutes ? (
-                  <button
-                    className="setup-primary"
-                    disabled={autoResolveAndGenerate.isPending}
-                    onClick={() => autoResolveAndGenerate.mutate()}
-                    type="button"
-                  >
-                    {autoResolveAndGenerate.isPending
-                      ? copy("loading", language)
-                      : copy("unfit_fix_routes", language)}
-                  </button>
+                  <>
+                    <button
+                      className="setup-primary"
+                      disabled={autoResolveAndGenerate.isPending}
+                      onClick={() => autoResolveAndGenerate.mutate()}
+                      type="button"
+                    >
+                      {autoResolveAndGenerate.isPending
+                        ? copy("loading", language)
+                        : autoResolveLabel}
+                    </button>
+                    <small className="setup-hint">{copy("auto_resolve_note", language)}</small>
+                  </>
                 ) : null}
                 {needsRoutes && autoResolveAndGenerate.isPending ? (
                   <BuildProgress language={language} />
