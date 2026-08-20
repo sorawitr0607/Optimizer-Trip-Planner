@@ -18,7 +18,7 @@ import {
   type Trip,
   type ComfortTradeoffReport,
 } from "../api/client";
-import { copy, copyFormat, copyFrom } from "../i18n/copy";
+import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
 import { placeName } from "../shared/names";
 import { collectRouteEvidence } from "../shared/routeEvidence";
@@ -67,6 +67,35 @@ function assumptionsOf(preview: PlanPreview | null, proposal: PlanProposal | nul
     lines.push("assumption_accommodation");
   }
   return lines;
+}
+
+/** The stages the free build actually goes through, in order. */
+const BUILD_LINES = [
+  "think_windows", "think_routes", "think_packing",
+  "think_variants", "think_checking", "think_almost",
+] as const;
+
+/**
+ * The wait, shown beside whichever control started it.
+ *
+ * Four buttons on this screen start the same ~210s job -- assume the missing hours
+ * and build -- and three of them showed only the word "Loading" on their own label.
+ * The real progress panel existed, but it renders near the top of the page, and two
+ * of those buttons sit a few hundred lines of markup below it: the feedback appeared
+ * somewhere the owner was not looking, having pressed something at the bottom of a
+ * long screen. A label that reads "Loading" without moving for three and a half
+ * minutes is the same picture as a page that has hung.
+ *
+ * 210 seconds, not 52. The 52 is the optimizer alone; the free path collects route
+ * evidence first, which on a fresh 15-place trip took the whole thing to 210.
+ */
+function BuildProgress({ language }: { language: Language }) {
+  return (
+    <div className="optimize-working" aria-busy="true">
+      <Thinking expectSeconds={210} language={language} lines={BUILD_LINES} />
+      <p className="setup-hint">{copy("optimizing_note", language)}</p>
+    </div>
+  );
 }
 
 export function OptimizePage() {
@@ -351,6 +380,7 @@ export function OptimizePage() {
             {autoResolveAndGenerate.isPending ? copy("loading", language) : autoResolveLabel}
           </button>
           <small className="setup-hint">{copy("auto_resolve_note", language)}</small>
+          {autoResolveAndGenerate.isPending ? <BuildProgress language={language} /> : null}
         </div>
       ) : null}
 
@@ -444,21 +474,8 @@ export function OptimizePage() {
           optimize takes, and was reported as "I still can't build a plan" — the work
           was succeeding every time and the screen never said so. */}
       {generate.isPending || autoResolveAndGenerate.isPending ? (
-        <div className="optimize-working" aria-busy="true">
-          <Thinking
-            /* Three variants, each with its own time budget since `WF-043` — measured at
-               about 52s end to end, which is what the six lines are paced across. */
-            /* 210s, measured, not 52. The 52 is the *optimizer* — three variants at
-               their own time budgets — and the free button does route collection first:
-               `collectRouteEvidence` loops `refresh_routes` and then asks for transit,
-               which on a fresh 15-place Porto trip took the wait to **210 seconds** end
-               to end. Paced at 52 the six lines cycled four times before the plan
-               arrived, and the note beside them promised "about a minute". */
-            expectSeconds={210}
-            language={language}
-            lines={["think_windows", "think_routes", "think_packing", "think_variants", "think_checking", "think_almost"]}
-          />
-          <p className="setup-hint">{copy("optimizing_note", language)}</p>
+        <div aria-busy="true">
+          <BuildProgress language={language} />
           <div className="skeleton-card">
             <span className="skeleton skeleton-line wide" />
             <span className="skeleton skeleton-line" />
@@ -703,6 +720,7 @@ export function OptimizePage() {
                 {autoResolveAndGenerate.isPending ? copy("loading", language) : autoResolveLabel}
               </button>
               <small className="setup-hint">{copy("auto_resolve_note", language)}</small>
+              {autoResolveAndGenerate.isPending ? <BuildProgress language={language} /> : null}
             </div>
           ) : null}
 
@@ -754,6 +772,9 @@ export function OptimizePage() {
                       ? copy("loading", language)
                       : copy("unfit_fix_routes", language)}
                   </button>
+                ) : null}
+                {needsRoutes && autoResolveAndGenerate.isPending ? (
+                  <BuildProgress language={language} />
                 ) : null}
                 <ul className="optimize-unfit-list">
                   {unfit.map((item) => (
