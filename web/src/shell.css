@@ -7736,7 +7736,13 @@
   width: calc(100% - 40px);
 }
 
+/* An explicit colour, because inheriting one is how this goes wrong. `.tour-card p`
+   had `--text-secondary` and the heading had nothing, so it took whatever the page
+   was using -- on the landing that is `--landing-text`, dark brown ink meant for warm
+   paper, printed onto a dark card. Reported as unreadable, and it was: near-black on
+   near-black. A rule inside a card must name its own colour. */
 .tour-card h3 {
+  color: var(--text-primary);
   margin: 0;
 }
 
@@ -9111,5 +9117,42 @@
   .place-deck-card,
   .place-deck-photo {
     touch-action: pan-y;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   The itinerary map, beside its stops rather than above them.
+
+   The map filled the column and the stop list -- the hotel anchor, each stop, its
+   status and its coordinates -- sat underneath it, so reading "where is stop 2" meant
+   scrolling away from the picture of where stop 2 is. On a phone stacked is right,
+   there being one column; on a desktop they belong side by side, and the map does not
+   need three-fifths of the viewport's height to say what it says.
+   --------------------------------------------------------------------------- */
+@media (min-width: 900px) {
+  .plan-map {
+    align-items: start;
+    column-gap: 16px;
+    display: grid;
+    /* 60:40. The map earns the larger share; the list only has to be readable. */
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  }
+
+  /* The heading stays across the top of both. */
+  .plan-map > h2 {
+    grid-column: 1 / -1;
+  }
+
+  /* Whatever holds the drawing takes the first column; the stop list takes the
+     second and scrolls itself if the day is long, so the page height is the map's. */
+  .plan-map > :is(div, figure, svg):first-of-type {
+    grid-column: 1;
+  }
+
+  .plan-map > :is(ul, ol) {
+    grid-column: 2;
+    margin: 0;
+    max-height: 60vh;
+    overflow-y: auto;
   }
 }
