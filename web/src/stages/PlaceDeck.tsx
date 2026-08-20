@@ -447,42 +447,33 @@ export function PlaceDeck({
                   so the platform owns the open/close and the keyboard. */}
               <ul className="deck-reconsider-list">
                 {rejectedChoices.map((c) => {
-                  const about = summaries[c.place_id];
-                  const photo = galleryFor(about, candidates[c.place_id])[0] ?? null;
-                  const prose = about?.text?.[language] ?? about?.text?.en
-                    ?? about?.description?.[language] ?? about?.description?.en ?? "";
+                  // No photograph or prose read here: the row shows neither, and the
+                  // card beside the deck fetches its own.
                   return (
                     <li
                       className={`deck-reconsider-row${openRow === c.place_id ? " open" : ""}`}
                       key={c.place_id}
                     >
-                      {/* Open, always. This was a `<details>`: a place you had already
-                          skipped once needed a click before it would say what it was,
-                          which is a click spent finding out whether the click was worth
-                          it. The picture and the sentence are the whole basis for
-                          reconsidering, so they are simply there.
-
-                          Selecting the place still happens, so the panel beside the deck
-                          shows its full card -- score, breakdown, gallery -- rather than
-                          this row's thumbnail being the whole of what the decision rests
-                          on. It moves to the name, which stays a button for that reason. */}
+                      {/* The detail is *not* shown here. It was, briefly, and it turned a
+                          scannable list of skipped names into a wall of pictures --
+                          which is the same problem the `<details>` had, arrived at from
+                          the other side. The full card already exists beside the deck,
+                          with the score, the breakdown and the gallery; this row's job
+                          is to name the place and offer the two things you can do with
+                          it, one of which is look properly. */}
                       <div className="deck-reconsider-detail">
+                        <span className="deck-reconsider-name">{nameOf(c.place_id)}</span>
                         <button
-                          className="deck-reconsider-name"
+                          className="deck-reconsider-view"
                           onClick={() => {
                             setOpenRow(c.place_id);
                             onCardChange?.(c.place_id);
                           }}
+                          title={copy("deck_view_details_hint", language)}
                           type="button"
                         >
-                          {nameOf(c.place_id)}
+                          {copy("deck_view_details", language)}
                         </button>
-                        <div className="deck-reconsider-about">
-                          {photo ? (
-                            <img alt={nameOf(c.place_id)} decoding="async" loading="lazy" src={photo} />
-                          ) : null}
-                          <p>{prose || copy("no_description_yet", language)}</p>
-                        </div>
                       </div>
                       <button
                         className="deck-reconsider-btn"

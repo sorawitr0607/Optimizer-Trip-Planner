@@ -243,17 +243,18 @@ describe("PlaceDeck", () => {
     expect(html).toContain("Add to list");
   });
 
-  it("shows a passed place without being asked to expand it", () => {
-    // A name twenty cards later is not enough to change a mind on: the picture and the
-    // sentence are what the decision was made on, and both are already in hand. They
-    // used to sit behind a `<details>`, which spent a click on finding out whether the
-    // click was worth spending -- so the assertion is now that there is no disclosure
-    // to open, and the evidence is simply present.
+  it("names a passed place and offers a way to look at it properly", () => {
+    // Three shapes have been tried here. A `<details>` spent a click on finding out
+    // whether the click was worth spending. Everything inline turned a scannable list
+    // of skipped names into a wall of pictures. So: the name, and a control that says
+    // what it opens -- the full card beside the deck, which has the score, the
+    // breakdown and the gallery this row could only ever hint at.
     const html = render(SUMMARY, ["explore"], RANKING.lanes.main_queue, ["first"]);
 
     expect(html).not.toContain("<details");
-    expect(html).toContain("A landmark tower with an observation deck.");
-    expect(html).toContain("commons.example/one.jpg");
+    expect(html).toContain("View details");
+    // The row stays a row: no photograph and no prose inlined into it.
+    expect(html).not.toContain("commons.example/one.jpg");
   });
 
   it("deals from whichever lane it is given, not always from main_queue", () => {

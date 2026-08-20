@@ -859,7 +859,7 @@
       "osm_notice": "Place data comes from OpenStreetMap's free public service. This app searches only when you ask it to, remembers what it already fetched, and identifies itself — which is what that service asks of everyone using it.",
       "other": "Other",
       "overdue": "Overdue",
-      "owner_age": "Owner age (0 = not set)",
+      "owner_age": "Your age — optional",
       "owner_must": "Only genuine non-negotiables · one per line (optional)",
       "owner_style": "Owner trip style",
       "packing": "Packing",
@@ -1345,7 +1345,7 @@
       "member_must_placeholder": "Wheelchair access everywhere.\nNo stairs.",
       "member_tags_help": "Their taste, not yours. It is weighted beside everyone else's so no one person decides the whole trip.",
       "member_count_help": "Everyone except you. Set the number and a card appears for each person.",
-      "owner_age_help": "Used for pacing and for opening-hour rules that depend on age. Leave it blank if you would rather not say.",
+      "owner_age_help": "Optional, and the plan is built either way. Given it, pacing is set to suit it and age-dependent opening rules are applied — some places admit under-18s only at certain hours, and some discounts and age limits change what is worth scheduling. Left blank, none of that is assumed about you.",
       "accommodation_help_unknown": "You have not decided where to stay. The planner will recommend an area to look in, based on the places you choose.",
       "accommodation_help_not_booked": "You know you need a room but have not booked one. Same as above: the planner recommends an area, and days are built around the centre of your places.",
       "accommodation_help_booked": "A room is booked. Add the address on the Evidence screen and every day is built out from that exact point instead of an estimate.",
@@ -1618,7 +1618,9 @@
       "landing_pain_tabs_label": "The pain vs the maths",
       "photos_top_up": "Get photos for {count} shortlisted place(s) — US${cost}",
       "photos_top_up_note": "These are on your shortlist and the free sources gave one picture or none. Buys up to five photographs and the live rating for each. Charged against your monthly cap, one place at a time, and it stops if the cap is reached.",
-      "photos_top_up_done": "Photos bought for {count} place(s)."
+      "photos_top_up_done": "Photos bought for {count} place(s).",
+      "deck_view_details": "View details",
+      "deck_view_details_hint": "Opens the full card beside the deck."
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -1977,7 +1979,7 @@
       "osm_notice": "ข้อมูลสถานที่มาจากบริการสาธารณะฟรีของ OpenStreetMap แอปจะค้นหาเมื่อคุณสั่งเท่านั้น จำสิ่งที่ดึงมาแล้ว และระบุตัวตน ตามที่บริการนั้นขอไว้",
       "other": "อื่นๆ",
       "overdue": "เกินกำหนด",
-      "owner_age": "อายุเจ้าของทริป (0 = ยังไม่ระบุ)",
+      "owner_age": "อายุของคุณ — ไม่บังคับ",
       "owner_must": "ใส่เฉพาะสิ่งที่ต่อรองไม่ได้ · หนึ่งข้อต่อบรรทัด (ไม่บังคับ)",
       "owner_style": "สไตล์หลักของเจ้าของทริป",
       "packing": "การจัดกระเป๋า",
@@ -2463,7 +2465,7 @@
       "member_must_placeholder": "ต้องเข้าถึงด้วยรถเข็นได้ทุกที่\nไม่มีบันได",
       "member_tags_help": "ความชอบของเขา ไม่ใช่ของคุณ ระบบจะถ่วงน้ำหนักร่วมกับคนอื่น จะได้ไม่มีใครคนเดียวกำหนดทั้งทริป",
       "member_count_help": "นับทุกคนยกเว้นตัวคุณ ใส่จำนวนแล้วจะมีการ์ดขึ้นมาให้กรอกทีละคน",
-      "owner_age_help": "ใช้กำหนดจังหวะการเดินทางและกฎเวลาเปิด-ปิดที่ขึ้นกับอายุ ไม่อยากบอกก็เว้นว่างได้",
+      "owner_age_help": "ไม่บังคับ และแผนจะถูกสร้างได้ทั้งสองแบบ หากระบุ ระบบจะตั้งจังหวะการเดินทางให้เหมาะ และใช้กฎเวลาเปิด-ปิดที่ขึ้นกับอายุ บางแห่งให้ผู้ที่อายุต่ำกว่า 18 ปีเข้าได้เฉพาะบางช่วงเวลา และส่วนลดหรือข้อจำกัดด้านอายุมีผลต่อสิ่งที่ควรจัดลงแผน หากเว้นว่าง ระบบจะไม่สันนิษฐานเรื่องนี้",
       "accommodation_help_unknown": "ยังไม่ได้ตัดสินใจว่าจะพักที่ไหน ระบบจะแนะนำย่านที่ควรมองหา จากสถานที่ที่คุณเลือก",
       "accommodation_help_not_booked": "รู้ว่าต้องมีที่พักแต่ยังไม่ได้จอง เหมือนข้อบน: ระบบจะแนะนำย่าน และจัดแต่ละวันรอบจุดกึ่งกลางของสถานที่ที่เลือก",
       "accommodation_help_booked": "จองที่พักแล้ว ใส่ที่อยู่ในหน้าหลักฐาน แล้วทุกวันจะถูกจัดจากจุดนั้นจริง ๆ แทนการประมาณ",
@@ -2736,7 +2738,9 @@
       "landing_pain_tabs_label": "ปัญหาที่เจอ เทียบกับการคำนวณ",
       "photos_top_up": "ดึงรูปสำหรับสถานที่ที่เลือกไว้ {count} แห่ง — US${cost}",
       "photos_top_up_note": "สถานที่เหล่านี้อยู่ในรายการที่เลือกไว้ และแหล่งข้อมูลฟรีให้รูปเพียงรูปเดียวหรือไม่มีเลย ระบบจะซื้อรูปไม่เกินห้ารูปและคะแนนรีวิวสดของแต่ละแห่ง คิดค่าใช้จ่ายจากเพดานรายเดือนของคุณ ทีละแห่ง และจะหยุดเมื่อถึงเพดาน",
-      "photos_top_up_done": "ซื้อรูปสำหรับสถานที่ {count} แห่งแล้ว"
+      "photos_top_up_done": "ซื้อรูปสำหรับสถานที่ {count} แห่งแล้ว",
+      "deck_view_details": "ดูรายละเอียด",
+      "deck_view_details_hint": "เปิดการ์ดเต็มข้างสำรับ"
     }
   }
 }

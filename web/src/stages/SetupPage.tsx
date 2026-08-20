@@ -689,19 +689,19 @@ export function SetupPage() {
               a value that only ever moves by one, next to a page that already had a
               proper control for exactly this question. `MAX_MEMBERS` still bounds it,
               and the value stays readable as text rather than living inside a spinner. */}
-          <div className="lab-control-group">
-            <span className="lab-control-label" id="member-count-label">
+          <div className="setup-counter-group">
+            <span className="setup-counter-label" id="member-count-label">
               {copy("member_count", language)}
             </span>
             <div
               aria-describedby="member-count-help"
               aria-labelledby="member-count-label"
-              className="lab-counter"
+              className="setup-counter"
               role="group"
             >
               <button
                 aria-label={copy("landing_lab_decrease", language)}
-                className="lab-counter-btn"
+                className="setup-counter-btn"
                 disabled={values.travellers.length <= 0}
                 onClick={() => setMemberCount(Math.max(0, values.travellers.length - 1))}
                 type="button"
@@ -710,12 +710,12 @@ export function SetupPage() {
               </button>
               {/* Announced on change, because the number is the only thing that moves
                   and a screen reader would otherwise hear nothing at all. */}
-              <span aria-live="polite" className="lab-counter-val">
+              <span aria-live="polite" className="setup-counter-val">
                 {values.travellers.length} {copy("travellers", language)}
               </span>
               <button
                 aria-label={copy("landing_lab_increase", language)}
-                className="lab-counter-btn"
+                className="setup-counter-btn"
                 disabled={values.travellers.length >= MAX_MEMBERS}
                 onClick={() =>
                   setMemberCount(Math.min(MAX_MEMBERS, values.travellers.length + 1))
