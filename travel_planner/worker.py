@@ -24,6 +24,7 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from .actions import PlannerActions
+from .credentials import load_local_credentials
 from .jobs import JobQueue, run_one
 
 #: Long enough that an idle worker is not hammering the database, short enough
@@ -73,6 +74,22 @@ def main(argv: list[str] | None = None) -> int:
                         help="also answer GET on this port, for hosts that only "
                              "keep a listening service alive (default: $PORT)")
     arguments = parser.parse_args(argv)
+
+    # The same thing the local server does at startup, and the worker did not.
+    #
+    # This is the whole of the "route and travel time are not verified" report. The
+    # worker runs the three slowest operations, and two of them call providers -- but
+    # it was started with `TOURIST_DB_URL` alone, so `OPENROUTESERVICE_API_KEY` was
+    # absent and every `refresh_routes` job raised "not configured". Every leg came
+    # back unverified, every place was reconciled out on ROUTE_UNVERIFIED, and the
+    # only visible offer was to accept a walking estimate -- for routes that were
+    # never asked about.
+    #
+    # An already-set variable still wins, so an explicit `export` and a hosted
+    # deployment's own environment are both untouched by this.
+    loaded = load_local_credentials()
+    if loaded:
+        print(f"loaded {len(loaded)} credential(s) from secrets.local.json", flush=True)
 
     actions = PlannerActions(arguments.database)
     queue = JobQueue(actions.store)
