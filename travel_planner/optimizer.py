@@ -609,6 +609,47 @@ def _prepare_candidates(
             continue
 
         queue = _verified_fact(snapshot, place_id, "queue_wait_minutes")
+
+        # `long_queues`. The same fact the meal check below has always used, asked of
+        # every kind rather than only of meals -- a two-hour queue for a viewpoint was
+        # simply scheduled. The threshold is the owner's own if they set one.
+        if queue and _dislikes(snapshot, "long_queues"):
+            limit = int(_thresholds(snapshot).get("maximum_queue_minutes", 45))
+            if int(queue["value"]) > limit:
+                alternative = next(
+                    (item for item in alternatives if item.get("kind") == kind), None
+                )
+                reconciliation[place_id] = _reconciliation(
+                    candidate,
+                    "cannot_currently_fit",
+                    "QUEUE_LONGER_THAN_ACCEPTED",
+                    f"alternative:{_candidate_id(alternative)}" if alternative else "owner_decision",
+                )
+                if alternative:
+                    prepared.append(deepcopy(alternative))
+                continue
+
+        # `late_meals`. `QUEUE_CAUSES_LATE_MEAL` below only fires when a queue is known,
+        # so a meal that runs past the window on its own duration was accepted in
+        # silence. This asks the same question with no queue in it.
+        if (
+            kind == "meal"
+            and _dislikes(snapshot, "late_meals")
+            and _meal_finishes_late(snapshot, candidate)
+        ):
+            alternative = next(
+                (item for item in alternatives if item.get("kind") == "meal"), None
+            )
+            reconciliation[place_id] = _reconciliation(
+                candidate,
+                "cannot_currently_fit",
+                "LATE_MEAL_NOT_ACCEPTED",
+                f"alternative:{_candidate_id(alternative)}" if alternative else "choose_earlier_meal",
+            )
+            if alternative:
+                prepared.append(deepcopy(alternative))
+            continue
+
         if queue and kind == "meal" and _queue_breaks_meal_window(snapshot, candidate, queue):
             alternative = next(
                 (item for item in alternatives if item.get("kind") == "meal"), None
@@ -1701,17 +1742,30 @@ def _dislikes(snapshot: dict[str, Any], value: str) -> bool:
     ) or value in snapshot.get("preferences", {}).get("dislikes", [])
 
 
-def _queue_breaks_meal_window(
-    snapshot: dict[str, Any], candidate: dict[str, Any], queue: dict[str, Any]
+def _meal_finishes_late(
+    snapshot: dict[str, Any], candidate: dict[str, Any], extra_minutes: int = 0
 ) -> bool:
+    """Would this meal still be running after the meal window closes?
+
+    `extra_minutes` is time that has to be spent before eating starts -- a queue,
+    today. Asked with zero it answers the plainer question of whether the meal fits
+    at all, which is what `late_meals` needs.
+    """
+
     meal = _meal_window(snapshot)
     if not meal:
         return False
     earliest = min(
         _minutes(window["start"]) for window in snapshot["trip"]["usable_windows"]
     )
-    finish = max(earliest, _minutes(meal["start"])) + int(queue["value"]) + _duration(candidate, "ideal")
+    finish = max(earliest, _minutes(meal["start"])) + extra_minutes + _duration(candidate, "ideal")
     return finish > _minutes(meal["end"])
+
+
+def _queue_breaks_meal_window(
+    snapshot: dict[str, Any], candidate: dict[str, Any], queue: dict[str, Any]
+) -> bool:
+    return _meal_finishes_late(snapshot, candidate, int(queue["value"]))
 
 
 def _activity_route(

@@ -42,11 +42,18 @@ ALSO_ENJOY_TAGS = (
     "malls",
     "wellness",
 )
+# Each of these has to reach the optimizer, and until 2026-08-20 two of them did not:
+# `late_meals` and `heavy_crowds` were offered and read by nothing. They are wired now
+# -- `late_meals` through the meal window the plan already carries, `heavy_crowds`
+# through the crowd tolerance and boarding buffer the Shanghai ferry regression
+# records. `long_queues` is added on the same condition, using the
+# `queue_wait_minutes` fact that was previously consulted for meals alone.
 AVOID_TAGS = (
     "tourist_traps",
     "plain_long_walks",
     "late_meals",
     "heavy_crowds",
+    "long_queues",
 )
 COMFORT_TAGS = (
     "balanced_pace",

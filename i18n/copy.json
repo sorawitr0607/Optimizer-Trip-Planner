@@ -259,7 +259,9 @@
       "bad_map_window": "The map window was not a usable area, so no buildings were requested.",
       "day_ends_free": "Evening free — everything you chose for today is done",
       "AREA_TIMES_ARE_WALKING_ONLY": "No metro network is published for this destination, so these are the neighbourhoods around the places you chose, ranked by walking time between them",
-      "owner_accepted_straight_line": "Straight-line walking estimate you accepted, deliberately over-stated"
+      "owner_accepted_straight_line": "Straight-line walking estimate you accepted, deliberately over-stated",
+      "LATE_MEAL_NOT_ACCEPTED": "This meal would still be running after your meal window closes, and you asked to avoid late meals.",
+      "QUEUE_LONGER_THAN_ACCEPTED": "The queue here is longer than you said you would accept."
     },
     "th": {
       "broader_replan_required": "ต้องวางแผนใหม่ในภาพกว้าง — วันนี้รับเพิ่มไม่ไหว",
@@ -398,7 +400,9 @@
       "bad_map_window": "ขอบเขตแผนที่ไม่ถูกต้อง จึงไม่ได้ร้องขอข้อมูลอาคาร",
       "day_ends_free": "ช่วงเย็นว่าง ทุกที่ที่เลือกไว้สำหรับวันนี้เสร็จแล้ว",
       "AREA_TIMES_ARE_WALKING_ONLY": "จุดหมายนี้ไม่มีข้อมูลเครือข่ายรถไฟฟ้า จึงจัดอันดับย่านรอบสถานที่ที่คุณเลือก ตามเวลาเดินระหว่างกัน",
-      "owner_accepted_straight_line": "ค่าประมาณการเดินแบบเส้นตรงที่คุณยอมรับ ซึ่งตั้งใจให้สูงกว่าจริง"
+      "owner_accepted_straight_line": "ค่าประมาณการเดินแบบเส้นตรงที่คุณยอมรับ ซึ่งตั้งใจให้สูงกว่าจริง",
+      "LATE_MEAL_NOT_ACCEPTED": "มื้อนี้จะยังไม่จบเมื่อเลยช่วงเวลามื้ออาหารของคุณ และคุณเลือกหลีกเลี่ยงมื้อดึก",
+      "QUEUE_LONGER_THAN_ACCEPTED": "คิวที่นี่นานกว่าที่คุณระบุว่ารับได้"
     }
   },
   "REJECTION_TEXT": {
@@ -455,7 +459,8 @@
       "religious_sites": "Temples & shrines",
       "theme_parks": "Theme & water parks",
       "malls": "Malls & department stores",
-      "wellness": "Spa & wellness"
+      "wellness": "Spa & wellness",
+      "long_queues": "Long queues"
     },
     "th": {
       "activity": "กิจกรรม",
@@ -490,7 +495,8 @@
       "religious_sites": "วัดและศาสนสถาน",
       "theme_parks": "สวนสนุกและสวนน้ำ",
       "malls": "ห้างสรรพสินค้า",
-      "wellness": "สปาและการผ่อนคลาย"
+      "wellness": "สปาและการผ่อนคลาย",
+      "long_queues": "การรอคิวนาน"
     }
   },
   "TEXT": {

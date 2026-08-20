@@ -4278,4 +4278,22 @@ def _comfort_thresholds(owner: dict[str, Any]) -> dict[str, Any]:
         thresholds.update(
             {"walking_minutes_per_leg": 25, "plain_walking_minutes_per_day": 60}
         )
+    # Independent of the walking ladder above, so these are separate tests rather than
+    # more branches of it: someone can dislike crowds and long walks both.
+    #
+    # `heavy_crowds` had never reached the optimizer. The values are not invented --
+    # they are the ones the Shanghai ferry regression carries, where a traveller who
+    # dislikes crowds and a high-crowd-risk place resolve to "scheduled with at least
+    # twenty minutes of boarding buffer, and the consequence made visible". That is the
+    # sanctioned answer; dropping the place is not, which is what a first attempt at
+    # this did before the fixture rejected it.
+    if "heavy_crowds" in avoid:
+        thresholds.update(
+            {"crowd_tolerance": "low", "minimum_boarding_buffer_minutes": 20}
+        )
+    # `long_queues` is new, and this is the number the optimizer falls back to anyway --
+    # set here so it is visible in the snapshot as something the owner asked for rather
+    # than a constant buried in a comparison.
+    if "long_queues" in avoid:
+        thresholds["maximum_queue_minutes"] = 45
     return thresholds
