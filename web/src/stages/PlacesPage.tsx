@@ -104,7 +104,6 @@ export function PlacesPage() {
   const pickLane = (next: Lane) => {
     setLane(next);
     setShown(LANE_PAGE);
-    setDecidedHere(0);
     setCardId("");
   };
   // Deck first, because WF-005 designed this stage as a swipe queue and the list is
@@ -160,7 +159,10 @@ export function PlacesPage() {
   /** Latched when the first card ever finishes, so the discovery block cannot come back. */
   const [firstCardDone, setFirstCardDone] = useState(false);
   /** Decisions taken out of the current page, which is what makes the page end. */
-  const [decidedHere, setDecidedHere] = useState(0);
+  // The page of places being worked through, per lane, by identity. A count cannot
+  // express this: the lane drops decided places server-side, so a count of remaining
+  // slots shrinks under you while the page you are reading does not.
+  const [windowIds, setWindowIds] = useState<Record<string, string[]>>({});
   // Decided in this session but not yet confirmed by a refetch. Emptied naturally: once
   // the stored choices carry the same ids, the union below is unchanged by it.
   const [justDecided, setJustDecided] = useState<Set<string>>(() => new Set());
@@ -235,16 +237,34 @@ export function PlacesPage() {
   // page could never end, which is also why the end-of-deck panel offering the other
   // lanes was effectively unreachable.
   //
-  // The window therefore shrinks by what has been decided out of it. Derived rather than
-  // held in an effect, so the very first render already deals a full page: seeding the
-  // page from `useEffect` left the first paint — and every static render — with no cards
-  // at all, which six tests caught immediately.
+  // Subtracting the decisions from the window was the fix for that, and it traded one
+  // bug for a worse one. Reported with a screenshot: "Showing the 5 strongest of 2744"
+  // and "Every unseen place has had a decision" after fourteen shortlisted and one
+  // passed. Fifteen decisions against a page of twenty leaves five, all of them already
+  // decided, so the deck declared the page finished having shown fifteen places. A
+  // decision must not cost you a card you have not seen.
+  //
+  // The window is a *set of places*, not a count. Filled from the top of the lane and
+  // kept, so deciding one leaves the other nineteen exactly where they were, and "every
+  // unseen place has had a decision" is only true once all twenty really are. `dealMore`
+  // extends it. Derived on first render rather than seeded in an effect, because seeding
+  // from `useEffect` left the first paint with no cards and six tests caught it.
   const allEntries = ranking.data ? laneEntries(ranking.data, lane) : [];
-  const entries = allEntries.slice(0, Math.max(0, shown - decidedHere));
+  const held = windowIds[lane] ?? [];
+  // Anything already in the window keeps its place; the rest of the page is topped up
+  // from the lane, which has excluded the decided ones server-side.
+  const windowNow = held.length
+    ? held.concat(allEntries.filter((e) => !held.includes(e.place_id)).map((e) => e.place_id))
+        .slice(0, shown)
+    : allEntries.slice(0, shown).map((e) => e.place_id);
+  if (windowNow.join(",") !== held.join(",")) {
+    setWindowIds((current) => ({ ...current, [lane]: windowNow }));
+  }
+  const inWindow = new Set(windowNow);
+  const entries = allEntries.filter((entry) => inWindow.has(entry.place_id));
   const laneRemaining = allEntries.length - entries.length;
   const dealMore = () => {
     setShown(LANE_PAGE);
-    setDecidedHere(0);
   };
   // A card id counts if the deck is dealing it **or** the catalogue holds it. The second
   // half is what lets "Reconsider skipped places" open a real detail panel: a passed-over
@@ -915,7 +935,6 @@ export function PlacesPage() {
                   // Counted here rather than derived from `choices`, because a decision
                   // made on the list view or on an earlier page is not a card taken out
                   // of *this* one.
-                  setDecidedHere((current) => current + 1);
                   saveChoice.mutate({ action, reason, placeId });
                 }}
                 onCardChange={setCardId}
