@@ -1613,7 +1613,10 @@
       "landing_sample_bills": "Sample bills:",
       "landing_total_expense": "Total expense:",
       "landing_fair_share": "Fair share / person:",
-      "landing_pain_tabs_label": "The pain vs the maths"
+      "landing_pain_tabs_label": "The pain vs the maths",
+      "photos_top_up": "Get photos for {count} shortlisted place(s) — US${cost}",
+      "photos_top_up_note": "These are on your shortlist and the free sources gave one picture or none. Buys up to five photographs and the live rating for each. Charged against your monthly cap, one place at a time, and it stops if the cap is reached.",
+      "photos_top_up_done": "Photos bought for {count} place(s)."
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -2728,7 +2731,10 @@
       "landing_sample_bills": "ตัวอย่างบิล:",
       "landing_total_expense": "ยอดรวม:",
       "landing_fair_share": "เฉลี่ยต่อคน:",
-      "landing_pain_tabs_label": "ปัญหาที่เจอ เทียบกับการคำนวณ"
+      "landing_pain_tabs_label": "ปัญหาที่เจอ เทียบกับการคำนวณ",
+      "photos_top_up": "ดึงรูปสำหรับสถานที่ที่เลือกไว้ {count} แห่ง — US${cost}",
+      "photos_top_up_note": "สถานที่เหล่านี้อยู่ในรายการที่เลือกไว้ และแหล่งข้อมูลฟรีให้รูปเพียงรูปเดียวหรือไม่มีเลย ระบบจะซื้อรูปไม่เกินห้ารูปและคะแนนรีวิวสดของแต่ละแห่ง คิดค่าใช้จ่ายจากเพดานรายเดือนของคุณ ทีละแห่ง และจะหยุดเมื่อถึงเพดาน",
+      "photos_top_up_done": "ซื้อรูปสำหรับสถานที่ {count} แห่งแล้ว"
     }
   }
 }

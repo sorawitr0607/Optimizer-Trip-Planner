@@ -366,6 +366,29 @@ export function PlacesPage() {
       await refreshReads();
     },
   });
+  const topUpPhotos = useMutation({
+    mutationFn: async (places: string[]) => {
+      const done: string[] = [];
+      for (const placeId of places) {
+        // Sequential on purpose. The cap is checked inside `_spend` on every call, so
+        // running these in parallel would let a burst commit past a limit that each
+        // call individually respected -- and a refusal here stops the remainder
+        // instead of buying the rest of the shortlist first.
+        const value = await rpc<PlaceInsight>("enrich_place_card", {
+          trip_id: tripId,
+          place_id: placeId,
+          language,
+        });
+        setInsights((current) => ({ ...current, [placeId]: value }));
+        done.push(placeId);
+      }
+      return done;
+    },
+    onSettled: async () => {
+      await refreshReads();
+    },
+  });
+
   const enrich = useMutation({
     mutationFn: () =>
       rpc<PlaceInsight>("enrich_place_card", {
@@ -526,6 +549,19 @@ export function PlacesPage() {
       !(selectedId in summaries.data) &&
       !(fetchCard.isError && fetchCard.variables === selectedId),
   );
+  // Shortlisted places the free sources barely covered. Wikimedia only carries a
+  // photograph for places with a Wikidata entity, and the ranking is deliberately blind
+  // to fame -- so the top of the list is exactly where free coverage runs out. One
+  // picture is not a gallery, so "one or none" is the line.
+  const thinlyPictured = selectedChoices.filter((choice) => {
+    const about = summaries.data?.[choice.place_id];
+    return galleryFor(about, byId[choice.place_id]).length <= 1;
+  });
+  // `enrich_place_card` is the tested paid path: one details call and up to
+  // PHOTO_LIMIT photographs, per place. Priced from the same rate card the cap uses,
+  // so this number and the cap cannot disagree.
+  const topUpCost = thinlyPictured.length * (0.017 + PHOTO_LIMIT * 0.007);
+
   const paidAllowed = Boolean(detailsCost.data?.allowed && photosCost.data?.allowed);
   const paidEstimate = (detailsCost.data?.estimate_usd ?? 0) + (photosCost.data?.estimate_usd ?? 0);
   const paidCaption = copy("live_details_cost", language)
@@ -1096,10 +1132,38 @@ export function PlacesPage() {
           <span>{copy("confirming_places", language)}</span>
         </p>
       ) : null}
+            {/* Only where the free sources came up short, and only for places already
+                on the shortlist -- so the spend follows a decision the owner has made
+                rather than paying to look at everything. Wikimedia carries photographs
+                for places with a Wikidata entity, and the ranking is blind to fame on
+                purpose, so the top of a good list is exactly where free coverage thins
+                out. */}
+            {thinlyPictured.length && paidAllowed ? (
+              <button
+                disabled={topUpPhotos.isPending}
+                onClick={() => topUpPhotos.mutate(thinlyPictured.map((c) => c.place_id))}
+                type="button"
+              >
+                {topUpPhotos.isPending
+                  ? copy("loading", language)
+                  : copy("photos_top_up", language)
+                      .replace("{count}", String(thinlyPictured.length))
+                      .replace("{cost}", topUpCost.toFixed(2))}
+              </button>
+            ) : null}
             <button onClick={() => setShortlistOpen(false)} type="button">
               {copy("close", language)}
             </button>
           </div>
+          {thinlyPictured.length && paidAllowed ? (
+            <p className="setup-hint">{copy("photos_top_up_note", language)}</p>
+          ) : null}
+          {topUpPhotos.isSuccess ? (
+            <p aria-live="polite" className="setup-hint">
+              {copy("photos_top_up_done", language)
+                .replace("{count}", String(topUpPhotos.data?.length ?? 0))}
+            </p>
+          ) : null}
         </div>
         <p className="setup-hint">{copy("shortlist_help", language)}</p>
         {selectedChoices.length ? (
