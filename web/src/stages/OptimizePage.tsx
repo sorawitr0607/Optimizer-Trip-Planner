@@ -107,7 +107,6 @@ export function OptimizePage() {
   const [refusal, setRefusal] = useState<string | null>(null);
   // Free is the default, and stays the default: this app's rule is that a control which
   // spends money says so before it is pressed, never that it is pressed by accident.
-  const [hoursChoice, setHoursChoice] = useState<"assume" | "verified">("assume");
   // Once a draft exists the build controls are done asking. Leaving "Before you build"
   // and "Build three plan options" above a finished proposal put the question and its
   // answer on screen together, so the screen read as still waiting for a press that had
@@ -399,40 +398,25 @@ export function OptimizePage() {
                 })
               : copy("before_all_covered", language)}
           </p>
-          {/* Two buttons here were two *actions*, and they are not: they are one action
-              and a choice about how to pay for it. Presented as buttons the owner had to
-              read both labels to work out that either one builds the plan — so the choice
-              is a radio group and "Build three plan options" below is the only press.
-              "More evidence controls" is gone for the same reason: a third link beside a
-              decision is a third thing to weigh. */}
+          {/* One control, and the warning beside it rather than a choice above it.
+
+              The history here is three shapes. Two buttons were two labels for one
+              action. A radio group made the *payment* the question, which read as
+              though building were blocked on answering it -- and the free option was
+              preselected anyway, so the group asked a question whose answer never
+              changed. Now the button says what pressing it accepts, and the gap it
+              accepts is stated next to it.
+
+              Buying verified hours has not gone anywhere; it lives on Check trip
+              facts, which is the screen about evidence. It was never this screen's
+              question. */}
           {evidence.data.needing_hours ? (
-            <fieldset className="evidence-choice">
-              <legend>{copy("before_hours_choice", language)}</legend>
-              <label>
-                <input
-                  checked={hoursChoice === "assume"}
-                  name="hours-choice"
-                  onChange={() => setHoursChoice("assume")}
-                  type="radio"
-                  value="assume"
-                />
-                <span>{copy("auto_resolve_free", language)}</span>
-              </label>
-              <label>
-                <input
-                  checked={hoursChoice === "verified"}
-                  name="hours-choice"
-                  onChange={() => setHoursChoice("verified")}
-                  type="radio"
-                  value="verified"
-                />
-                <span>
-                  {copyFormat("before_buy_hours", language, {
-                    cost: evidence.data.verified.estimate_usd.toFixed(3),
-                  })}
-                </span>
-              </label>
-            </fieldset>
+            <p className="field-error" role="status">
+              ⚠ {copyFormat("missing_criteria_warning", language, {
+                needing: evidence.data.needing_hours,
+                places: evidence.data.places,
+              })}
+            </p>
           ) : null}
         </section>
       ) : null}
@@ -455,15 +439,19 @@ export function OptimizePage() {
           className="setup-primary"
           disabled={considered.length === 0 || building}
           onClick={() => {
+            // No branch on how to pay any more: this screen builds, free, and the
+            // priced alternative lives on the evidence screen where it belongs.
             if (!evidence.data?.needing_hours) return generate.mutate();
-            if (hoursChoice === "verified") return buyThenGenerate.mutate();
             return autoResolveAndGenerate.mutate();
           }}
           type="button"
         >
           {building
-            ? copy(buyThenGenerate.isPending ? "before_buying" : "optimizing", language)
-            : copy("generate_plan", language)}
+            ? copy("optimizing", language)
+            : copy(
+                evidence.data?.needing_hours ? "accept_all_criteria" : "generate_plan",
+                language,
+              )}
         </button>
       </div>
       {/* A disabled primary action always says why. */}
