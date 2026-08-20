@@ -3,6 +3,11 @@
   "buildCommand": "npm --prefix web ci && npm --prefix web run build",
   "outputDirectory": "web/dist",
   "functions": {
-    "api/rpc.py": { "maxDuration": 60 }
-  }
+    "api/rpc.py": {
+      "maxDuration": 60
+    }
+  },
+  "regions": [
+    "sin1"
+  ]
 }

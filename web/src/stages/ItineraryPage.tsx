@@ -485,6 +485,10 @@ export function ItineraryPage() {
   const snapshot = useQuery({
     queryKey: ["export_snapshot", tripId, language],
     queryFn: () => rpc<Frozen<ExportSnapshot>>("build_export_snapshot", { trip_id: tripId, language }),
+    // One retry, not the default three. Each attempt is a full snapshot build, so
+    // three failures with backoff kept the screen on "Loading…" for about a minute
+    // before saying anything -- and the error it eventually shows is the useful part.
+    retry: 1,
   });
   // `WF-045`. The stored plan cannot notice that its own evidence moved, so the screen
   // asks. Its own query rather than part of the snapshot: a plan that no longer holds
@@ -495,7 +499,26 @@ export function ItineraryPage() {
     retry: false,
   });
 
-  if (snapshot.isPending) return <p>{copy("loading", language)}</p>;
+  if (snapshot.isPending) {
+    // A bare word on an empty page, for a call that took **10.9 seconds** measured
+    // against the deployment, was reported as "blank". The snapshot is the whole
+    // screen, so there is nothing else to show while it arrives -- but a shape that
+    // says "an itinerary is coming" is not the same picture as a page that failed.
+    return (
+      <section aria-busy="true" className="stage-card">
+        <p aria-live="polite" className="thinking">
+          <span className="thinking-dot" />
+          <span>{copy("loading", language)}</span>
+        </p>
+        <div className="skeleton-card">
+          <span className="skeleton skeleton-line wide" />
+          <span className="skeleton skeleton-line" />
+          <span className="skeleton skeleton-photo short" />
+          <span className="skeleton skeleton-line" />
+        </div>
+      </section>
+    );
+  }
   if (snapshot.isError) {
     const message = snapshot.error instanceof ApiError
       ? copyFrom("OPTIMIZER_CODE_TEXT", snapshot.error.code, language)

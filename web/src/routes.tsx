@@ -14,11 +14,18 @@ import { TripsPage } from "./stages/TripsPage";
 
 function Loading() {
   const { language } = useLanguage();
-  return <p>{copy("loading", language)}</p>;
+  // A word alone on an empty page is the picture of a broken site, and this one is
+  // shown for the three sequential calls `/` makes before it knows where to send
+  // anyone. Reported as "I start from the root and can't see anything".
+  return (
+    <p aria-busy="true" aria-live="polite" className="thinking">
+      <span className="thinking-dot" />
+      <span>{copy("loading", language)}</span>
+    </p>
+  );
 }
 
 function Landing() {
-  const { language } = useLanguage();
   const landing = useQuery({
     queryKey: ["landing"],
     queryFn: async () => {
@@ -29,8 +36,8 @@ function Landing() {
       return `/trips/${recent.trip_id}/${journey.next}`;
     },
   });
-  if (landing.isPending) return <p>{copy("loading", language)}</p>;
-  if (landing.isError) return <p>⚠ {landing.error.message}</p>;
+  if (landing.isPending) return <Loading />;
+  if (landing.isError) return <p className="field-error">⚠ {landing.error.message}</p>;
   return <Navigate replace to={landing.data} />;
 }
 
