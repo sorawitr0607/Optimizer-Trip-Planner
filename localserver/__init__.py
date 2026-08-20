@@ -30,6 +30,7 @@ from travel_planner.exporters import (
 )
 from travel_planner.providers import (
     ProviderBudgetExceeded,
+    ProviderNoMatch,
     ProviderUnavailable,
     RevisionInterpretationUnavailable,
 )
@@ -159,6 +160,7 @@ ACTIONS = (
 
 REFUSAL_STATUS = {
     "not_your_trip": 403,
+    "place_not_in_provider": 404,
     "unknown_trip": 404,
     "unknown_candidate": 404,
     "unknown_plan_variant": 404,
@@ -288,6 +290,11 @@ def error_response(error: Exception) -> tuple[int, dict[str, Any]]:
         return 400, {"code": "bad_request", "detail": {"message": str(error)}}
     if isinstance(error, ProviderBudgetExceeded):
         return 402, {"code": "paid_cap_reached", "detail": {"message": str(error)}}
+    # Before `ProviderUnavailable`, which it subclasses: a reachable provider with no
+    # record of a place is a 404, not an outage, and saying "unavailable" invited
+    # pressing a paid button again to be told the same thing twice.
+    if isinstance(error, ProviderNoMatch):
+        return 404, {"code": "place_not_in_provider", "detail": {"message": str(error)}}
     if isinstance(error, ProviderUnavailable):
         return 503, {"code": "provider_unavailable", "detail": {"message": str(error)}}
     if isinstance(error, RevisionInterpretationUnavailable):

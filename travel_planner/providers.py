@@ -23,6 +23,18 @@ class ProviderUnavailable(RuntimeError):
     pass
 
 
+class ProviderNoMatch(ProviderUnavailable):
+    """The provider answered, and has nothing about this place.
+
+    A subclass, so every `except ProviderUnavailable` still catches it -- but the
+    screen can tell the two apart, and they are not remotely the same news. "Google
+    is unreachable" invites pressing the button again; "Google has no record of
+    阿弥陀ヶ峰" is a complete answer, and pressing again spends money to be told it
+    twice. Reported as `provider_unavailable` appearing for particular places while
+    the same button worked on others, which is exactly what this distinction is.
+    """
+
+
 class ProviderBudgetExceeded(RuntimeError):
     """The monthly paid cap would be crossed; this is a budget stop, not an outage."""
 
@@ -2885,7 +2897,7 @@ class GooglePlacesOpeningHoursProvider:
 
         places = payload.get("places") or []
         if not places:
-            raise ProviderUnavailable("Places returned no match for this place")
+            raise ProviderNoMatch("Places returned no match for this place")
         hours_matches = [
             match for match in places if "regularOpeningHours" in match
         ]
@@ -3025,7 +3037,7 @@ class GooglePlacesCardProvider:
     def normalize(payload: dict[str, Any], *, place: dict[str, Any]) -> dict[str, Any]:
         matches = payload.get("places") or []
         if not matches:
-            raise ProviderUnavailable("Places returned no live match for this place")
+            raise ProviderNoMatch("Places returned no live match for this place")
         match, distance = _best_nearby_match(matches, place)
 
         reviews = []

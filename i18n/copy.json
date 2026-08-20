@@ -262,7 +262,8 @@
       "owner_accepted_straight_line": "Straight-line walking estimate you accepted, deliberately over-stated",
       "LATE_MEAL_NOT_ACCEPTED": "This meal would still be running after your meal window closes, and you asked to avoid late meals.",
       "QUEUE_LONGER_THAN_ACCEPTED": "The queue here is longer than you said you would accept.",
-      "not_your_trip": "This trip belongs to someone else on this deployment. Your own trips are on the home screen."
+      "not_your_trip": "This trip belongs to someone else on this deployment. Your own trips are on the home screen.",
+      "place_not_in_provider": "Google has no record of this place, so there is no live gallery, rating or reviews to load. The free OpenStreetMap details and its position on the map are all that exist for it — asking again will not find more."
     },
     "th": {
       "broader_replan_required": "ต้องวางแผนใหม่ในภาพกว้าง — วันนี้รับเพิ่มไม่ไหว",
@@ -404,7 +405,8 @@
       "owner_accepted_straight_line": "ค่าประมาณการเดินแบบเส้นตรงที่คุณยอมรับ ซึ่งตั้งใจให้สูงกว่าจริง",
       "LATE_MEAL_NOT_ACCEPTED": "มื้อนี้จะยังไม่จบเมื่อเลยช่วงเวลามื้ออาหารของคุณ และคุณเลือกหลีกเลี่ยงมื้อดึก",
       "QUEUE_LONGER_THAN_ACCEPTED": "คิวที่นี่นานกว่าที่คุณระบุว่ารับได้",
-      "not_your_trip": "ทริปนี้เป็นของผู้ใช้อื่นในระบบนี้ ทริปของคุณอยู่ที่หน้าแรก"
+      "not_your_trip": "ทริปนี้เป็นของผู้ใช้อื่นในระบบนี้ ทริปของคุณอยู่ที่หน้าแรก",
+      "place_not_in_provider": "Google ไม่มีข้อมูลของสถานที่นี้ จึงไม่มีแกลเลอรี คะแนน หรือรีวิวสดให้โหลด มีเพียงข้อมูลฟรีจาก OpenStreetMap และตำแหน่งบนแผนที่ การกดซ้ำจะไม่พบข้อมูลเพิ่ม"
     }
   },
   "REJECTION_TEXT": {
