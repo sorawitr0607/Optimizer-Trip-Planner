@@ -495,14 +495,15 @@ export function OptimizePage() {
           }}
           type="button"
         >
+          {/* Always "build". This borrowed the accept label when a plan existed, which
+              put "Accept all criteria and build the plan — free" here and "Accept
+              criteria and rebuild" in the unfit section below -- the same mutation under
+              two names, on screen together, which is the duplicate that keeps being
+              reported. Accepting belongs where the failure is described; this button
+              only ever builds. */}
           {building
             ? copy(buyThenGenerate.isPending ? "before_buying" : "optimizing", language)
-            : copy(
-                evidence.data?.needing_hours && proposal
-                  ? "accept_all_criteria"
-                  : "generate_plan",
-                language,
-              )}
+            : copy("generate_plan", language)}
         </button>
       </div>
       {/* A disabled primary action always says why. */}
