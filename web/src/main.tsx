@@ -70,6 +70,30 @@ const requested = parameters.get("baseline_language");
 const language: Language | undefined =
   requested === "th" ? "th" : requested === "en" ? "en" : undefined;
 
+// Vercel Speed Insights, without `@vercel/speed-insights`.
+//
+// That package is a wrapper whose whole job is to inject the one script below, and
+// `WF-026` fixes the web runtime at six dependencies -- the rule GSAP was refused
+// under. A seventh for a file the platform already serves from this origin is the
+// cost with none of the benefit. `WF-034` is satisfied for the same reason: the
+// path is same-origin, not a remote host.
+//
+// What the wrapper does that this does not is report the route *pattern*, so
+// `/trips/:tripId/places` is one page rather than one per trip. Left as raw paths
+// on purpose: this is a personal planner with a handful of trips, and the
+// cardinality that would cost a real product nothing here.
+//
+// Production only. The script is served by the deployment, so asking for it from
+// `vite dev` is a guaranteed 404 in the console. Never during a capture, for the
+// reason the forecast and the summaries prefetch are also skipped: a capture
+// observes the app rather than operating it, and this one reports.
+if (import.meta.env.PROD && !document.documentElement.dataset.capture) {
+  const insights = document.createElement("script");
+  insights.src = "/_vercel/speed-insights/script.js";
+  insights.defer = true;
+  document.head.append(insights);
+}
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
