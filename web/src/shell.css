@@ -754,7 +754,27 @@
 .setup-fields {
   display: grid;
   gap: 12px;
+  /* One column, capped: a form label and its input are prose, and 34rem is the
+     measure that keeps them readable. */
   grid-template-columns: minmax(0, 34rem);
+}
+
+/* Chips are not prose. On a wide screen the single capped column left the whole right
+   half of the page empty while the four style fieldsets wrapped their chips into five
+   or six rows inside 34rem. A second, elastic track takes that space: the text inputs
+   stay in the measured column, and anything spanning `1 / -1` -- which is every chip
+   fieldset and every traveller card -- gets the full width. */
+@media (min-width: 1040px) {
+  .setup-fields {
+    grid-template-columns: minmax(0, 34rem) minmax(0, 1fr);
+  }
+
+  /* Still one per row, still measured. Only the spanning children widen. */
+  .setup-fields > label,
+  .setup-fields > p,
+  .setup-fields > .setup-counter-group {
+    grid-column: 1;
+  }
 }
 
 .setup-fields > label {
@@ -6507,7 +6527,10 @@
   right: 16px;
   top: 16px;
   width: min(420px, calc(100vw - 32px));
-  z-index: 4;
+  /* Above everything, including `.landing::after`'s grain at 6 -- which is what was
+     painting over a panel that had already declared itself fixed. A drawer that
+     something else draws on top of is not a drawer. */
+  z-index: 60;
 }
 
 .shortlist-head {
