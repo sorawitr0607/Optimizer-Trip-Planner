@@ -33,6 +33,13 @@ HANDLERS: dict[str, str] = {
     "discover_places": "discover_places",
     "generate_plan_preview": "generate_plan_preview",
     "refresh_routes": "refresh_routes",
+    # `http_504` from a phone, reported with a screenshot. `recommend_areas` asks
+    # Overpass for amenity counts around every candidate station neighbourhood --
+    # tens of seconds of work -- and it was running inline in a function capped at
+    # 60. The gateway gave up before the answer arrived, so the stage was
+    # unreachable on the deployment while working locally, where nothing caps it.
+    # Queued now, like the other three operations that outlast a request.
+    "recommend_areas": "recommend_areas",
 }
 
 #: The payload keys each operation will accept, because `method(**payload)` on an
@@ -43,6 +50,7 @@ PAYLOAD_KEYS: dict[str, frozenset[str]] = {
     "discover_places": frozenset({"force_refresh"}),
     "generate_plan_preview": frozenset({"time_limit_seconds"}),
     "refresh_routes": frozenset(),
+    "recommend_areas": frozenset(),
 }
 
 QUEUED, RUNNING, DONE, FAILED = "queued", "running", "done", "failed"
