@@ -221,7 +221,11 @@ class SetupConfirmationTest(unittest.TestCase):
         groups = self.actions.setup_vocabulary()["tag_groups"]
         offered = [tag for group in groups.values() for tag in group]
 
-        self.assertEqual(21, len(offered))
+        # 33 since 2026-08-20: twelve tags added to the style groups. The number is
+        # here so an empty or truncated vocabulary cannot make the loop below pass by
+        # iterating over nothing -- it is a floor on coverage, not a claim about the
+        # taxonomy, so it moves whenever the taxonomy legitimately does.
+        self.assertEqual(33, len(offered))
         for tag in offered:
             for language in ("en", "th"):
                 self.assertIn(tag, tags[language], f"{tag} missing in {language}")

@@ -7,11 +7,23 @@ from datetime import date, time
 from typing import Any
 
 
+# Every tag here has to be *produced* by something. `ranking.CATEGORY_TAGS` maps the
+# categories discovery actually returns onto these codes, so a tag no category maps to
+# is a control that cannot change an answer -- and two of the avoid tags below are
+# already in that position. The five added on 2026-08-20 each name a distinction the
+# catalogue can already make: art against culture generally, history against the same,
+# viewpoints against sightseeing at large, water against nature, and the family-facing
+# places (theme parks, zoos, aquaria) which were reachable only through "activity".
 MAIN_STYLE_TAGS = (
     "sightseeing",
     "culture",
+    "art",
+    "history",
     "nature",
+    "views",
+    "water",
     "activity",
+    "family",
     "shopping",
     "chill",
 )
@@ -22,6 +34,13 @@ ALSO_ENJOY_TAGS = (
     "markets",
     "architecture",
     "neighborhoods",
+    "parks_gardens",
+    "animals",
+    "performing_arts",
+    "religious_sites",
+    "theme_parks",
+    "malls",
+    "wellness",
 )
 AVOID_TAGS = (
     "tourist_traps",

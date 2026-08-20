@@ -10,6 +10,8 @@ import {
   type Trip,
 } from "../api/client";
 import { copy, copyFormat, copyFrom } from "../i18n/copy";
+import { Minus, Plus } from "lucide-react";
+
 import { useLanguage } from "../i18n/LanguageProvider";
 
 // Six, because the wizard now opens on a step that asks for nothing and only says
@@ -589,6 +591,39 @@ export function SetupPage() {
               {copy("main_style_help", language)}
             </span>
           )}
+          <label>
+            {copy("owner_age", language)}
+            <input
+              aria-describedby={ownerAgeInvalid ? "owner-age-error owner-age-help" : "owner-age-help"}
+              aria-invalid={ownerAgeInvalid || undefined}
+              autoComplete="off"
+              // `numeric`, so a phone offers digits rather than a full keyboard for a
+              // field that can only ever hold digits.
+              inputMode="numeric"
+              id="owner-age"
+              max={120}
+              min={0}
+              name="owner-age"
+              onChange={(event) =>
+                edit({ owner_age: event.target.value ? Number(event.target.value) : null })
+              }
+              step={1}
+              type="number"
+              value={values.owner_age ?? ""}
+            />
+          </label>
+          {ownerAgeInvalid ? (
+            <p className="setup-field-error" id="owner-age-error" role="alert">
+              ⚠ {copy("age_invalid", language)}
+            </p>
+          ) : null}
+          {/* The hint is *named* and pointed at by the field above, so a screen reader
+              reads the guidance with the field instead of stranding it as loose text
+              after it. Every hint on this form was unattached; a sighted user could see
+              the relationship and nobody else could. */}
+          <p className="setup-hint" id="owner-age-help">
+            {copy("owner_age_help", language)}
+          </p>
           {(["main_style", "also_enjoy", "avoid", "comfort"] as const).map((group) => (
             <fieldset
               aria-describedby={
@@ -626,39 +661,6 @@ export function SetupPage() {
               ))}
             </fieldset>
           ))}
-          <label>
-            {copy("owner_age", language)}
-            <input
-              aria-describedby={ownerAgeInvalid ? "owner-age-error owner-age-help" : "owner-age-help"}
-              aria-invalid={ownerAgeInvalid || undefined}
-              autoComplete="off"
-              // `numeric`, so a phone offers digits rather than a full keyboard for a
-              // field that can only ever hold digits.
-              inputMode="numeric"
-              id="owner-age"
-              max={120}
-              min={0}
-              name="owner-age"
-              onChange={(event) =>
-                edit({ owner_age: event.target.value ? Number(event.target.value) : null })
-              }
-              step={1}
-              type="number"
-              value={values.owner_age ?? ""}
-            />
-          </label>
-          {ownerAgeInvalid ? (
-            <p className="setup-field-error" id="owner-age-error" role="alert">
-              ⚠ {copy("age_invalid", language)}
-            </p>
-          ) : null}
-          {/* The hint is *named* and pointed at by the field above, so a screen reader
-              reads the guidance with the field instead of stranding it as loose text
-              after it. Every hint on this form was unattached; a sighted user could see
-              the relationship and nobody else could. */}
-          <p className="setup-hint" id="owner-age-help">
-            {copy("owner_age_help", language)}
-          </p>
           {/* The free-text boxes never said what happens to what you type, so they
               read as a comment field nobody reads. They are parsed for constraints
               when the plan is built, and an example is worth more than the label. */}
@@ -682,22 +684,48 @@ export function SetupPage() {
       {step === 4 ? (
         <div className="setup-fields">
           <p className="setup-hint setup-wide">{copy("setup_travellers_help", language)}</p>
-          <label>
-            {copy("member_count", language)}
-            <input
+          {/* The same counter the landing page uses for party size, down to the class
+              names. It was a `<input type="number">`: two four-pixel browser arrows for
+              a value that only ever moves by one, next to a page that already had a
+              proper control for exactly this question. `MAX_MEMBERS` still bounds it,
+              and the value stays readable as text rather than living inside a spinner. */}
+          <div className="lab-control-group">
+            <span className="lab-control-label" id="member-count-label">
+              {copy("member_count", language)}
+            </span>
+            <div
               aria-describedby="member-count-help"
-              inputMode="numeric"
-              max={MAX_MEMBERS}
-              min={0}
-              name="member-count"
-              onChange={(event) =>
-                setMemberCount(Math.min(Number(event.target.value || 0), MAX_MEMBERS))
-              }
-              step={1}
-              type="number"
-              value={values.travellers.length}
-            />
-          </label>
+              aria-labelledby="member-count-label"
+              className="lab-counter"
+              role="group"
+            >
+              <button
+                aria-label={copy("landing_lab_decrease", language)}
+                className="lab-counter-btn"
+                disabled={values.travellers.length <= 0}
+                onClick={() => setMemberCount(Math.max(0, values.travellers.length - 1))}
+                type="button"
+              >
+                <Minus aria-hidden="true" size={13} />
+              </button>
+              {/* Announced on change, because the number is the only thing that moves
+                  and a screen reader would otherwise hear nothing at all. */}
+              <span aria-live="polite" className="lab-counter-val">
+                {values.travellers.length} {copy("travellers", language)}
+              </span>
+              <button
+                aria-label={copy("landing_lab_increase", language)}
+                className="lab-counter-btn"
+                disabled={values.travellers.length >= MAX_MEMBERS}
+                onClick={() =>
+                  setMemberCount(Math.min(MAX_MEMBERS, values.travellers.length + 1))
+                }
+                type="button"
+              >
+                <Plus aria-hidden="true" size={13} />
+              </button>
+            </div>
+          </div>
           <p className="setup-hint" id="member-count-help">
             {copy("member_count_help", language)}
           </p>

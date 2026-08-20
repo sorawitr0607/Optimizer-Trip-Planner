@@ -443,7 +443,19 @@
       "rewarding_walks": "Rewarding walks",
       "shopping": "Shopping",
       "sightseeing": "Sightseeing",
-      "tourist_traps": "Tourist traps"
+      "tourist_traps": "Tourist traps",
+      "art": "Art & galleries",
+      "history": "History & heritage",
+      "views": "Viewpoints",
+      "water": "Sea, lakes & water",
+      "family": "Family friendly",
+      "parks_gardens": "Parks & gardens",
+      "animals": "Animals & wildlife",
+      "performing_arts": "Theatre & performance",
+      "religious_sites": "Temples & shrines",
+      "theme_parks": "Theme & water parks",
+      "malls": "Malls & department stores",
+      "wellness": "Spa & wellness"
     },
     "th": {
       "activity": "กิจกรรม",
@@ -466,7 +478,19 @@
       "rewarding_walks": "เดินเมื่อมีสิ่งคุ้มค่าให้ชม",
       "shopping": "ช้อปปิ้ง",
       "sightseeing": "เที่ยวชมเมือง",
-      "tourist_traps": "แหล่งดักนักท่องเที่ยว"
+      "tourist_traps": "แหล่งดักนักท่องเที่ยว",
+      "art": "ศิลปะและหอศิลป์",
+      "history": "ประวัติศาสตร์และมรดก",
+      "views": "จุดชมวิว",
+      "water": "ทะเล ทะเลสาบ และสายน้ำ",
+      "family": "เหมาะกับครอบครัว",
+      "parks_gardens": "สวนสาธารณะและสวนพฤกษศาสตร์",
+      "animals": "สัตว์และสัตว์ป่า",
+      "performing_arts": "โรงละครและศิลปะการแสดง",
+      "religious_sites": "วัดและศาสนสถาน",
+      "theme_parks": "สวนสนุกและสวนน้ำ",
+      "malls": "ห้างสรรพสินค้า",
+      "wellness": "สปาและการผ่อนคลาย"
     }
   },
   "TEXT": {
