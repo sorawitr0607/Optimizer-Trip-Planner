@@ -805,25 +805,29 @@ export function OptimizePage() {
                     routes and rebuild", which named one of the three things it does and
                     read as a second, different action -- two buttons for one behaviour,
                     reported as redundant and confusing. */}
-                {needsRoutes ? (
+                {/* This screen's own words, not the general free-build label. Routes are
+                    *measured*, not assumed -- a router is asked, and when it refuses the
+                    leg stays unverified however the hours were filled. That is why "the
+                    route is not verified" can follow choosing "assume free": the free
+                    choice covers hours, and this covers what the measuring could not
+                    reach. Replacing the label rather than adding a second control, so
+                    one action is never two buttons on one screen. */}
+                {needsRoutes && !autoResolveAndGenerate.isPending ? (
                   <>
+                    <p className="field-error" role="status">
+                      ⚠ {copy("routes_unverified_warning", language)}
+                    </p>
                     <button
                       className="setup-primary"
-                      disabled={autoResolveAndGenerate.isPending}
                       onClick={() => autoResolveAndGenerate.mutate()}
                       type="button"
                     >
-                      {autoResolveAndGenerate.isPending
-                        ? copy("loading", language)
-                        : autoResolveLabel}
+                      {copy("accept_walking_estimate", language)}
                     </button>
-                    <small className="setup-hint">{copy("auto_resolve_note", language)}</small>
                   </>
                 ) : null}
-                {needsRoutes && autoResolveAndGenerate.isPending ? (
-                  <BuildProgress language={language} />
-                ) : null}
-                <ul className="optimize-unfit-list">
+                {autoResolveAndGenerate.isPending ? <BuildProgress language={language} /> : null}
+                <ul className="optimize-unfit-list" hidden={autoResolveAndGenerate.isPending}>
                   {unfit.map((item) => (
                     <li key={item.place_id}>
                       <span className="optimize-unfit-name">

@@ -557,10 +557,13 @@ export function PlacesPage() {
     const about = summaries.data?.[choice.place_id];
     return galleryFor(about, byId[choice.place_id]).length <= 1;
   });
-  // `enrich_place_card` is the tested paid path: one details call and up to
-  // PHOTO_LIMIT photographs, per place. Priced from the same rate card the cap uses,
-  // so this number and the cap cannot disagree.
-  const topUpCost = thinlyPictured.length * (0.017 + PHOTO_LIMIT * 0.007);
+  // One card's worth, priced from the same rate card the cap uses so this number and
+  // the cap cannot disagree: one details call plus up to PHOTO_LIMIT photographs.
+  const oneCardCost = 0.017 + PHOTO_LIMIT * 0.007;
+  // Whether the card *currently open* is one of the thin ones. The button belongs
+  // here rather than in the shortlist head, which priced places the owner was not
+  // looking at and put four controls and a paragraph into a 373px drawer header.
+  const selectedIsThin = thinlyPictured.some((c) => c.place_id === selectedId);
 
   const paidAllowed = Boolean(detailsCost.data?.allowed && photosCost.data?.allowed);
   const paidEstimate = (detailsCost.data?.estimate_usd ?? 0) + (photosCost.data?.estimate_usd ?? 0);
@@ -1067,6 +1070,17 @@ export function PlacesPage() {
                 <div className="place-paid-action">
                   <p className="setup-hint">{detailsCost.isPending || photosCost.isPending ? copy("loading", language) : paidCaption}</p>
                   <button disabled={!paidAllowed || enrich.isPending} onClick={() => enrich.mutate()} type="button">{copy("load_live_details", language)}</button>
+                  {/* The same call, offered by the case it answers: this card has one
+                      photograph or none, and the free sources have nothing more. Only
+                      shown when that is true of the card on screen. */}
+                  {selectedIsThin && paidAllowed ? (
+                    <p className="setup-hint">
+                      {copy("photos_top_up_note", language)}{" "}
+                      {copy("photos_top_up", language)
+                        .replace("{count}", "1")
+                        .replace("{cost}", oneCardCost.toFixed(2))}
+                    </p>
+                  ) : null}
                 </div>
               ))}
 
@@ -1132,32 +1146,10 @@ export function PlacesPage() {
           <span>{copy("confirming_places", language)}</span>
         </p>
       ) : null}
-            {/* Only where the free sources came up short, and only for places already
-                on the shortlist -- so the spend follows a decision the owner has made
-                rather than paying to look at everything. Wikimedia carries photographs
-                for places with a Wikidata entity, and the ranking is blind to fame on
-                purpose, so the top of a good list is exactly where free coverage thins
-                out. */}
-            {thinlyPictured.length && paidAllowed ? (
-              <button
-                disabled={topUpPhotos.isPending}
-                onClick={() => topUpPhotos.mutate(thinlyPictured.map((c) => c.place_id))}
-                type="button"
-              >
-                {topUpPhotos.isPending
-                  ? copy("loading", language)
-                  : copy("photos_top_up", language)
-                      .replace("{count}", String(thinlyPictured.length))
-                      .replace("{cost}", topUpCost.toFixed(2))}
-              </button>
-            ) : null}
             <button onClick={() => setShortlistOpen(false)} type="button">
               {copy("close", language)}
             </button>
           </div>
-          {thinlyPictured.length && paidAllowed ? (
-            <p className="setup-hint">{copy("photos_top_up_note", language)}</p>
-          ) : null}
           {topUpPhotos.isSuccess ? (
             <p aria-live="polite" className="setup-hint">
               {copy("photos_top_up_done", language)
