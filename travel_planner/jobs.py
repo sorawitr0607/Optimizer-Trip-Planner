@@ -24,6 +24,8 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
+from .wire import jsonable
+
 #: Only these may be enqueued. The same reasoning as the API's literal method
 #: allowlist: a queue that will run any named function is a remote code path, and
 #: `dir()`-style dispatch is how one gets built by accident.
@@ -234,7 +236,13 @@ def run_one(queue: JobQueue, actions: Any, worker_id: str) -> dict | None:
         method: Callable = getattr(actions, HANDLERS[job["kind"]])
         payload = json.loads(job["payload_json"])
         result = method(trip_id=job["trip_id"], **payload)
-        queue.complete(job["id"], result)
+        # The same conversion the HTTP path applies. Without it the action's return
+        # went through `json.dumps(..., default=str)`, so a dataclass reached the
+        # browser as its own Python repr inside a string -- and the screen looking
+        # for `.candidates.data` on that said "Cannot read properties of undefined
+        # (reading 'data')". The work had succeeded every time; only its shape was
+        # wrong, which is why the worker logged `done in 33.6s` and the page broke.
+        queue.complete(job["id"], jsonable(result))
     except Exception as error:  # noqa: BLE001 - the message is the product here
         queue.fail(job["id"], f"{type(error).__name__}: {error}")
     return queue.get(job["id"])

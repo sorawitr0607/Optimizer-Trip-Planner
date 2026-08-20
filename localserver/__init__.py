@@ -21,6 +21,7 @@ from travel_planner.actions import PlannerActions, PlannerRefusal
 from travel_planner.copy import OPTIMIZER_CODE_TEXT, TEXT
 from travel_planner.core import FrozenSnapshot
 from travel_planner.credentials import load_local_credentials
+from travel_planner.wire import jsonable
 from travel_planner.exporters import (
     checklist_ics,
     money_workbook_xlsx,
@@ -204,20 +205,6 @@ REFUSAL_STATUS = {
 
 class BadRequest(ValueError):
     pass
-
-
-def jsonable(value: Any) -> Any:
-    """Convert domain records to their frozen JSON wire shapes."""
-
-    if isinstance(value, FrozenSnapshot):
-        return {"data": value.as_dict(), "sha256": value.sha256}
-    if is_dataclass(value):
-        return {field.name: jsonable(getattr(value, field.name)) for field in fields(value)}
-    if isinstance(value, Mapping):
-        return {key: jsonable(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [jsonable(item) for item in value]
-    return value
 
 
 def dispatch(actions: PlannerActions, method: str, payload: Mapping[str, Any]) -> Any:

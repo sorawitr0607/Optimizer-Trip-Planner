@@ -8,6 +8,8 @@ against a real Postgres.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -115,3 +117,60 @@ class JobQueueGuardsTest(unittest.TestCase):
     def test_a_payload_may_only_carry_arguments_the_operation_takes(self) -> None:
         with self.assertRaises(ValueError):
             self.queue.enqueue("discover_places", "T1", {"database_path": "/etc/passwd"})
+
+class QueuedResultShapeTest(unittest.TestCase):
+    """A queued result must be the shape the HTTP path would have returned.
+
+    `discover_places` returns a dataclass holding a `FrozenSnapshot`. The queue
+    stored the return value through `json.dumps(..., default=str)`, so the dataclass
+    became its own Python repr inside a JSON string -- and the screen reading
+    `.candidates.data` off that reported "Cannot read properties of undefined
+    (reading 'data')" while the worker logged the job as done in 33.6 seconds. The
+    work was never the problem; only what was written down about it.
+    """
+
+    def test_a_dataclass_result_survives_the_queue(self):
+        from dataclasses import dataclass
+
+        from travel_planner.core import FrozenSnapshot
+        from travel_planner.jobs import HANDLERS, JobQueue, run_one
+        from travel_planner.wire import jsonable
+
+        payload = json.dumps({"candidates": [{"place_id": "node_1"}]}, sort_keys=True)
+        snapshot = FrozenSnapshot(
+            canonical_json=payload,
+            sha256=hashlib.sha256(payload.encode("utf-8")).hexdigest(),
+        )
+
+        @dataclass
+        class DiscoveryLike:
+            run_id: str
+            candidates: FrozenSnapshot
+
+        answer = DiscoveryLike(run_id="run-1", candidates=snapshot)
+
+        class FakeActions:
+            def __init__(self, store):
+                self.store = store
+
+            def discover_places(self, *, trip_id):  # noqa: ARG002 - shape under test
+                return answer
+
+        with tempfile.TemporaryDirectory() as directory:
+            store = SQLiteStore(str(Path(directory) / "jobs.sqlite3"))
+            queue = JobQueue(store)
+            actions = FakeActions(store)
+            self.assertIn("discover_places", HANDLERS)
+            queue.enqueue("discover_places", "trip_x", {})
+            job = run_one(queue, actions, "worker-1")
+
+        self.assertEqual(job["status"], "done")
+        stored = json.loads(job["result_json"])
+        # The exact structure the browser indexes into.
+        self.assertEqual(stored, jsonable(answer))
+        self.assertIsInstance(stored, dict)
+        self.assertIn("candidates", stored)
+        self.assertIn("data", stored["candidates"])
+        self.assertEqual(stored["candidates"]["sha256"], snapshot.sha256)
+
+
