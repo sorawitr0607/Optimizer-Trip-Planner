@@ -9063,18 +9063,55 @@
     width: 100%;
   }
 
-  /* The landmark cards. Each is a button holding drawn art and a label, laid out for
-     a pointer that can hover — on a phone the art keeps its desktop aspect while the
-     column narrows, so every box gained the band of empty ground reported as "a lot of
-     space and white indent". The art scales with the box instead. */
+  /* The landmark field stops being a scene and becomes a list.
+
+     This is the second attempt. The first gave `.landmark-place` `width: 100%` and the
+     art a 4/3 box, which fixed the empty band by making every landmark a full-width
+     square with a small drawing adrift in the middle of it -- worse than what it
+     replaced, and with a label still escaping the right edge because the places are
+     positioned by coordinate and a coordinate near 1200 has nowhere to go in 390px.
+
+     A scene laid out by coordinate cannot survive this width, so on a phone it is not
+     one: static positioning, one landmark per row, art at a size a thumb can read
+     without scrolling past it. The desktop scene is untouched. */
+  .world-landmarks {
+    display: grid;
+    gap: 12px;
+    height: auto;
+    position: static;
+  }
+
   .landmark-place {
+    inset: auto;
+    position: static;
+    transform: none;
     width: 100%;
   }
 
-  .landmark-art {
-    aspect-ratio: 4 / 3;
-    height: auto;
+  .landmark {
+    align-items: center;
+    display: grid;
+    gap: 10px;
+    grid-template-columns: 96px minmax(0, 1fr);
+    text-align: left;
     width: 100%;
+  }
+
+  /* Its own column, at a size that leaves room for the words beside it rather than
+     taking the whole row and pushing them under. */
+  .landmark-art {
+    aspect-ratio: 1 / 1;
+    height: auto;
+    max-width: 96px;
+    width: 100%;
+  }
+
+  /* Beside the art, wrapping, and inside the frame — it was absolutely placed for the
+     scene and that is what put "Places" off the right edge. */
+  .landmark-label {
+    inset: auto;
+    position: static;
+    white-space: normal;
   }
 
   /* Opened detail was laid out beside the landmark and had nowhere to go at this
