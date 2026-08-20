@@ -6875,14 +6875,28 @@
   z-index: 3;
 }
 
-/* In the flow on a phone: one floating control over a 390px screen is one too many, and
-   the drawer it opens covers the whole width anyway. */
+/* Sticky on a phone, not static.
+
+   `position: static` put it in the flow at the top of the screen, so it scrolled away
+   with the copy and the shortlist became unreachable from anywhere below the first
+   screenful -- which is what "your shortlisted not follow" reported, with a screenshot
+   of it sitting inline above "Choose where to go".
+
+   Sticky rather than fixed, which is what the original comment was reaching for: one
+   floating control over 390px is one too many, and sticky is not floating. It occupies
+   its own row, full width, and stops at the top edge when the page scrolls past it --
+   always reachable, never over anything. The panel it opens is a bottom sheet, so the
+   two do not meet. */
 @media (max-width: 768px) {
   .shortlist-handle {
     justify-content: center;
     margin-bottom: 12px;
-    position: static;
+    position: sticky;
+    /* Clear of the browser's own chrome, which on a phone overlays the top. */
+    top: 8px;
     width: 100%;
+    /* Above the page content it slides over, below the sheet at 60. */
+    z-index: 20;
   }
 }
 
