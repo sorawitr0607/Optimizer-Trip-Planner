@@ -4,6 +4,8 @@ import { Link, useNavigate, useParams } from "react-router";
 
 import { Thinking } from "../shared/Thinking";
 import { ComfortTradeoffs } from "./ComfortTradeoffs";
+import { BuildStages } from "./BuildStages";
+import { BUILD_STAGES } from "../shared/buildStages";
 import { StayPlanner } from "./StayPlanner";
 
 import {
@@ -89,10 +91,35 @@ const BUILD_LINES = [
  * 210 seconds, not 52. The 52 is the optimizer alone; the free path collects route
  * evidence first, which on a fresh 15-place trip took the whole thing to 210.
  */
-function BuildProgress({ language }: { language: Language }) {
+/**
+ * The wait, and how much of it can honestly be described.
+ *
+ * `stage` is supplied only by `autoResolveAndGenerate`, which awaits four separate calls
+ * and therefore *knows* where it is -- each one returning is a fact, not an estimate. The
+ * other two build paths are a single `generate_plan_preview` (plus, on the paid one, a
+ * purchase), so they have no milestones to report and keep the rotating lines alone.
+ * `Thinking` sits inside whichever stage is active, because the long stage really does
+ * have nothing to say beyond "still running, this many seconds so far".
+ */
+function BuildProgress({
+  language,
+  stage,
+  routesMeasured,
+}: {
+  language: Language;
+  stage?: number;
+  routesMeasured?: number;
+}) {
+  const thinking = <Thinking expectSeconds={210} language={language} lines={BUILD_LINES} />;
   return (
     <div className="optimize-working" aria-busy="true">
-      <Thinking expectSeconds={210} language={language} lines={BUILD_LINES} />
+      {stage === undefined ? (
+        thinking
+      ) : (
+        <BuildStages language={language} reached={stage} routesMeasured={routesMeasured}>
+          {thinking}
+        </BuildStages>
+      )}
       <p className="setup-hint">{copy("optimizing_note", language)}</p>
     </div>
   );
@@ -226,10 +253,16 @@ export function OptimizePage() {
   // looked like: the second run's result replacing the first's, twice as slowly. A ref
   // is set synchronously, so the second click has nothing to do.
   const buildingRef = useRef(false);
+  // How many of the free build's four calls have returned, and the server's own count of
+  // route pairs measured. Both are facts the page already had and was discarding.
+  const [buildStage, setBuildStage] = useState(0);
+  const [routesMeasured, setRoutesMeasured] = useState(0);
   const autoResolveAndGenerate = useMutation({
     mutationFn: async () => {
       if (buildingRef.current) return null;
       buildingRef.current = true;
+      setBuildStage(0);
+      setRoutesMeasured(0);
       // No invented hotel. This used to call `confirm_accommodation_base("")`, which
       // geocodes `"{destination} Station"` — and for "New York, United States" that
       // returned a station in upstate New York State, 286 km from Manhattan and from all
@@ -254,14 +287,21 @@ export function OptimizePage() {
       } catch (err) {
         void err;
       }
+      // Marked done even when it threw: the stage is "we asked", and the catch above is
+      // there because an unreachable clock is not a reason to abandon the build. Claiming
+      // it succeeded would be the dishonest version.
+      setBuildStage(1);
       await rpc("confirm_default_opening_windows", { trip_id: tripId, start: "09:00", end: "18:00" });
+      setBuildStage(2);
       // Until every pair is measured, not once: one call covers sixty new pairs and
       // eleven places need 110, so a single pass left the rest fatally unverified.
-      await collectRouteEvidence(tripId);
+      await collectRouteEvidence(tripId, setRoutesMeasured);
+      setBuildStage(3);
       return rpc<PlanPreview>("generate_plan_preview", { trip_id: tripId });
     },
     onSuccess: async () => {
       setRefusal(null);
+      setBuildStage(BUILD_STAGES.length);
       await queryClient.invalidateQueries({ queryKey: ["plan_preview", tripId] });
       await queryClient.invalidateQueries({ queryKey: ["opening_options", tripId] });
       await queryClient.invalidateQueries({ queryKey: ["journey", tripId] });
@@ -392,7 +432,9 @@ export function OptimizePage() {
             {autoResolveAndGenerate.isPending ? copy("loading", language) : autoResolveLabel}
           </button>
           <small className="setup-hint">{copy("auto_resolve_note", language)}</small>
-          {autoResolveAndGenerate.isPending ? <BuildProgress language={language} /> : null}
+          {autoResolveAndGenerate.isPending ? (
+            <BuildProgress language={language} routesMeasured={routesMeasured} stage={buildStage} />
+          ) : null}
         </div>
       ) : null}
 
@@ -827,7 +869,9 @@ export function OptimizePage() {
                     </button>
                   </>
                 ) : null}
-                {autoResolveAndGenerate.isPending ? <BuildProgress language={language} /> : null}
+                {autoResolveAndGenerate.isPending ? (
+            <BuildProgress language={language} routesMeasured={routesMeasured} stage={buildStage} />
+          ) : null}
                 <ul className="optimize-unfit-list" hidden={autoResolveAndGenerate.isPending}>
                   {unfit.map((item) => (
                     <li key={item.place_id}>

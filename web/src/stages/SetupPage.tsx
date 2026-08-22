@@ -19,12 +19,23 @@ import { useLanguage } from "../i18n/LanguageProvider";
 // step-count-agnostic by S3's decision, so this is a constant change, not a
 // component change.
 const STEP_COUNT = 5;
+// The step *indicator* keeps the short nouns, because a progress rail has room for a
+// word and not for a sentence. The heading above each step asks the question instead:
+// "Trip basics" names a topic and leaves the reader to work out what is wanted, which is
+// the whole of why this form read as unfriendly.
 const STEP_TITLES = [
   "welcome",
   "trip_basics",
   "owner_style",
   "travellers",
   "review",
+];
+const STEP_QUESTIONS = [
+  "welcome",
+  "ask_trip_basics",
+  "ask_owner_style",
+  "ask_travellers",
+  "ask_review",
 ];
 // A POC view convention, not a core rule: setup.py accepts any number.
 const MAX_MEMBERS = 8;
@@ -64,6 +75,8 @@ interface Draft {
   start_date: string | null;
   end_date: string | null;
   arrival_time: string | null;
+  active_start: string;
+  active_end: string;
   departure_time: string | null;
   accommodation_status: string;
   owner_age: number | null;
@@ -81,6 +94,8 @@ const EMPTY: Draft = {
   start_date: null,
   end_date: null,
   arrival_time: null,
+  active_start: "08:00",
+  active_end: "22:00",
   departure_time: null,
   accommodation_status: "not_booked",
   owner_age: null,
@@ -104,6 +119,8 @@ function toDraft(record: SetupDraft | null): Draft {
     start_date: basics.start_date ?? null,
     end_date: basics.end_date ?? null,
     arrival_time: basics.arrival_time ?? null,
+    active_start: basics.active_start ?? "08:00",
+    active_end: basics.active_end ?? "22:00",
     departure_time: basics.departure_time ?? null,
     accommodation_status:
       basics.accommodation_status === "unknown" || !basics.accommodation_status
@@ -372,7 +389,7 @@ export function SetupPage() {
       ) : null}
 
       <h2 className="setup-step-title" ref={stepHeading} tabIndex={-1}>
-        {copy(STEP_TITLES[step - 1], language)}
+        {copy(STEP_QUESTIONS[step - 1], language)}
       </h2>
 
       {/* Nothing is asked here. The wizard used to open on a date checkbox, so a
@@ -466,6 +483,43 @@ export function SetupPage() {
               ) : null}
             </>
           )}
+          {/* The hours the owner wants to be out, which `_optimizer_input` used to invent
+              as 08:00-22:00 for every trip on earth. Two plain time inputs rather than a
+              range control: the browser's own picker is the accessible one, and there are
+              exactly two values. Pre-filled with the old constants, so leaving them alone
+              is the same plan as before. */}
+          <fieldset className="setup-hours setup-wide">
+            <legend className="setup-legend">{copy("active_hours", language)}</legend>
+            <label>
+              {copy("active_start", language)}
+              <input
+                aria-describedby="active-hours-help"
+                name="active-start"
+                onChange={(event) => edit({ active_start: event.target.value })}
+                type="time"
+                value={values.active_start}
+              />
+            </label>
+            <label>
+              {copy("active_end", language)}
+              <input
+                aria-describedby="active-hours-help"
+                name="active-end"
+                onChange={(event) => edit({ active_end: event.target.value })}
+                type="time"
+                value={values.active_end}
+              />
+            </label>
+            {values.active_start >= values.active_end ? (
+              <p className="setup-field-error setup-wide" role="alert">
+                ⚠ {copy("date_order_invalid", language)}
+              </p>
+            ) : null}
+          </fieldset>
+          <p className="setup-hint setup-wide" id="active-hours-help">
+            {copy("active_hours_help", language)}
+          </p>
+
           <label className="setup-check">
             <input
               aria-controls={values.arrival_time !== null ? "arrival-time" : undefined}

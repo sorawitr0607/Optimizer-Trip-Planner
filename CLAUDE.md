@@ -120,6 +120,24 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   is labelled `Value for time`, and declares `effort_state: visit_time_estimated`; walking, transfers,
   cost and fatigue remain optimizer evidence. `shared/cards.ts` holds the guards; `WF-005` asks for
   these rows, so they are kept where they can answer and dropped where they cannot.
+- **`Thinking` claims no milestones because the *server* reports none — the client is a
+  different matter.** `autoResolveAndGenerate` awaits four calls in order, so each one
+  returning is a fact the page already holds, and `BuildStages` marks a stage done on that
+  and nothing else. Never advance it from a timer: a green check that means "probably by
+  now" is the same defect as printing a placeholder as a finding. The long
+  `generate_plan_preview` really has no milestones, so `Thinking` stays inside that stage
+  where a rotating line and an elapsed counter are the honest thing to show.
+- **A field added to the setup draft must also be added to
+  `StayPlanner.wholeDraftWithDates`.** `save_setup` defaults every field it is not sent,
+  so that function rebuilds the whole payload by hand — and a field missing from its list
+  is silently reset the moment the owner picks dates from the stay planner. Its own
+  docstring says so; `active_start` / `active_end` were nearly the first casualty.
+- **The day's planning window is the owner's answer, not a literal.**
+  `_optimizer_input` hardcoded `08:00`–`22:00` for every trip on earth, which is the same
+  invention `WF-046` refused for opening hours. Setup asks; `setup.DEFAULT_ACTIVE_START` /
+  `DEFAULT_ACTIVE_END` hold the old pair for a draft saved before the field existed, which
+  is what keeps the 27 regressions byte-identical. Arrival and departure still tighten
+  their own day — a flight is a fact, active hours are a preference.
 - **A screen-baseline run must reuse one Chrome profile.** Trip ownership is a localStorage token; a
   fresh profile per image lets the first image claim the scratch trip and makes every later image show
   `Trip not found`. Capture mode suppresses the one-time plan-ready dialog so the itinerary baselines

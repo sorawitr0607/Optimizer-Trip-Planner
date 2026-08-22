@@ -67,6 +67,10 @@ export interface SetupPayload {
     end_date?: string | null;
     arrival_time?: string | null;
     departure_time?: string | null;
+    /** The hours the owner wants to be out. `_optimizer_input` used to invent these;
+     *  `setup.DEFAULT_ACTIVE_*` still supplies them for a draft saved before the field. */
+    active_start?: string | null;
+    active_end?: string | null;
     accommodation_status?: string;
   };
   owner?: {
@@ -473,6 +477,11 @@ export interface ExportPlanItem {
   to_name?: string | null;
   reason?: string | null;
   photo_reference?: string | null;
+  /** The ranking card's `total_score` for this place, carried through
+   *  `actions._optimizer_input` and the optimizer onto the exported row. Out of 100, so
+   *  it renders as the same "% match" the deck shows -- one number, two screens. Absent
+   *  or 0 on synthetic rows (meals, logistics, buffers), which is why it is optional. */
+  score?: number | null;
 }
 
 export interface ExportStop {

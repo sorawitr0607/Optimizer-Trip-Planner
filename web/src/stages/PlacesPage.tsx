@@ -881,7 +881,7 @@ export function PlacesPage() {
                 <select value={selectedId} onChange={(event) => setCardId(event.target.value)}>
                   {entries.map((entry) => {
                     const item = catalog.find((value) => value.place_id === entry.place_id);
-                    return <option key={entry.place_id} value={entry.place_id}>{item ? placeName(item, language, item.name) : entry.place_id} · {ranking.data!.cards[entry.place_id]?.total_score.toFixed(1)}/100</option>;
+                    return <option key={entry.place_id} value={entry.place_id}>{item ? placeName(item, language, item.name) : entry.place_id} · {Math.round(ranking.data!.cards[entry.place_id]?.total_score ?? 0)}%</option>;
                   })}
                 </select>
               </label>
@@ -973,7 +973,7 @@ export function PlacesPage() {
             <article className="place-card">
               <header className="place-card-head">
                 <div><h3>{placeName(candidate, language, candidate.name)}</h3>{candidate.names?.local && candidate.names.local !== placeName(candidate, language, candidate.name) ? <p>{candidate.names.local}</p> : null}<span className="money-tag">{categoryName(candidate.category, language)}</span></div>
-                <strong className="place-score">{card.total_score.toFixed(1)}<small>/100</small></strong>
+                <strong className="place-score">{copyFormat("match_for_you", language, { percent: Math.round(card.total_score) })}</strong>
               </header>
               {(() => {
                 const about = summaries.data?.[selectedId];

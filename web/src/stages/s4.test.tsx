@@ -197,7 +197,7 @@ describe("PlacesPage", () => {
     expect(html).toContain("Places picked for your trip");
     expect(html).toContain("Taipei 101");
     expect(html).toContain("Museum");
-    expect(html).toContain("78.4");
+    expect(html).toContain("78% match");
     expect(html).toContain("Current choice: Interested");
     expect(html).toContain("US$0.007");
     expect(html.indexOf("US$0.007")).toBeLessThan(html.indexOf("Load live gallery"));

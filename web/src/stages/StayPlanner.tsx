@@ -47,6 +47,12 @@ function wholeDraftWithDates(
     start_date: start,
     end_date: end,
     arrival_time: basics.arrival_time ?? null,
+    // Carried explicitly, because this function's own docstring is the reason: a field
+    // omitted here is a field `save_setup` resets to its default. Adding one to the draft
+    // without adding it to this list silently erases the owner's answer the moment they
+    // pick dates from the stay planner.
+    active_start: basics.active_start ?? null,
+    active_end: basics.active_end ?? null,
     departure_time: basics.departure_time ?? null,
     accommodation_status: basics.accommodation_status ?? "unknown",
     owner_age: owner.age ?? null,

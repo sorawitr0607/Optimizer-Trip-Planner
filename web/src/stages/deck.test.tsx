@@ -114,13 +114,19 @@ describe("PlaceDeck", () => {
     // Both names, because 61% of the Taipei catalogue has no `name:en` and the local
     // string is what the signage and a taxi driver use.
     expect(html).toContain("台北101");
-    expect(html).toContain("71.5");
+    // The score reads as fit now, not as an exam mark: same number out of the same 100,
+    // rounded, because a tenth of a percent of a heuristic is precision it does not have.
+    expect(html).toContain("72% match");
+    expect(html).not.toContain("/100");
     // The description is deliberately NOT here. The panel beside the deck renders the
     // same paragraph from the same summary, so the card printed text already on screen
     // — and the card is for deciding, not for reading.
     expect(html).not.toContain("A landmark tower");
-    expect(html).toContain("Visit estimate");
+    // The always-true facts read as a caption now, not as labelled rows: the duration is
+    // there, its label is not, because "Visit estimate: 45-90 min" and "45-90 min" carry
+    // the same information and one of them is shorter.
     expect(html).toContain("45–90");
+    expect(html).not.toContain("Visit estimate");
     // Held back for the same reason as the other two: `ranking.py` hardcodes
     // `reward_vs_effort` to 10 of 20 and marks `effort_state`
     // `route_and_walking_not_evaluated`, so this row read "10/20" on every card in the
@@ -217,7 +223,7 @@ describe("PlaceDeck", () => {
     const html = render(SUMMARY, ["first"]);
     expect(html).toContain("A quiet park");
     expect(html).toContain("widen the search");
-    expect(html).toContain("52.0");
+    expect(html).toContain("52% match");
   });
 
   it("shows a placeholder outside the card it stands in for", () => {

@@ -3352,3 +3352,139 @@ Implementation commit `6beb0d4` passed the 12-stage gate: 619 Python tests, 27 h
 regressions, 125 web tests, typecheck, lint, graph integrity at 2964 nodes / 6970 directed edges, and
 56 of 56 approved screen baselines. GitHub and `origin/main` matched, and Vercel recorded the commit's
 production deployment as successful.
+
+## Borrowing from Roameo, 2026-08-22
+
+The owner sent a 49-second screen recording of **Roameo** (TikTok `@leya.travels`) and asked
+what of it applies here. Its pipeline is almost step-for-step ours — destination, dates,
+trip type, interests, budget, a wait, a swipe deck, a shortlist review, a wait, an
+itinerary — which makes the comparison unusually direct. Seven things were taken, and five
+were deliberately not.
+
+### The screen worth copying was the wait
+
+Roameo's "Setting up your journey" is a vertical checklist of five named stages, each with
+an icon and a sub-line, going grey → orange spinner → green check as it advances. Ours was
+`Thinking`: one rotating line and an elapsed counter.
+
+`Thinking`'s own comment explains why it rotates rather than ticks — "the server reports no
+milestones, so this claims none" — and that principle is right. But it was answering about
+the *server*, and the build is not a server operation. `autoResolveAndGenerate` awaits four
+separate calls in order: `refresh_timezone`, `confirm_default_opening_windows`,
+`collectRouteEvidence`, `generate_plan_preview`. Every one of those returning is a fact the
+page already held and was throwing away.
+
+So `BuildStages` marks a stage done when its call returns, and nothing else advances it. A
+green check means that request came back. The routes stage additionally shows the server's
+own count of pairs measured, because `collectRouteEvidence` loops and already reports it —
+that is a tally, not a percentage of unknown work. And the last stage keeps `Thinking`
+inside it, because one long `generate_plan_preview` genuinely has no milestones and a
+rotating line beside a ticking counter is the honest thing to show for it.
+
+The timezone stage is marked done even when its call throws. That is deliberate and the
+comment says so: the stage is "we asked", the `try/catch` around it exists because an
+unreachable clock is not a reason to abandon a build, and claiming success would be the
+dishonest version of the same screen.
+
+Only the free path gets stages. `buyThenGenerate` and the bare `generate` are a single call
+plus, on the paid one, a purchase — no milestones, so they keep the rotating lines. A
+checklist on a screen that cannot fill it in would be theatre.
+
+### The score was a number nobody could read
+
+The deck showed `71.5/100`. Roameo shows `76% match for you`. It is the same number —
+`FORMULA_WEIGHTS` already sums to 100, so this is a relabel and not a rescale — but a score
+out of a hundred asks the reader to know what a good score is, and nothing on the card told
+them. Now it reads as fit, rounded, because a tenth of a percent of a heuristic is
+precision the number does not have.
+
+The same figure already rides on every exported plan row: `actions._optimizer_input` puts
+the ranking card's `total_score` on each selected place and the optimizer carries it
+through, so `exports.py` was already writing `score` on each visit and nothing read it. The
+itinerary now shows it as "% match for your group" per stop — one number, two screens,
+no extra request.
+
+### Four rows became a caption
+
+`.place-deck-topics` was a definition list: five labelled rows, of which the earlier audit
+had already found three could not vary. Roameo's card has no labelled rows at all — it is a
+photograph with a name, a rating, a category and a sentence over it.
+
+What is always true of a place now reads as one line under its name: what kind of thing it
+is, how long it wants, what that time buys. The labels went, because "Visit estimate:
+45–90 min" and "45–90 min" carry the same information. What stayed labelled is what is not
+always true — feasibility and crowd signals — because an exception earns a label precisely
+by being an exception.
+
+The caption sits **below** the photograph rather than over it, which is the one place this
+deliberately diverges from the source. Overlaid text is the more striking arrangement, but
+this card has five photo states — gallery, loading, no-photo map, buy-a-photo, no-summary —
+and a caption that sits on the image in one and under it in four is worse than one that is
+always in the same place.
+
+### The idea worth more than the visuals: active hours
+
+Roameo asks "Active hours", `9:00 AM` to `10:00 PM`, labelled Morning and Evening. Not when
+your flight lands — what hours you want to be out.
+
+`_optimizer_input` had been inventing that: `start = "08:00"`, `end = "22:00"`, literals, for
+every trip on earth. It is the same shape of fabrication `WF-046` argued against for opening
+hours, and with the same consequence — a plan built for someone who does not want an 08:00
+start says nothing about it, it simply schedules one.
+
+Setup asks now, and `setup.DEFAULT_ACTIVE_START` / `DEFAULT_ACTIVE_END` hold the old pair for
+anyone who does not answer. That default is the whole safety of the change: the 27 historic
+regressions carry no such field, feed the optimizer directly, and stay byte-identical.
+Arrival and departure still tighten their own day, because a flight is a fact and active
+hours are a preference.
+
+One near-miss worth recording. `StayPlanner.wholeDraftWithDates` rebuilds the whole
+`save_setup` payload field by field, and its own docstring says why: the method defaults
+every field it is not sent. A new draft field that is not added to that list is silently
+erased the moment the owner picks dates from the stay planner — so the active hours would
+have survived setup and then quietly reverted to 08:00–22:00 one screen later. That is now
+a rule in CLAUDE.md.
+
+### And the smaller two
+
+Each step of the wizard is a question in Roameo — "When are you travelling?", "What
+interests you most?" — where ours were nouns: *Trip basics*, *Owner style*. A noun names a
+topic and leaves the reader to work out what is wanted, which is most of why the form read
+as unfriendly. The step *rail* keeps the nouns, because a progress indicator has room for a
+word and not a sentence; the heading above each step asks.
+
+And each itinerary row now carries its kind as an icon in a fixed left gutter — a day is
+scanned, not read, and "where is lunch" should not require parsing six rows of prose. The
+text badge stays beside the name: `WF-034`'s rule is that the drawing is never the only
+carrier. `lucide-react` was already one of the six permitted dependencies, so this cost
+nothing against `WF-026`.
+
+### What was deliberately not taken
+
+Five things, and the reason is the same one each time — this app does not have the data, and
+the repo's own rule is that a control which cannot change anything is worse than none.
+
+**Star ratings and `$$$` price bands.** Roameo's cards carry `★4.9 · $$$`. We have
+`ratings: []` and a `no_licensed_rating` string, which is exactly the row the earlier audit
+deleted for being a constant. A video is not a data source.
+
+**"Reserve Now".** An affiliate booking integration, and a different product.
+
+**The activity sentence.** Roameo's itinerary rows lead with what you will do — "Explore the
+massive indoor market for electronics and fashion" — and the place name comes second. It
+reads far better than `Stop 3 · MBK Center`. There is no source for it here: place summaries
+are encyclopedic rather than instructional, and generating one per stop is an LLM call per
+stop on a screen that is meant to work offline.
+
+**The daily-budget step.** `Budget US$20–30` through `Luxury US$120–180`, attractively
+presented. We hold no price data for anything, so an answer could not change a single plan —
+which is precisely the failure `tests/test_avoid_tags_reach_the_planner.py` exists to
+prevent.
+
+**The itinerary as a drag-up sheet over a persistent map.** Real work, and our
+Timeline/Map toggle is defensible: it puts both one tap away and the wide layout already
+shows them side by side.
+
+One further observation not acted on: Roameo streams its itinerary in with a `⟳ Calculating`
+placeholder where the next entry will land. Ours is one batch computation, so there are no
+partial results to show, and faking them would be the timer problem again.

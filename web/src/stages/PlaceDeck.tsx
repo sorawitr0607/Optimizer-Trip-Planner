@@ -644,9 +644,16 @@ export function PlaceDeck({
               .replace("{current}", String(Math.min(cursor + 1, queue.length)))
               .replace("{total}", String(queue.length))}
           </p>
+          {/* "76% match", not "71.5/100". The number is the same one -- the formula is
+              already out of 100, so this is a relabel and not a rescale -- but a score
+              out of a hundred asks the reader to know what a good score is, and nothing
+              on the card tells them. Framed as fit it answers the question the card is
+              actually for. Rounded, because a tenth of a percent of a heuristic is
+              precision the number does not have. */}
           <strong className="place-score">
-            {card.total_score.toFixed(1)}
-            <small>/100</small>
+            {copyFormat("match_for_you", language, {
+              percent: Math.round(card.total_score),
+            })}
           </strong>
         </header>
 
@@ -818,47 +825,61 @@ export function PlaceDeck({
           </p>
         ) : null}
 
-        {/* `WF-005` asks every card to show feasibility, crowd signal and cost/reservation
-            status. Three of the five rows were printing a constant: `ranking.py` hardcodes
-            `feasibility.state` to `not_evaluated` because the deck runs before the
-            optimizer, cost/reservation was a fixed `no_licensed_rating` string with no
-            data path behind it, and crowd signal announced "none" on most places. A row
-            with one possible value cannot separate this place from the next, and it
-            teaches you to stop reading the rows that can.
+        {/* A caption, not a table.
+            The definition list gave every fact a label and a row, which reads as a
+            specification sheet -- and on a card whose job is one decision, five labelled
+            rows are five things to read before deciding. What is always true of a place
+            now reads as one line under its name: what kind of thing it is, how long it
+            wants, and what that time buys. The labels go, because "Visit estimate:
+            45-90 min" and "45-90 min" carry the same information and one of them is
+            shorter.
 
-            So the requirement is kept where it can still answer and dropped where it
-            cannot: feasibility and crowd signal appear once they say something, and
-            cost/reservation is gone until a licensed source exists to fill it. Duration
-            and visit-time value move on every card and are always shown. */}
-        <dl className="place-deck-topics">
-          <dt>{copy("duration", language)}</dt>
-          <dd>
+            What stays labelled is what is *not* always true. Feasibility and crowd
+            signals appear only when they have something to say -- see `shared/cards.ts`
+            for why three of the original five rows could not -- and an exception deserves
+            a label precisely because it is an exception.
+
+            Deliberately below the photograph rather than over it. Overlaid text is the
+            more striking arrangement, but this card has five photo states -- gallery,
+            loading, no-photo map, buy-a-photo, no-summary -- and a caption that sits on
+            the image in one of them and under it in four is worse than one that is always
+            in the same place. */}
+        <p className="place-deck-caption">
+          {(() => {
+            const kind = candidates[entry.place_id]?.category;
+            return kind ? (
+              <span className="place-deck-kind">{copyFrom("CATEGORY_TEXT", kind, language)}</span>
+            ) : null;
+          })()}
+          <span>
             {card.duration_estimate.minimum_minutes}–{card.duration_estimate.maximum_minutes}{" "}
             {copy("minutes", language)}
-          </dd>
+          </span>
           {evaluatedEffort(card.effort_state) ? (
-            <>
-              <dt>{copy("effort_access", language)}</dt>
-              <dd>{card.dimensions.reward_vs_effort.score}/{card.dimensions.reward_vs_effort.max}</dd>
-            </>
+            <span>
+              {copy("effort_access", language)}{" "}
+              {card.dimensions.reward_vs_effort.score}/{card.dimensions.reward_vs_effort.max}
+            </span>
           ) : null}
-          {evaluatedFeasibility(card.feasibility.state) ? (
-            <>
-              <dt>{copy("feasibility", language)}</dt>
-              <dd>{copy(card.feasibility.state, language)}</dd>
-            </>
-          ) : null}
-          {distinguishingCons(card.cons).length ? (
-            <>
-              <dt>{copy("crowd_signal", language)}</dt>
-              <dd>
+        </p>
+
+        {evaluatedFeasibility(card.feasibility.state) || distinguishingCons(card.cons).length ? (
+          <p className="place-deck-advisories">
+            {evaluatedFeasibility(card.feasibility.state) ? (
+              <span>
+                {copy("feasibility", language)}: {copy(card.feasibility.state, language)}
+              </span>
+            ) : null}
+            {distinguishingCons(card.cons).length ? (
+              <span>
+                {copy("crowd_signal", language)}:{" "}
                 {distinguishingCons(card.cons)
                   .map((code) => copyFrom("EXPLANATION_TEXT", code, language))
                   .join(" · ")}
-              </dd>
-            </>
-          ) : null}
-        </dl>
+              </span>
+            ) : null}
+          </p>
+        ) : null}
       </div>
 
       {/* Four directions is more than a sentence can carry, so the legend is a diagram:

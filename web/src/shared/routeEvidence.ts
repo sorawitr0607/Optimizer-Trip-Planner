@@ -29,7 +29,13 @@ const MAX_PASSES = 12;
  * Never throws. A failed or rate-limited pass keeps whatever the earlier passes stored,
  * which is strictly better than the state the trip was already in.
  */
-export async function collectRouteEvidence(tripId: string): Promise<number> {
+export async function collectRouteEvidence(
+  tripId: string,
+  /** Called with the running total after each pass, so a caller can say how many routes
+   *  have actually been measured. The server's own count -- this reports it, it does not
+   *  estimate progress. */
+  onProgress?: (stored: number) => void,
+): Promise<number> {
   let stored = 0;
   for (let pass = 0; pass < MAX_PASSES; pass += 1) {
     let reply: RouteRefreshReply;
@@ -39,6 +45,7 @@ export async function collectRouteEvidence(tripId: string): Promise<number> {
       break;
     }
     stored += reply.fetched;
+    onProgress?.(stored);
     // Everything that was outstanding arrived, or nothing did. Either way there is no
     // reason to ask a third time: the cap is per call, so a pass that fetched nothing
     // will fetch nothing again.
@@ -57,6 +64,7 @@ export async function collectRouteEvidence(tripId: string): Promise<number> {
   try {
     const transit = await rpc<RouteRefreshReply>("refresh_transit_routes", { trip_id: tripId });
     stored += transit.fetched;
+    onProgress?.(stored);
   } catch {
     /* the walking routes, if any, still stand */
   }

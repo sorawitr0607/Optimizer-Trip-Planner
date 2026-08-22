@@ -1,3 +1,11 @@
+import {
+  Coffee,
+  ListChecks,
+  MapPin,
+  Plane,
+  Route,
+  Utensils,
+} from "lucide-react";
 import { useState } from "react";
 
 import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
@@ -24,6 +32,23 @@ import { durationText, type TimedItem } from "../shared/tripClock";
  * The cost is that ticks do not follow you to another device, which is the same trade the
  * trip's own token already makes.
  */
+
+/**
+ * One icon per row kind, in the left gutter.
+ *
+ * The kind was a text badge, which reads only if you read it -- and a day is scanned, not
+ * read. An icon in a fixed gutter lets "where is lunch" be answered without parsing six
+ * rows of prose. The badge stays beside the name: the icon is the fast path, not the only
+ * one, which is `WF-034`'s rule that a drawing is never the sole carrier.
+ */
+const KIND_ICON = {
+  visit: MapPin,
+  travel: Route,
+  meal: Utensils,
+  preparation: ListChecks,
+  logistics: Plane,
+  buffer: Coffee,
+} as const;
 
 export interface DayStopsProps {
   items: TimedItem[];
@@ -99,6 +124,14 @@ export function DayStops({
               key={item.key}
             >
               <div className="day-stop-head">
+                {(() => {
+                  const Icon = KIND_ICON[item.type] ?? MapPin;
+                  return (
+                    <span aria-hidden="true" className={`day-stop-kind ${item.type}`}>
+                      <Icon size={13} />
+                    </span>
+                  );
+                })()}
                 {/* The box is 16px and a finger is 44, so the label carries the target. */}
                 <label className="day-stop-tick">
                   <input
@@ -143,6 +176,16 @@ export function DayStops({
                       </span>
                       {item.opening_verified === false ? (
                         <span className="day-stop-warn">{copy("opening_unverified", language)}</span>
+                      ) : null}
+                      {/* The same number the deck showed when this place was chosen, so
+                          the two screens cannot disagree about how well it fits. Only
+                          where there is one: meals, buffers and logistics carry 0. */}
+                      {item.score ? (
+                        <span className="day-stop-match">
+                          {copyFormat("match_for_group", language, {
+                            percent: Math.round(item.score),
+                          })}
+                        </span>
                       ) : null}
                     </span>
                   </span>

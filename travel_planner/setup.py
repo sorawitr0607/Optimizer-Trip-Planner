@@ -83,6 +83,17 @@ def normalise_accommodation_status(status: str) -> str:
     return LEGACY_ACCOMMODATION_STATUSES.get(status, status)
 
 
+#: The day the planner assumes when the owner has not said otherwise.
+#:
+#: These were literals inside `actions._optimizer_input` and are exported here because
+#: two places now need the same pair: the payload that records the answer and the input
+#: that reads it. The values are the ones that were already there -- the reference trips
+#: routinely begin before 09:00 and end after 21:00 once breakfast and the trip back to
+#: the base are represented -- so nothing about an existing plan moves.
+DEFAULT_ACTIVE_START = "08:00"
+DEFAULT_ACTIVE_END = "22:00"
+
+
 def build_setup_payload(
     *,
     planning_mode: str,
@@ -99,6 +110,12 @@ def build_setup_payload(
     end_date: str | None = None,
     arrival_time: str | None = None,
     departure_time: str | None = None,
+    # The hours the owner wants to be out. `_optimizer_input` used to invent these --
+    # 08:00 to 22:00 for every trip on earth -- and an invented window is exactly what
+    # `WF-046` argued against for opening hours. The defaults reproduce the constant
+    # byte-for-byte, so a draft saved before this field existed plans identically.
+    active_start: str | None = None,
+    active_end: str | None = None,
     accommodation_status: str = "not_booked",
     confirmed: bool = False,
 ) -> dict[str, Any]:
@@ -146,6 +163,8 @@ def build_setup_payload(
             "end_date": end,
             "arrival_time": _time_text(arrival_time, "arrival_time"),
             "departure_time": _time_text(departure_time, "departure_time"),
+            "active_start": _time_text(active_start, "active_start") or DEFAULT_ACTIVE_START,
+            "active_end": _time_text(active_end, "active_end") or DEFAULT_ACTIVE_END,
             "accommodation_status": accommodation_status,
         },
         "owner": {

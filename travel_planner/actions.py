@@ -406,6 +406,8 @@ class PlannerActions:
         start_date: str | None = None,
         end_date: str | None = None,
         arrival_time: str | None = None,
+        active_start: str | None = None,
+        active_end: str | None = None,
         departure_time: str | None = None,
         accommodation_status: str = "not_booked",
         confirmed: bool = False,
@@ -427,6 +429,8 @@ class PlannerActions:
             start_date=start_date,
             end_date=end_date,
             arrival_time=arrival_time,
+            active_start=active_start,
+            active_end=active_end,
             departure_time=departure_time,
             accommodation_status=accommodation_status,
             confirmed=confirmed,
@@ -1295,12 +1299,18 @@ class PlannerActions:
         local_dates = date_range(start_date, end_date) if start_date and end_date else []
         usable_windows = []
         for index, local_date in enumerate(local_dates):
-            # The reference trips routinely begin before 09:00 and end after
-            # 21:00 once breakfast, hotel transitions, and the trip back to the
-            # base are represented. Arrival/departure still tighten their own
-            # day rather than silently becoming attraction time.
-            start = "08:00"
-            end = "22:00"
+            # The owner's own hours, where they gave them. These were the literals
+            # 08:00 and 22:00 -- chosen because the reference trips routinely begin
+            # before 09:00 and end after 21:00 once breakfast, hotel transitions and the
+            # trip back to the base are represented -- and an invented window is the
+            # thing `WF-046` argued against for opening hours. Setup now asks, and
+            # `setup.DEFAULT_ACTIVE_*` holds the same pair for anyone who did not answer,
+            # so a draft saved before the field existed plans identically.
+            #
+            # Arrival/departure still tighten their own day rather than silently becoming
+            # attraction time.
+            start = str(basics.get("active_start") or setup_module.DEFAULT_ACTIVE_START)
+            end = str(basics.get("active_end") or setup_module.DEFAULT_ACTIVE_END)
             if index == 0 and basics.get("arrival_time"):
                 start = basics["arrival_time"]
             if index == len(local_dates) - 1 and basics.get("departure_time"):
