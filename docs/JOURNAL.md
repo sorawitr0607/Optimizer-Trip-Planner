@@ -3488,3 +3488,77 @@ shows them side by side.
 One further observation not acted on: Roameo streams its itinerary in with a `⟳ Calculating`
 placeholder where the next entry will land. Ours is one batch computation, so there are no
 partial results to show, and faking them would be the timer problem again.
+
+## The worker was draining the wrong database, 2026-08-23
+
+Reported as "find_place got timed out, nothing come out from worker". Both halves were
+true and the second explains the first.
+
+A worker had been running since 17:09 the previous evening and looked entirely healthy —
+right process, right working directory, no errors, no complaints. It was draining
+`SQLiteStore` against `data/tourist.sqlite3`. The owner was using the deployed app, whose
+jobs go into the hosted Postgres queue, so `discover_places` was enqueued and never
+claimed; the client waited out its 120 s abort and reported a timeout.
+
+Nothing in the failure points at the cause. The worker prints no error because there is
+no error: an empty queue is a perfectly normal thing to find, and it found one every two
+seconds for fourteen hours. What identifies it is absence — `lsof` on the process showed
+`libsqlite3` loaded and **no `psycopg`, and no TCP connection at all**, while the local
+`jobs` table held zero rows of any status. A worker on the hosted queue cannot be
+connectionless. Its own second line of output says which store it picked, and that is the
+cheap check to make first.
+
+`CLAUDE.md` already carried the rule — "`SQLiteStore` means `TOURIST_DB_URL` did not reach
+it" — so what was missing was noticing, not knowing.
+
+### And the value in `.env` is a template
+
+The first restart failed differently and instructively. `TOURIST_DB_URL` is commented out
+in `.env` deliberately, with a note saying to set it per-command rather than per-shell,
+because exporting it has twice written test data into the owner's hosted database. What
+that commented line holds is not a URL:
+
+    # TOURIST_DB_URL="$POSTGRES_URL_NON_POOLING"
+
+Passed through verbatim it produced `missing "=" after "$POSTGRES_URL_NON_POOLING" in
+connection info string`, once per poll, until killed. The variable to read is
+`POSTGRES_URL_NON_POOLING`. Restarted correctly the worker announced
+`draining PostgresStore` and cleared the backlog in seconds: one stale
+`discover_places` for a deleted trip failed three times and gave up on
+`unknown_trip`, and the owner's real job finished in **1.9 s** — the destination-keyed
+provider cache, so no Overpass call at all. The work had never been slow. Nothing had been
+listening.
+
+## The baselines, approved at last, and the trap in approving them
+
+Fifty-six screens, and only **eight** drifted: `setup` at both viewports, both themes, both
+languages. That was exactly the surface changed — the step heading became a question and
+the active-hours fieldset appeared — and both were reviewed before approving, desktop light
+and phone dark, per the rule about opening changed images. The phone shot also proved the
+new light default had not broken the dark capture, since dark still rendered.
+
+Then approving appeared to make things worse: the gate came back with *more* screens
+failing at *higher* percentages, including `split`, which nothing had touched.
+
+`--approve` writes the baseline set and does not refresh `screen-current`. So the check
+that follows it diffs the approve run against whichever comparison capture was lying
+around — two different runs of the same code — and reports the difference as drift. The
+sequence is approve, capture again without `--approve`, then check. Done in that order the
+gate passes, and `scripts/check.py` reported **12 of 12 for the first time**.
+
+Worth keeping: a stale comparison reported `split` at 15–20%. Nothing was wrong with
+`split`. A gate that can produce a number like that from correct code is a gate someone
+will eventually switch off, so the ordering is now a rule rather than a habit.
+
+## Light is the default, whatever the device asks for
+
+At the owner's request. `ThemeProvider.initialTheme` read `prefers-color-scheme` for anyone
+who had never touched the toggle, and that was the only path by which the device reached
+the theme at all — neither `tokens.css` nor `shell.css` contains a `prefers-color-scheme`
+block, so dark is applied exclusively through `[data-theme="dark"]`. Removing one branch is
+therefore the entire change, and there is no flash of the wrong palette before React
+mounts because the bare `:root` palette is already the light one.
+
+It is a default and not a lock, which is the distinction worth recording: the stamped root
+still wins for capture, a stored choice still wins for the owner, and someone on a dark
+phone who presses the toggle still gets dark on their next visit too.

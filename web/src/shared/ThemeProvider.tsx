@@ -12,10 +12,19 @@ import { createContext, type PropsWithChildren, useCallback, useContext, useEffe
  *
  * Three rules. **A stamped root wins**: `main.tsx` sets `data-theme` from the
  * capture seam before React mounts, and a stored preference from an earlier run
- * must not repaint a baseline. **A stored choice beats the system**, because the
- * owner said so. **With neither, the system decides** — read once at startup
- * rather than subscribed to, since a theme flipping under someone mid-task is a
- * worse surprise than one that waits for the next visit.
+ * must not repaint a baseline. **A stored choice beats everything else**, because
+ * the owner said so. **With neither, the answer is light** — at the owner's asking,
+ * and regardless of what the device prefers.
+ *
+ * That last rule used to read the device: `prefers-color-scheme` decided for anyone
+ * who had never touched the toggle. It was the only path by which the device reached
+ * the theme at all — neither `tokens.css` nor `shell.css` contains a
+ * `prefers-color-scheme` block, so dark is applied exclusively through
+ * `[data-theme="dark"]` — which is why removing one branch here is the whole change
+ * and there is no flash of the wrong palette before React mounts.
+ *
+ * Note what this does *not* do: it is a default, not a lock. Someone on a dark phone
+ * who presses the toggle still gets dark, and still gets it on their next visit.
  */
 
 export type Theme = "light" | "dark";
@@ -42,9 +51,9 @@ function initialTheme(): Theme {
   // node environment, where there is no document to read a preference from and no
   // effect will run to write one back.
   if (typeof document === "undefined") return "light";
-  const chosen = stampedTheme() ?? storedTheme();
-  if (chosen) return chosen;
-  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  // Light unless something explicitly says otherwise. The device is deliberately not
+  // consulted -- see the note above.
+  return stampedTheme() ?? storedTheme() ?? "light";
 }
 
 interface ThemeState {

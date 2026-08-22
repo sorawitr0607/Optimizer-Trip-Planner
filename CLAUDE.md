@@ -72,6 +72,17 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   217 KB basemap is immutable until its evidence expiry, so `shared/basemap.ts` also keeps it in
   browser storage until the server-provided `expires_at`; do not replace that with a cache for mutable
   plan or route snapshots without measuring another egress problem first.
+- **`TOURIST_DB_URL` is a *template* in `.env`, not a literal — it reads
+  `"$POSTGRES_URL_NON_POOLING"`.** Passing that commented line's value through verbatim
+  starts a worker that loops on `missing "=" after "$POSTGRES_URL_NON_POOLING"`. The
+  variable to read is `POSTGRES_URL_NON_POOLING`, per-command and never exported.
+- **A worker started without `TOURIST_DB_URL` drains the *local file* and looks perfectly
+  healthy doing it.** The deployed app queues into Postgres, so its jobs sit forever while
+  the worker reports nothing wrong — `find places` simply times out at the client's 120 s
+  abort. Diagnose it by what the worker is *not* holding: no `psycopg` in
+  `lsof -p <pid>`, no TCP connection, and a local `jobs` table with zero rows while the
+  hosted one has a backlog. The second line of its output is the direct answer —
+  `draining PostgresStore` or `draining SQLiteStore`.
 - **The worker's idle poll backs off from 2s to `MAX_IDLE_SLEEP_SECONDS` (10s) and resets on any job.**
   A flat 2s is 43,200 queries a day whether or not anyone is using the app. Keep the ceiling below
   `REAP_EVERY_SECONDS` or abandoned jobs slip a whole reap cycle.
@@ -138,6 +149,16 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   `DEFAULT_ACTIVE_END` hold the old pair for a draft saved before the field existed, which
   is what keeps the 27 regressions byte-identical. Arrival and departure still tighten
   their own day — a flight is a fact, active hours are a preference.
+- **`--approve` writes the baselines and leaves `screen-current` alone**, so running
+  `check_screen_baselines.py` straight afterwards diffs the approve run against whatever
+  capture happened to be sitting there and fails with percentages that look alarming and
+  mean nothing. Approve, then capture once more without `--approve`, then check. Measured:
+  a stale comparison reported `split` at 15-20% drift on code that had not touched it.
+- **Light is the default theme regardless of the device.** `ThemeProvider.initialTheme`
+  consults the stamped root, then `localStorage`, then answers `light` — it does *not* read
+  `prefers-color-scheme`, and neither stylesheet contains such a block, so
+  `[data-theme="dark"]` is the only path to dark. It remains a default and not a lock: the
+  toggle still works and is still remembered.
 - **A screen-baseline run must reuse one Chrome profile.** Trip ownership is a localStorage token; a
   fresh profile per image lets the first image claim the scratch trip and makes every later image show
   `Trip not found`. Capture mode suppresses the one-time plan-ready dialog so the itinerary baselines
