@@ -2274,20 +2274,32 @@ class PlannerActions:
             return {**evidence, "status": "stale"}
         return evidence
 
+    def _discovery_boundary(self, trip_id: str) -> list[float] | None:
+        """The window discovery searched, as [south, west, north, east], or None.
+
+        Reads the run's report and not its candidates. Four callers needed only this box
+        and were each pulling ~390 KB of candidate JSON out of the database to find it --
+        see `SQLiteStore.get_latest_discovery_report`.
+        """
+
+        report = self.store.get_latest_discovery_report(trip_id)
+        box = (report or {}).get("query_boundary")
+        if isinstance(box, list) and len(box) == 4:
+            return [float(value) for value in box]
+        return None
+
     def _destination_centre(self, trip_id: str) -> dict[str, float]:
         """The centre of the discovered coverage box, or a selected place."""
 
-        discovery = self.store.get_latest_discovery(trip_id)
-        if discovery is not None:
-            # The discovery report records the searched window as query_boundary,
-            # in the provider's [south, west, north, east] order.
-            bbox = discovery.report.as_dict().get("query_boundary")
-            if isinstance(bbox, list) and len(bbox) == 4:
-                south, west, north, east = (float(value) for value in bbox)
-                return {
-                    "latitude": round((south + north) / 2, 6),
-                    "longitude": round((west + east) / 2, 6),
-                }
+        # The discovery report records the searched window as query_boundary, in the
+        # provider's [south, west, north, east] order.
+        bbox = self._discovery_boundary(trip_id)
+        if bbox is not None:
+            south, west, north, east = bbox
+            return {
+                "latitude": round((south + north) / 2, 6),
+                "longitude": round((west + east) / 2, 6),
+            }
         points = self._route_points(trip_id)
         if points:
             return {
@@ -2325,9 +2337,8 @@ class PlannerActions:
         if not force and held and held.get("expires_at", "") > now.isoformat():
             return self.get_basemap(trip_id) or {}
 
-        discovery = self.get_latest_discovery(trip_id)
-        box = (discovery.report.as_dict() if discovery else {}).get("query_boundary")
-        if not (isinstance(box, list) and len(box) == 4):
+        box = self._discovery_boundary(trip_id)
+        if box is None:
             raise PlannerRefusal("discovery_required_for_climate", trip_id=trip_id)
 
         provider = self.place_provider or OpenStreetMapProvider()
@@ -2369,12 +2380,11 @@ class PlannerActions:
         basics = setup.snapshot.as_dict().get("trip_basics", {}) if setup else {}
         start, end = basics.get("start_date"), basics.get("end_date")
 
-        discovery = self.get_latest_discovery(trip_id)
-        box = (discovery.report.as_dict() if discovery else {}).get("query_boundary")
-        if not (isinstance(box, list) and len(box) == 4):
+        box = self._discovery_boundary(trip_id)
+        if box is None:
             raise PlannerRefusal("discovery_required_for_climate", trip_id=trip_id)
-        latitude = (float(box[0]) + float(box[2])) / 2
-        longitude = (float(box[1]) + float(box[3])) / 2
+        latitude = (box[0] + box[2]) / 2
+        longitude = (box[1] + box[3]) / 2
 
         provider = self.forecast_provider or OpenMeteoForecastProvider()
         now = datetime.now(timezone.utc)
@@ -2534,12 +2544,11 @@ class PlannerActions:
         trip = self.store.get_trip(trip_id)
         if trip is None:
             raise PlannerRefusal("unknown_trip", trip_id=trip_id)
-        discovery = self.get_latest_discovery(trip_id)
         # `query_boundary` is the clamped window discovery actually searched, stored as
         # (south, west, north, east). Its centre is the city as this trip found it, so
         # the weather described is the weather over the places on the shortlist.
-        box = (discovery.report.as_dict() if discovery else {}).get("query_boundary")
-        if not (isinstance(box, list) and len(box) == 4):
+        box = self._discovery_boundary(trip_id)
+        if box is None:
             raise PlannerRefusal("discovery_required_for_climate", trip_id=trip_id)
         latitude = (float(box[0]) + float(box[2])) / 2
         longitude = (float(box[1]) + float(box[3])) / 2
@@ -3511,7 +3520,9 @@ class PlannerActions:
 
         now = datetime.now(timezone.utc).isoformat()
         window = month or usage.month_of(now)
-        entries = self.store.list_paid_usage()
+        # Scoped in SQL. `usage.totals` filters to the month anyway, so reading the
+        # whole ledger only moved rows across the wire to be discarded.
+        entries = self.store.list_paid_usage(month=window)
         summary = usage.totals(entries, month=window)
         cap = self.store.get_paid_cap() or usage.CAP_USD
         return {

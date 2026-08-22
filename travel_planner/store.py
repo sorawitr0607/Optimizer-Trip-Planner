@@ -658,6 +658,37 @@ class SQLiteStore:
             ).fetchone()
         return self._discovery_run(row) if row else None
 
+    def get_latest_discovery_report(self, trip_id: str) -> dict[str, Any] | None:
+        """The latest run's report only, without dragging its candidates out with it.
+
+        `get_latest_discovery` is `SELECT *`, and `candidates_json` on a real city is
+        around 390 KB while `report_json` is under two. Four callers wanted nothing from
+        the run but `query_boundary` -- four floats -- and three of them
+        (`refresh_basemap`, the country outline, `trip_forecast`) run on every itinerary
+        page load. That was roughly 1.5 MB read out of the database per view to answer a
+        question the report already holds, which is most of a hosted deployment's egress
+        bill and all of it avoidable.
+
+        Returns the parsed report, or None where the trip has no run yet. The checksum is
+        verified as it is anywhere else: a cheap read is not an unchecked one.
+        """
+
+        with self.connect() as connection:
+            row = connection.execute(
+                """
+                SELECT id, report_json, report_sha256 FROM discovery_runs
+                WHERE trip_id = ?
+                ORDER BY created_at DESC, id DESC
+                LIMIT 1
+                """,
+                (trip_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return self._verified_snapshot(
+            row["report_json"], row["report_sha256"], f"discovery report {row['id']}"
+        ).as_dict()
+
     def list_discovery_runs(self, trip_id: str) -> list[DiscoveryRun]:
         with self.connect() as connection:
             rows = connection.execute(
@@ -1270,11 +1301,31 @@ class SQLiteStore:
             )
         return {**entry, "usage_id": row_id}
 
-    def list_paid_usage(self) -> list[dict[str, Any]]:
+    def list_paid_usage(self, *, month: str | None = None) -> list[dict[str, Any]]:
+        """The ledger, optionally narrowed to one `YYYY-MM` in SQL rather than in Python.
+
+        The cap is a monthly figure, but this read was unfiltered and `usage.totals` threw
+        away everything outside the month after it had already crossed the wire. The table
+        only grows -- a few thousand rows and over a megabyte on a trip that has been
+        worked on for a while -- and the status banner asks for it on page loads, so the
+        whole history was being read to sum the current month. `month_of` is
+        `created_at[:7]`, so a prefix comparison is exactly the same filter.
+        """
+
         with self.connect() as connection:
-            rows = connection.execute(
-                "SELECT * FROM paid_usage ORDER BY created_at, id"
-            ).fetchall()
+            if month is None:
+                rows = connection.execute(
+                    "SELECT * FROM paid_usage ORDER BY created_at, id"
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    """
+                    SELECT * FROM paid_usage
+                    WHERE SUBSTR(created_at, 1, 7) = ?
+                    ORDER BY created_at, id
+                    """,
+                    (month,),
+                ).fetchall()
         return [
             {
                 "usage_id": row["id"],

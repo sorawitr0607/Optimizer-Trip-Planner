@@ -314,6 +314,7 @@ def _day(
             "latitude": item["latitude"],
             "longitude": item["longitude"],
             "status": item["status"],
+            "photo_reference": item.get("photo_reference"),
         }
         for item in items
         if item["type"] == "visit"
@@ -364,6 +365,12 @@ def _item(
                 "latitude": card.get("latitude"),
                 "longitude": card.get("longitude"),
                 "address": card.get("address"),
+                # OpenStreetMap's own `wikimedia_commons` / `image` tag, carried on the
+                # snapshot so the itinerary can show a picture without asking for the
+                # discovery run. That run's `candidates_json` is ~390 KB and this is a
+                # filename, and the point of putting it here is that the screen showing
+                # photographs must not be the screen that reads 390 KB to find them.
+                "photo_reference": card.get("photo_reference"),
                 "opening_verified": subject_id in context["opening_verified"],
                 "status": _visit_status(subject_id, card, context),
             }
