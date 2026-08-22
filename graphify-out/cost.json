@@ -246,9 +246,21 @@
       "input_tokens": 47359,
       "output_tokens": 6682,
       "estimated_usd": 0.029635
+    },
+    {
+      "date": "2026-08-22T08:07:30.758913+00:00",
+      "input_tokens": 149469,
+      "output_tokens": 6939,
+      "estimated_usd": 0.07089
+    },
+    {
+      "date": "2026-08-22T08:08:34.965696+00:00",
+      "input_tokens": 11637,
+      "output_tokens": 479,
+      "estimated_usd": 0.005421
     }
   ],
-  "total_input_tokens": 767478,
-  "total_output_tokens": 93110,
-  "estimated_usd": 0.455929
+  "total_input_tokens": 928584,
+  "total_output_tokens": 100528,
+  "estimated_usd": 0.53224
 }

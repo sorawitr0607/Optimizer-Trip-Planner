@@ -23,8 +23,15 @@ export interface TimedItem extends ExportPlanItem {
   key: string;
 }
 
-/** `YYYY-MM-DD` plus `HH:MM` as a local Date. Local, because a plan is lived locally. */
-export function at(date: string, time: string): Date {
+/** `YYYY-MM-DD` plus `HH:MM` as a local Date. Local, because a plan is lived locally.
+ *
+ *  Named `momentAt` rather than `at`: `providers.py` has a local `def at(field)` inside
+ *  `OpenMeteoForecastProvider.forecast`, and the graph builder matched the two names and
+ *  invented an edge claiming Python calls TypeScript. That is the third occurrence of the
+ *  same collision after `rpc` and `fetch`, and CLAUDE.md's rule is to fix it at the
+ *  source rather than weaken the endpoint-pair guard. A two-letter module export was
+ *  asking for it. */
+export function momentAt(date: string, time: string): Date {
   const [year, month, day] = date.split("-").map(Number);
   const [hour, minute] = time.split(":").map(Number);
   return new Date(year, month - 1, day, hour, minute);
@@ -45,15 +52,15 @@ export function flattenDays(days: ExportDay[]): TimedItem[] {
       items.push({
         ...item,
         dayDate: day.date,
-        startAt: at(item.date, item.start),
-        endAt: at(item.date, item.start),
+        startAt: momentAt(item.date, item.start),
+        endAt: momentAt(item.date, item.start),
         key: `${item.date}|${item.start}|${item.item_id}`,
       });
     }
   }
   items.sort((left, right) => +left.startAt - +right.startAt);
   items.forEach((item, index) => {
-    const stated = item.end ? at(item.date, item.end) : null;
+    const stated = item.end ? momentAt(item.date, item.end) : null;
     if (stated && +stated > +item.startAt) {
       item.endAt = stated;
     } else if (stated) {

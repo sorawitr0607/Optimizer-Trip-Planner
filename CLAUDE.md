@@ -712,7 +712,29 @@ must stay directed. Rebuild only through `python3 scripts/build_project_graph.py
 failure), and only when explicitly asked or after a topology-changing milestone. After any graph
 change, `--check` must pass before committing. See `AGENTS.md`.
 
-**Rebuilt again on 2026-08-10 for `WF-049` and `--check` passes**: **2389 nodes, 5732 directed edges,
+**Rebuilt on 2026-08-22 after the itinerary dashboard and `--check` passes**: **2964 nodes, 6970
+directed edges, 220 communities**, up from 2389/5732/200 — seven new modules
+(`shared/tripClock.ts`, `shared/cards.ts`, `shared/ticks.ts`, `shared/checklistText.ts`,
+`stages/DayStops.tsx`, `stages/TripNow.tsx`, `tests/test_discovery_egress.py`) and the rewritten
+`/itinerary`. It took **three attempts and US$0.076311**, and both failures are the two documented
+kinds rather than anything new:
+
+- The first lost **110** endpoint pairs, all pointing at `travel_planner_actions`, whose file node
+  extraction had simply not emitted that run. **The retry produced it**, which is the "extraction is
+  not deterministic" case below — retry before diagnosing.
+- The second lost exactly **one**: `travel_planner_providers_openmeteoforecastprovider_forecast ->
+  web_src_shared_tripclock_at`. A **third name collision**, and the reverse direction of the first two:
+  `providers.py` has a local `def at(field)` inside `OpenMeteoForecastProvider.forecast`, and the new
+  `shared/tripClock.ts` exported a function called `at`. Renamed to `momentAt`; the third run was
+  **free** on a warm cache (89 hit / 0 miss).
+
+**Do not name anything on either side after a short generic the other side also uses.** That is now
+`rpc`, `fetch` and `at` — three occurrences, and the rule runs both ways: it was written as "do not
+name a Python method after something the TypeScript side calls", but a two-letter TypeScript *export*
+collided with a Python local just as easily. Fix it by renaming, never by weakening the endpoint-pair
+guard.
+
+**Rebuilt on 2026-08-10 for `WF-049` and `--check` passed**: **2389 nodes, 5732 directed edges,
 200 communities**; recorded cumulative cost is US$0.455929 over 41 runs. Adding the ticket file is what
 required it — `--check` demands a node per ticket, so stage 4 of `check.py` failed with
 `Extraction produced no node for WF-049` until this ran. It cost **US$0.0296** and succeeded on the
@@ -767,7 +789,8 @@ collided with the browser `fetch()` that `web/src/api/client.ts`'s `rpc` calls: 
 claiming TypeScript calls Python, clustering rightly dropped it, and the endpoint-pair guard demanded a
 false edge survive. Renamed to `read_page`. **Do not name a Python method after something the TypeScript
 side calls** — `fetch`, `rpc`, `post`. That is now two occurrences, so treat it as a rule rather than a
-curiosity.
+curiosity. *(Three as of 2026-08-22, and the third ran the other way: a TypeScript export named `at`
+against a Python local `def at`. See the rebuild note above — the rule is symmetric.)*
 
 A third ticket-authoring trap, and the fix is in `normalize_raw_graph` rather than in how tickets are
 written. Extraction sometimes emits one file **twice** — `tests_test_x` and `tests_test_x_py`,

@@ -3053,3 +3053,262 @@ keeps in `localStorage` — not a credential, and not offered as one; it separat
 people's trips, which was the actual problem. Two consequences worth knowing: trips are
 per-browser, so the same person in a second browser sees an empty list, and the spend cap
 is global, so any visitor can spend the owner's keys.
+
+## Owner testing, 2026-08-22: six reports, and what auditing the score found
+
+Six reports from a testing round, answered in one pass. Two of them turned out to be the
+same defect wearing different clothes, and chasing the second one into `ranking.py` found
+a third instance nobody had reported. A separate billing warning arrived mid-session and
+is the last entry.
+
+### The white box that had been measured in the wrong place
+
+The landmark section on the phone had a near-white panel behind each landmark, reported
+twice and closed once as unreproducible. The previous session measured `.landmark`
+(306×96) and `.landmark-art` (96×96), found both transparent, could not see a large
+near-white box in that section, and concluded a stale phone cache.
+
+Both measurements were correct and neither was of the right element. The background is on
+`.landmark-place`, the *parent* — `background: var(--landing-cut)`, which is `#fffdf5` —
+inside the `@media (max-width: 860px)` block that recomposes the world vertically. It had
+been added with the border and the hard shadow to turn each landmark into a full-width
+row, which was the right idea; the paper-cut panel was not.
+
+This is the second time in two sessions that a measurement of the wrong node closed a
+real bug: the first was `.shortlist` measured while the fault was `.shortlist-handle`.
+The pattern is worth naming. A measurement of a child says nothing about a background on
+its parent, and "I measured it and it is not there" reads exactly like "it is not there".
+When a screenshot and a measurement disagree, walk the ancestors before disbelieving the
+screenshot.
+
+The padding stays. It is what makes the row a 56px target rather than an 80px drawing.
+
+### A wizard step that asked the same question twice
+
+Setup had six steps and the fifth held one textarea: `owner_must_respect`. The owner asked
+whether it could be merged with `avoid`.
+
+It could, and the reason it should is not screen count. `avoid` is soft — "I would rather
+not" — and `must_respect` is hard — "the plan cannot do this". That is a real and useful
+distinction, and split across two screens two steps apart it is invisible: the second box
+reads as a free-text version of the chips, so it either goes unused or gets filled with
+preferences that are then treated as rules. Under the avoid chips the contrast *is* the
+layout.
+
+Five steps now. The field still feeds `constraints` at `actions.py:1485`; nothing was
+dropped, and `setup_requirements_help` / `setup_intro_requirements` went with the step
+they belonged to. `INTRO_STEPS` promised four steps and now promises three — the kind of
+count that drifts silently when a step is removed and nothing reads it back.
+
+### Explanatory text as keywords, and the three lines that had to stay
+
+Eighty-one `*_help` / `*_hint` / `*_note` / `*_intro` strings, both languages, about
+11,900 characters removed. The rule agreed with the owner: keywords everywhere, except
+where a line warns about time, money, or a provisional result. Those stay a short
+sentence, because losing them is what had `/optimize` reported as broken when it was
+working slowly and saying nothing.
+
+Three were over-trimmed on the first pass and the suite caught all three:
+
+- `free_text_help` lost "The model never sets an opening time, route, fare or closure."
+  That is the scope limit on GenAI, asserted by a test whose own comment says "before
+  money and data leave the machine".
+- `drag_hint` lost "The buttons do the same thing", which is the non-gesture guarantee —
+  a gesture-only deck excludes keyboard and screen-reader users.
+- `provisional_evidence_help` lost "Explore mode can continue now", the sentence that
+  offers the provisional path at all.
+
+All three tests were right to exist and right to fail. A copy trim is exactly the change
+that cannot be reviewed by reading the diff, because every line looks like prose and
+three of them were contracts.
+
+### A page that asked to build when it was asking to accept
+
+After `StayPlanner` writes provisional dates it builds a proposal, and `/optimize` then
+shows a timetable — under the heading `optimizer_title`, which says build. So the activate
+button at the bottom read as optional and plans were left un-activated. The heading is
+`confirm_title` whenever a timetable exists and has not been activated, and the
+`stay_recommendation` branch is excluded because that mode has no timetable to confirm,
+it has dates to choose.
+
+### Four rows that could not vary, and the audit that found the fourth
+
+The owner's report was that the swipe card's detail "show the same thing for most of
+place". It was worse than that. Three of the five rows were *constants*:
+
+- `feasibility.state` is `not_evaluated` for every card, hardcoded in `ranking.py`
+  because ranking runs before the optimizer and cannot know.
+- Cost and reservation printed a fixed `no_licensed_rating` string. No provider licenses
+  cost data, so the row had no data path behind it at all.
+- `cons` is seeded with `route_not_verified`, `ratings_not_enriched` and
+  `best_time_unconfirmed` on every candidate alike, so the crowd row led with three
+  identical strings before anything about the place.
+
+`/places` showed it most plainly. Its caution column was `cons.slice(0, 2)`, and since the
+seeded three come first, **every place in the catalogue carried the same two strings** — a
+column that could never distinguish anything, on the screen for distinguishing things.
+
+Then the scoring audit found the fourth, which nobody had reported because it looked like
+a measurement. `reward_effort` is the literal `10.0` while
+`FORMULA_WEIGHTS["reward_vs_effort"]` is 20, so **20 of the formula's 100 points are frozen
+at exactly half for every candidate**, and the card printed "Reward versus effort: 10/20"
+on all of them. Ordering is unaffected — a constant added to every score preserves the
+order — so this is a communication defect rather than a ranking one, and computing the
+dimension for real is a change to the formula that belongs to a ticket.
+
+`WF-005` requires these rows, which is why they were there. The resolution is to keep the
+requirement where it can still answer and drop it where it cannot: feasibility and effort
+appear once their state is not a placeholder, crowd signal once a con is about the place,
+and cost/reservation is gone until a licensed source exists. `shared/cards.ts` holds the
+guards so the deck and the list cannot disagree — the two disagreeing about one place is
+a bug this app has had before.
+
+The general rule, now in CLAUDE.md: a row with one possible value cannot separate this
+place from the next, and it teaches the eye past the rows that can.
+
+### Two scoring findings that are not bugs, and now have tests saying so
+
+`ranking.py` imports `AVOID_TAGS` and never penalises a candidate for matching one. That
+reads like a wiring omission and is not: the five chips are `heavy_crowds`, `late_meals`,
+`long_queues`, `plain_long_walks` and `tourist_traps`, and the intersection with the
+24-word place vocabulary is **empty**. They describe a plan, not a place, so there is
+nothing on a candidate to match them against, and they are enforced where they can be —
+as optimizer thresholds and `_dislikes` questions, which
+`tests/test_avoid_tags_reach_the_planner.py` already pins.
+
+Without a test saying so, the obvious next move is to add an avoid deduction keyed on
+candidate tags, which would be dead code that looks like a feature. That is now
+`tests/test_ranking.py::SetupVocabularyReachesScoringTest`, along with the narrower
+finding that only `rewarding_walks` of the five comfort chips is a word a place carries —
+so the 0.05 comfort term moves one chip, not five.
+
+Weights sum to 100 and match the ticket's 30/20/20/10/15/5.
+
+### /itinerary is a dashboard
+
+The owner asked for the itinerary page to become an interactive dashboard like the one in
+the sibling `Dashboard/` project, which builds self-contained pages from the reference
+workbooks. That project's ADR-0001 had deliberately refused to be "a screen in the
+planner" — putting finished history in a gated, database-backed app would have meant
+inventing a data path it did not have. This is the reverse direction and the constraint
+inverts with it: the planner *has* the data, so everything comes from the existing export
+snapshot and no new RPC was added.
+
+What moved across is the interaction model. The table being replaced was built to be
+audited — every column the exporter knows, on every row — and standing on a corner the
+question is narrower: which one is this, is it done, and what did I need to remember. So
+what is happening now is at the top and follows the clock, the day's stops can be ticked
+off, and search crosses every day because not knowing which day is the reason for asking.
+
+**There is no scrubber**, following that project's ADR-0009. A trip is thousands of
+minutes wide, so a phone-width slider gives about twenty minutes per pixel, cannot land on
+anything, and puts looking around behind a mode you enter first. Tapping a stop's time
+pins the page to that moment; `‹ ›` steps stop by stop; one tap returns to live. The trade
+is that you can only stop where the plan has a stop, which is every moment it describes.
+
+Day tabs replace the prev/next stepper, which itself replaced a dropdown. The complaint
+about the dropdown was "open, find, aim, click, and it never showed which day you were
+about to get" — tabs answer that more directly than a stepper, and the ticked-through days
+carry a dot so the row doubles as trip progress.
+
+Nothing was quietly lost in the rebuild, which was the main risk. `PlanRow`'s stop numbers
+stay, because the map pins are numbered and row and pin must be matchable by eye; its
+buffer reasons stay, because "buffer" alone is the one row that tells you nothing; its
+distance, transfers and boarding buffer moved into the opened row; and the day's fallbacks
+are still rendered, since what to cut when the day runs late is what is wanted while the
+day is running late. The checklist is a summary linking to `/readiness` rather than a
+second copy of that board — two full copies would be two places to tick the same thing
+off.
+
+Two implementation notes. `flattenDays` in `shared/tripClock.ts` is where an item that
+ends after midnight gets a day added rather than rendering a negative span, which is the
+same rollover rule the dashboards derive their dates with; it is pure and has nine tests
+because that arithmetic is the part that breaks silently. And the pinned-moment stamp is
+formatted from local parts, not `toISOString()` — local midnight on the 11th is 17:00 on
+the 10th in UTC+7, the trap `StayPlanner`'s date arithmetic already carries a comment
+about, and it printed the day before itself until it was caught.
+
+Ticks are `localStorage`. `plan_versions` records what was *scheduled*, not what happened,
+and inventing a field for "I have been here" would mean a write path, a migration and a
+schema bump against a hosted database that `PostgresStore._copy_before_bump` rightly
+refuses. The cost is that ticks do not follow you to a second browser — the same trade the
+trip's own token already makes.
+
+No new dependencies; `WF-026` holds at six.
+
+### Supabase said the free tier was spent, and the reason was four floats
+
+A billing warning arrived mid-session: the organisation had passed the free tier's 5.5 GB
+egress allowance, with the Fair Use Policy applying from 2026-09-21. Measuring the local
+database rather than reasoning about it found the cause in one pass.
+
+`provider_cache` is 65 MB across 279 OpenStreetMap rows and looks like the culprit. It is
+not — those are primary-key lookups. The cost was two unbounded reads on paths a page load
+takes:
+
+- `get_latest_discovery` is `SELECT *`, and `discovery_runs.candidates_json` measured
+  **391 KB** against 1.7 KB for `report_json`. Four callers wanted nothing from the run but
+  `query_boundary` — four floats naming the searched window — and three of them
+  (`refresh_basemap`, the country outline, `trip_forecast`) run on **every** `/itinerary`
+  view. So one view read about 1.17 MB of candidate JSON to answer a question the report
+  already held.
+- `paid_usage_status` sums one calendar month and read the whole ledger to do it, filtering
+  in Python afterwards. The table only grows — 7,084 rows and 1.6 MB here — so `/evidence`
+  moved the entire history across the wire every time.
+
+`store.get_latest_discovery_report` selects three columns and verifies the checksum as any
+other read does; `actions._discovery_boundary` is the one helper those four callers share;
+`list_paid_usage(month=...)` filters in SQL, and a test compares it against filtering in
+Python so the two cannot drift. `SUBSTR(created_at, 1, 7)` is valid on both backends,
+which `PostgresStore` subclassing `SQLiteStore` requires. No schema change, so nothing
+needed `SCHEMA_VERSION` moved against the hosted database.
+
+Photographs on the new dashboard come from a `photo_reference` now carried on the
+snapshot's stops. That is deliberate rather than incidental: the obvious source was
+`get_latest_discovery`, and using it would have added 391 KB to every view of the one
+screen that shows pictures.
+
+Then the worker, which is a separate cost and not a read at all. Its idle poll was a flat
+two seconds — 43,200 queries a day whether or not anyone is using the app, every one of
+them billed egress for asking an empty queue whether it is still empty. `next_idle_sleep`
+doubles the wait after each empty poll to a 10s ceiling and the loop resets it the moment
+a job appears, so an idle day is 8,640 polls and the backoff costs nothing while the
+worker is working. Doubling rather than jumping to the ceiling because settling in one
+step makes a burst of jobs wait; capped because a worker that keeps backing off eventually
+stops noticing anything; and the ceiling asserted below `REAP_EVERY_SECONDS`, because
+reaping only happens when the loop wakes and a longer interval would let an abandoned job
+slip a whole cycle. The one cost it cannot avoid is that the first job after a quiet spell
+waits up to ten seconds, which against discovery at 30-90s is inside the noise — an
+owner's decision, taken explicitly, not a default.
+
+`provider_cache`'s 65 MB was left alone: storage, not egress, and the free tier allows
+500 MB.
+
+### The graph rebuild, and a third name collision
+
+The seven new modules and the rewritten `/itinerary` are a topology change, so the graph
+was rebuilt: **2964 nodes, 6970 directed edges, 220 communities**, up from
+2389 / 5732 / 200. Three attempts, US$0.076311, and neither failure was new.
+
+The first lost **110** endpoint pairs, every one pointing at `travel_planner_actions` —
+whose file node that extraction run had simply not emitted, though 208 of its members
+were there. That is the documented non-determinism, and the retry produced it. The
+instinct to go looking for a fold bug was wrong and CLAUDE.md already said so: retry
+first, diagnose second.
+
+The second lost exactly one pair, and one is the interesting number:
+`travel_planner_providers_openmeteoforecastprovider_forecast -> web_src_shared_tripclock_at`.
+Extraction had decided a Python provider method calls a TypeScript function. It cannot;
+what it had actually found was a name. `providers.py` has a local `def at(field)` inside
+`OpenMeteoForecastProvider.forecast`, and `shared/tripClock.ts` — written earlier the same
+session — exported a function called `at`.
+
+This is the third occurrence after `rpc` and `fetch`, and it arrived from the opposite
+direction. The rule as written was "do not name a Python method after something the
+TypeScript side calls", which reads as a constraint on Python; the collision here was a
+two-letter *TypeScript export* against a Python local. The rule is symmetric, and a
+two-character module export was asking for it either way. Renamed to `momentAt`, which is
+a better name regardless, and the third run cost nothing on a warm cache.
+
+Worth keeping: the endpoint-pair guard has now caught three invented cross-language edges
+and has never been wrong. Every time, the fix was at the source.
