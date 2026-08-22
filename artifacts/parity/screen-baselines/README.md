@@ -88,6 +88,13 @@ Chrome needs two macOS workarounds, both in `capture()`: it writes the
 screenshot and then never exits, so the return code is not a usable signal and
 the file itself is judged; and `--headless=old` returns rc=1 without writing.
 
+The whole capture set also shares one temporary Chrome profile. Trip ownership is
+stored in localStorage, so creating a profile per image let the first image claim
+the scratch trip and made the other 55 quietly photograph `Trip not found`.
+`CaptureOwnerSessionTest` pins the shared profile. Capture mode also suppresses the
+one-time plan-ready dialog; otherwise every itinerary baseline covers the modal
+instead of the interactive dashboard it is meant to protect.
+
 ## The capture renders live app state, so look before approving
 
 These are screenshots of the running app against the real database, not of
@@ -108,6 +115,8 @@ Re-running discovery cleared it — `verified`, 849 candidates, 51s — and the
 
 - **Open the changed images before `--approve`.** A diff that is large and
   unexplained is usually state, not styling.
+- **Reject `Trip not found` and full-screen plan-ready dialogs.** They are capture
+  state, not acceptable itinerary baselines.
 - **Check `get_latest_discovery(...).status` is `verified` first.** A `stale`
   run means the banner is on screen.
 - Data changes legitimately move these images. Confirming the accommodation base

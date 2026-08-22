@@ -68,7 +68,10 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   `query_boundary` and three of them ran on every `/itinerary` view. Use
   `actions._discovery_boundary()` / `store.get_latest_discovery_report()` for anything that is not the
   candidate list itself, and scope a ledger read to its month (`list_paid_usage(month=...)`) rather
-  than filtering in Python. Supabase's free tier allows 5.5 GB and this trip passed it.
+  than filtering in Python. Supabase's free tier allows 5.5 GB and this trip passed it. The roughly
+  217 KB basemap is immutable until its evidence expiry, so `shared/basemap.ts` also keeps it in
+  browser storage until the server-provided `expires_at`; do not replace that with a cache for mutable
+  plan or route snapshots without measuring another egress problem first.
 - **The worker's idle poll backs off from 2s to `MAX_IDLE_SLEEP_SECONDS` (10s) and resets on any job.**
   A flat 2s is 43,200 queries a day whether or not anyone is using the app. Keep the ceiling below
   `REAP_EVERY_SECONDS` or abandoned jobs slip a whole reap cycle.
@@ -107,14 +110,20 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   one. An audit that drives the API will declare the app broken and be wrong.
 - **A screenshot is evidence about what someone sees; a measurement is evidence about what was
   measured.** When they disagree, the screenshot is describing the product.
-- **Never print a placeholder as if it were a finding.** Four of the swipe card's fact rows could not
-  vary: `ranking.py` fixes `feasibility.state` before the optimizer runs, hardcodes
-  `reward_effort = 10.0` against a weight of 20, seeds every card's `cons` with three
-  pipeline-state codes, and cost/reservation had no data path at all. `/places` showed it worst — its
+- **Never print a placeholder as if it were a finding.** Four of the swipe card's fact rows originally
+  could not vary: `ranking.py` fixes `feasibility.state` before the optimizer runs, formerly fixed
+  `reward_effort = 10.0` against a weight of 20, seeds every card's `cons` with three pipeline-state
+  codes, and cost/reservation had no data path at all. `/places` showed it worst — its
   caution column was `cons.slice(0, 2)`, so every place in the catalogue carried the same two strings.
   A row with one possible value cannot separate this place from the next, and it teaches the eye past
-  the rows that can. `shared/cards.ts` holds the guards; `WF-005` asks for these rows, so they are
-  kept where they can answer and dropped where they cannot.
+  the rows that can. `reward_vs_effort` now varies from category experience per estimated visit minute,
+  is labelled `Value for time`, and declares `effort_state: visit_time_estimated`; walking, transfers,
+  cost and fatigue remain optimizer evidence. `shared/cards.ts` holds the guards; `WF-005` asks for
+  these rows, so they are kept where they can answer and dropped where they cannot.
+- **A screen-baseline run must reuse one Chrome profile.** Trip ownership is a localStorage token; a
+  fresh profile per image lets the first image claim the scratch trip and makes every later image show
+  `Trip not found`. Capture mode suppresses the one-time plan-ready dialog so the itinerary baselines
+  cover the dashboard beneath it. Open changed images before approving them.
 - **Before penalising an `avoid` chip in `ranking.py`, check the vocabulary.** None of the five is a
   word the place vocabulary uses (`AVOID_TAGS ∩ candidate tags = ∅`), so a deduction keyed on
   candidate tags is dead code that looks like a feature. They reach the engine as optimizer

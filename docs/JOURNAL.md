@@ -3313,3 +3313,42 @@ a better name regardless, and the third run cost nothing on a warm cache.
 
 Worth keeping: the endpoint-pair guard has now caught three invented cross-language edges
 and has never been wrong. Every time, the fix was at the source.
+
+### The testing round closed only after a whole journey, 2026-08-22
+
+The six owner reports were rechecked as one flow rather than six isolated screens: create a
+Taipei trip at a true 390×844 viewport, finish the five setup steps, confirm the criteria,
+discover and choose places, choose a stay, build all three timetables, activate one, and use
+the itinerary dashboard. The run reached 364 candidates, showed the new varying `Value for
+time`, presented `Confirm the criteria and timetable` before activation, and ended on the
+interactive map, day tabs, live clock, timeline and checklist links. The landing landmark
+row had no white mobile box, the merged avoid/requirements step retained the hard constraint,
+and the shortened copy still carried the safety and provisional-result boundaries.
+
+That journey found one additional dashboard bug. An item whose stated start and end were both
+`12:00` was treated as crossing midnight and displayed as 24 hours. Equality means a genuine
+zero-minute row; only an end strictly earlier than its start rolls into the next day. The shared
+`flattenDays` rule was corrected once and its regression test now pins zero minutes.
+
+The first attempt to approve the 56 screen baselines was rejected on sight: only the first
+headless Chrome process had claimed the scratch trip, while a new profile for every later image
+rendered `Trip not found`. Reusing one isolated profile for the full capture set fixed ownership.
+A second attempt was rejected because every itinerary image showed the one-time plan-ready dialog
+instead of the dashboard, so capture mode now suppresses that dialog. Only the third set, after
+representative mobile, desktop, Thai and dark images were opened, became the approved baseline.
+
+The live Supabase dashboard supplied the operational result the local database could not. The
+current cycle still read **6.975 / 5 GB** and cannot be made unspent by a code change, but its chart
+attributed the egress to the Shared Pooler and showed **5.747 GB on 2026-08-20** falling to
+**43.793 MB on 2026-08-21** after the unbounded discovery and paid-usage reads were removed. The
+database history agreed: the former full-ledger query had returned 16,060,869 rows across 2,006
+calls. The last repeated payload on the page path was the roughly 217 KB basemap, so the browser now
+reuses it until the server evidence's own `expires_at`; capture mode remains read-only. Mutable plan
+and route snapshots were deliberately not cached without evidence that they are the next problem.
+The existing billing warning remains valid for this cycle, while the measured daily rate after the
+fix is below a future free-cycle trajectory if the workload stays comparable.
+
+Implementation commit `6beb0d4` passed the 12-stage gate: 619 Python tests, 27 historical optimizer
+regressions, 125 web tests, typecheck, lint, graph integrity at 2964 nodes / 6970 directed edges, and
+56 of 56 approved screen baselines. GitHub and `origin/main` matched, and Vercel recorded the commit's
+production deployment as successful.
