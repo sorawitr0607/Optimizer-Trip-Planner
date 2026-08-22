@@ -6,6 +6,7 @@ import time
 import unittest
 from unittest.mock import patch
 
+import scripts.capture_screen_baselines as capture
 import scripts.check_screen_baselines as gate
 
 
@@ -75,6 +76,35 @@ class StaleCaptureGuardTest(unittest.TestCase):
 
         self.assertEqual([], self.run_guard())
 
+
+class CaptureOwnerSessionTest(unittest.TestCase):
+    """Every screen in one run must carry the same browser owner token."""
+
+    def test_one_browser_profile_is_reused_for_the_whole_capture_set(self) -> None:
+        view = capture.View("", (500, 844), (capture.Screen("setup", "/setup"),))
+        profiles: list[str] = []
+
+        def record(*args) -> bool:
+            profiles.append(args[4])
+            return True
+
+        with TemporaryDirectory() as directory, patch.object(
+            capture, "ROOT", Path(directory)
+        ), patch.object(
+            capture, "CURRENT", Path(directory) / "current"
+        ), patch.object(capture, "VIEWS", (view,)), patch.object(
+            capture, "THEMES", ("light", "dark")
+        ), patch.object(capture, "LANGUAGES", ("en",)), patch.object(
+            capture, "alive", return_value=True
+        ), patch.object(capture, "chrome", return_value="chrome"), patch.object(
+            capture, "stable_capture", side_effect=record
+        ), patch(
+            "sys.argv", ["capture_screen_baselines.py", "--trip", "trip_test"]
+        ):
+            self.assertEqual(0, capture.main())
+
+        self.assertEqual(2, len(profiles))
+        self.assertEqual(1, len(set(profiles)))
 
 if __name__ == "__main__":
     unittest.main()

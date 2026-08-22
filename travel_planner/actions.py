@@ -2314,10 +2314,7 @@ class PlannerActions:
         held = self.store.get_trip_evidence(trip_id, "basemap")
         if not held:
             return None
-        return {
-            key: value for key, value in held.items()
-            if key not in {"retrieved_at", "expires_at"}
-        }
+        return held
 
     def refresh_basemap(self, trip_id: str, *, force: bool = False) -> dict[str, Any]:
         """Fetch the drawn basemap for the window discovery searched.
@@ -2347,6 +2344,7 @@ class PlannerActions:
             detail={"bbox": [round(float(value), 4) for value in box]},
         )
         value = provider.basemap([float(value) for value in box])
+        expires_at = (now + timedelta(days=30)).isoformat()
         self.store.upsert_trip_evidence(
             trip_id=trip_id,
             kind="basemap",
@@ -2354,9 +2352,9 @@ class PlannerActions:
             provider=str(provider.name),
             retrieved_at=now.isoformat(),
             # Roads and coastlines do not move; a month is already conservative.
-            expires_at=(now + timedelta(days=30)).isoformat(),
+            expires_at=expires_at,
         )
-        return value
+        return {**value, "retrieved_at": now.isoformat(), "expires_at": expires_at}
 
     def trip_forecast(self, trip_id: str) -> dict[str, Any]:
         """The real weather for the trip's own dates, where they are near enough to know.

@@ -19,6 +19,7 @@ import {
 } from "../api/client";
 import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
+import { loadBasemap } from "../shared/basemap";
 import { mapsLink, type MapPlace } from "../shared/map";
 import { DayStops } from "./DayStops";
 import { PlanReady } from "./PlanReady";
@@ -343,10 +344,10 @@ export function ItineraryPage() {
   // when there is a network; these are the picture when there is not.
   const basemap = useQuery({
     queryKey: ["basemap", tripId],
-    queryFn: () =>
-      typeof document !== "undefined" && document.documentElement.dataset.capture
-        ? rpc<Basemap | null>("get_basemap", { trip_id: tripId })
-        : rpc<Basemap | null>("refresh_basemap", { trip_id: tripId }),
+    queryFn: () => loadBasemap(
+      tripId,
+      typeof document !== "undefined" && Boolean(document.documentElement.dataset.capture),
+    ),
     enabled: Boolean(tripId),
     staleTime: Infinity,
     retry: false,

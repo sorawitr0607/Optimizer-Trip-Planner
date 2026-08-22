@@ -829,7 +829,7 @@ export function PlaceDeck({
             So the requirement is kept where it can still answer and dropped where it
             cannot: feasibility and crowd signal appear once they say something, and
             cost/reservation is gone until a licensed source exists to fill it. Duration
-            and effort move on every card and are always shown. */}
+            and visit-time value move on every card and are always shown. */}
         <dl className="place-deck-topics">
           <dt>{copy("duration", language)}</dt>
           <dd>
@@ -839,10 +839,7 @@ export function PlaceDeck({
           {evaluatedEffort(card.effort_state) ? (
             <>
               <dt>{copy("effort_access", language)}</dt>
-              <dd>
-                {copyFrom("DIMENSION_TEXT", "reward_vs_effort", language)}:{" "}
-                {card.dimensions.reward_vs_effort.score}/{card.dimensions.reward_vs_effort.max}
-              </dd>
+              <dd>{card.dimensions.reward_vs_effort.score}/{card.dimensions.reward_vs_effort.max}</dd>
             </>
           ) : null}
           {evaluatedFeasibility(card.feasibility.state) ? (

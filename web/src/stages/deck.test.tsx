@@ -141,21 +141,21 @@ describe("PlaceDeck", () => {
     expect(html).not.toContain("A quiet park");
   });
 
-  it("shows effort once it has actually been routed", () => {
-    const routed = {
+  it("shows value once visit time has been estimated", () => {
+    const estimated = {
       ...RANKING,
       cards: {
         ...RANKING.cards,
         first: {
           ...CARD,
-          effort_state: "routed",
+          effort_state: "visit_time_estimated",
           dimensions: { ...CARD.dimensions, reward_vs_effort: { score: 16, max: 20 } },
         },
       },
     } as unknown as Ranking;
-    const html = render(SUMMARY, [], RANKING.lanes.main_queue, [], false, routed);
+    const html = render(SUMMARY, [], RANKING.lanes.main_queue, [], false, estimated);
 
-    expect(html).toContain("Effort and access");
+    expect(html).toContain("Value for time");
     expect(html).toContain("16/20");
   });
 

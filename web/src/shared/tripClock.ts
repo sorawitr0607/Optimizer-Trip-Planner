@@ -40,7 +40,7 @@ export function momentAt(date: string, time: string): Date {
 /**
  * Every item of every day, in time order, with an end for each.
  *
- * An item whose `end` is at or before its `start` has crossed midnight, so a day is
+ * An item whose `end` is before its `start` has crossed midnight, so a day is
  * added rather than the row being drawn as ending before it began -- the same rollover
  * rule the trip dashboards derive their dates with. An item with no usable end borrows
  * the next item's start, and the last one falls back to its stated duration.
@@ -61,7 +61,7 @@ export function flattenDays(days: ExportDay[]): TimedItem[] {
   items.sort((left, right) => +left.startAt - +right.startAt);
   items.forEach((item, index) => {
     const stated = item.end ? momentAt(item.date, item.end) : null;
-    if (stated && +stated > +item.startAt) {
+    if (stated && +stated >= +item.startAt) {
       item.endAt = stated;
     } else if (stated) {
       // Earlier than its own start means the clock passed midnight inside this item.

@@ -124,7 +124,14 @@ def alive(base: str) -> bool:
         return False
 
 
-def stable_capture(binary: str, url: str, out: Path, size: tuple[int, int], attempts: int = 4) -> bool:
+def stable_capture(
+    binary: str,
+    url: str,
+    out: Path,
+    size: tuple[int, int],
+    profile: str,
+    attempts: int = 4,
+) -> bool:
     """Accept a screenshot only once two consecutive shots are identical.
 
     File-size stability is not visual stability: a screen caught mid-load or
@@ -136,7 +143,7 @@ def stable_capture(binary: str, url: str, out: Path, size: tuple[int, int], atte
 
     previous: bytes | None = None
     for _ in range(attempts):
-        if not capture(binary, url, out, size):
+        if not capture(binary, url, out, size, profile):
             continue
         current = out.read_bytes()
         if previous is not None and current == previous:
@@ -146,7 +153,7 @@ def stable_capture(binary: str, url: str, out: Path, size: tuple[int, int], atte
     return out.is_file() and out.stat().st_size > 0
 
 
-def capture(binary: str, url: str, out: Path, size: tuple[int, int]) -> bool:
+def capture(binary: str, url: str, out: Path, size: tuple[int, int], profile: str) -> bool:
     """True when a non-empty PNG landed, regardless of how Chrome exited.
 
     Two macOS headless quirks are handled here rather than worked around by the
@@ -157,40 +164,39 @@ def capture(binary: str, url: str, out: Path, size: tuple[int, int]) -> bool:
     """
 
     out.unlink(missing_ok=True)
-    with tempfile.TemporaryDirectory() as profile:
-        process = subprocess.Popen(
-            [
-                binary,
-                "--headless=new",
-                "--disable-gpu",
-                "--hide-scrollbars",
-                "--force-device-scale-factor=1",
-                f"--window-size={size[0]},{size[1]}",
-                f"--user-data-dir={profile}",
-                "--virtual-time-budget=5000",
-                f"--screenshot={out}",
-                url,
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        deadline = time.monotonic() + 30
-        settled, last = 0, -1
-        while time.monotonic() < deadline:
-            if process.poll() is not None:
-                break
-            written = out.stat().st_size if out.is_file() else 0
-            # Two consecutive identical non-zero sizes means the write finished.
-            settled = settled + 1 if written and written == last else 0
-            last = written
-            if settled >= 2:
-                break
-            time.sleep(0.4)
-        process.terminate()
-        try:
-            process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            process.kill()
+    process = subprocess.Popen(
+        [
+            binary,
+            "--headless=new",
+            "--disable-gpu",
+            "--hide-scrollbars",
+            "--force-device-scale-factor=1",
+            f"--window-size={size[0]},{size[1]}",
+            f"--user-data-dir={profile}",
+            "--virtual-time-budget=5000",
+            f"--screenshot={out}",
+            url,
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    deadline = time.monotonic() + 30
+    settled, last = 0, -1
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            break
+        written = out.stat().st_size if out.is_file() else 0
+        # Two consecutive identical non-zero sizes means the write finished.
+        settled = settled + 1 if written and written == last else 0
+        last = written
+        if settled >= 2:
+            break
+        time.sleep(0.4)
+    process.terminate()
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        process.kill()
     return out.is_file() and out.stat().st_size > 0
 
 
@@ -214,23 +220,27 @@ def main() -> int:
     written, failed = 0, []
 
     expected = sum(len(view.screens) * len(THEMES) * len(LANGUAGES) for view in VIEWS)
-    for view in VIEWS:
-        for screen in view.screens:
-            for theme in THEMES:
-                for language in LANGUAGES:
-                    name = f"{view.prefix}{screen.name}-{theme}-{language}.png"
-                    # The app reads theme and language from the query string, so a
-                    # headless load can reach any combination without clicking
-                    # through a UI it would then be photographing mid-click.
-                    query = f"baseline_theme={theme}&baseline_language={language}"
-                    if screen.query:
-                        query = f"{query}&{screen.query}"
-                    url = f"{args.base}{screen.path.format(trip=args.trip)}?{query}"
-                    if stable_capture(binary, url, target / name, view.size):
-                        written += 1
-                    else:
-                        failed.append(name)
-                        print(f"  unsettled: {name}", file=sys.stderr, flush=True)
+    # One isolated profile for the run: the app's owner token lives in localStorage.
+    # A fresh profile per image made the first one claim the trip and all 55 later ones
+    # photograph "Trip not found" under a different token.
+    with tempfile.TemporaryDirectory() as profile:
+        for view in VIEWS:
+            for screen in view.screens:
+                for theme in THEMES:
+                    for language in LANGUAGES:
+                        name = f"{view.prefix}{screen.name}-{theme}-{language}.png"
+                        # The app reads theme and language from the query string, so a
+                        # headless load can reach any combination without clicking
+                        # through a UI it would then be photographing mid-click.
+                        query = f"baseline_theme={theme}&baseline_language={language}"
+                        if screen.query:
+                            query = f"{query}&{screen.query}"
+                        url = f"{args.base}{screen.path.format(trip=args.trip)}?{query}"
+                        if stable_capture(binary, url, target / name, view.size, profile):
+                            written += 1
+                        else:
+                            failed.append(name)
+                            print(f"  unsettled: {name}", file=sys.stderr, flush=True)
 
     manifest = target / "manifest.json"
     manifest.write_text(

@@ -95,6 +95,10 @@ Crowd mismatch, tourist-trap risk, meal disruption, redundant experiences, and m
 
 Every card minimally shows permitted imagery, English/Thai/local-script names, lane and feasibility state, total score and dimension breakdown, `Why shown`, pros and cons, source-specific rating and review count where licensed, an attributed example review only where permitted, expected duration, effort/access summary, best-time and opening evidence state, cost/reservation status, crowd/tourist-trap signals, and the four trip-choice actions. The score is an ordering aid rather than a guarantee or probability.
 
+### 2026-08-22 — Reward versus effort starts with honest visit-time evidence
+
+The pre-selection ranker cannot know walking, transfers, licensed cost, or whole-day fatigue before places are selected and routed. Its `reward_vs_effort` component therefore measures only the evidence it has: category experience per estimated visit minute. The catalogue's median reward density maps to 10/20 through `20 × density / (density + median density)`, so the score stays bounded without letting short categories swallow the ranking. The card labels this provisional result `Value for time`; `effort_state: visit_time_estimated` prevents it from being mistaken for routed effort. Source and heritage bonuses remain solely in `experience_value`, so they are not counted twice. Route, cost, and fatigue consequences remain optimizer evidence and hard comfort thresholds remain outside the card score.
+
 ## Resolution summary
 
 Phase 1 retrieves a broad citywide union before personalizing, reports what was and was not searched, merges evidence without losing distinct experiences, and ranks every retained candidate with an explainable owner-led group score. Popularity cannot dominate, diversity is protected, all selections receive a fitting or non-fitting explanation, and the owner always sees the consequences before changing the plan.

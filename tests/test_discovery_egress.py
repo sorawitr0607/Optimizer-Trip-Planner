@@ -132,6 +132,19 @@ class DiscoveryReportReadTest(unittest.TestCase):
         self.assertEqual(4, len(boundary))
         self.assertEqual([], reads, "the full run was read to find four floats")
 
+    def test_basemap_read_carries_the_server_expiry_for_browser_reuse(self) -> None:
+        self.store.upsert_trip_evidence(
+            trip_id=self.trip.trip_id,
+            kind="basemap",
+            value={"roads": [], "water": [], "green": []},
+            provider="fake",
+            retrieved_at="2026-08-22T00:00:00+00:00",
+            expires_at="2026-09-21T00:00:00+00:00",
+        )
+
+        held = self.actions.get_basemap(self.trip.trip_id)
+        self.assertEqual("2026-09-21T00:00:00+00:00", held["expires_at"])
+
 
 class PaidUsageLedgerReadTest(unittest.TestCase):
     """The other unbounded read on a page load.

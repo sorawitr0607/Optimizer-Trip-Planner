@@ -700,21 +700,27 @@ class SetupVocabularyReachesScoringTest(unittest.TestCase):
 
         self.assertEqual({"rewarding_walks"}, set(COMFORT_TAGS) & vocabulary)
 
-    def test_reward_versus_effort_is_a_placeholder_and_says_so(self) -> None:
-        """20 of the formula's 100 points are frozen at exactly half.
+    def test_reward_versus_effort_uses_estimated_visit_time(self) -> None:
+        """The 20-point dimension varies before routes exist, without pretending they do."""
 
-        `reward_effort` is the literal `10.0` because routes are not measured at ranking
-        time. Ordering is unaffected -- a constant added to every candidate preserves the
-        order -- but the card must not print it as a per-place finding, so the state that
-        lets a view suppress it is asserted here beside the constant that makes it
-        necessary. Computing this dimension for real is a change to the formula and
-        belongs to a ticket, not to a view.
-        """
+        result = build_ranking(
+            setup=setup_payload(),
+            candidates=[
+                candidate("short", "viewpoint", 2),
+                candidate("long", "theme_park", 4),
+            ],
+            choices=[],
+            discovery_status="verified",
+        )
+        short = result["cards"]["short"]
+        long = result["cards"]["long"]
 
         self.assertEqual(20, ranking.FORMULA_WEIGHTS["reward_vs_effort"])
-        source = (
-            Path(ranking.__file__).read_text(encoding="utf-8")
-            if hasattr(ranking, "__file__") else ""
+        self.assertGreater(
+            short["dimensions"]["reward_vs_effort"]["score"],
+            long["dimensions"]["reward_vs_effort"]["score"],
         )
-        self.assertIn("reward_effort = 10.0", source)
-        self.assertIn("route_and_walking_not_evaluated", source)
+        self.assertEqual(14.4, short["dimensions"]["reward_vs_effort"]["score"])
+        self.assertEqual(6.4, long["dimensions"]["reward_vs_effort"]["score"])
+        self.assertEqual("visit_time_estimated", short["effort_state"])
+        self.assertEqual("visit_time_estimated", long["effort_state"])

@@ -56,7 +56,12 @@ export interface PlanReadyProps {
 }
 
 export function PlanReady({ language, versionId, gaps }: PlanReadyProps) {
-  const [open, setOpen] = useState(() => Boolean(versionId) && !alreadySeen(versionId));
+  // Baselines need the dashboard itself. Letting this dialog cover every itinerary
+  // screenshot leaves the much larger interactive screen without regression coverage.
+  const capturing = typeof document !== "undefined" && Boolean(document.documentElement.dataset.capture);
+  const [open, setOpen] = useState(
+    () => Boolean(versionId) && !capturing && !alreadySeen(versionId),
+  );
   const dialog = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {

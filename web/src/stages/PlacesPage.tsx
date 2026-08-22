@@ -8,7 +8,6 @@ import { useNavigate, useParams, useSearchParams } from "react-router";
 
 import {
   ApiError,
-  type Basemap,
   type CandidateChoice,
   type CountryOutline,
   type DiscoveryRun,
@@ -26,6 +25,7 @@ import { mergeNames, placeAltName, placeName } from "../shared/names";
 import { distinguishingCons, evaluatedFeasibility } from "../shared/cards";
 import { galleryFor } from "../shared/photos";
 import { mapPlaces } from "../shared/map";
+import { loadBasemap } from "../shared/basemap";
 import { PlaceMap } from "./PlaceMap";
 
 const LANES = ["main_queue", "city_icons", "worth_it_if", "local_alternatives", "browse_all"] as const;
@@ -197,10 +197,10 @@ export function PlacesPage() {
   });
   const basemap = useQuery({
     queryKey: ["basemap", tripId],
-    queryFn: () =>
-      typeof document !== "undefined" && document.documentElement.dataset.capture
-        ? rpc<Basemap | null>("get_basemap", { trip_id: tripId })
-        : rpc<Basemap | null>("refresh_basemap", { trip_id: tripId }),
+    queryFn: () => loadBasemap(
+      tripId,
+      typeof document !== "undefined" && Boolean(document.documentElement.dataset.capture),
+    ),
     enabled: Boolean(tripId),
     staleTime: Infinity,
     retry: false,

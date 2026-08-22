@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from math import asin, cos, radians, sin, sqrt
+from statistics import median
 from typing import Any
 
 from .setup import AVOID_TAGS, COMFORT_TAGS
@@ -131,6 +132,10 @@ DURATION_ESTIMATES = {
     "mall": (60, 180),
     "department_store": (60, 180),
 }
+REFERENCE_REWARD_DENSITY = median(
+    EXPERIENCE_PRIOR.get(category, 10) / ((minimum + maximum) / 2)
+    for category, (minimum, maximum) in DURATION_ESTIMATES.items()
+)
 
 ICON_CATEGORIES = frozenset(
     {
@@ -291,9 +296,10 @@ def _score_candidate(
     )
     preference = min(30.0, preference + learned_category_bonus)
     city_icon, icon_basis = _city_icon(candidate)
+    experience_prior = float(EXPERIENCE_PRIOR.get(category, 10))
     experience = min(
         20.0,
-        float(EXPERIENCE_PRIOR.get(category, 10))
+        experience_prior
         + (1.0 if candidate.get("signals", {}).get("wikidata") else 0.0)
         + (1.0 if candidate.get("signals", {}).get("wikipedia") else 0.0)
         # `WF-037` phase two. An official heritage designation is an act by an
@@ -309,7 +315,16 @@ def _score_candidate(
         # it, so this lifts a named few rather than reshuffling the catalogue.
         + (HERITAGE_BONUS if _designated(candidate) else 0.0),
     )
-    reward_effort = 10.0
+    duration = DURATION_ESTIMATES.get(category, (45, 120))
+    estimated_visit_minutes = (duration[0] + duration[1]) / 2
+    # The card stage has no routes or licensed cost evidence yet. Score the part it does
+    # know: expected experience per estimated visit minute. A median-density place is
+    # 10/20; the bounded ratio stops very short categories from swallowing the ranking.
+    # Walking, transfers, cost and fatigue remain optimizer evidence.
+    reward_density = experience_prior / estimated_visit_minutes
+    reward_effort = round(
+        20.0 * reward_density / (reward_density + REFERENCE_REWARD_DENSITY), 1
+    )
     time_fit = _time_fit(candidate)
     route_fit, route_distance = _route_fit(candidate, selected_candidates)
     evidence = _evidence_score(candidate, discovery_status)
@@ -367,7 +382,6 @@ def _score_candidate(
     if candidate["operational_evidence"]["access"]["state"] == "unconfirmed":
         cons.append("access_unconfirmed")
 
-    duration = DURATION_ESTIMATES.get(category, (45, 120))
     dimensions = {
         "group_preference_fit": {"score": round(preference, 1), "max": 30},
         "experience_value": {"score": round(experience, 1), "max": 20},
@@ -398,7 +412,7 @@ def _score_candidate(
             "origin": "planner_category_default",
         },
         "route_distance_to_selected_metres": route_distance,
-        "effort_state": "route_and_walking_not_evaluated",
+        "effort_state": "visit_time_estimated",
         "feasibility": {
             "state": "not_evaluated",
             "reason": "optimizer_not_run",

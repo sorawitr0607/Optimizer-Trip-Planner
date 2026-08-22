@@ -52,6 +52,18 @@ describe("flattenDays", () => {
     expect(+overnight.endAt).toBeGreaterThan(+overnight.startAt);
   });
 
+  it("keeps equal start and end as a zero-minute item", () => {
+    const zeroDay = [{
+      date: "2026-10-10", start: "12:00", end: "12:00",
+      items: [{ order: 1, item_id: "zero", type: "travel", subject_id: "s3",
+        date: "2026-10-10", start: "12:00", end: "12:00", duration_minutes: 0,
+        status: "ready" }],
+      stops: [], fallbacks: [], totals: {}, highest_risk: null,
+    }] as unknown as ExportDay[];
+    const zero = flattenDays(zeroDay)[0];
+    expect(+zero.endAt).toBe(+zero.startAt);
+  });
+
   it("keeps the day it was listed under, which is not always its own date", () => {
     const items = flattenDays(DAYS);
     expect(items.map((item) => item.dayDate)).toEqual([

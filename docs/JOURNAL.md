@@ -3149,17 +3149,18 @@ seeded three come first, **every place in the catalogue carried the same two str
 column that could never distinguish anything, on the screen for distinguishing things.
 
 Then the scoring audit found the fourth, which nobody had reported because it looked like
-a measurement. `reward_effort` is the literal `10.0` while
-`FORMULA_WEIGHTS["reward_vs_effort"]` is 20, so **20 of the formula's 100 points are frozen
+a measurement. `reward_effort` was the literal `10.0` while
+`FORMULA_WEIGHTS["reward_vs_effort"]` is 20, so **20 of the formula's 100 points were frozen
 at exactly half for every candidate**, and the card printed "Reward versus effort: 10/20"
-on all of them. Ordering is unaffected — a constant added to every score preserves the
-order — so this is a communication defect rather than a ranking one, and computing the
-dimension for real is a change to the formula that belongs to a ticket.
+on all of them. The 2026-08-22 follow-up records the formula decision in `WF-005`: the
+ranker now maps category experience per estimated visit time against the catalogue's
+median reward density, labels it `Value for time`, and declares `visit_time_estimated`. Walking,
+transfers, cost and fatigue still wait for optimizer evidence rather than being guessed.
 
 `WF-005` requires these rows, which is why they were there. The resolution is to keep the
-requirement where it can still answer and drop it where it cannot: feasibility and effort
-appear once their state is not a placeholder, crowd signal once a con is about the place,
-and cost/reservation is gone until a licensed source exists. `shared/cards.ts` holds the
+requirement where it can still answer and drop it where it cannot: feasibility appears
+once its state is not a placeholder, visit-time value appears from its measured estimate,
+crowd signal once a con is about the place, and cost/reservation is gone until a licensed source exists. `shared/cards.ts` holds the
 guards so the deck and the list cannot disagree — the two disagreeing about one place is
 a bug this app has had before.
 

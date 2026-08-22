@@ -260,9 +260,8 @@ export interface RankingCard {
   cons: string[];
   duration_estimate: { minimum_minutes: number; maximum_minutes: number; origin: string };
   feasibility: { state: string; reason: string };
-  /** `ranking.py` sets this to `route_and_walking_not_evaluated` and hardcodes
-   *  `reward_vs_effort` to 10 of 20 — so the dimension is a placeholder, not a
-   *  measurement, and the view must not print it as one. */
+  /** Which effort evidence backs the score. Cards currently know estimated visit time;
+   *  walking, transfers, cost and fatigue belong to the optimizer. */
   effort_state?: string;
   choice_action: string | null;
 }
@@ -607,6 +606,8 @@ export interface Basemap {
   green: [number, number][][];
   attribution: string;
   license: string;
+  retrieved_at?: string;
+  expires_at?: string;
 }
 
 /** `WF-048`. One zoomed-in window's map, in the layers a street map is read in.
