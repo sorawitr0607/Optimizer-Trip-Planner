@@ -356,6 +356,10 @@ export function OptimizePage() {
   );
   const assumptions = assumptionsOf(preview.data ?? null, proposal);
   const showBuildControls = !proposal || rebuilding;
+  // A timetable exists and has not been activated yet, which is the only state where
+  // the owner's next move is to confirm rather than to build.
+  const timetableAwaitingConfirmation =
+    Boolean(proposal) && proposal?.mode !== "stay_recommendation" && !rebuilding;
   const gaps = optimizerInput?.capability_gaps ?? [];
   // One label, two dead ends — the refusal card and an unusable variant's warnings.
   // It says "free" because it now is, and says what it assumes, because a button that
@@ -364,9 +368,14 @@ export function OptimizePage() {
 
   return (
     <section className="stage-card optimize-screen">
+      {/* Once a timetable is on screen the page is no longer asking to build one, it is
+          asking to accept one -- and the heading said "build" either way, so the activate
+          button at the bottom read as optional and the plan was left un-activated. The
+          `stay_recommendation` branch is excluded: that mode has no timetable to confirm,
+          it has dates to choose. */}
       <header className="money-head">
-        <h1>{copy("optimizer_title", language)}</h1>
-        <p>{copy("optimizer_help", language)}</p>
+        <h1>{copy(timetableAwaitingConfirmation ? "confirm_title" : "optimizer_title", language)}</h1>
+        <p>{copy(timetableAwaitingConfirmation ? "confirm_help" : "optimizer_help", language)}</p>
       </header>
 
       {refusal ? (

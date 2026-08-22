@@ -18,13 +18,12 @@ import { useLanguage } from "../i18n/LanguageProvider";
 // what the other five want and why. The step indicator was already
 // step-count-agnostic by S3's decision, so this is a constant change, not a
 // component change.
-const STEP_COUNT = 6;
+const STEP_COUNT = 5;
 const STEP_TITLES = [
   "welcome",
   "trip_basics",
   "owner_style",
   "travellers",
-  "requirements",
   "review",
 ];
 // A POC view convention, not a core rule: setup.py accepts any number.
@@ -42,7 +41,6 @@ const INTRO_STEPS = [
   ["trip_basics", "setup_intro_basics"],
   ["owner_style", "setup_intro_style"],
   ["travellers", "setup_intro_travellers"],
-  ["requirements", "setup_intro_requirements"],
 ] as const;
 
 interface Member {
@@ -661,6 +659,24 @@ export function SetupPage() {
               ))}
             </fieldset>
           ))}
+          {/* Was its own step, which made a wizard of six for one textarea and asked the
+              same question twice: `avoid` is soft ("rather not"), this is hard ("cannot").
+              Split across two screens the difference was invisible, so it now sits
+              directly under the avoid chips where the contrast is the point. */}
+          <label className="setup-wide">
+            {copy("owner_must", language)}
+            <textarea
+              aria-describedby="owner-must-help"
+              name="owner-requirements"
+              onChange={(event) => edit({ owner_must_respect: event.target.value })}
+              placeholder={copy("owner_must_placeholder", language)}
+              rows={3}
+              value={values.owner_must_respect}
+            />
+          </label>
+          <p className="setup-hint setup-wide" id="owner-must-help">
+            {copy("owner_must_help", language)}
+          </p>
           {/* The free-text boxes never said what happens to what you type, so they
               read as a comment field nobody reads. They are parsed for constraints
               when the plan is built, and an example is worth more than the label. */}
@@ -827,26 +843,6 @@ export function SetupPage() {
       ) : null}
 
       {step === 5 ? (
-        <div className="setup-fields">
-          <p className="setup-hint setup-wide">{copy("setup_requirements_help", language)}</p>
-          <label className="setup-wide">
-            {copy("owner_must", language)}
-            <textarea
-              aria-describedby="owner-must-help"
-              name="owner-requirements"
-              onChange={(event) => edit({ owner_must_respect: event.target.value })}
-              placeholder={copy("owner_must_placeholder", language)}
-              rows={4}
-              value={values.owner_must_respect}
-            />
-          </label>
-          <p className="setup-hint setup-wide" id="owner-must-help">
-            {copy("owner_must_help", language)}
-          </p>
-        </div>
-      ) : null}
-
-      {step === 6 ? (
         <dl className="setup-review">
           <dt>{copy("mode", language)}</dt>
           <dd>{trip ? copy(trip.planning_mode, language) : "—"}</dd>

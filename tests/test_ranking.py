@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 
 from travel_planner import ranking
+from travel_planner.setup import AVOID_TAGS, COMFORT_TAGS
 from travel_planner.actions import PlannerActions
 from travel_planner.providers import GooglePlacesCardProvider, ProviderUnavailable
 from travel_planner.ranking import FORMULA_WEIGHTS, build_ranking
@@ -656,3 +657,64 @@ class LaneVarietyTest(unittest.TestCase):
 
         self.assertEqual(ids, ranking._spread_families(ids, cards))
 
+
+
+class SetupVocabularyReachesScoringTest(unittest.TestCase):
+    """Which setup answers the ranker can act on, and which belong to the optimizer.
+
+    From auditing the scoring formula against the setup form. `ranking.py` imports
+    `AVOID_TAGS` but never penalises a candidate for matching one, which reads like an
+    omission and is not: the five avoid chips describe a *plan* -- crowds, queues, long
+    plain walks, late meals -- and none of them is a word the place vocabulary uses. There
+    is nothing on a candidate for the ranker to match them against, so they are enforced
+    where they can be, as optimizer thresholds and `_dislikes` questions, which
+    `tests/test_avoid_tags_reach_the_planner.py` pins.
+
+    This is the other half of that guard. Without it the natural "fix" is to add an avoid
+    deduction keyed on candidate tags, which would be dead code that looks like a feature.
+    """
+
+    def test_no_avoid_chip_is_a_word_the_place_vocabulary_uses(self) -> None:
+        vocabulary: set[str] = set()
+        for tags in ranking.CATEGORY_TAGS.values():
+            vocabulary |= tags
+
+        self.assertEqual(
+            set(),
+            set(AVOID_TAGS) & vocabulary,
+            "an avoid chip now overlaps the place vocabulary, so the ranker can and "
+            "should act on it -- see tests/test_avoid_tags_reach_the_planner.py",
+        )
+
+    def test_the_one_comfort_chip_the_ranker_can_see_is_still_rewarding_walks(self) -> None:
+        """The comfort term is real but narrow, and worth knowing before tuning it.
+
+        `_preference_fit` gives comfort matches 0.05 of the owner's fit, and only
+        `rewarding_walks` is a word a place carries; the other four are pace and meal
+        properties the optimizer enforces. So the term moves one chip, not five.
+        """
+
+        vocabulary: set[str] = set()
+        for tags in ranking.CATEGORY_TAGS.values():
+            vocabulary |= tags
+
+        self.assertEqual({"rewarding_walks"}, set(COMFORT_TAGS) & vocabulary)
+
+    def test_reward_versus_effort_is_a_placeholder_and_says_so(self) -> None:
+        """20 of the formula's 100 points are frozen at exactly half.
+
+        `reward_effort` is the literal `10.0` because routes are not measured at ranking
+        time. Ordering is unaffected -- a constant added to every candidate preserves the
+        order -- but the card must not print it as a per-place finding, so the state that
+        lets a view suppress it is asserted here beside the constant that makes it
+        necessary. Computing this dimension for real is a change to the formula and
+        belongs to a ticket, not to a view.
+        """
+
+        self.assertEqual(20, ranking.FORMULA_WEIGHTS["reward_vs_effort"])
+        source = (
+            Path(ranking.__file__).read_text(encoding="utf-8")
+            if hasattr(ranking, "__file__") else ""
+        )
+        self.assertIn("reward_effort = 10.0", source)
+        self.assertIn("route_and_walking_not_evaluated", source)

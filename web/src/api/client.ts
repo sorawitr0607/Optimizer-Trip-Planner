@@ -260,6 +260,10 @@ export interface RankingCard {
   cons: string[];
   duration_estimate: { minimum_minutes: number; maximum_minutes: number; origin: string };
   feasibility: { state: string; reason: string };
+  /** `ranking.py` sets this to `route_and_walking_not_evaluated` and hardcodes
+   *  `reward_vs_effort` to 10 of 20 — so the dimension is a placeholder, not a
+   *  measurement, and the view must not print it as one. */
+  effort_state?: string;
   choice_action: string | null;
 }
 
@@ -469,6 +473,7 @@ export interface ExportPlanItem {
   from_name?: string | null;
   to_name?: string | null;
   reason?: string | null;
+  photo_reference?: string | null;
 }
 
 export interface ExportStop {
@@ -478,6 +483,9 @@ export interface ExportStop {
   latitude: number | null;
   longitude: number | null;
   status: string;
+  /** OpenStreetMap's own photo tag, carried here so the itinerary never has to read the
+   *  discovery run -- whose `candidates_json` is ~390 KB -- to show a picture. */
+  photo_reference?: string | null;
 }
 
 export interface ExportFallback {

@@ -277,7 +277,10 @@ describe("ItineraryPage", () => {
     // URL precisely so this stays assertable rather than becoming unreachable state.
     const html = render(<ItineraryPage />, "en", undefined, "?view=timeline");
     for (const rowType of ["preparation", "travel", "visit", "buffer", "meal", "logistics"]) {
-      expect(html).toContain(`plan-row ${rowType}`);
+      // The dashboard renders a `day-stop` list item whose badge carries the type,
+      // where the audit table rendered `plan-row <type>` on an article. Every one of the
+      // six kinds still appears on its own row, which is what this test is about.
+      expect(html).toContain(`plan-row-kind ${rowType}`);
     }
     expect(html).toContain("Fallback for this half-day");
     expect(html.indexOf("Fallback for this half-day")).toBeGreaterThan(html.indexOf("Longshan Temple"));

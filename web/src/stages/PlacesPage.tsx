@@ -23,6 +23,7 @@ import {
 import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
 import { mergeNames, placeAltName, placeName } from "../shared/names";
+import { distinguishingCons, evaluatedFeasibility } from "../shared/cards";
 import { galleryFor } from "../shared/photos";
 import { mapPlaces } from "../shared/map";
 import { PlaceMap } from "./PlaceMap";
@@ -1010,7 +1011,7 @@ export function PlacesPage() {
                         category: categoryName(candidate.category, language),
                         best_for: (card.matched_tags.length ? card.matched_tags : card.candidate_tags).slice(0, 4).map((tag) => copyFrom("TAG_TEXT", tag, language)).join(" · "),
                         reason: copyFrom("EXPLANATION_TEXT", card.why_shown[0], language),
-                        caution: card.cons.slice(0, 2).map((code) => copyFrom("EXPLANATION_TEXT", code, language)).join(" · "),
+                        caution: distinguishingCons(card.cons).slice(0, 2).map((code) => copyFrom("EXPLANATION_TEXT", code, language)).join(" · "),
                       })}</p>
                     </>
                   );
@@ -1068,7 +1069,9 @@ export function PlacesPage() {
               />
               <div className="place-card-facts">
                 <span><b>{copy("duration", language)}:</b> {card.duration_estimate.minimum_minutes}–{card.duration_estimate.maximum_minutes} {copy("minutes", language)}</span>
-                <span><b>{copy("feasibility", language)}:</b> {copy(card.feasibility.state, language)}</span>
+                {evaluatedFeasibility(card.feasibility.state) ? (
+                  <span><b>{copy("feasibility", language)}:</b> {copy(card.feasibility.state, language)}</span>
+                ) : null}
               </div>
 
               {insight ? (

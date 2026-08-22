@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import type { CandidateChoice, DiscoveryCandidate, PlaceSummary, Ranking } from "../api/client";
 import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
 import { flyToShortlist } from "../shared/flyToShortlist";
+import { distinguishingCons, evaluatedEffort, evaluatedFeasibility } from "../shared/cards";
 import { galleryFor } from "../shared/photos";
 import { PlaceMap } from "./PlaceMap";
 
@@ -817,29 +818,49 @@ export function PlaceDeck({
           </p>
         ) : null}
 
-        {/* `WF-005`'s minimum card content, one labelled topic per line so each is
-            readable on its own rather than run together in a sentence. */}
+        {/* `WF-005` asks every card to show feasibility, crowd signal and cost/reservation
+            status. Three of the five rows were printing a constant: `ranking.py` hardcodes
+            `feasibility.state` to `not_evaluated` because the deck runs before the
+            optimizer, cost/reservation was a fixed `no_licensed_rating` string with no
+            data path behind it, and crowd signal announced "none" on most places. A row
+            with one possible value cannot separate this place from the next, and it
+            teaches you to stop reading the rows that can.
+
+            So the requirement is kept where it can still answer and dropped where it
+            cannot: feasibility and crowd signal appear once they say something, and
+            cost/reservation is gone until a licensed source exists to fill it. Duration
+            and effort move on every card and are always shown. */}
         <dl className="place-deck-topics">
           <dt>{copy("duration", language)}</dt>
           <dd>
             {card.duration_estimate.minimum_minutes}–{card.duration_estimate.maximum_minutes}{" "}
             {copy("minutes", language)}
           </dd>
-          <dt>{copy("feasibility", language)}</dt>
-          <dd>{copy(card.feasibility.state, language)}</dd>
-          <dt>{copy("effort_access", language)}</dt>
-          <dd>
-            {copyFrom("DIMENSION_TEXT", "reward_vs_effort", language)}:{" "}
-            {card.dimensions.reward_vs_effort.score}/{card.dimensions.reward_vs_effort.max}
-          </dd>
-          <dt>{copy("crowd_signal", language)}</dt>
-          <dd>
-            {card.cons.length
-              ? card.cons.map((code) => copyFrom("EXPLANATION_TEXT", code, language)).join(" · ")
-              : copy("none", language)}
-          </dd>
-          <dt>{copy("cost_reservation", language)}</dt>
-          <dd>{copy("no_licensed_rating", language)}</dd>
+          {evaluatedEffort(card.effort_state) ? (
+            <>
+              <dt>{copy("effort_access", language)}</dt>
+              <dd>
+                {copyFrom("DIMENSION_TEXT", "reward_vs_effort", language)}:{" "}
+                {card.dimensions.reward_vs_effort.score}/{card.dimensions.reward_vs_effort.max}
+              </dd>
+            </>
+          ) : null}
+          {evaluatedFeasibility(card.feasibility.state) ? (
+            <>
+              <dt>{copy("feasibility", language)}</dt>
+              <dd>{copy(card.feasibility.state, language)}</dd>
+            </>
+          ) : null}
+          {distinguishingCons(card.cons).length ? (
+            <>
+              <dt>{copy("crowd_signal", language)}</dt>
+              <dd>
+                {distinguishingCons(card.cons)
+                  .map((code) => copyFrom("EXPLANATION_TEXT", code, language))
+                  .join(" · ")}
+              </dd>
+            </>
+          ) : null}
         </dl>
       </div>
 

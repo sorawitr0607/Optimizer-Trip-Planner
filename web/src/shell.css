@@ -3593,11 +3593,11 @@
     translate: -1px 0;
   }
 
+  /* No card behind the landmark. The paper-cut panel was measured on `.landmark`
+     and `.landmark-art` -- both transparent -- so the near-white box kept being
+     reported as unreproducible; the background was on the parent all along. The
+     padding stays: it is what makes the row a 56px target rather than a drawing. */
   .landmark-place {
-    background: var(--landing-cut);
-    border: 2px solid var(--landing-cut);
-    border-radius: var(--radius-house);
-    box-shadow: 0 4px 0 var(--landing-cut-shadow);
     padding: 12px;
   }
 
@@ -9223,4 +9223,571 @@
    --------------------------------------------------------------------------- */
 .landing-world .world-copy .section-lead {
   margin-bottom: clamp(28px, 4vw, 56px);
+}
+
+/* --- THE ITINERARY DASHBOARD ---------------------------------------------- */
+
+/* The itinerary stopped being a table you audit and became a screen you carry. The
+   question it is opened with is "where am I supposed to be", so that answer is at the
+   top and follows the clock, and every row can be ticked off as you go.
+
+   Phone first throughout: this is the one screen used while standing on a corner, and
+   every target here is at least 44px because that is a finger, not a cursor. */
+
+/* --- what is happening now ------------------------------------------------ */
+.trip-now {
+  background: var(--bg-card);
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-accent);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-hard-md);
+  display: grid;
+  gap: 2px;
+  margin: 12px 0;
+  padding: 14px;
+}
+
+.trip-now-tag {
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-selected);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.trip-now-time {
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.trip-now-name {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-selected);
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+/* How far through the current stop you are — the one thing a timetable cannot tell you
+   by being read. */
+.trip-now-bar {
+  background: var(--bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  height: 6px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+
+.trip-now-bar > i {
+  background: var(--color-accent);
+  display: block;
+  height: 100%;
+}
+
+.trip-now-next {
+  align-items: baseline;
+  border-top: 1px dashed var(--color-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding-top: 9px;
+}
+
+.trip-now-next-when {
+  color: var(--color-accent);
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-secondary);
+}
+
+.trip-now-next-name {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-secondary);
+  overflow-wrap: anywhere;
+}
+
+.trip-now-jump {
+  background: var(--bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  margin-top: 10px;
+  min-height: 44px;
+  padding: 0 12px;
+}
+
+/* The time control. There is no scrubber — see `TripNow`. */
+.trip-now-clock {
+  align-items: center;
+  border-top: 1px dashed var(--color-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 9px;
+}
+
+.trip-now-step {
+  background: var(--bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  font-family: var(--font-mono);
+  font-size: var(--text-md);
+  font-weight: var(--weight-selected);
+  line-height: 1;
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.trip-now-step:disabled {
+  opacity: var(--opacity-disabled);
+}
+
+.trip-now-at {
+  color: var(--text-muted);
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  min-width: 8rem;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.trip-now-golive {
+  background: var(--color-accent);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius);
+  color: var(--color-on-accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-selected);
+  letter-spacing: 0.06em;
+  min-height: 44px;
+  padding: 0 12px;
+}
+
+/* --- the days ------------------------------------------------------------- */
+
+/* Every day one tap, its date on the control, and a dot once the day is ticked through,
+   so the row doubles as trip progress. */
+.day-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 4px 0 10px;
+  scrollbar-width: none;
+}
+
+.day-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.day-tab {
+  align-items: center;
+  background: var(--bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-hard-sm);
+  display: flex;
+  flex: none;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 12px;
+  transition: transform var(--duration-fast) var(--ease-standard);
+  white-space: nowrap;
+}
+
+.day-tab:active {
+  box-shadow: none;
+  transform: translate(1px, 1px);
+}
+
+.day-tab[aria-pressed="true"] {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.day-tab-name {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-secondary);
+}
+
+.day-tab-date {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  opacity: var(--opacity-dim);
+}
+
+.day-tab-dot {
+  background: var(--color-success);
+  border-radius: var(--radius-pill);
+  height: 6px;
+  width: 6px;
+}
+
+.day-tab[aria-pressed="true"] .day-tab-dot {
+  background: var(--color-on-accent);
+}
+
+.day-meta {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  letter-spacing: 0.05em;
+  margin: 0 0 10px;
+  text-transform: uppercase;
+}
+
+/* --- searching every day -------------------------------------------------- */
+.day-find {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  margin: 0 0 10px;
+}
+
+.day-find input {
+  background: var(--bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-hard-sm);
+  color: var(--text-primary);
+  flex: 1;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  min-height: 44px;
+  min-width: 0;
+  padding: 0 10px;
+}
+
+.day-find button {
+  background: var(--bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  flex: none;
+  font-size: var(--text-xs);
+  min-height: 44px;
+  padding: 0 12px;
+}
+
+.day-find-count {
+  color: var(--text-muted);
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+}
+
+/* --- the day's stops ------------------------------------------------------ */
+.day-stops {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.day-stops-empty {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  padding: 20px;
+  text-align: center;
+}
+
+.day-stop {
+  background: var(--bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-hard-sm);
+  margin-bottom: 6px;
+  overflow: hidden;
+}
+
+/* Behind you, so it recedes — but it is never removed, because a plan you cannot look
+   back at is a plan you cannot check. */
+.day-stop.past {
+  opacity: var(--opacity-dim);
+}
+
+.day-stop.live,
+.day-stop.pinned {
+  border-color: var(--color-accent);
+  border-left: 4px solid var(--color-accent);
+  box-shadow: var(--shadow-hard-md);
+}
+
+.day-stop-head {
+  display: flex;
+  gap: 0;
+}
+
+/* The box is 16px and a finger is 44, so the label carries the target. */
+.day-stop-tick {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  flex: none;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.day-stop-tick input {
+  accent-color: var(--color-accent);
+  cursor: pointer;
+  height: 1.15rem;
+  width: 1.15rem;
+}
+
+.day-stop-when {
+  align-self: flex-start;
+  background: none;
+  border: 0;
+  color: var(--text-secondary);
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-secondary);
+  min-height: 44px;
+  padding: 10px 0;
+  text-align: left;
+  text-decoration: underline dotted var(--text-muted);
+  text-underline-offset: 3px;
+  width: 3.4rem;
+}
+
+.day-stop-when:hover {
+  color: var(--color-accent);
+}
+
+.day-stop-open {
+  align-items: flex-start;
+  background: none;
+  border: 0;
+  display: flex;
+  flex: 1;
+  gap: 8px;
+  min-height: 44px;
+  min-width: 0;
+  padding: 10px 10px 10px 2px;
+  text-align: left;
+}
+
+.day-stop-open:disabled {
+  cursor: default;
+}
+
+.day-stop-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.day-stop-name {
+  display: block;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-secondary);
+  overflow-wrap: anywhere;
+}
+
+.day-stop.done .day-stop-name {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.day-stop-meta {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 5px;
+}
+
+.day-stop-dur {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+}
+
+.day-stop-warn {
+  color: var(--color-warning);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+}
+
+.day-stop-thumb {
+  align-self: flex-start;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  flex: none;
+  height: 44px;
+  object-fit: cover;
+  width: 44px;
+}
+
+.day-stop-chev {
+  color: var(--text-muted);
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+
+.day-stop.open .day-stop-chev {
+  transform: rotate(90deg);
+}
+
+.day-stop-detail {
+  border-top: 1px dashed var(--color-border);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  padding: 8px 10px 10px 44px;
+}
+
+.day-stop-line {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  overflow-wrap: anywhere;
+  padding: 3px 0;
+}
+
+.day-stop-k {
+  color: var(--text-muted);
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-selected);
+  letter-spacing: 0.07em;
+  padding-top: 2px;
+  text-transform: uppercase;
+  width: 5.2rem;
+}
+
+.day-stop-photo {
+  background: none;
+  border: 0;
+  cursor: zoom-in;
+  display: block;
+  margin-top: 8px;
+  padding: 0;
+}
+
+.day-stop-photo img {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-hard-sm);
+  display: block;
+  max-width: 15rem;
+  width: 100%;
+}
+
+.day-stop-lightbox {
+  align-items: center;
+  background: var(--landing-scrim);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  inset: 0;
+  justify-content: center;
+  padding: 16px;
+  position: fixed;
+  z-index: 60;
+}
+
+.day-stop-lightbox img {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  cursor: zoom-out;
+  max-height: 82vh;
+  max-width: 100%;
+}
+
+.day-stop-lightbox button {
+  background: var(--bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  min-height: 44px;
+  padding: 0 16px;
+}
+
+.day-fallbacks {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+/* From 900px the map and the stops sit side by side, because on a wide screen the point
+   is seeing where you are going *and* in what order. */
+@media (min-width: 900px) {
+  .trip-now {
+    padding: 18px 20px;
+  }
+
+  .trip-now-name {
+    font-size: var(--text-xl);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .day-tab,
+  .day-stop-chev {
+    transition: none;
+  }
+}
+
+/* --- what is still outstanding before departure --------------------------- */
+
+/* A summary, not the board. `/readiness` renders every item with its authority and
+   evidence state; two full copies would be two places to tick the same thing off. */
+.plan-checklist {
+  background: var(--bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-hard-sm);
+  margin: 12px 0;
+}
+
+.plan-checklist > summary {
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-selected);
+  letter-spacing: 0.08em;
+  min-height: 44px;
+  padding: 12px;
+  text-transform: uppercase;
+}
+
+.plan-checklist-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 12px;
+}
+
+.plan-checklist-list li {
+  align-items: baseline;
+  border-bottom: 1px dashed var(--color-border);
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 7px 0;
+}
+
+.plan-checklist-title {
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+.plan-checklist-when {
+  color: var(--text-muted);
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+}
+
+.plan-checklist .primary-link {
+  display: inline-block;
+  margin: 10px 12px 12px;
 }

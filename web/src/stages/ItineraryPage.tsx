@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 
 import {
@@ -8,10 +8,9 @@ import {
   rpc,
   type Basemap,
   type CountryOutline,
-  type ExportDay,
   type ExportFallback,
-  type ExportPlanItem,
   type ExportSnapshot,
+  type ChecklistItem,
   type ExportStop,
   type Frozen,
   type PlanDrift,
@@ -21,7 +20,12 @@ import {
 import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
 import { mapsLink, type MapPlace } from "../shared/map";
+import { DayStops } from "./DayStops";
 import { PlanReady } from "./PlanReady";
+import { TripNow } from "./TripNow";
+import { isOutstanding, taskTitle } from "../shared/checklistText";
+import { doneCount, useTicks } from "../shared/ticks";
+import { flattenDays, type TimedItem } from "../shared/tripClock";
 import { PlaceMap } from "./PlaceMap";
 
 const MAP_WIDTH = 420;
@@ -147,86 +151,12 @@ export function plotCoordinates<T extends { latitude: number; longitude: number 
   return points.map((point) => ({ ...point, ...projection.toXY(point.latitude, point.longitude) }));
 }
 
-function halfDay(start: string): "morning" | "afternoon" {
-  return start < "12:00" ? "morning" : "afternoon";
-}
-
 function stateText(status: string, language: Language): string {
   return copy(`state_${status}`, language);
 }
 
 function codeText(code: string | null | undefined, language: Language): string {
   return copyFrom("OPTIMIZER_CODE_TEXT", code || "unknown", language);
-}
-
-function PlanRow({ item, language }: { item: ExportPlanItem; language: Language }) {
-  const clock = `${item.start}–${item.end}`;
-  const length = `${item.duration_minutes} ${copy("minutes", language)}`;
-  if (item.type === "buffer") {
-    const freeTime = item.reason === "free_time_or_rest" || item.reason === "day_ends_free";
-    return (
-      <article className="plan-row buffer">
-        <time>{clock}<small>{length}</small></time>
-        <div>
-          <span className="plan-row-kind">
-            {freeTime ? codeText(item.reason, language) : copy("buffer_minutes", language)}
-          </span>
-          {freeTime ? null : <p>{codeText(item.reason, language)}</p>}
-        </div>
-      </article>
-    );
-  }
-
-  let title = item.display_name ?? item.type;
-  let kind = copy(`type_${item.type}`, language);
-  let meta = stateText(item.status, language);
-  let details: React.ReactNode;
-  if (item.type === "visit") {
-    title = `${copy("stop", language)} ${item.stop_number} · ${item.display_name}`;
-    kind = copy("stop", language);
-    meta += item.local_name ? ` · ${item.local_name}` : "";
-    details = (
-      <ul>
-        <li>{copy("choice", language)}: {copy(item.priority ?? "maybe", language)}</li>
-        {item.address ? <li>{item.address}</li> : null}
-        {!item.opening_verified ? <li>{copy("opening_unverified", language)}</li> : null}
-      </ul>
-    );
-  } else if (item.type === "travel") {
-    title = `${item.origin_name ?? "?"} → ${item.destination_name ?? "?"}`;
-    kind = copy("travel_minutes", language);
-    meta += ` · ${copy("travel_mode", language)} ${item.mode ?? "?"} · ${copy("walk_portion", language)} ${item.walking_minutes ?? 0} ${copy("minutes", language)}`;
-    details = (
-      <ul>
-        <li>{copy(item.sightseeing_walk ? "sightseeing_walk" : "plain_transfer", language)}</li>
-        {item.distance_m != null ? <li>{copy("distance", language)}: {item.distance_m} m</li> : null}
-        {item.transfers != null ? <li>{copy("transfers", language)}: {item.transfers}</li> : null}
-        {item.boarding_buffer_minutes ? <li>{copy("boarding_buffer", language)}: {item.boarding_buffer_minutes} {copy("minutes", language)}</li> : null}
-      </ul>
-    );
-  } else {
-    details = (
-      <ul>
-        {item.from_name || item.to_name ? <li>{item.from_name ?? "?"} → {item.to_name ?? "?"}</li> : null}
-        {item.mode ? <li>{copy("travel_mode", language)}: {item.mode}</li> : null}
-        {item.notes ? <li>{item.notes}</li> : null}
-        <li>{copy("confirmation_needed", language)}</li>
-      </ul>
-    );
-  }
-
-  return (
-    // derives-from: A2 day timeline, with the three operational variants the accepted prototype added.
-    <article className={`plan-row ${item.type}`}>
-      <time>{clock}<small>{length}</small></time>
-      <div className="plan-row-body">
-        <span className="plan-row-kind">{kind}</span>
-        <h3>{title}</h3>
-        <p>{meta}</p>
-        <details><summary>{copy("row_details", language)}</summary>{details}</details>
-      </div>
-    </article>
-  );
 }
 
 function FallbackRow({ fallback, language }: { fallback: ExportFallback; language: Language }) {
@@ -499,6 +429,18 @@ export function ItineraryPage() {
     retry: false,
   });
 
+  /** null follows the real clock. See `TripNow`: the timeline is the time control. */
+  const [pinned, setPinned] = useState<Date | null>(null);
+  /** Searches every day, not the one on screen -- "where was that noodle place" is not
+   *  a question you can ask of a single day, because not knowing the day is the point. */
+  const [query, setQuery] = useState("");
+  const ticks = useTicks(tripId);
+
+  // Nullable and read before the early returns, because the hooks below cannot sit
+  // after them. `plan` is non-null everywhere past the guards.
+  const loaded = snapshot.data?.data ?? null;
+  const allItems = useMemo(() => (loaded ? flattenDays(loaded.days) : []), [loaded]);
+
   if (snapshot.isPending) {
     // A bare word on an empty page, for a call that took **10.9 seconds** measured
     // against the deployment, was reported as "blank". The snapshot is the whole
@@ -527,9 +469,43 @@ export function ItineraryPage() {
   }
 
   const plan = snapshot.data.data;
+  const moment = pinned ?? new Date();
+  const needle = query.trim().toLowerCase();
+  /** Matches across the whole trip, or the chosen day when nothing is being searched. */
+  const matches = needle
+    ? allItems.filter((item) =>
+        [item.display_name, item.address, item.notes, item.origin_name, item.destination_name]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(needle))
+    : [];
+  /** What to call a row.
+   *
+   *  A visit leads with its stop number, because the map pins are numbered and the row
+   *  and the pin have to be matchable by eye -- that correspondence is the reason the
+   *  number is on the row at all. A leg is its two ends. A buffer says what it is waiting
+   *  for where the optimizer named a reason, since "buffer" alone is the one row that
+   *  tells you nothing. Everything else is its own kind, which is all `preparation` and
+   *  `logistics` ever had. */
+  const nameOf = (item: TimedItem) => {
+    if (item.type === "visit" && item.stop_number != null) {
+      return `${copy("stop", language)} ${item.stop_number} · ${item.display_name}`;
+    }
+    if (item.type === "buffer") {
+      return item.reason ? codeText(item.reason, language) : copy("buffer_minutes", language);
+    }
+    return (
+      item.display_name
+      ?? (item.origin_name && item.destination_name
+        ? `${item.origin_name} → ${item.destination_name}`
+        : copy(`type_${item.type}`, language))
+    );
+  };
 
   const day = plan.days.find((item) => item.date === chosenDate) ?? plan.days[0];
   const dayIndex = plan.days.indexOf(day);
+  const dayItems = allItems.filter((item) => item.dayDate === day.date);
   // The evening before departure is a real day in the plan — pack, documents, alarm — but
   // it is not a day *of the trip*, and numbering it "Day 1 of 6" on a trip the owner knows
   // runs the 10th to the 14th reads as an off-by-one. Measured on a fresh Porto trip:
@@ -568,6 +544,26 @@ export function ItineraryPage() {
         <h1>{copy("use_title", language)}</h1>
         <p>{copy("use_help", language)}</p>
       </header>
+
+      {/* The answer to the question this screen is opened with, before anything that
+          describes the plan as a whole. */}
+      <TripNow
+        currentDayDate={day.date}
+        dayLabelOf={(date) => {
+          const index = plan.days.findIndex((entry) => entry.date === date);
+          return prepFirst && index === 0
+            ? copy("day_before_you_go", language)
+            : copy("day_of", language)
+                .replace("{current}", String(index + (prepFirst ? 0 : 1)))
+                .replace("{total}", String(tripDayCount));
+        }}
+        items={allItems}
+        language={language}
+        nameOf={nameOf}
+        onPin={setPinned}
+        onSelectDay={setChosenDate}
+        pinned={pinned}
+      />
       <div className="plan-stamp">
         <strong>{copy(plan.stamp.variant_id, language)} · {copy("readiness", language)}: {copy(plan.readiness.state, language)}</strong>
         <span>{copy("active_plan", language)} <code>{versionTag}</code> · {copy("exported_at", language)}{" "}
@@ -690,40 +686,93 @@ export function ItineraryPage() {
           like nothing of the sort. Implementing the full pattern is the other way to
           fix it, but these two are not really tabs: the state lives in the query
           string, each is independently linkable, and a toggle pair is what that is. */}
-      {/* Prev / next rather than a dropdown, at the owner's asking. A trip is a sequence
-          and the move you make ninety-nine times out of a hundred is "the next day" — a
-          select turns that into open, find, aim, click, and it never showed which day you
-          were about to get. The date is on the control itself, so the destination is
-          named before the press; the ends disable rather than wrap, because a trip has a
-          first and a last day and silently jumping from one to the other reads as a bug. */}
-      <div className="day-stepper">
-        <button
-          disabled={dayIndex <= 0}
-          onClick={() => setChosenDate(plan.days[dayIndex - 1].date)}
-          type="button"
-        >
-          ← {copy("day_previous", language)}
-          {dayIndex > 0 ? ` · ${plan.days[dayIndex - 1].date}` : ""}
-        </button>
-        <span className="day-stepper-current">
-          {dayLabel}
-          {" · "}
-          <strong>{day.date}</strong>
-        </span>
-        <button
-          disabled={dayIndex >= plan.days.length - 1}
-          onClick={() => setChosenDate(plan.days[dayIndex + 1].date)}
-          type="button"
-        >
-          {copy("day_next", language)}
-          {dayIndex < plan.days.length - 1 ? ` · ${plan.days[dayIndex + 1].date}` : ""} →
-        </button>
+      {/* Tabs rather than the prev/next pair, which itself replaced a dropdown.
+          The complaint about the dropdown was that it took "open, find, aim, click" and
+          never showed which day you were about to get -- and tabs answer that more
+          directly than a stepper does: every day is one tap, its date is on the control,
+          and the ticked-through days carry a dot, so the row doubles as trip progress.
+          The stepper's own reason for existing was that "the next day" is the move you
+          make ninety-nine times in a hundred; that move is still one tap here. */}
+      <div className="day-tabs">
+        {plan.days.map((entry, index) => {
+          const entryItems = allItems.filter((item) => item.dayDate === entry.date);
+          const complete = entryItems.length > 0
+            && entryItems.every((item) => ticks.isDone(item.key));
+          return (
+            <button
+              aria-pressed={entry.date === day.date}
+              className="day-tab"
+              key={entry.date}
+              onClick={() => setChosenDate(entry.date)}
+              type="button"
+            >
+              <span className="day-tab-name">
+                {prepFirst && index === 0
+                  ? copy("day_before_you_go", language)
+                  : copy("day_of", language)
+                      .replace("{current}", String(index + (prepFirst ? 0 : 1)))
+                      .replace("{total}", String(tripDayCount))}
+              </span>
+              <span className="day-tab-date">{entry.date.slice(5)}</span>
+              {complete ? <span aria-hidden="true" className="day-tab-dot" /> : null}
+            </button>
+          );
+        })}
       </div>
+
+      <p className="day-meta">
+        {day.date} · {dayItems.length} · {copyFormat("stops_done", language, {
+          done: doneCount(dayItems, ticks.isDone),
+          total: dayItems.length,
+        })}
+      </p>
+
+      {/* Searches every day. "Where was that noodle place" is not a question you can ask
+          of one day, because not knowing which day is the whole reason for asking. */}
+      <div className="day-find">
+        <input
+          aria-label={copy("find_stop", language)}
+          autoComplete="off"
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder={copy("find_stop", language)}
+          type="search"
+          value={query}
+        />
+        {query.trim() ? (
+          <>
+            <span aria-live="polite" className="day-find-count">
+              {copyFormat("find_across_days", language, { n: matches.length })}
+            </span>
+            <button onClick={() => setQuery("")} type="button">
+              {copy("clear_search", language)}
+            </button>
+          </>
+        ) : null}
+      </div>
+
       <div className="plan-tabs">
         <button aria-pressed={tab === "timeline"} onClick={() => setTab("timeline")} type="button">{copy("timeline", language)}</button>
         <button aria-pressed={tab === "map"} onClick={() => setTab("map")} type="button">{copy("tab_map", language)}</button>
       </div>
-      {tab === "timeline" ? <Timeline day={day} language={language} /> : (
+      {tab === "timeline" ? (
+        <DayStops
+          coordsOf={(subjectId) => {
+            const stop = day.stops.find((entry) => entry.subject_id === subjectId);
+            return stop && stop.latitude != null && stop.longitude != null
+              ? { latitude: stop.latitude, longitude: stop.longitude }
+              : null;
+          }}
+          emptyText={copy(needle ? "find_nothing" : "no_schedule_day", language)}
+          isDone={ticks.isDone}
+          items={needle ? matches : dayItems}
+          language={language}
+          moment={moment}
+          nameOf={nameOf}
+          onPin={setPinned}
+          onToggle={ticks.toggle}
+          pinned={pinned}
+        />
+      ) : (
         <CoordinateMap
           accommodationStatus={plan.accommodation.status}
           autoTraceKey={day.date}
@@ -736,6 +785,63 @@ export function ItineraryPage() {
           tripId={tripId}
         />
       )}
+
+      {/* The day's contingencies. `Timeline` carried these and the dashboard replaced it,
+          so they are rendered here rather than lost -- what to drop when the day runs
+          late is exactly the thing wanted while the day is running late. */}
+      {tab === "timeline" && !needle && day.fallbacks.length ? (
+        <div className="day-fallbacks">
+          {day.fallbacks.map((item) => (
+            <FallbackRow
+              fallback={item}
+              key={`${item.primary_id}-${item.fallback_id}`}
+              language={language}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      {/* What is still outstanding before departure.
+          Deliberately a summary and not the board: `/readiness` already renders every
+          item with its authority, evidence state and deadline, and a second full copy
+          here would be two places to tick the same thing off. What the itinerary owes is
+          the count and the soonest few, so the board is a decision rather than a
+          discovery. Ordered by date with undated items last. */}
+      {(() => {
+        const outstanding = (plan.checklist.items as ChecklistItem[]).filter(isOutstanding);
+        return (
+          <details className="plan-checklist" open={outstanding.length > 0}>
+            <summary>
+              {copy("before_you_go", language)} ({outstanding.length})
+            </summary>
+            {outstanding.length ? (
+              <ul className="plan-checklist-list">
+                {outstanding
+                  .slice()
+                  .sort((left, right) =>
+                    (left.due_date ?? "9999").localeCompare(right.due_date ?? "9999"))
+                  .slice(0, 5)
+                  .map((item) => (
+                    <li key={item.item_id}>
+                      <span className="plan-checklist-title">{taskTitle(item, language)}</span>
+                      <span className="plan-checklist-when">
+                        {/* A dash rather than `⚠ undefined`: `timing` is optional on the
+                            wire, and an item with neither a date nor a bucket is simply
+                            undated. */}
+                        {item.due_date ?? (item.timing ? copy(item.timing, language) : "—")}
+                      </span>
+                    </li>
+                  ))}
+              </ul>
+            ) : (
+              <p className="setup-hint">{copy("checklist_all_clear", language)}</p>
+            )}
+            <Link className="primary-link" to={`/trips/${tripId}/readiness`}>
+              {copy("open_full_checklist", language)} →
+            </Link>
+          </details>
+        );
+      })()}
 
       {/* Where to go next, said in words. The sidebar names these six but never says
           what any of them is for, so from the finished itinerary — the screen an owner
@@ -777,20 +883,5 @@ export function ItineraryPage() {
         </details>
       ) : null}
     </section>
-  );
-}
-
-function Timeline({ day, language }: { day: ExportDay; language: Language }) {
-  if (!day.items.length) return <p>{copy("no_schedule_day", language)}</p>;
-  return (
-    <div className="plan-timeline">
-      {(["morning", "afternoon"] as const).map((part) => {
-        const items = day.items.filter((item) => halfDay(item.start) === part);
-        const fallbacks = day.fallbacks.filter((item) => item.half_day === part);
-        if (!items.length && !fallbacks.length) return null;
-        return <section key={part}><h2 className="money-eyebrow">{copy(part, language)}</h2>{items.map((item) => <PlanRow item={item} key={item.item_id} language={language} />)}{fallbacks.map((item) => <FallbackRow fallback={item} key={`${item.primary_id}-${item.fallback_id}`} language={language} />)}</section>;
-      })}
-      {day.fallbacks.filter((item) => item.half_day == null).map((item) => <FallbackRow fallback={item} key={`${item.primary_id}-${item.fallback_id}`} language={language} />)}
-    </div>
   );
 }

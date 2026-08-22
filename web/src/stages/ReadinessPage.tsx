@@ -12,29 +12,7 @@ import {
 } from "../api/client";
 import { copy, type Language } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
-
-/**
- * Mirror of `checklist._localized`: a generated task carries a code plus format
- * arguments, so it reads in the selected language everywhere. A missing template
- * or a mistyped placeholder falls back to the stored literal rather than losing
- * the wording.
- */
-function localized(
-  item: ChecklistItem,
-  prefix: string,
-  code: string | null | undefined,
-  fallback: string,
-  language: Language,
-): string {
-  if (!code) return fallback;
-  const template = copy(`${prefix}${code}`, language);
-  if (template.startsWith("⚠ ")) return fallback;
-  const filled = template.replace(/\{(\w+)\}/g, (whole, name: string) => {
-    const value = item.title_args?.[name];
-    return value === undefined ? whole : String(value);
-  });
-  return /\{\w+\}/.test(filled) ? fallback : filled;
-}
+import { localizedTask, taskTitle } from "../shared/checklistText";
 
 /**
  * `expected_authority` and `authority_type` hold stable codes, but the field also
@@ -47,10 +25,10 @@ function codeOrLiteral(value: string, language: Language): string {
 }
 
 const title = (item: ChecklistItem, language: Language) =>
-  localized(item, "task_", item.template_id, item.title, language);
+  taskTitle(item, language);
 
 const consequence = (item: ChecklistItem, language: Language) =>
-  localized(
+  localizedTask(
     item,
     "why_",
     item.consequence_code ?? item.template_id,

@@ -85,6 +85,7 @@ function render(
   entries = RANKING.lanes.main_queue,
   rejected: string[] = [],
   summaryLoading = false,
+  ranking: Ranking = RANKING,
 ) {
   return renderToStaticMarkup(
     <PlaceDeck
@@ -99,7 +100,7 @@ function render(
       nameOf={(placeId) => (placeId === "first" ? "Taipei 101" : "A quiet park")}
       onDecide={() => {}}
       onWantSummary={() => {}}
-      ranking={RANKING}
+      ranking={ranking}
       summaryLoading={summaryLoading}
       summaries={summaries}
     />,
@@ -107,7 +108,7 @@ function render(
 }
 
 describe("PlaceDeck", () => {
-  it("shows one card with every fact WF-005 requires on it", () => {
+  it("shows the facts WF-005 requires that can actually differ between places", () => {
     const html = render(SUMMARY);
     expect(html).toContain("Taipei 101");
     // Both names, because 61% of the Taipei catalogue has no `name:en` and the local
@@ -120,12 +121,60 @@ describe("PlaceDeck", () => {
     expect(html).not.toContain("A landmark tower");
     expect(html).toContain("Visit estimate");
     expect(html).toContain("45–90");
-    expect(html).toContain("Effort and access");
-    expect(html).toContain("Crowd and tourist-trap signals");
-    expect(html).toContain("Cost and reservation");
+    // Held back for the same reason as the other two: `ranking.py` hardcodes
+    // `reward_vs_effort` to 10 of 20 and marks `effort_state`
+    // `route_and_walking_not_evaluated`, so this row read "10/20" on every card in the
+    // catalogue. Found auditing the scoring formula, not by reading the card.
+    expect(html).not.toContain("Effort and access");
+    // Three of WF-005's rows are not facts about this place, they are constants.
+    // `ranking.py` fixes `feasibility.state` before the optimizer runs; no licensed
+    // source backs cost/reservation at all; and `cons` is seeded with
+    // `route_not_verified`, `ratings_not_enriched` and `best_time_unconfirmed` on every
+    // candidate alike. This card's only con is one of those three, so the crowd row has
+    // nothing to say and does not appear. Printed anyway they train the eye past the
+    // rows that do differ, so their absence is asserted and restoring one is deliberate.
+    expect(html).not.toContain("Crowd and tourist-trap signals");
+    expect(html).not.toContain("Cost and reservation");
+    expect(html).not.toContain("Feasibility");
     expect(html).toContain("CC BY-SA");
     // The second card must not be on screen: this is a deck, not a list.
     expect(html).not.toContain("A quiet park");
+  });
+
+  it("shows effort once it has actually been routed", () => {
+    const routed = {
+      ...RANKING,
+      cards: {
+        ...RANKING.cards,
+        first: {
+          ...CARD,
+          effort_state: "routed",
+          dimensions: { ...CARD.dimensions, reward_vs_effort: { score: 16, max: 20 } },
+        },
+      },
+    } as unknown as Ranking;
+    const html = render(SUMMARY, [], RANKING.lanes.main_queue, [], false, routed);
+
+    expect(html).toContain("Effort and access");
+    expect(html).toContain("16/20");
+  });
+
+  it("shows the crowd row once a con is about the place, not about the pipeline", () => {
+    // The other half of the same rule: the row is held back for the three seeded
+    // constants, and appears the moment a con actually describes this place.
+    const flagged = {
+      ...RANKING,
+      cards: {
+        ...RANKING.cards,
+        first: { ...CARD, cons: ["route_not_verified", "possible_duplicate"] },
+      },
+    } as unknown as Ranking;
+    const html = render(SUMMARY, [], RANKING.lanes.main_queue, [], false, flagged);
+
+    expect(html).toContain("Crowd and tourist-trap signals");
+    expect(html).toContain("Possible duplicate needs owner review");
+    // The seeded constant beside it is still filtered out.
+    expect(html).not.toContain("are not routed yet");
   });
 
   it("offers every decision as a real button, not only as a gesture", () => {

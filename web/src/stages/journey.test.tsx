@@ -245,7 +245,7 @@ describe("SetupPage", () => {
     // an answer that was given weeks ago.
     const html = render(<SetupPage />, "en");
 
-    expect(html).toContain("Step 2 of 6");
+    expect(html).toContain("Step 2 of 5");
     expect(html).toContain("wizard-steps");
     // The saved draft is what the form opens on, not an empty one.
     expect(html).toContain("2026-12-29");
@@ -262,7 +262,7 @@ describe("SetupPage", () => {
     // what the form was for or how long it ran.
     const html = renderWithoutSetup(<SetupPage />, "en");
 
-    expect(html).toContain("Step 1 of 6");
+    expect(html).toContain("Step 1 of 5");
     expect(html).toContain("What you will be asked");
     expect(html).toContain("about five minutes");
     expect(html).toContain('aria-label="Setup progress"');
@@ -276,7 +276,7 @@ describe("SetupPage", () => {
   it("renders the same wizard in Thai", () => {
     const html = render(<SetupPage />, "th");
 
-    expect(html).toContain("ขั้นที่ 2 จาก 6");
+    expect(html).toContain("ขั้นที่ 2 จาก 5");
     expect(html).toContain("2026-12-29");
     expectNoMissingCopy(html);
   });
@@ -286,7 +286,7 @@ describe("SetupPage", () => {
 
     // Step 1 is current; every later step is closed, because later steps
     // depend on earlier answers.
-    expect((html.match(/disabled=""/g) ?? []).length).toBeGreaterThanOrEqual(5);
+    expect((html.match(/disabled=""/g) ?? []).length).toBeGreaterThanOrEqual(4);
     expect(html).toContain("wizard-step current reached");
   });
 
