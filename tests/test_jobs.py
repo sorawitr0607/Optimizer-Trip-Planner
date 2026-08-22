@@ -206,3 +206,60 @@ class PayloadAllowlistTest(unittest.TestCase):
 
         for kind in HANDLERS:
             self.assertIn(kind, PAYLOAD_KEYS)
+
+
+class IdlePollBackoffTest(unittest.TestCase):
+    """How often an idle worker asks an empty queue whether it is still empty.
+
+    A flat two-second poll is 43,200 queries a day whether or not anyone is using the
+    app, and on the hosted deployment that is billed egress. Supabase's free tier allows
+    5.5 GB and this trip's reads had already passed it, so the interval backs off to ten
+    seconds when nothing is arriving -- about 80% fewer polls on an idle day -- and
+    resets the moment a job appears.
+
+    The ramp is the part worth testing: settling too fast makes a burst of jobs wait,
+    and not capping makes a quiet worker eventually stop noticing anything.
+    """
+
+    def test_the_interval_doubles_and_stops_at_the_ceiling(self) -> None:
+        from travel_planner.worker import (
+            IDLE_SLEEP_SECONDS,
+            MAX_IDLE_SLEEP_SECONDS,
+            next_idle_sleep,
+        )
+
+        waits = [IDLE_SLEEP_SECONDS]
+        for _ in range(6):
+            waits.append(next_idle_sleep(waits[-1]))
+
+        self.assertEqual([2.0, 4.0, 8.0, 10.0, 10.0, 10.0, 10.0], waits)
+        self.assertEqual(MAX_IDLE_SLEEP_SECONDS, waits[-1])
+
+    def test_a_burst_of_work_never_waits_more_than_the_responsive_interval(self) -> None:
+        """The reset is what makes the backoff free while the worker is working.
+
+        Mirrors the loop: every job seen puts the interval back to `IDLE_SLEEP_SECONDS`,
+        so consecutive jobs are picked up two seconds apart however long the quiet spell
+        before them was.
+        """
+
+        from travel_planner.worker import IDLE_SLEEP_SECONDS, next_idle_sleep
+
+        interval = IDLE_SLEEP_SECONDS
+        for _ in range(20):            # a long quiet spell
+            interval = next_idle_sleep(interval)
+        self.assertEqual(10.0, interval)
+
+        interval = IDLE_SLEEP_SECONDS  # a job arrives
+        self.assertEqual(IDLE_SLEEP_SECONDS, interval)
+
+    def test_the_ceiling_stays_inside_the_reap_timer(self) -> None:
+        """Reaping runs on a timer the loop can only honour when it wakes up.
+
+        `reap_stale` returns jobs abandoned by a dead worker, so a poll interval at or
+        above `REAP_EVERY_SECONDS` would let that slip by a whole cycle.
+        """
+
+        from travel_planner.worker import MAX_IDLE_SLEEP_SECONDS, REAP_EVERY_SECONDS
+
+        self.assertLess(MAX_IDLE_SLEEP_SECONDS, REAP_EVERY_SECONDS)

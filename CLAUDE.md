@@ -63,6 +63,15 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
 - **Anything that calls a provider must load credentials, and log how many it loaded.** The worker did
   not, so every route job raised "not configured" and the failure only surfaced as an empty plan three
   minutes later.
+- **Egress is billed, so a read that wants four floats must not fetch 390 KB.** `get_latest_discovery`
+  is `SELECT *` and `candidates_json` is ~390 KB on a real city; four callers wanted only
+  `query_boundary` and three of them ran on every `/itinerary` view. Use
+  `actions._discovery_boundary()` / `store.get_latest_discovery_report()` for anything that is not the
+  candidate list itself, and scope a ledger read to its month (`list_paid_usage(month=...)`) rather
+  than filtering in Python. Supabase's free tier allows 5.5 GB and this trip passed it.
+- **The worker's idle poll backs off from 2s to `MAX_IDLE_SLEEP_SECONDS` (10s) and resets on any job.**
+  A flat 2s is 43,200 queries a day whether or not anyone is using the app. Keep the ceiling below
+  `REAP_EVERY_SECONDS` or abandoned jobs slip a whole reap cycle.
 
 **The core**
 
@@ -98,6 +107,18 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   one. An audit that drives the API will declare the app broken and be wrong.
 - **A screenshot is evidence about what someone sees; a measurement is evidence about what was
   measured.** When they disagree, the screenshot is describing the product.
+- **Never print a placeholder as if it were a finding.** Four of the swipe card's fact rows could not
+  vary: `ranking.py` fixes `feasibility.state` before the optimizer runs, hardcodes
+  `reward_effort = 10.0` against a weight of 20, seeds every card's `cons` with three
+  pipeline-state codes, and cost/reservation had no data path at all. `/places` showed it worst — its
+  caution column was `cons.slice(0, 2)`, so every place in the catalogue carried the same two strings.
+  A row with one possible value cannot separate this place from the next, and it teaches the eye past
+  the rows that can. `shared/cards.ts` holds the guards; `WF-005` asks for these rows, so they are
+  kept where they can answer and dropped where they cannot.
+- **Before penalising an `avoid` chip in `ranking.py`, check the vocabulary.** None of the five is a
+  word the place vocabulary uses (`AVOID_TAGS ∩ candidate tags = ∅`), so a deduction keyed on
+  candidate tags is dead code that looks like a feature. They reach the engine as optimizer
+  thresholds; `tests/test_avoid_tags_reach_the_planner.py` and `tests/test_ranking.py` pin both halves.
 - The web runtime is fixed at **six dependencies** (`WF-026`) — the rule GSAP was refused under.
 - Only assets actually used are vendored; the unDraw licence forbids pack redistribution.
 - Complete a slice vertically, with its own runnable check, before starting the next.

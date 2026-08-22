@@ -27,12 +27,39 @@ from .actions import PlannerActions
 from .credentials import load_local_credentials
 from .jobs import JobQueue, run_one
 
-#: Long enough that an idle worker is not hammering the database, short enough
-#: that a queued job is not left sitting. Every poll is one round trip.
+#: How soon after finishing a job the queue is asked again. Every poll is one round
+#: trip, and this is the responsive end: a job queued while the worker is busy or
+#: recently busy is picked up within two seconds.
 IDLE_SLEEP_SECONDS = 2.0
+
+#: Where the interval settles once nothing is arriving.
+#:
+#: A flat two seconds is 43,200 queries a day whether or not the app is being used, and
+#: on a hosted deployment that is billed egress for asking an empty queue if it is still
+#: empty. Supabase's free tier allows 5.5 GB and this trip's own reads had already passed
+#: it. Backing off to ten seconds cuts an idle day to 8,640 polls -- about 80% less --
+#: and costs nothing while the worker is working, because the interval resets the moment
+#: a job appears.
+#:
+#: The trade is the one case it cannot avoid: the *first* job after a quiet spell waits
+#: up to ten seconds to be noticed. Against discovery at 30-90s and a full proposal at
+#: ~52s that is inside the noise, and it is the owner's decision rather than a default.
+MAX_IDLE_SLEEP_SECONDS = 10.0
 
 #: Reaping walks the running jobs, so it runs on a timer rather than every poll.
 REAP_EVERY_SECONDS = 60.0
+
+
+def next_idle_sleep(current: float) -> float:
+    """The next wait after an empty poll: double it, up to the ceiling.
+
+    Doubling rather than jumping straight to the ceiling, so a worker that has just
+    finished something stays responsive -- 2s, 4s, 8s, then 10s, which is three empty
+    polls and about fourteen seconds before it settles. A burst of jobs arriving one
+    after another therefore never sees more than a two-second gap.
+    """
+
+    return min(MAX_IDLE_SLEEP_SECONDS, current * 2)
 
 
 def serve_health(port: int, state: dict) -> None:
@@ -117,6 +144,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"worker {worker_id} draining {type(actions.store).__name__}", flush=True)
     state["status"] = "idle"
     last_reap = 0.0
+    idle_sleep = IDLE_SLEEP_SECONDS
     while not stopping:
         now = time.monotonic()
         if now - last_reap > REAP_EVERY_SECONDS:
@@ -131,8 +159,11 @@ def main(argv: list[str] | None = None) -> int:
             if arguments.once:
                 print("nothing queued", flush=True)
                 return 0
-            time.sleep(IDLE_SLEEP_SECONDS)
+            time.sleep(idle_sleep)
+            idle_sleep = next_idle_sleep(idle_sleep)
             continue
+        # Work arrived, so stop backing off: the next poll is the responsive one again.
+        idle_sleep = IDLE_SLEEP_SECONDS
 
         seconds = time.monotonic() - started
         state["jobs_run"] += 1
