@@ -100,6 +100,13 @@ CHECKLIST_TEMPLATE_FIELDS = (
 # silently dropped, so a thin route set is visible rather than assumed complete.
 MAX_ROUTE_REQUESTS = 60
 
+#: How many capped passes one `refresh_routes` sweep may make. Forty-one places need
+#: 1640 ordered pairs and a pass covers sixty, so this is a ceiling that stops a stuck
+#: provider turning one press into an unbounded run — not a limit on the trip, since
+#: pressing again resumes where it stopped. It was the browser's `MAX_PASSES`; the
+#: number is unchanged, only the side of the wire it lives on.
+MAX_ROUTE_PASSES = 12
+
 
 class PlannerRefusal(ValueError):
     """An owner-visible refusal with a stable, translatable code."""
@@ -1202,19 +1209,44 @@ class PlannerActions:
         return self.store.list_comfort_acceptances(trip_id)
 
     def generate_plan_preview(
-        self, trip_id: str, *, time_limit_seconds: float = 30.0
+        self,
+        trip_id: str,
+        *,
+        time_limit_seconds: float = 30.0,
+        progress: Callable[[int], None] | None = None,
     ) -> OptimizationPreview:
+        """Build the three-variant draft, reporting each variant as it lands.
+
+        The same contract as `discover_places`: a count of things that have
+        *returned*, supplied only by the worker. This is the longest single call in
+        the app — three variants at roughly 21s each, and the whole of it used to be
+        one silent wait on every build path except `/optimize`'s auto-resolve, which
+        could count its own four calls.
+
+            1-3  that many variants have been solved
+            4    the draft is stored
+
+        A trip with no dates gets a stay recommendation instead of variants, so it
+        reaches 4 without passing through them — which is true, and better than
+        inventing three stages nothing ran.
+        """
+
         optimizer_input = self._optimizer_input(trip_id)
         proposal = optimize_trip(
-            optimizer_input, time_limit_seconds=time_limit_seconds
+            optimizer_input,
+            time_limit_seconds=time_limit_seconds,
+            on_variant=progress,
         )
-        return self.store.save_optimization_preview(
+        preview = self.store.save_optimization_preview(
             new_optimization_preview(
                 trip_id=trip_id,
                 optimizer_input=optimizer_input,
                 proposal=proposal,
             )
         )
+        if progress is not None:
+            progress(4)
+        return preview
 
     def get_plan_preview(self, trip_id: str) -> OptimizationPreview | None:
         return self.store.get_optimization_preview(trip_id)
@@ -3040,12 +3072,60 @@ class PlannerActions:
             if row.get("place_id")
         }
 
-    def refresh_routes(self, trip_id: str, *, force: bool = False) -> dict[str, Any]:
-        """Fetch walking routes between the selected places, sparsely and capped."""
+    def refresh_routes(
+        self,
+        trip_id: str,
+        *,
+        force: bool = False,
+        max_passes: int = 1,
+        progress: Callable[[int], None] | None = None,
+    ) -> dict[str, Any]:
+        """Fetch walking routes between the selected places, sparsely and capped.
 
-        return self._refresh_routes_with(
-            self.route_provider or OpenRouteServiceProvider(), trip_id, force=force
-        )
+        `MAX_ROUTE_REQUESTS` bounds one **pass**, and eleven places need 110 ordered
+        pairs, so a full sweep has always taken several. Those passes used to be made
+        by the browser, one RPC each — which on the hosted deployment is one *queued
+        job* each: enqueue, poll at 1.5s, wait for the worker to pick it up, poll
+        again. Twelve of those is minutes of pure round-trip before any routing
+        happens, and it is the largest part of what a ten-minute build was spending.
+
+        So the loop lives here now, where the passes are consecutive and free. The
+        provider work is identical and so is the spending: `_spend` is still called
+        once per route, inside `_refresh_routes_with`, so the monthly cap is checked
+        exactly as often as before and `ProviderBudgetExceeded` still stops the sweep
+        by propagating. Only the waiting is gone.
+
+        `max_passes` defaults to 1, so every existing caller is unchanged.
+        """
+
+        provider = self.route_provider or OpenRouteServiceProvider()
+        # `force` refetches pairs the cache already holds, so the pass list never
+        # shrinks and a second pass would buy the same sixty routes again. One pass
+        # is the only safe reading of "force" here.
+        passes = 1 if force else max(1, min(int(max_passes), MAX_ROUTE_PASSES))
+
+        result = self._refresh_routes_with(provider, trip_id, force=force)
+        stored = int(result["fetched"])
+        if progress is not None:
+            progress(stored)
+        run = 1
+        while run < passes:
+            # The same two stops the browser used. A pass that fetched nothing will
+            # fetch nothing again, and a pass that left nothing over the cap has
+            # finished the sweep.
+            if result["fetched"] == 0 or result["skipped_over_cap"] == 0:
+                break
+            result = self._refresh_routes_with(provider, trip_id, force=force)
+            stored += int(result["fetched"])
+            if progress is not None:
+                progress(stored)
+            run += 1
+
+        # The last pass's view of the trip, with the totals that describe the whole
+        # sweep rather than only its final leg -- `fetched` is what the caller counts.
+        result["fetched"] = stored
+        result["passes_run"] = run
+        return result
 
     def refresh_transit_routes(
         self, trip_id: str, *, force: bool = False

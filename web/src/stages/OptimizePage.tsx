@@ -5,7 +5,7 @@ import { Link, useNavigate, useParams } from "react-router";
 import { Thinking } from "../shared/Thinking";
 import { ComfortTradeoffs } from "./ComfortTradeoffs";
 import { BuildStages } from "./BuildStages";
-import { BUILD_STAGES } from "../shared/buildStages";
+import { BUILD_STAGES, PREVIEW_STAGES } from "../shared/buildStages";
 import { StayPlanner } from "./StayPlanner";
 
 import {
@@ -104,21 +104,40 @@ const BUILD_LINES = [
 function BuildProgress({
   language,
   stage,
+  previewStage,
   routesMeasured,
+  startedAt,
 }: {
   language: Language;
   stage?: number;
+  previewStage?: number;
   routesMeasured?: number;
+  startedAt?: number;
 }) {
-  const thinking = <Thinking expectSeconds={210} language={language} lines={BUILD_LINES} />;
+  const thinking = (
+    <Thinking
+      expectSeconds={210}
+      language={language}
+      lines={BUILD_LINES}
+      /* Survives the remount when this moves inside a stage row. */
+      startedAt={startedAt}
+    />
+  );
   return (
     <div className="optimize-working" aria-busy="true">
-      {stage === undefined ? (
-        thinking
-      ) : (
+      {stage !== undefined ? (
         <BuildStages language={language} reached={stage} routesMeasured={routesMeasured}>
           {thinking}
         </BuildStages>
+      ) : previewStage !== undefined ? (
+        /* The plain and paid builds are a single `generate_plan_preview`, so they have
+           no calls of their own to count -- but the optimizer now says which of its
+           three variants it has finished, which is the same kind of fact. */
+        <BuildStages language={language} reached={previewStage} stages={PREVIEW_STAGES}>
+          {thinking}
+        </BuildStages>
+      ) : (
+        thinking
       )}
       <p className="setup-hint">{copy("optimizing_note", language)}</p>
     </div>
@@ -223,10 +242,15 @@ export function OptimizePage() {
     mutationFn: async () => {
       if (buildingRef.current) return null;
       buildingRef.current = true;
+      setPreviewStage(undefined);
       await rpc<unknown>("refresh_opening_hours", { trip_id: tripId });
       await queryClient.invalidateQueries({ queryKey: ["opening_options", tripId] });
       await queryClient.invalidateQueries({ queryKey: ["paid_usage"] });
-      return rpc<PlanPreview>("generate_plan_preview", { trip_id: tripId });
+      return rpc<PlanPreview>(
+        "generate_plan_preview",
+        { trip_id: tripId },
+        setPreviewStage,
+      );
     },
     onSuccess: async () => {
       setRefusal(null);
@@ -239,7 +263,14 @@ export function OptimizePage() {
   });
 
   const generate = useMutation({
-    mutationFn: () => rpc<PlanPreview>("generate_plan_preview", { trip_id: tripId }),
+    mutationFn: () => {
+      setPreviewStage(undefined);
+      return rpc<PlanPreview>(
+        "generate_plan_preview",
+        { trip_id: tripId },
+        setPreviewStage,
+      );
+    },
     onSuccess: async () => {
       setRefusal(null);
       await queryClient.invalidateQueries({ queryKey: ["plan_preview", tripId] });
@@ -257,6 +288,9 @@ export function OptimizePage() {
   // route pairs measured. Both are facts the page already had and was discarding.
   const [buildStage, setBuildStage] = useState(0);
   const [routesMeasured, setRoutesMeasured] = useState(0);
+  /** Which of `generate_plan_preview`'s four the worker has reported, or undefined
+   *  when nothing has -- still queued, or the local server, which runs it inline. */
+  const [previewStage, setPreviewStage] = useState<number | undefined>(undefined);
   const autoResolveAndGenerate = useMutation({
     mutationFn: async () => {
       if (buildingRef.current) return null;
@@ -566,7 +600,11 @@ export function OptimizePage() {
           was succeeding every time and the screen never said so. */}
       {generate.isPending || autoResolveAndGenerate.isPending ? (
         <div aria-busy="true">
-          <BuildProgress language={language} />
+          <BuildProgress
+            language={language}
+            previewStage={previewStage}
+            startedAt={generate.submittedAt || undefined}
+          />
           <div className="skeleton-card">
             <span className="skeleton skeleton-line wide" />
             <span className="skeleton skeleton-line" />
@@ -932,7 +970,7 @@ export function OptimizePage() {
             <>
               <h2 className="money-eyebrow">{copy("timeline", language)}</h2>
               <div className="money-table-scroll">
-                <table className="money-table">
+                <table className="money-table timeline-table">
                   <thead>
                     <tr>
                       <th>{copy("days", language)}</th>

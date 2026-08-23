@@ -17,7 +17,7 @@ import type { Language } from "../i18n/copy";
 import { LanguageProvider } from "../i18n/LanguageProvider";
 import { copy } from "../i18n/copy";
 import { Thinking } from "../shared/Thinking";
-import { PLACES_STAGES, PLACES_WORKER_STAGES } from "../shared/buildStages";
+import { PLACES_STAGES, PLACES_WORKER_STAGES, PREVIEW_STAGES } from "../shared/buildStages";
 import { BuildStages } from "./BuildStages";
 import { CoordinateMap, ItineraryPage, plotCoordinates } from "./ItineraryPage";
 import { PlacesPage } from "./PlacesPage";
@@ -313,6 +313,31 @@ describe("the /places stage list", () => {
     expect(html).toContain('aria-busy="true"');
     expect(html.match(/build-stage active/g) ?? []).toHaveLength(1);
     expect(html).toContain("Your shortlist");
+  });
+});
+
+describe("the draft build's stage list", () => {
+  it("has one stage per variant plus the write, with copy for every one", () => {
+    // Three variants and then the stored draft. A fourth variant row would be a
+    // claim about work the optimizer does not do.
+    expect(PREVIEW_STAGES).toHaveLength(4);
+    for (const stage of PREVIEW_STAGES) {
+      for (const language of ["en", "th"] as const) {
+        expect(copy(`stage_${stage.key}`, language)).not.toContain("⚠");
+        expect(copy(`stage_${stage.key}_detail`, language)).not.toContain("⚠");
+      }
+    }
+  });
+
+  it("marks the variants that have come back", () => {
+    const html = renderToStaticMarkup(
+      <LanguageProvider initial="en">
+        <BuildStages language="en" reached={2} stages={PREVIEW_STAGES} />
+      </LanguageProvider>,
+    );
+
+    expect(html.match(/build-stage done/g) ?? []).toHaveLength(2);
+    expect(html).toContain("More highlights");
   });
 });
 

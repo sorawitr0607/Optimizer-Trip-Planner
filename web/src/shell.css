@@ -1207,6 +1207,15 @@
    tab bar's border. One value, derived once. */
 .app-shell {
   --tab-bar: 57px;
+  /* The top bar's real height, written once for the same reason `--tab-bar` is: a
+     sticky control that has to come to rest *below* it needs the number, and a
+     literal guessed at the call site is how one ends up underneath. Its own padding
+     expression, plus a 24px line of text and the 1px bottom border.
+
+     The 24 is measured, not derived: at 390px the bar computes to exactly 45px, and
+     a first guess of 22 put this two pixels short. Re-measure before changing the
+     bar's padding or type, the same way `--tab-bar` was arrived at. */
+  --trip-bar: calc(max(10px, env(safe-area-inset-top)) + 35px);
 }
 
 /* Which trip is open. States it; does not navigate. */
@@ -7205,10 +7214,15 @@
     justify-content: center;
     margin-bottom: 12px;
     position: sticky;
-    /* Clear of the browser's own chrome, which on a phone overlays the top. */
-    top: 8px;
+    /* Below `.trip-bar`, not at the top of the viewport. Both are sticky and the
+       trip bar is `top: 0` at `z-index: 30`, so an 8px offset parked this one
+       *underneath* it once the page scrolled — covered, and untappable where it
+       overlapped, which is exactly what was reported. Coming to rest under the bar
+       keeps it reachable and keeps the two from ever occupying the same pixels. */
+    top: calc(var(--trip-bar) + 8px);
     width: 100%;
-    /* Above the page content it slides over, below the sheet at 60. */
+    /* Above the page content it slides over, below the trip bar at 30 and the sheet
+       at 60 — it rests below the bar now, so it must never paint over it. */
     z-index: 20;
   }
 }
@@ -10395,4 +10409,140 @@
   gap: 2px;
   margin: 8px 0 0;
   padding-left: 8px;
+}
+
+/* The draft timetable stops being a table on a phone.
+
+   Six columns cannot be read at 390px. The generic rule above gives every wide table
+   its own horizontal scroller, on the reasoning that "a data table cannot be made
+   narrow -- its columns are its content", and for the reconciliation table that still
+   holds. It did not hold here: the owner's report was that the validated timetable is
+   "really hard to read cause I can't see the whole thing", and a row you have to scroll
+   sideways to finish is one you read twice and trust once.
+
+   So each row becomes a block instead, and the columns become a small layout: the time
+   range and the kind chip on one line, the place under them, the duration last. No data
+   is dropped and nothing is abbreviated — the same six cells, stacked. The header row
+   goes because each value is self-describing once it is not in a column, and the date
+   keeps `.timeline-day-start`'s rule as the thing that separates one day from the next.
+
+   Placed after the generic rule on purpose: both selectors are one class, so source
+   order is what decides, and this has to win the `white-space: nowrap` it sets. */
+@media (max-width: 860px) {
+  .timeline-table,
+  .timeline-table tbody,
+  .timeline-table tr,
+  .timeline-table td {
+    display: block;
+    white-space: normal;
+  }
+
+  /* The cell rules that make sense in a column make no sense in a stack. Every cell
+     is right-aligned for the money tables, carries its own dashed rule to separate
+     the row above, and gets a 14px left gutter from `td + td` to keep neighbouring
+     columns apart. Stacked, that is six right-aligned lines, each indented, each with
+     a rule through it — and 193px of height for one timetable row, which on a
+     twenty-item day is nearly four thousand pixels of scrolling. The row owns the
+     spacing and the separator now; the cells own neither. */
+  .timeline-table td,
+  .timeline-table td + td {
+    border-top: 0;
+    padding: 0;
+    text-align: left;
+  }
+
+  .timeline-table {
+    overflow-x: visible;
+  }
+
+  .timeline-table thead {
+    display: none;
+  }
+
+  .timeline-table tr {
+    /* `start`, not `baseline`. Baseline alignment pads each grid row until the
+       columns' first baselines line up, which turned a 24px line into a 34-40px row
+       and one timetable entry into 165px. The times and the chip share a row and
+       line up on their own. */
+    align-items: start;
+    border-bottom: 1px solid var(--bg-card-border);
+    column-gap: 8px;
+    display: grid;
+    row-gap: 2px;
+    grid-template-areas:
+      "date  date date"
+      "start end  kind"
+      "name  name name"
+      "dur   dur  dur";
+    grid-template-columns: auto auto 1fr;
+    padding: 10px 0;
+  }
+
+  /* The date cell is an empty string on every row but the first of its day, and an
+     empty grid area still reserves its row. */
+  .timeline-table td:nth-child(1) {
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+    grid-area: date;
+  }
+
+  .timeline-table td:nth-child(1):empty {
+    display: none;
+  }
+
+  .timeline-table td:nth-child(2) {
+    grid-area: start;
+  }
+
+  .timeline-table td:nth-child(3) {
+    grid-area: end;
+  }
+
+  /* The dash the column heads used to supply by sitting next to each other. */
+  .timeline-table td:nth-child(3)::before {
+    content: "– ";
+  }
+
+  .timeline-table td:nth-child(4) {
+    grid-area: kind;
+    justify-self: end;
+  }
+
+  /* The chip is taller than the times it sits beside; centring it on their line
+     keeps the row from looking like two rows. */
+  .timeline-table td:nth-child(4) .plan-row-kind {
+    display: block;
+    margin-top: -1px;
+  }
+
+  .timeline-table td:nth-child(5) {
+    grid-area: name;
+  }
+
+  .timeline-table td:nth-child(5):empty {
+    display: none;
+  }
+
+  .timeline-table td:nth-child(6) {
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+    grid-area: dur;
+  }
+
+  /* The day boundary belongs to the row here, not to its cells.
+
+     `.money-table tr.timeline-day-start td` gives every cell a solid top rule and
+     12px of top padding, which is right for a column layout and wrong for a stack:
+     the rule is drawn six times, and the padding lands once per *grid row*, adding
+     48px to the one row that has a date. It also outranks the `padding: 0` above on
+     specificity, which is why zeroing the border alone was not enough. */
+  .timeline-table tr.timeline-day-start td {
+    border-top: 0;
+    padding-top: 0;
+  }
+
+  .timeline-table tr.timeline-day-start {
+    border-top: 1.5px solid var(--bg-card-border);
+    padding-top: 12px;
+  }
 }

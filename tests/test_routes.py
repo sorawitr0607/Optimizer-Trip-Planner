@@ -217,6 +217,48 @@ class RouteRefreshTest(unittest.TestCase):
         self.assertEqual(report["pairs_needed"] - 2, report["skipped_over_cap"])
         self.assertEqual(2, report["request_cap"])
 
+    def test_one_sweep_makes_every_pass_the_browser_used_to_make(self) -> None:
+        """The passes moved to the server; the work and the spending did not.
+
+        Each pass was an RPC, and on the deployment an RPC for slow work is a queued
+        job — enqueue, poll at 1.5s, wait to be claimed, poll again. Twelve of those
+        is minutes of round-trip before a single route is fetched, and it was the
+        bulk of a ten-minute build. Looping here costs one job instead of twelve.
+        """
+
+        reached: list[int] = []
+        with patch("travel_planner.actions.MAX_ROUTE_REQUESTS", 2):
+            single = self.actions.refresh_routes(self.trip.trip_id)
+            sweep = self.actions.refresh_routes(
+                self.trip.trip_id, max_passes=12, progress=reached.append
+            )
+
+        # One pass still means one pass, which is what every other caller asks for.
+        self.assertEqual(2, single["fetched"])
+        # The sweep finished the trip rather than stopping at the per-pass cap, and
+        # said so pass by pass rather than only at the end.
+        self.assertEqual(single["pairs_needed"] - 2, sweep["fetched"])
+        self.assertEqual(0, sweep["skipped_over_cap"])
+        self.assertGreater(sweep["passes_run"], 1)
+        self.assertEqual(sweep["fetched"], reached[-1])
+        self.assertEqual(sorted(reached), reached, "the count may only go up")
+
+    def test_a_sweep_stops_rather_than_re_buying_what_force_already_bought(self) -> None:
+        """`force` refetches cached pairs, so the pass list never shrinks.
+
+        Looping on that would buy the same routes every pass until the ceiling — real
+        money against a US$10 monthly cap, for nothing. One pass is the only honest
+        reading of `force` here.
+        """
+
+        with patch("travel_planner.actions.MAX_ROUTE_REQUESTS", 2):
+            forced = self.actions.refresh_routes(
+                self.trip.trip_id, force=True, max_passes=12
+            )
+
+        self.assertEqual(1, forced["passes_run"])
+        self.assertEqual(2, forced["fetched"])
+
     def test_the_cap_limits_one_run_and_not_what_a_trip_can_ever_know(self) -> None:
         """Repeated runs must reach pairs beyond the cap.
 

@@ -1726,7 +1726,15 @@
       "stage_place_catalogue": "The catalogue",
       "stage_place_catalogue_detail": "Sorting and storing what came back",
       "stage_place_ranking": "Your shortlist",
-      "stage_place_ranking_detail": "Ordering them for this trip"
+      "stage_place_ranking_detail": "Ordering them for this trip",
+      "stage_variant_balanced": "Balanced plan",
+      "stage_variant_balanced_detail": "The first of three options",
+      "stage_variant_relaxed": "Relaxed plan",
+      "stage_variant_relaxed_detail": "The same days at a gentler pace",
+      "stage_variant_highlights": "More highlights",
+      "stage_variant_highlights_detail": "As much as the days will hold",
+      "stage_preview_saved": "Your draft",
+      "stage_preview_saved_detail": "Saving it so you can compare the three"
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -2950,7 +2958,15 @@
       "stage_place_catalogue": "รายการสถานที่",
       "stage_place_catalogue_detail": "จัดเรียงและบันทึกผลที่ได้",
       "stage_place_ranking": "รายการที่คัดไว้",
-      "stage_place_ranking_detail": "จัดลำดับให้เหมาะกับทริปนี้"
+      "stage_place_ranking_detail": "จัดลำดับให้เหมาะกับทริปนี้",
+      "stage_variant_balanced": "แผนสมดุล",
+      "stage_variant_balanced_detail": "ตัวเลือกแรกจากสามแบบ",
+      "stage_variant_relaxed": "แผนแบบสบาย ๆ",
+      "stage_variant_relaxed_detail": "วันเดิมแต่จังหวะช้าลง",
+      "stage_variant_highlights": "เก็บให้ครบที่สุด",
+      "stage_variant_highlights_detail": "เท่าที่เวลาในแต่ละวันจะพอ",
+      "stage_preview_saved": "ฉบับร่างของคุณ",
+      "stage_preview_saved_detail": "บันทึกไว้เพื่อเปรียบเทียบทั้งสามแบบ"
     }
   }
 }

@@ -49,17 +49,27 @@ HANDLERS: dict[str, str] = {
 PAYLOAD_KEYS: dict[str, frozenset[str]] = {
     "discover_places": frozenset({"force_refresh"}),
     "generate_plan_preview": frozenset({"time_limit_seconds"}),
-    "refresh_routes": frozenset(),
+    "refresh_routes": frozenset({"max_passes"}),
     "recommend_areas": frozenset(),
 }
 
 #: Operations that describe their own wait, and are therefore handed a progress
-#: sink by `run_one`. Only discovery has milestones worth reporting: it geocodes,
-#: then runs two sequential Overpass blocks, then builds and stores a catalogue,
-#: and each of those *returning* is a fact rather than an estimate. The other
-#: three are a single long call apiece, so an ignored `progress` argument on each
-#: of them would be three claims that they can say where they are.
-REPORTS_PROGRESS: frozenset[str] = frozenset({"discover_places"})
+#: sink by `run_one`.
+#:
+#: What the number *means* belongs to the operation, because the screen that asked
+#: for it is the screen that reads it. `discover_places` counts stages it has
+#: finished — geocode, two Overpass blocks, catalogue — and `/places` draws them as
+#: a list. `refresh_routes` counts route pairs it has stored, and `/optimize` prints
+#: it beside its routes stage, which is the number that screen was already showing
+#: back when the browser made the passes itself and could count them.
+#:
+#: What both have in common is the only rule that matters: the number moves because
+#: a call came back, never because time passed. An operation with nothing of that
+#: kind to report is left out — an ignored `progress` argument would be a claim it
+#: can say where it is.
+REPORTS_PROGRESS: frozenset[str] = frozenset(
+    {"discover_places", "refresh_routes", "generate_plan_preview"}
+)
 
 QUEUED, RUNNING, DONE, FAILED = "queued", "running", "done", "failed"
 
@@ -213,11 +223,12 @@ class JobQueue:
             return dict(row) if row and row["status"] == RUNNING else None
 
     def report_progress(self, job_id: str, reached: int) -> None:
-        """Record how many of this job's stages have returned.
+        """Record how far this job has got, as a number it defines itself.
 
-        A count, not a label. The browser owns the words and already holds the
-        list they come from, so sending one number keeps the two descriptions of
-        the same wait from drifting apart in different languages.
+        A count, not a label. The browser owns the words and already knows what it
+        asked for, so sending one number keeps the two descriptions of the same wait
+        from drifting apart in different languages. `REPORTS_PROGRESS` says which
+        operations write here and what each one is counting.
         """
         with self.store.connect() as connection:
             connection.execute(

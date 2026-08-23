@@ -6,6 +6,7 @@ SQLite, Streamlit, exporters, or a language model.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from copy import deepcopy
 from datetime import date, timedelta
 from hashlib import sha256
@@ -202,9 +203,24 @@ OPERATIONAL_COPY = {
 
 
 def optimize_trip(
-    snapshot: dict[str, Any], *, time_limit_seconds: float = 30.0
+    snapshot: dict[str, Any],
+    *,
+    time_limit_seconds: float = 30.0,
+    on_variant: Callable[[int], None] | None = None,
 ) -> dict[str, Any]:
-    """Return deterministic proposals from one provider-neutral snapshot."""
+    """Return deterministic proposals from one provider-neutral snapshot.
+
+    `on_variant` is told how many variants have been solved, each time one is. It is
+    observation only and the proposal does not depend on it: it receives a count and
+    returns nothing, it is never consulted, and `deterministic_signature` is computed
+    from the same variants whether it was supplied or not. It imports nothing, so the
+    module stays as language-neutral and dependency-free as its docstring says.
+
+    It exists because this is the longest single call in the app — three variants at
+    roughly 21s each — and to anything watching from outside it is one opaque wait. A
+    variant *returning* is a fact, which is the only kind of progress this project
+    reports.
+    """
 
     _validate_input(snapshot)
     if time_limit_seconds <= 0:
@@ -234,10 +250,15 @@ def optimize_trip(
     # left `more_highlights` already past it. It returned in 0.04s having placed
     # nothing, while the same variant on its own budget finishes in 21.5s with all 13
     # visits. Worst case is now len(VARIANT_CONFIGS) x time_limit_seconds.
-    variants = [
-        _solve_variant(snapshot, config, deadline=monotonic() + time_limit_seconds)
-        for config in VARIANT_CONFIGS
-    ]
+    variants = []
+    for solved, config in enumerate(VARIANT_CONFIGS, start=1):
+        variants.append(
+            _solve_variant(snapshot, config, deadline=monotonic() + time_limit_seconds)
+        )
+        # After the append, so the count is of variants in hand rather than of
+        # iterations begun.
+        if on_variant is not None:
+            on_variant(solved)
     proposal = {
         "schema_version": 1,
         "optimizer_version": OPTIMIZER_VERSION,

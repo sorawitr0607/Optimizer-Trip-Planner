@@ -34,15 +34,9 @@ export function ComfortTradeoffs({ tripId, language }: ComfortTradeoffsProps) {
     await queryClient.invalidateQueries({ queryKey: ["plan_preview", tripId] });
   };
 
-  const accept = useMutation({
-    mutationFn: (input: { code: string; value: number }) =>
-      rpc<unknown>("accept_comfort_tradeoff", {
-        trip_id: tripId,
-        code: input.code,
-        value: input.value,
-      }),
-    onSuccess: refresh,
-  });
+  // No `accept` mutation here. The one control that makes an agreement lives in
+  // `OptimizePage`, beside the places the overage cost; `accept_comfort_tradeoff`
+  // is still the call it makes. Withdrawing stays here, with the explanation.
   const withdraw = useMutation({
     mutationFn: (code: string) =>
       rpc<unknown>("withdraw_comfort_tradeoff", { trip_id: tripId, code }),
@@ -94,17 +88,11 @@ export function ComfortTradeoffs({ tripId, language }: ComfortTradeoffsProps) {
               )}
             </div>
             <div className="place-choice-actions">
-              {rule.exceeds && !rule.covered && rule.measured !== null ? (
-                <button
-                  disabled={accept.isPending}
-                  onClick={() => accept.mutate({ code: rule.code, value: rule.measured! })}
-                  type="button"
-                >
-                  {copyFormat("accept_this_amount", language, {
-                    measured: String(rule.measured),
-                  })}
-                </button>
-              ) : null}
+              {/* No accept here any more. `OptimizePage` offers one further down, beside
+                  the places the overage actually cost — and two buttons agreeing to the
+                  same number, one per rule and one for all of them, was reported as a
+                  duplicate. This panel explains the overage and can withdraw an
+                  agreement; making it is the other control's job. */}
               {rule.accepted_value === null ? null : (
                 <button
                   disabled={withdraw.isPending}

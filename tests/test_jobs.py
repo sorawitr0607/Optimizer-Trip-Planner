@@ -308,11 +308,11 @@ class ProgressReportingTest(unittest.TestCase):
         """An ignored `progress` argument on the other three would be three lies."""
 
         class FakeActions:
-            def refresh_routes(self, *, trip_id):  # noqa: ARG002
+            def recommend_areas(self, *, trip_id):  # noqa: ARG002
                 return {"ok": True}
 
-        self.assertNotIn("refresh_routes", REPORTS_PROGRESS)
-        job_id = self.queue.enqueue("refresh_routes", "T1")
+        self.assertNotIn("recommend_areas", REPORTS_PROGRESS)
+        job_id = self.queue.enqueue("recommend_areas", "T1")
         job = run_one(self.queue, FakeActions(), "worker-a")
         self.assertEqual(job["status"], DONE)
         self.assertIsNone(self.queue.get(job_id)["progress"])

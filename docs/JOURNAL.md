@@ -4131,3 +4131,108 @@ clearing, the provider reporting each block including the failed one, `rpc` hand
 each poll's number, `BuildStages` at each reached value, and the counter surviving a
 remount. The baseline recapture proves nothing about this change — the gate keys on source
 mtimes, and a static capture never catches a discovery in flight.
+
+## Six things owner testing found, 2026-08-24
+
+The first real use of the stage list, and it came back with five defects and one
+question. Four of the six were in code the stage work had just touched or just walked
+past; one was a bug that had been buying photographs of the wrong place for as long as
+the deck has existed.
+
+### The shortlist tab was parked underneath the top bar
+
+`.trip-bar` is `position: sticky; top: 0; z-index: 30`. The handle was `sticky` at
+`top: 8px`, `z-index: 20`. Both stick, so once the page scrolled the handle came to rest
+*inside* the bar's 45 pixels and behind it — covered, and untappable where they
+overlapped. The previous entry moved this control from bottom-fixed to top-sticky and
+recorded the reasoning; what it did not do was ask what was already at the top.
+
+`--trip-bar` now holds the bar's height beside `--tab-bar`, for the same reason that one
+exists, and the handle rests at `calc(var(--trip-bar) + 8px)`. **The number is measured,
+not derived**: the first attempt reasoned it out as a 22px line between 10px paddings and
+came to 43px against a real 45. It cleared anyway, by two pixels, which is the worst kind
+of nearly-right — a token that is wrong is a trap for whatever uses it next. Measured at
+390px through cmux: bar 0–45, handle 53–97, overlap 0, and `elementFromPoint` at the
+centre of the handle returns the handle.
+
+### "Get photographs from Google" bought them for a different place
+
+The deck passes the card's own id — `onWantPhotos(entry.place_id)` — and `PlacesPage`
+took it as `onWantPhotos={() => enrich.mutate()}`, dropping the argument and enriching
+`selectedId` instead. So on any card that was not also the list's selection, the money
+was spent, the photographs were stored against another place, and the card that was
+tapped did not change. Which is exactly the report: the picture should arrive and the
+card should reload.
+
+`onDecide` and `onWantSummary` sit on the same element and both pass `placeId` through
+correctly; `saveChoice` even carries the comment explaining why — "the card in the deck is
+not the card in the select". One of the three did not get the memo.
+
+### The skeleton was describing work that had not started
+
+Two placeholder cards sat under the new stage list from the moment the button was
+pressed. They stand for cards being fetched, and until `discover_places` returns there is
+no catalogue to draw one from — so they claimed a fetch that could not be happening while
+the list above them said the landmarks were still being searched for. They belong to the
+last stage, and now appear only once the discovery call has resolved.
+
+### Ten minutes to build, and it was almost all round-trips
+
+The report was a ten-minute build with nothing on screen. Two separate faults.
+
+**The slowness is not the optimizer.** `collectRouteEvidence` made up to twelve
+`refresh_routes` calls, and on the deployment every one of those is a queued job:
+enqueue, poll at 1.5s, wait for the worker to claim it, poll again. Four to twelve
+seconds of pure latency per pass before a single route is fetched, twelve times over,
+and then a ~52s proposal on the end. The passes exist because `MAX_ROUTE_REQUESTS` caps
+one pass at sixty new pairs and eleven places need 110 — a good cap, in the wrong place
+to be looping from.
+
+The loop is now `actions.refresh_routes(max_passes=...)`, so one job does the whole
+sweep. **The work and the spending are identical**: `_spend` is still called once per
+route inside `_refresh_routes_with`, so the monthly cap is checked exactly as often, and
+`ProviderBudgetExceeded` still stops the sweep by propagating. Only the waiting is gone —
+twelve jobs became one. `force` is pinned to a single pass, because it refetches cached
+pairs, so the pass list never shrinks and a loop would buy the same sixty routes until
+the ceiling.
+
+**And the build had no stages** on two of its three paths. `/optimize`'s auto-resolve
+could always describe itself because it drives four calls; the plain and the paid build
+are a single `generate_plan_preview`, which is three variants at roughly 21s each and was
+one silent minute. The optimizer now reports each variant as it lands.
+
+That hook is in `optimizer.py`, which is the pure core, and the exemption is narrow and
+worth stating: `on_variant` imports nothing, receives a count, returns nothing, and is
+never consulted. `test_the_proposal_is_the_same_whether_or_not_anyone_is_watching`
+asserts the two runs produce the same `deterministic_signature`, which is the property
+that makes it observation rather than participation.
+
+### Two accepts for one agreement
+
+`ComfortTradeoffs` offered "Agree to 27 min" per rule and `OptimizePage` offered "Accept
+27 minutes and rebuild" for all of them, on the same screen. The second was added because
+the first "was reported as not being there at all" — its own comment says so — and the
+answer was a second button rather than a moved one. The panel keeps the explanation and
+the withdraw; making the agreement is now one control, beside the places the overage
+cost.
+
+### The timetable stopped being a table on a phone
+
+Six columns at 390px. `shell.css` gives every wide table its own horizontal scroller on
+the reasoning that "a data table cannot be made narrow — its columns are its content",
+and for the reconciliation table that still holds. It did not hold here: a row you have
+to scroll sideways to finish is one you read twice and trust once.
+
+Each row is a small stacked layout now — time range and kind chip on one line, the place
+under them, the duration last, the date once per day. No column is dropped. Three
+inherited rules had to be undone for it and each was invisible until measured: cells are
+`text-align: right` for the money tables, each carries its own dashed rule, and
+`td + td` adds a 14px gutter — stacked, that is six right-aligned indented lines each
+with a rule through it. `align-items: baseline` then padded every grid row to align
+baselines across columns, turning a 24px line into 34–40px. And
+`.money-table tr.timeline-day-start td` sets `padding-top: 12px` at a higher specificity
+than the `padding: 0` above it, so the one row with a date collected it once per grid row.
+
+Measured at 390px: 167px for a day-start row before, 123px after — and 73px for a travel
+row and 97px for a visit, which is exactly the lines they carry. No sideways scroll on
+the table and none on the document.

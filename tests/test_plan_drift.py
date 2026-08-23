@@ -55,6 +55,39 @@ class ActivePlanDriftTest(unittest.TestCase):
     def tearDown(self) -> None:
         self.directory.cleanup()
 
+    def test_the_build_reports_each_variant_as_it_lands(self) -> None:
+        """The longest single call in the app, and it used to say nothing.
+
+        `/optimize`'s auto-resolve could describe its own wait because it drives four
+        calls itself. The plain and paid builds are *one* call — about a minute of
+        three variants — so they showed a rotating line and nothing else. A variant
+        returning is a fact, which is the only kind of progress this project reports.
+        """
+
+        from travel_planner.optimizer import VARIANT_CONFIGS
+
+        reached: list[int] = []
+        self.actions.generate_plan_preview(self.trip.trip_id, progress=reached.append)
+
+        # One per variant, in order, then the stored draft.
+        self.assertEqual(list(range(1, len(VARIANT_CONFIGS) + 1)) + [4], reached)
+
+    def test_the_proposal_is_the_same_whether_or_not_anyone_is_watching(self) -> None:
+        """`on_variant` observes; it must not participate.
+
+        A hook inside the pure core is only safe while that is true, and the signature
+        is what proves it: same input, same optimizer version, same answer.
+        """
+
+        watched = self.actions.generate_plan_preview(
+            self.trip.trip_id, progress=lambda _reached: None
+        ).proposal.as_dict()
+        unwatched = self.actions.generate_plan_preview(self.trip.trip_id).proposal.as_dict()
+
+        self.assertEqual(
+            watched["deterministic_signature"], unwatched["deterministic_signature"]
+        )
+
     def activate(self) -> None:
         proposal = self.actions.generate_plan_preview(self.trip.trip_id).proposal.as_dict()
         best = next(

@@ -5,8 +5,11 @@ import {
   Landmark,
   ListChecks,
   MapPinned,
+  Save,
+  Scale,
   Search,
   Sparkles,
+  Wind,
 } from "lucide-react";
 
 /**
@@ -72,3 +75,23 @@ export const PLACES_STAGES = [
 
 /** How many of `PLACES_STAGES` the worker reports; the rest is the page's own wait. */
 export const PLACES_WORKER_STAGES = 4;
+
+/**
+ * What one `generate_plan_preview` does, in the order it does it.
+ *
+ * Three variants at roughly 21s each and then a write — the longest single call in
+ * the app. `/optimize`'s auto-resolve could always describe its own wait because it
+ * drives four calls itself, but the plain build and the paid build are *one* call,
+ * so they showed a rotating line for the better part of a minute and had nothing
+ * else they could honestly show. Now the optimizer says which variant it has
+ * finished, the worker writes the count down, and this is the list that reads it.
+ *
+ * A trip with no dates gets a stay recommendation instead of variants and so arrives
+ * at the last row without passing through the first three, which is what happened.
+ */
+export const PREVIEW_STAGES = [
+  { key: "variant_balanced", icon: Scale },
+  { key: "variant_relaxed", icon: Wind },
+  { key: "variant_highlights", icon: Sparkles },
+  { key: "preview_saved", icon: Save },
+] as const;

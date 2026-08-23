@@ -96,10 +96,26 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
 - **`/optimize` reads its assumptions out of the frozen `optimizer_input`, never recomputed.** The
   snapshot records its own `capability_gaps`; a second opinion derived beside it could disagree with
   the plan it claims to describe.
+- **`optimize_trip`'s `on_variant` is the one hook in the pure core, and it observes only.**
+  It imports nothing, takes a count, returns nothing, and is never read back — the three
+  variants are ~21s each and the whole call was otherwise a single silent minute on every
+  build path but auto-resolve. The property that keeps it honest is asserted, not assumed:
+  the same input produces the same `deterministic_signature` whether or not a hook was
+  passed. Anything that wants to *influence* the optimizer is not this and does not belong
+  here.
 - The destination string is **`"City, Country"`** — `AppShell.countrySlug()` takes the last
   comma-separated segment, so a city-only string silently loses the destination accent.
 - **A slow operation must be queued.** `DEFERRED` is derived from `HANDLERS`; anything inline over
   ~60s answers `http_504` on the deployment while working perfectly locally.
+- **A queued operation is expensive to ask for, so do not loop on one from the browser.**
+  Every RPC for slow work is a job: enqueue, poll at 1.5s, wait for the worker to claim
+  it, poll again — four to twelve seconds of latency before the work starts.
+  `collectRouteEvidence` made up to twelve of those in a row and that, not the optimizer,
+  was most of a measured ten-minute build. The loop belongs on the server, where the
+  passes are consecutive and free: `refresh_routes(max_passes=...)` is the shape, and it
+  changes nothing about the work — `_spend` still runs once per route, so the cap is
+  checked exactly as often. `force` stays one pass: it refetches cached pairs, so a loop
+  would buy the same sixty routes until the ceiling.
 - Job payload allowlist keys must match their handler's signature — `tests/test_jobs.py` checks every
   one. An allowlist that permits keys the handler rejects is worse than none.
 - Provider retries are **three attempts, four seconds apart, and only for 429 and 5xx**. A 400 or 404
@@ -259,6 +275,21 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   three `.setup-fields > …` rules are extended to reach inside a group, since wrapping
   changed what "direct child" means — miss that and every label inside a group loses its
   layout.
+- **`--trip-bar` is the top bar's height, and a sticky control must rest below it.**
+  `.trip-bar` is `sticky; top: 0; z-index: 30`, so anything else that sticks near the top
+  parks *inside* its 45px and behind it — covered, and untappable where they overlap,
+  which is what happened to the shortlist handle. The number is **measured**: reasoning it
+  out from the padding gave 43 against a real 45, which cleared by two pixels and would
+  have misled the next thing to use it. Re-measure at 390px before changing the bar's
+  padding or type.
+- **A wide table may stop being a table on a phone, and `.timeline-table` is the one that
+  does.** The generic rule gives every wide table its own horizontal scroller, and for the
+  reconciliation table that is right. Six columns of timetable at 390px was not: the owner
+  could not see a whole row. Stacking one means undoing three things the column layout
+  supplies — cells are `text-align: right`, each draws its own dashed rule, and `td + td`
+  adds a 14px gutter — and avoiding two traps: `align-items: baseline` pads every grid row
+  to align baselines across columns, and `.money-table tr.timeline-day-start td` sets
+  `padding-top` at a higher specificity than a plain `.timeline-table td { padding: 0 }`.
 - **`--tab-bar` is the one place the bottom bar's height is written**: 56px of target plus a
   1px top border. Three rules depend on it — the bar, the sticky setup actions that sit on
   top of it, and the padding that keeps content clear — and as three literals they were
@@ -332,6 +363,18 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   work the new attempt has not done. Report a stage when its call **stops running**, not
   when it succeeds — a failed Overpass block has still been passed, and `incomplete_blocks`
   is what names it.
+- **A control in the deck acts on the card in the deck, never on `selectedId`.** The deck
+  deals from a lane and the list has its own selection; they are usually different places.
+  `saveChoice` carries the comment saying so and `onWantSummary` obeys it, but
+  `onWantPhotos` was wired as `() => enrich.mutate()` — dropping the `place_id` the deck
+  had passed — so **the paid photograph was bought for whichever place the list was on**,
+  stored against that one, and the tapped card never changed. Any new `on*` prop on
+  `PlaceDeck` takes a `placeId` and the handler uses it.
+- **A skeleton is a promise that something is being fetched.** Two placeholder cards sat
+  under the discovery stage list from the moment the button was pressed, while the list
+  above them said the search had not finished — there is no catalogue to draw a card from
+  until `discover_places` returns. Show a skeleton for the request that is actually in
+  flight, not for the wait in general.
 - **Give `Thinking` a `startedAt` wherever it can be remounted mid-wait.** It counts from
   its own mount otherwise, and `/places` moves it into the active stage the instant the
   worker first reports — a new position in the tree, so a new mount. The counter reset to

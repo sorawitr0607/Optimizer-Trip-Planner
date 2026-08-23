@@ -7,10 +7,9 @@ interface RouteRefreshReply {
   fetched: number;
 }
 
-/** A ceiling on passes, not on the trip. Sixty new pairs a pass covers eleven places in
- *  two and forty-one places in the twenty-eight a real shortlist would need — this stops
- *  a stuck provider turning one button into an unbounded run, and the remainder is still
- *  reachable by pressing again. */
+/** A ceiling on passes, not on the trip — and it lives on the server now, as
+ *  `actions.MAX_ROUTE_PASSES`. The number is unchanged; only the side of the wire it
+ *  runs on moved, because each pass used to cost a whole queued job. */
 const MAX_PASSES = 12;
 
 /**
@@ -37,19 +36,22 @@ export async function collectRouteEvidence(
   onProgress?: (stored: number) => void,
 ): Promise<number> {
   let stored = 0;
-  for (let pass = 0; pass < MAX_PASSES; pass += 1) {
-    let reply: RouteRefreshReply;
-    try {
-      reply = await rpc<RouteRefreshReply>("refresh_routes", { trip_id: tripId });
-    } catch {
-      break;
-    }
-    stored += reply.fetched;
+  try {
+    // One request for the whole sweep. This used to be a loop of up to twelve, and on
+    // the deployment each turn of it was a queued job: enqueue, poll at 1.5s, wait for
+    // the worker to claim it, poll again. Minutes of round-trip before any routing,
+    // which is most of what a ten-minute build was doing. The passes are the same
+    // passes, made consecutively by the worker; `onProgress` still ticks per pass,
+    // reported through the job row rather than inferred from twelve replies.
+    const reply = await rpc<RouteRefreshReply>(
+      "refresh_routes",
+      { trip_id: tripId, max_passes: MAX_PASSES },
+      (measured) => onProgress?.(measured),
+    );
+    stored = reply.fetched;
     onProgress?.(stored);
-    // Everything that was outstanding arrived, or nothing did. Either way there is no
-    // reason to ask a third time: the cap is per call, so a pass that fetched nothing
-    // will fetch nothing again.
-    if (reply.fetched === 0 || reply.pairs_needed <= reply.fetched) break;
+  } catch {
+    /* whatever earlier passes stored still stands */
   }
 
   // Walking is the *preferred* evidence, not the only kind. OpenRouteService went

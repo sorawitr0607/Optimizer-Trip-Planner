@@ -432,14 +432,20 @@ export function PlacesPage() {
   });
 
   const enrich = useMutation({
-    mutationFn: () =>
+    // `placeId` defaults to the list's selection; the deck passes its own, for the
+    // same reason `saveChoice` does — the card in the deck is not the card in the
+    // select. Dropping it meant the deck's "get photographs" button bought pictures
+    // for whichever place the list happened to be on, stored them under *that* id,
+    // and left the card that was tapped exactly as it was. The money was spent and
+    // the visible answer never changed.
+    mutationFn: (placeId?: string) =>
       rpc<PlaceInsight>("enrich_place_card", {
         trip_id: tripId,
-        place_id: selectedId,
+        place_id: placeId ?? selectedId,
         language,
       }),
-    onSuccess: async (value) => {
-      setInsights((current) => ({ ...current, [selectedId]: value }));
+    onSuccess: async (value, placeId) => {
+      setInsights((current) => ({ ...current, [placeId ?? selectedId]: value }));
       // The photographs were bought and then nothing asked for them. `insights` holds
       // the rating and the reviews, but the gallery is read from `place_summaries` --
       // so the card kept showing no picture, and the button offering to buy pictures
@@ -867,6 +873,12 @@ export function PlacesPage() {
                 {thinking}
               </BuildStages>
             )}
+            {/* Not while the search is still running. These are placeholders for cards,
+                and until `discover_places` returns there is no catalogue to draw one
+                from — two empty cards below a stage list that says the landmarks are
+                still being fetched claim work that has not started. They belong to the
+                last stage, where the ranking and the first card really are arriving. */}
+            {discover.isPending ? null : (
             <div className="places-workspace" aria-busy="true">
               <div className="skeleton-card">
                 <span className="skeleton skeleton-photo" />
@@ -883,6 +895,7 @@ export function PlacesPage() {
                 <span className="skeleton skeleton-line" />
               </div>
             </div>
+            )}
             </>
           ) : null}
 
@@ -995,7 +1008,7 @@ export function PlacesPage() {
                   saveChoice.mutate({ action, reason, placeId });
                 }}
                 onCardChange={setCardId}
-                onWantPhotos={() => enrich.mutate()}
+                onWantPhotos={(placeId) => enrich.mutate(placeId)}
                 onWantSummary={(placeId) => fetchCard.mutate(placeId)}
                 paidPhotoUsd={paidAllowed ? paidEstimate : null}
                 summaryLoading={summaryPendingForCard}
@@ -1147,7 +1160,7 @@ export function PlacesPage() {
               ) : (
                 <div className="place-paid-action">
                   <p className="setup-hint">{detailsCost.isPending || photosCost.isPending ? copy("loading", language) : paidCaption}</p>
-                  <button disabled={!paidAllowed || enrich.isPending} onClick={() => enrich.mutate()} type="button">{copy("load_live_details", language)}</button>
+                  <button disabled={!paidAllowed || enrich.isPending} onClick={() => enrich.mutate(undefined)} type="button">{copy("load_live_details", language)}</button>
                   {/* The same call, offered by the case it answers: this card has one
                       photograph or none, and the free sources have nothing more. Only
                       shown when that is true of the card on screen. */}
