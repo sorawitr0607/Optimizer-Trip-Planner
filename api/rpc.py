@@ -118,6 +118,10 @@ def handle(
         return 200, {
             "job_id": job["id"], "status": job["status"], "kind": job["kind"],
             "attempts": job["attempts"], "error": job["error"],
+            # How many of the operation's stages have returned, or null when the
+            # operation does not describe itself and when no worker has claimed
+            # it yet. `jobs.REPORTS_PROGRESS` names the ones that do.
+            "progress": job["progress"],
             "result": json.loads(job["result_json"]) if job["result_json"] else None,
         }
 

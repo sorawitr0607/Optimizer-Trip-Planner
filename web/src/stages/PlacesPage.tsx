@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from "react";
 
 import { PlaceDeck } from "./PlaceDeck";
 import { Thinking } from "../shared/Thinking";
+import { BuildStages } from "./BuildStages";
+import { PLACES_STAGES, PLACES_WORKER_STAGES } from "../shared/buildStages";
 import { PlacesTour } from "./PlacesTour";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 
@@ -176,6 +178,17 @@ export function PlacesPage() {
   const [catalogShown, setCatalogShown] = useState(CATALOG_PAGE);
   const [rejectionReason, setRejectionReason] = useState("null");
   const [flash, setFlash] = useState<string | null>(null);
+  /**
+   * How many of `PLACES_STAGES` the running discovery has finished, or undefined
+   * when nobody has said.
+   *
+   * Undefined is the honest state and not a placeholder for zero: it means the job
+   * is still queued with no worker on it, or that this is the local server, which
+   * runs discovery inline and reports nothing at all. Both show `Thinking`, which
+   * is what this screen has always shown. Zero means a worker has claimed the job
+   * and started -- a different fact, and the one worth drawing stages for.
+   */
+  const [discoverStage, setDiscoverStage] = useState<number | undefined>(undefined);
   const [insights, setInsights] = useState<Record<string, PlaceInsight>>({});
 
   const [photoIndexes, setPhotoIndexes] = useState<Record<string, number>>({});
@@ -307,8 +320,16 @@ export function PlacesPage() {
   }
 
   const discover = useMutation({
-    mutationFn: (force_refresh: boolean) =>
-      rpc<DiscoveryRun>("discover_places", { trip_id: tripId, force_refresh }),
+    mutationFn: (force_refresh: boolean) => {
+      // Cleared per run, not per success. A second search must not open on the
+      // last one's finished checklist during the poll before the worker speaks.
+      setDiscoverStage(undefined);
+      return rpc<DiscoveryRun>(
+        "discover_places",
+        { trip_id: tripId, force_refresh },
+        setDiscoverStage,
+      );
+    },
     onSuccess: async (value) => {
       queryClient.setQueryData(["discovery", tripId], value);
       // "Discovery result saved" beside "No places came back" is the app congratulating
@@ -603,6 +624,23 @@ export function PlacesPage() {
   const mutationError = detailsCost.error ?? photosCost.error
     ?? discover.error ?? saveChoice.error ?? clearChoice.error ?? enrich.error;
 
+  /* Discovery is two Overpass blocks and runs 30-90s; paced at the low end so the
+     lines are not still arriving after the places are. Named rather than inlined
+     because it is shown twice now: alone while nothing has reported, and inside the
+     active stage once something has. */
+  const thinking = (
+    <Thinking
+      expectSeconds={40}
+      language={language}
+      lines={["think_reading_setup", "think_searching", "think_dedup", "think_scoring", "think_lanes", "think_photos", "think_almost"]}
+      /* The mutation's own start, so the counter keeps counting across the remount
+         that happens when the first stage arrives and this moves inside the list.
+         Zero on the paths where no discovery ran -- a page arriving on an existing
+         catalogue waits only for the ranking, and that wait starts at mount. */
+      startedAt={discover.submittedAt || undefined}
+    />
+  );
+
   return (
     <section className="stage-card places-screen">
       {/* The shortlist tab floats, because it is a drawer you want to reach while
@@ -813,13 +851,22 @@ export function PlacesPage() {
 
       {busy ? (
             <>
-            <Thinking
-              /* Discovery is two Overpass blocks and runs 30-90s; paced at the low end so
-                 the lines are not still arriving after the places are. */
-              expectSeconds={40}
-              language={language}
-              lines={["think_reading_setup", "think_searching", "think_dedup", "think_scoring", "think_lanes", "think_photos", "think_almost"]}
-            />
+            {discoverStage === undefined ? (
+              thinking
+            ) : (
+              /* Four of the five stages are the worker's own report and the fifth is
+                 this page's: once the RPC resolves, the catalogue is stored and what
+                 is left is the ranking and the first card, which `busy` already
+                 covers. `Thinking` moves inside the active stage, where an elapsed
+                 counter is the honest thing to add to a stage that cannot count. */
+              <BuildStages
+                language={language}
+                reached={discover.isPending ? discoverStage : PLACES_WORKER_STAGES}
+                stages={PLACES_STAGES}
+              >
+                {thinking}
+              </BuildStages>
+            )}
             <div className="places-workspace" aria-busy="true">
               <div className="skeleton-card">
                 <span className="skeleton skeleton-photo" />

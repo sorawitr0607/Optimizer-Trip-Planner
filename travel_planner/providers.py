@@ -10,7 +10,7 @@ import re
 from math import asin, ceil, cos, radians, sin, sqrt
 import os
 from pathlib import Path
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode, urljoin, urlsplit
@@ -110,11 +110,24 @@ class OpenStreetMapProvider:
             "overpass_url": self.overpass_url,
         }
 
-    def discover(self, destination: str) -> dict[str, Any]:
+    def discover(
+        self, destination: str, *, progress: Callable[[int], None] | None = None
+    ) -> dict[str, Any]:
+        """Geocode the destination, then query the two blocks inside its box.
+
+        `progress` is the worker's stage sink, described on
+        `PlannerActions.discover_places`. Passed only when there is one, so this
+        signature is the only place in the provider protocol that has to know
+        about it.
+        """
         location = self._find_destination(destination)
+        if progress is not None:
+            progress(1)
         bbox = self._bounded_bbox(location)
         return self._discover_bbox(
-            bbox, geocoded_name=str(location.get("display_name") or destination)
+            bbox,
+            geocoded_name=str(location.get("display_name") or destination),
+            progress=progress,
         )
 
     def geocode(self, query: str) -> dict[str, Any]:
@@ -137,7 +150,13 @@ class OpenStreetMapProvider:
             "provider": self.name,
         }
 
-    def refresh(self, destination: str, cached_payload: dict[str, Any]) -> dict[str, Any]:
+    def refresh(
+        self,
+        destination: str,
+        cached_payload: dict[str, Any],
+        *,
+        progress: Callable[[int], None] | None = None,
+    ) -> dict[str, Any]:
         coverage = cached_payload.get("coverage", {})
         bbox = coverage.get("bbox") if isinstance(coverage, dict) else None
         if not (
@@ -145,9 +164,15 @@ class OpenStreetMapProvider:
             and len(bbox) == 4
             and all(isinstance(value, (int, float)) for value in bbox)
         ):
-            return self.discover(destination)
+            return self.discover(destination, progress=progress)
+        # Stage 1 without a geocode, because the cached box *is* the answer a
+        # geocode would return -- this path skips the request, not the fact.
+        if progress is not None:
+            progress(1)
         return self._discover_bbox(
-            bbox, geocoded_name=str(coverage.get("geocoded_name") or destination)
+            bbox,
+            geocoded_name=str(coverage.get("geocoded_name") or destination),
+            progress=progress,
         )
 
     def _overpass_elements(self, query: str, timeout: float | None = None) -> list[Any]:
@@ -250,7 +275,13 @@ class OpenStreetMapProvider:
         sleep(self.RETRY_PAUSE_SECONDS)
         return self._overpass_elements(query, timeout=timeout)
 
-    def _discover_bbox(self, bbox: list[float], *, geocoded_name: str) -> dict[str, Any]:
+    def _discover_bbox(
+        self,
+        bbox: list[float],
+        *,
+        geocoded_name: str,
+        progress: Callable[[int], None] | None = None,
+    ) -> dict[str, Any]:
         # Two requests, sequential, each best-effort.
         #
         # As one query this failed outright on a dense city: Tokyo's Nominatim boundary
@@ -284,6 +315,13 @@ class OpenStreetMapProvider:
                 returned_elements.extend(self._attempt_block(query, deadline))
             except ProviderUnavailable as error:
                 incomplete[name] = str(error)[:240]
+            # Reported either way. The stage is "this block has stopped running",
+            # which is true of a 504 as much as of 3082 elements, and the block
+            # that failed is named in `incomplete_blocks` below. Marking it only
+            # on success would leave the screen frozen on a stage that has in
+            # fact been passed -- the same silence the stage list exists to end.
+            if progress is not None:
+                progress(index + 2)
         if not returned_elements:
             raise ProviderUnavailable(
                 "; ".join(incomplete.values())

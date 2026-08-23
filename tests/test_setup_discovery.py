@@ -426,6 +426,75 @@ class ConcreteProviderTest(unittest.TestCase):
             any("timed out" in gap for gap in result["coverage"]["known_gaps"])
         )
 
+    def test_each_block_reports_its_stage_whether_or_not_it_answered(self) -> None:
+        """The stage is "this block has stopped running", not "this block worked".
+
+        `/places` is one queued job, so the only way its wait can be described is
+        for the work itself to say where it is. Marking a stage only on success
+        would freeze the list on a stage that has in fact been passed -- and the
+        block that failed is already named in `incomplete_blocks`, so nothing is
+        lost by counting it. The same silence the stage list exists to end.
+        """
+
+        provider = OpenStreetMapProvider()
+        provider.BLOCK_PAUSE_SECONDS = 0
+        responses = iter(
+            [
+                [
+                    {
+                        "display_name": "Tokyo, Japan",
+                        "lat": "35.6762",
+                        "lon": "139.6503",
+                        "boundingbox": ["35.5", "35.8", "139.5", "139.8"],
+                    }
+                ],
+                {
+                    "elements": [
+                        {
+                            "type": "node",
+                            "id": 1,
+                            "lat": 35.68,
+                            "lon": 139.65,
+                            "tags": {"name": "Sensoji", "historic": "temple"},
+                        }
+                    ]
+                },
+                {"elements": [], "remark": "runtime error: Query timed out"},
+            ]
+        )
+        provider._request_json = lambda request, timeout=None: next(responses)
+
+        reached: list[int] = []
+        result = provider.discover("Tokyo, Japan", progress=reached.append)
+
+        # 1 the geocode returned, 2 the landmarks answered, 3 the baseline did not.
+        self.assertEqual([1, 2, 3], reached)
+        self.assertEqual(["baseline"], result["coverage"]["incomplete_blocks"])
+
+    def test_a_refresh_reports_the_destination_it_did_not_have_to_geocode(self) -> None:
+        """The cached box *is* the answer a geocode would give; only the request is skipped."""
+
+        provider = OpenStreetMapProvider()
+        provider.BLOCK_PAUSE_SECONDS = 0
+        responses = iter(
+            [
+                {"elements": [{"type": "node", "id": 1, "lat": 35.68, "lon": 139.65,
+                               "tags": {"name": "Sensoji", "historic": "temple"}}]},
+                {"elements": [{"type": "node", "id": 2, "lat": 35.69, "lon": 139.70,
+                               "tags": {"name": "Ueno Park", "leisure": "park"}}]},
+            ]
+        )
+        provider._request_json = lambda request, timeout=None: next(responses)
+
+        reached: list[int] = []
+        provider.refresh(
+            "Tokyo, Japan",
+            {"coverage": {"bbox": [35.5, 139.5, 35.8, 139.8], "geocoded_name": "Tokyo, Japan"}},
+            progress=reached.append,
+        )
+
+        self.assertEqual([1, 2, 3], reached)
+
     def test_a_fast_gateway_failure_is_retried_once(self) -> None:
         """`overpass-api.de` balances across backends and an unhealthy one 504s in
         seconds. Measured 2026-08-08 on Singapore: both blocks 504 at 9.0s and 9.5s with

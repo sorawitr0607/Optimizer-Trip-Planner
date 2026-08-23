@@ -4053,3 +4053,81 @@ at the next login. And **`kill` is not a stop**: `KeepAlive` returns the worker 
 seconds, so it is a slow `restart` wearing a misleading name. `restart` uses `kickstart -k`
 for the same reason — `stop` then `start` races launchd's own respawn and can leave two
 workers or none.
+
+## `/places` says where the wait has got to, 2026-08-23
+
+The last screen still showing a bare rotating `Thinking` line. Everywhere else the wait is
+drawn as stages, and the rule those stages follow is that a stage is marked done when its
+call **returns** — never on a timer. `/places` could not follow it, and that is why it had
+been left: its wait is one queued `discover_places` job, so the page holds a job id and a
+poll and nothing else. Inventing timed stages there would have broken the exact rule
+`BuildStages` exists to enforce.
+
+So the work is not a UI change. It is the worker learning to say where it is.
+
+### What the wait is actually made of
+
+`discover_places` is not one long call. It geocodes through Nominatim, then `_discover_bbox`
+runs **two sequential Overpass blocks** — the indexed landmark block at about 10s on Tokyo,
+a 3s courtesy pause, then the unindexed baseline block at about 39 — and then builds and
+stores the catalogue. Four milestones, in order, each one a call coming back.
+
+That shape decided the depth. Reporting only from `actions.py` would have given three
+stages of which the middle one *is* the whole 30-90s wait: two instant checks and one long
+spin, which is close to what `Thinking` already showed. Splitting the blocks is what turns
+"is it stuck" into "it is on the second of two queries", so the sink is threaded down into
+the provider.
+
+### How it travels
+
+A `progress INTEGER` on the `jobs` row, a count and not a label — the browser owns the
+words and already holds the list, so one number cannot drift out of sync with Thai. `run_one`
+hands the sink only to the operations in a new `REPORTS_PROGRESS`; the other three are a
+single long call apiece and an ignored `progress` argument on each would be three claims
+that they can say where they are. `job_status` carries the number, and `rpc`'s new
+`onProgress` hands it to the caller from the poll loop that was already holding it.
+
+**Zero is written before the work starts**, which is the difference between "queued, and
+nothing is running this" and "a worker has it". That distinction was free — the client had
+no way to tell them apart before — and it is what decides whether the screen draws stages
+at all.
+
+Three details that are honesty rather than plumbing. A block reports its stage **whether or
+not it answered**: either may fail while the run carries on with the other half, and
+`incomplete_blocks` already names which — marking only on success would freeze the list on
+a stage that has in fact been passed. `fail` and `reap_stale` **clear** the count, because a
+retry starts over and a list still reading 3 of 5 describes work the new attempt has not
+done. And a cached run reaches 4 in under a second having genuinely skipped nothing it
+claimed to do.
+
+### The fifth stage, and the one that is not the worker's
+
+`PLACES_STAGES` has five rows for four reported milestones. `discover_places` returning is
+not the end of the wait — the ranking and the first card follow it, and `busy` on this
+screen has always covered both — so a list stopping at four would hand back a finished
+checklist and keep spinning.
+
+**Nothing arrives on the local server**, which runs discovery inline and answers 200. The
+undefined state is therefore not a placeholder for zero; it means nobody is reporting, and
+it shows `Thinking`, exactly as before. The same `stage === undefined` shape `/optimize`
+already uses.
+
+### The bug this nearly shipped
+
+Moving `Thinking` inside the active stage is a different position in the tree, so React
+unmounts and remounts it — and it counted elapsed seconds from its own mount. The counter
+would have reset to zero part-way through a 30-90s wait, which is precisely the "it looks
+like it hung" impression that counter was added to answer, reintroduced by the change meant
+to improve it. It now reads off the clock from an optional `startedAt` (the mutation's
+`submittedAt`), derived in the initial state rather than corrected a tick later so the
+remount does not flash `0s`. Clock-derived also fixes a second case nobody had hit: a
+throttled `setInterval` in a background tab.
+
+### Where it cannot be seen
+
+Only against a deployment with a worker. Locally the stage list never appears, so the
+rendering is held by tests rather than by a screenshot: the queue's counts and their
+clearing, the provider reporting each block including the failed one, `rpc` handing over
+each poll's number, `BuildStages` at each reached value, and the counter surviving a
+remount. The baseline recapture proves nothing about this change — the gate keys on source
+mtimes, and a static capture never catches a discovery in flight.

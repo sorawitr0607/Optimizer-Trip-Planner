@@ -1716,7 +1716,17 @@
       "stage_discovery": "Places for those dates",
       "stage_discovery_detail": "Reading what was already found",
       "stage_plan": "Three plan options",
-      "stage_plan_detail": "Building and checking each one"
+      "stage_plan_detail": "Building and checking each one",
+      "stage_place_lookup": "Your destination",
+      "stage_place_lookup_detail": "Finding it on the map",
+      "stage_place_landmarks": "Landmarks",
+      "stage_place_landmarks_detail": "The places with an encyclopaedia entry",
+      "stage_place_baseline": "Everything else",
+      "stage_place_baseline_detail": "The slow half — markets, parks, viewpoints",
+      "stage_place_catalogue": "The catalogue",
+      "stage_place_catalogue_detail": "Sorting and storing what came back",
+      "stage_place_ranking": "Your shortlist",
+      "stage_place_ranking_detail": "Ordering them for this trip"
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -2930,7 +2940,17 @@
       "stage_discovery": "สถานที่สำหรับวันเหล่านั้น",
       "stage_discovery_detail": "ใช้ผลที่ค้นไว้แล้ว",
       "stage_plan": "แผนสามตัวเลือก",
-      "stage_plan_detail": "สร้างและตรวจทีละแบบ"
+      "stage_plan_detail": "สร้างและตรวจทีละแบบ",
+      "stage_place_lookup": "จุดหมายของคุณ",
+      "stage_place_lookup_detail": "ค้นหาตำแหน่งบนแผนที่",
+      "stage_place_landmarks": "สถานที่สำคัญ",
+      "stage_place_landmarks_detail": "ที่ที่มีบันทึกในสารานุกรม",
+      "stage_place_baseline": "ที่เหลือทั้งหมด",
+      "stage_place_baseline_detail": "ส่วนที่ช้า — ตลาด สวน จุดชมวิว",
+      "stage_place_catalogue": "รายการสถานที่",
+      "stage_place_catalogue_detail": "จัดเรียงและบันทึกผลที่ได้",
+      "stage_place_ranking": "รายการที่คัดไว้",
+      "stage_place_ranking_detail": "จัดลำดับให้เหมาะกับทริปนี้"
     }
   }
 }

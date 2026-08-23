@@ -927,6 +927,9 @@ interface JobEnvelope {
   job_id: string;
   status: "queued" | "running" | "done" | "failed";
   error: string | null;
+  /** How many of the operation's stages have returned, or null when it does not
+   *  describe itself and while it is still queued behind a worker. */
+  progress: number | null;
   result: unknown;
 }
 
@@ -982,7 +985,23 @@ async function post(
   }
 }
 
-export async function rpc<T>(method: string, payload: Record<string, unknown> = {}): Promise<T> {
+/**
+ * Call one method and return its answer, whether the server does the work or queues it.
+ *
+ * `onProgress` is how a caller sees inside a queued operation. Every poll below already
+ * holds the job row, and the operations in `jobs.REPORTS_PROGRESS` write a count of the
+ * stages they have finished into it -- so this hands over a fact the loop was throwing
+ * away, on the same rule `BuildStages` draws: a number goes up because a call came back.
+ *
+ * It fires only against a deployment that queues. The local server runs the same work
+ * inline and answers 200, so a caller there is never told anything and must have
+ * something honest to show for that -- `Thinking`, in every case so far.
+ */
+export async function rpc<T>(
+  method: string,
+  payload: Record<string, unknown> = {},
+  onProgress?: (reached: number) => void,
+): Promise<T> {
   const first = await post(method, payload, 120_000);
 
   // 202 means the server queued the work instead of doing it. Three operations
@@ -998,6 +1017,9 @@ export async function rpc<T>(method: string, payload: Record<string, unknown> = 
     await new Promise((resume) => setTimeout(resume, JOB_POLL_MS));
     const { value } = await post("job_status", { job_id: jobId }, 30_000);
     const job = value as JobEnvelope;
+    // Before the exits, so the last count reported still reaches the caller on the
+    // poll that also carries the result.
+    if (typeof job.progress === "number") onProgress?.(job.progress);
     if (job.status === "done") return job.result as T;
     if (job.status === "failed") throw new ApiError(job.error ?? "job_failed", { job_id: jobId });
     if (Date.now() > deadline) throw new ApiError("job_timeout", { job_id: jobId });

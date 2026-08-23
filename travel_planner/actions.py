@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import datetime, timedelta, timezone
 import os
 from pathlib import Path
@@ -488,7 +488,32 @@ class PlannerActions:
             ],
         }
 
-    def discover_places(self, *, trip_id: str, force_refresh: bool = False) -> DiscoveryRun:
+    def discover_places(
+        self,
+        *,
+        trip_id: str,
+        force_refresh: bool = False,
+        progress: Callable[[int], None] | None = None,
+    ) -> DiscoveryRun:
+        """Find the destination's places, reporting the stages it passes through.
+
+        `progress` is supplied only by the worker (`jobs.REPORTS_PROGRESS`), and
+        only on a hosted deployment -- the local server runs this inline and
+        answers the request directly, so nothing there polls and nothing there
+        listens. It is a count of stages that have *returned*, on the same rule
+        `/optimize` marks its four by: a number goes up because a call came back,
+        never because time passed.
+
+            1  the destination was geocoded
+            2  the indexed landmark block has been asked
+            3  the unindexed baseline block has been asked
+            4  the catalogue is built and stored
+
+        2 and 3 mean asked, not answered. Either block may fail while the run
+        carries on with the other half, and `incomplete_blocks` in the report
+        below is what says which -- a stage cannot both wait for that answer and
+        describe the wait.
+        """
         trip = self.store.get_trip(trip_id)
         setup = self.store.get_setup(trip_id)
         if trip is None:
@@ -521,10 +546,15 @@ class PlannerActions:
         else:
             try:
                 refresh = getattr(provider, "refresh", None)
+                # Handed over only when there is one to hand over, so a provider
+                # that reports nothing needs no signature for it -- the fakes in
+                # `tests/` implement `discover(destination)` and are never given
+                # a sink, because only the worker has one to give.
+                sink = {"progress": progress} if progress is not None else {}
                 payload = (
-                    refresh(trip.destination, cached_payload)
+                    refresh(trip.destination, cached_payload, **sink)
                     if cache and refresh and cached_payload
-                    else provider.discover(trip.destination)
+                    else provider.discover(trip.destination, **sink)
                 )
                 if not isinstance(payload, Mapping):
                     raise ValueError("Provider result must be an object")
@@ -583,7 +613,7 @@ class PlannerActions:
                 "provider_error": provider_error,
             }
         )
-        return self.store.add_discovery_run(
+        run = self.store.add_discovery_run(
             new_discovery_run(
                 trip_id=trip_id,
                 setup_sha256=setup.snapshot.sha256,
@@ -593,6 +623,13 @@ class PlannerActions:
                 report=report,
             )
         )
+        # After the write, not before it: the stage is "the catalogue is stored",
+        # and a fresh cache serves this path without touching Overpass at all, so
+        # a cached run reaches 4 in well under a second having honestly skipped
+        # nothing it claimed to do.
+        if progress is not None:
+            progress(4)
+        return run
 
     def get_latest_discovery(self, trip_id: str) -> DiscoveryRun | None:
         return self.store.get_latest_discovery(trip_id)

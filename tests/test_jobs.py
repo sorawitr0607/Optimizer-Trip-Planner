@@ -14,7 +14,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from travel_planner.jobs import DONE, FAILED, QUEUED, RUNNING, JobQueue
+from travel_planner.jobs import DONE, FAILED, QUEUED, REPORTS_PROGRESS, RUNNING, JobQueue, run_one
 from travel_planner.store import SQLiteStore
 
 
@@ -153,7 +153,7 @@ class QueuedResultShapeTest(unittest.TestCase):
             def __init__(self, store):
                 self.store = store
 
-            def discover_places(self, *, trip_id):  # noqa: ARG002 - shape under test
+            def discover_places(self, *, trip_id, progress=None):  # noqa: ARG002 - shape under test
                 return answer
 
         with tempfile.TemporaryDirectory() as directory:
@@ -263,3 +263,101 @@ class IdlePollBackoffTest(unittest.TestCase):
         from travel_planner.worker import MAX_IDLE_SLEEP_SECONDS, REAP_EVERY_SECONDS
 
         self.assertLess(MAX_IDLE_SLEEP_SECONDS, REAP_EVERY_SECONDS)
+
+
+class ProgressReportingTest(unittest.TestCase):
+    """A queued wait can only be described if the worker writes down where it is.
+
+    `/places` is one `discover_places` job, so the screen holds a job id and a poll
+    and nothing else -- which is why it showed a rotating line for 30-90 seconds
+    while `/optimize`, which drives its own four calls, could show stages. The
+    stages are honest here only because the number below moves when a call returns.
+    """
+
+    def setUp(self) -> None:
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.store = SQLiteStore(Path(self.directory.name) / "jobs.sqlite3")
+        self.queue = JobQueue(self.store)
+
+    def test_a_reporting_operation_is_handed_a_sink_and_its_counts_are_stored(self) -> None:
+        stored: list[int | None] = []
+
+        class FakeActions:
+            def discover_places(self, *, trip_id, progress=None):  # noqa: ARG002
+                # What the worker already wrote before calling in: a claimed job
+                # reads 0, and that is the whole difference between "queued, and
+                # nothing is running this" and "a worker has it". The screen draws
+                # a stage list for the second and a rotating line for the first.
+                stored.append(queue.get(job_id)["progress"])
+                # Then what the provider does: geocode, two blocks, the catalogue.
+                for reached in (1, 2, 3, 4):
+                    progress(reached)
+                    stored.append(queue.get(job_id)["progress"])
+                return {"ok": True}
+
+        queue = self.queue
+        job_id = queue.enqueue("discover_places", "T1")
+        # Nothing at all while it waits for a worker.
+        self.assertIsNone(queue.get(job_id)["progress"])
+        run_one(queue, FakeActions(), "worker-a")
+        self.assertEqual(stored, [0, 1, 2, 3, 4])
+        self.assertEqual(queue.get(job_id)["progress"], 4)
+
+    def test_an_operation_with_no_milestones_is_not_handed_one(self) -> None:
+        """An ignored `progress` argument on the other three would be three lies."""
+
+        class FakeActions:
+            def refresh_routes(self, *, trip_id):  # noqa: ARG002
+                return {"ok": True}
+
+        self.assertNotIn("refresh_routes", REPORTS_PROGRESS)
+        job_id = self.queue.enqueue("refresh_routes", "T1")
+        job = run_one(self.queue, FakeActions(), "worker-a")
+        self.assertEqual(job["status"], DONE)
+        self.assertIsNone(self.queue.get(job_id)["progress"])
+
+    def test_a_retry_starts_its_stage_list_over(self) -> None:
+        """Stages left at 3 describe work the next attempt has not done."""
+        job_id = self.queue.enqueue("discover_places", "T1", max_attempts=2)
+        self.queue.claim("w")
+        self.queue.report_progress(job_id, 3)
+        self.assertEqual(self.queue.fail(job_id, "overpass 504"), QUEUED)
+        self.assertIsNone(self.queue.get(job_id)["progress"])
+
+    def test_a_reaped_job_starts_its_stage_list_over(self) -> None:
+        job_id = self.queue.enqueue("discover_places", "T1")
+        self.queue.claim("w")
+        self.queue.report_progress(job_id, 2)
+        with self.store.connect() as connection:
+            connection.execute(
+                "UPDATE jobs SET claimed_at = ? WHERE id = ?", ("2000-01-01T00:00:00+00:00", job_id)
+            )
+        self.assertEqual(self.queue.reap_stale(), 1)
+        self.assertIsNone(self.queue.get(job_id)["progress"])
+
+
+class QueuePredatingProgressTest(unittest.TestCase):
+    """A queue built before `progress` existed must gain the column, not fail on it.
+
+    The table check that keeps a serverless cold start cheap is exactly what would
+    have hidden this: an older `jobs` table passes "does the table exist" and then
+    fails every write to a column it has never had.
+    """
+
+    def test_an_older_jobs_table_is_migrated(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = SQLiteStore(str(Path(directory) / "jobs.sqlite3"))
+            with store.connect() as connection:
+                connection.execute(
+                    "CREATE TABLE jobs (id TEXT PRIMARY KEY, kind TEXT NOT NULL,"
+                    " trip_id TEXT NOT NULL, payload_json TEXT NOT NULL,"
+                    " status TEXT NOT NULL, attempts INTEGER NOT NULL,"
+                    " max_attempts INTEGER NOT NULL, claimed_by TEXT, claimed_at TEXT,"
+                    " created_at TEXT NOT NULL, finished_at TEXT, result_json TEXT,"
+                    " error TEXT)"
+                )
+            queue = JobQueue(store)
+            job_id = queue.enqueue("discover_places", "T1")
+            queue.report_progress(job_id, 2)
+            self.assertEqual(queue.get(job_id)["progress"], 2)

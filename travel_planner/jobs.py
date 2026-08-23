@@ -53,6 +53,14 @@ PAYLOAD_KEYS: dict[str, frozenset[str]] = {
     "recommend_areas": frozenset(),
 }
 
+#: Operations that describe their own wait, and are therefore handed a progress
+#: sink by `run_one`. Only discovery has milestones worth reporting: it geocodes,
+#: then runs two sequential Overpass blocks, then builds and stores a catalogue,
+#: and each of those *returning* is a fact rather than an estimate. The other
+#: three are a single long call apiece, so an ignored `progress` argument on each
+#: of them would be three claims that they can say where they are.
+REPORTS_PROGRESS: frozenset[str] = frozenset({"discover_places"})
+
 QUEUED, RUNNING, DONE, FAILED = "queued", "running", "done", "failed"
 
 #: A job still `running` after this long is assumed to belong to a worker that
@@ -73,6 +81,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     claimed_at TEXT,
     created_at TEXT NOT NULL,
     finished_at TEXT,
+    progress INTEGER,
     result_json TEXT,
     error TEXT
 );
@@ -96,17 +105,39 @@ class JobQueue:
             # builds a queue on every cold start, and re-running the DDL each time
             # is a round trip and a catalogue lock for a table that is almost
             # always already there. One cheap existence check instead.
-            present = connection.execute(
-                "SELECT to_regclass('public.jobs') IS NOT NULL AS present"
+            #
+            # The check is on `progress` rather than on the table, because a queue
+            # created before that column existed passes a table check and then
+            # fails every write to it. A column implies its table, so this is the
+            # same single read it always was.
+            ready = connection.execute(
+                "SELECT EXISTS (SELECT 1 FROM information_schema.columns"
+                " WHERE table_schema = 'public' AND table_name = 'jobs'"
+                " AND column_name = 'progress') AS ready"
                 if self.is_postgres
-                else "SELECT COUNT(*) AS present FROM sqlite_master "
-                "WHERE type = 'table' AND name = 'jobs'"
+                else "SELECT COUNT(*) AS ready FROM pragma_table_info('jobs')"
+                " WHERE name = 'progress'"
             ).fetchone()
-            if present and present["present"]:
+            if ready and ready["ready"]:
                 return
             for statement in DDL.strip().split(";"):
                 if statement.strip():
                     connection.execute(statement)
+            # `CREATE TABLE IF NOT EXISTS` does nothing to a queue that predates
+            # `progress`, so that one case is migrated explicitly. Reached at most
+            # once per database. Postgres gets `IF NOT EXISTS` because a failed
+            # statement there aborts the surrounding transaction -- the hazard
+            # `PostgresStore._stored_version` documents -- while SQLite, which has
+            # no such clause, is asked first instead.
+            if self.is_postgres:
+                connection.execute(
+                    "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS progress INTEGER"
+                )
+            elif not connection.execute(
+                "SELECT COUNT(*) AS present FROM pragma_table_info('jobs')"
+                " WHERE name = 'progress'"
+            ).fetchone()["present"]:
+                connection.execute("ALTER TABLE jobs ADD COLUMN progress INTEGER")
 
     def enqueue(self, kind: str, trip_id: str, payload: dict | None = None,
                 max_attempts: int = 3) -> str:
@@ -181,6 +212,18 @@ class JobQueue:
             row = connection.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
             return dict(row) if row and row["status"] == RUNNING else None
 
+    def report_progress(self, job_id: str, reached: int) -> None:
+        """Record how many of this job's stages have returned.
+
+        A count, not a label. The browser owns the words and already holds the
+        list they come from, so sending one number keeps the two descriptions of
+        the same wait from drifting apart in different languages.
+        """
+        with self.store.connect() as connection:
+            connection.execute(
+                "UPDATE jobs SET progress = ? WHERE id = ?", (reached, job_id)
+            )
+
     def complete(self, job_id: str, result: Any) -> None:
         with self.store.connect() as connection:
             connection.execute(
@@ -203,9 +246,12 @@ class JobQueue:
                 return FAILED
             retry = row["attempts"] < row["max_attempts"]
             status = QUEUED if retry else FAILED
+            # `progress` goes with it. A retry starts the operation over, and a
+            # stage list still reading "3 of 5 done" describes work the new
+            # attempt has not done yet.
             connection.execute(
                 "UPDATE jobs SET status = ?, error = ?, claimed_by = NULL,"
-                " finished_at = ? WHERE id = ?",
+                " progress = NULL, finished_at = ? WHERE id = ?",
                 (status, error[:2000], None if retry else _now(), job_id),
             )
             return status
@@ -223,7 +269,7 @@ class JobQueue:
             ).fetchall()
             for row in rows:
                 connection.execute(
-                    "UPDATE jobs SET status = ?, claimed_by = NULL,"
+                    "UPDATE jobs SET status = ?, claimed_by = NULL, progress = NULL,"
                     " error = 'worker did not finish' WHERE id = ?",
                     (QUEUED, row["id"]),
                 )
@@ -243,6 +289,18 @@ def run_one(queue: JobQueue, actions: Any, worker_id: str) -> dict | None:
     try:
         method: Callable = getattr(actions, HANDLERS[job["kind"]])
         payload = json.loads(job["payload_json"])
+        if job["kind"] in REPORTS_PROGRESS:
+            # Not from the payload, so `PAYLOAD_KEYS` is untouched: this is the
+            # worker handing the operation somewhere to write, not a caller
+            # reaching a keyword it was never offered.
+            payload["progress"] = lambda reached: queue.report_progress(
+                job["id"], reached
+            )
+            # Zero before the work starts, which is what separates "queued, and
+            # nothing is running this" from "a worker has it". Until this lands
+            # the screen has no reason to believe anyone is listening, and says
+            # so by showing the rotating line instead of a stage list.
+            payload["progress"](0)
         result = method(trip_id=job["trip_id"], **payload)
         # The same conversion the HTTP path applies. Without it the action's return
         # went through `json.dumps(..., default=str)`, so a dataclass reached the

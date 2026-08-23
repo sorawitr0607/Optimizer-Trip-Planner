@@ -1,4 +1,13 @@
-import { CalendarCheck, Clock3, Footprints, MapPinned, Sparkles } from "lucide-react";
+import {
+  CalendarCheck,
+  Clock3,
+  Footprints,
+  Landmark,
+  ListChecks,
+  MapPinned,
+  Search,
+  Sparkles,
+} from "lucide-react";
 
 /**
  * The four calls `autoResolveAndGenerate` awaits, in the order it awaits them.
@@ -34,3 +43,32 @@ export const PLAN_STAGES = [
   { key: "discovery", icon: MapPinned },
   { key: "plan", icon: Sparkles },
 ] as const;
+
+/**
+ * What `/places` waits through, in the order it happens.
+ *
+ * The first four are the worker's, not the page's. Discovery is one queued job, so
+ * unlike the two lists above this screen cannot see its own milestones -- it holds a
+ * job id and a poll. The job row now carries a count of stages that have returned and
+ * `rpc`'s `onProgress` hands it over, which is what made an honest list possible here:
+ * the alternative was timed stages, and inventing those is the exact thing
+ * `BuildStages` was built to refuse.
+ *
+ * The fifth is the page's own. `discover_places` returning is not the end of the wait
+ * -- the ranking and the first card follow it, and `busy` on this screen has always
+ * covered both -- so a list that stopped at four would hand back a finished checklist
+ * and keep spinning.
+ *
+ * Nothing arrives on the local server, which runs discovery inline and answers the
+ * request. There the page shows `Thinking`, as it always has.
+ */
+export const PLACES_STAGES = [
+  { key: "place_lookup", icon: Search },
+  { key: "place_landmarks", icon: Landmark },
+  { key: "place_baseline", icon: MapPinned },
+  { key: "place_catalogue", icon: ListChecks },
+  { key: "place_ranking", icon: Sparkles },
+] as const;
+
+/** How many of `PLACES_STAGES` the worker reports; the rest is the page's own wait. */
+export const PLACES_WORKER_STAGES = 4;

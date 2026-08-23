@@ -19,6 +19,11 @@ import { copy, copyFormat, type Language } from "../i18n/copy";
 /** Slow enough to read, quick enough to look alive. */
 const EVERY_MS = 2600;
 
+/** Whole seconds since `origin`, never negative. */
+function since(origin: number): number {
+  return Math.max(0, Math.round((Date.now() - origin) / 1000));
+}
+
 export interface ThinkingProps {
   language: Language;
   /** Copy codes, in the order the work actually happens. */
@@ -32,11 +37,27 @@ export interface ThinkingProps {
    * simply run out of things to say five sixths of the way from the end.
    */
   expectSeconds?: number;
+  /**
+   * When the wait began, as `Date.now()`. Defaults to this element's own mount.
+   *
+   * Supplied where the element is remounted part-way through the wait it is
+   * describing. `/places` does exactly that: the moment the worker reports its
+   * first stage, this moves from standing alone to sitting inside the active row
+   * of `BuildStages`, which is a different position in the tree and therefore a
+   * new mount. A counter that restarted at zero there would read as the work
+   * having started over -- the precise impression it was added to prevent.
+   */
+  startedAt?: number;
 }
 
-export function Thinking({ expectSeconds, language, lines }: ThinkingProps) {
+export function Thinking({ expectSeconds, language, lines, startedAt }: ThinkingProps) {
   const [index, setIndex] = useState(0);
-  const [elapsed, setElapsed] = useState(0);
+  const [mountedAt] = useState(() => Date.now());
+  const origin = startedAt ?? mountedAt;
+  // Correct on the first paint, not one tick later. A remount that renders `0s`
+  // and fixes itself a second afterwards is a visible flinch, and it is the same
+  // wrong number the effect below exists to avoid.
+  const [elapsed, setElapsed] = useState(() => since(origin));
 
   useEffect(() => {
     const step = expectSeconds ? Math.max(EVERY_MS, (expectSeconds * 1000) / lines.length) : EVERY_MS;
@@ -53,12 +74,21 @@ export function Thinking({ expectSeconds, language, lines }: ThinkingProps) {
   }, [expectSeconds, lines.length]);
 
   useEffect(() => {
-    // A real measurement, not an estimate of progress — the server reports no milestones,
-    // so this counts the one thing actually known. It can never freeze, which is the
-    // whole point: a number that ticks says "running" where held text says "hung".
-    const timer = window.setInterval(() => setElapsed((seconds) => seconds + 1), 1000);
+    // A real measurement, not an estimate of progress — for the paths where the server
+    // reports no milestones this is the one thing actually known, and where it does
+    // report them it is still the only thing that can be said *inside* a stage. It can
+    // never freeze, which is the whole point: a number that ticks says "running" where
+    // held text says "hung".
+    //
+    // Read off the clock rather than counted in ticks, so it survives a remount and
+    // does not drift with a throttled `setInterval` in a background tab. Both are the
+    // same failure: a wait that has run for a minute claiming it has run for ten
+    // seconds.
+    const tick = () => setElapsed(since(origin));
+    tick();
+    const timer = window.setInterval(tick, 1000);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [origin]);
 
   return (
     // derives-from: element 36 .currency-info-box as .thinking

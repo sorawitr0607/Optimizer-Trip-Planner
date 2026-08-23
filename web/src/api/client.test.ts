@@ -58,6 +58,28 @@ describe("rpc", () => {
     expect(calls[1]).toBe("/api/job_status");
   }, 20_000);
 
+  it("hands the caller each stage the worker reports, and nothing while it is queued", async () => {
+    // `/places` is one queued job, so this callback is the only way that screen can
+    // know where a 30-90s wait has got to. A queued job reports nothing at all --
+    // which is the honest difference between "no worker has this" and "a worker
+    // started", and the screen shows a rotating line for the first.
+    const reached: number[] = [];
+    stubFetch([
+      { status: 202, body: '{"job_id":"job_3","status":"queued"}' },
+      { status: 200, body: '{"job_id":"job_3","status":"queued","progress":null,"error":null,"result":null}' },
+      { status: 200, body: '{"job_id":"job_3","status":"running","progress":0,"error":null,"result":null}' },
+      { status: 200, body: '{"job_id":"job_3","status":"running","progress":2,"error":null,"result":null}' },
+      { status: 200, body: '{"job_id":"job_3","status":"done","progress":4,"error":null,"result":{"places":3}}' },
+    ]);
+    await expect(
+      rpc("discover_places", { trip_id: "trip_x" }, (n) => reached.push(n)),
+    ).resolves.toEqual({ places: 3 });
+    // Including the 4 that arrives with the result: the last stage is reported on
+    // the same poll that ends the wait, and dropping it would leave the list one
+    // short of the answer it just delivered.
+    expect(reached).toEqual([0, 2, 4]);
+  }, 20_000);
+
   it("raises the job's own error when it fails", async () => {
     stubFetch([
       { status: 202, body: '{"job_id":"job_2","status":"queued"}' },

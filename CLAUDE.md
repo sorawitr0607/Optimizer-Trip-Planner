@@ -179,7 +179,7 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   Anything worth seeing goes above 200 or below 610, and the waterline sits at 772 rather
   than 646 so there is water to moor a boat on *outside* those rectangles. Re-measure
   before moving an object; twice now something has been drawn correctly and been invisible.
-- **`BuildStages` takes a stage list, and both lists are the calls their page awaits.**
+- **`BuildStages` takes a stage list, and every list is the calls its page awaits.**
   `BUILD_STAGES` is `/optimize`'s four; `PLAN_STAGES` is `StayPlanner`'s three —
   `save_setup`, `discover_places`, `generate_plan_preview`. That press is the longest
   wait in the app and showed one rotating line, so a slow discovery and a slow proposal
@@ -188,6 +188,10 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   nested inside the final stage where `generate_plan_preview` genuinely has no
   milestones. Adding a stage that no `await` corresponds to is a claim about work that
   is not happening — `stayplanner.test.tsx` pins the count to three.
+  `PLACES_STAGES` is the third and the odd one: four of its five are reported by the
+  **worker** rather than awaited by the page, because `/places` is one queued job. See
+  the rule on `REPORTS_PROGRESS` below — the count still moves only on a call returning,
+  which is what let that screen have stages at all instead of timed fiction.
 - **`ShoreScene` is `slice`, and `SceneEnvironment` is `none`, and the difference is
   what each one draws.** That comment is right that abstract terrain "is the one thing
   that tolerates" stretching; a lighthouse and a boat do not. Measured, `none` on this
@@ -310,13 +314,30 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   is labelled `Value for time`, and declares `effort_state: visit_time_estimated`; walking, transfers,
   cost and fatigue remain optimizer evidence. `shared/cards.ts` holds the guards; `WF-005` asks for
   these rows, so they are kept where they can answer and dropped where they cannot.
-- **`Thinking` claims no milestones because the *server* reports none — the client is a
-  different matter.** `autoResolveAndGenerate` awaits four calls in order, so each one
-  returning is a fact the page already holds, and `BuildStages` marks a stage done on that
-  and nothing else. Never advance it from a timer: a green check that means "probably by
-  now" is the same defect as printing a placeholder as a finding. The long
-  `generate_plan_preview` really has no milestones, so `Thinking` stays inside that stage
-  where a rotating line and an elapsed counter are the honest thing to show.
+- **`Thinking` claims no milestones of its own — everything above it does.**
+  `autoResolveAndGenerate` awaits four calls in order, so each one returning is a fact the
+  page already holds, and `BuildStages` marks a stage done on that and nothing else. Never
+  advance it from a timer: a green check that means "probably by now" is the same defect as
+  printing a placeholder as a finding. The long `generate_plan_preview` really has no
+  milestones, so `Thinking` stays inside that stage where a rotating line and an elapsed
+  counter are the honest thing to show.
+- **A queued operation describes its own wait, or nothing can.** `jobs.REPORTS_PROGRESS`
+  names the operations `run_one` hands a `progress` sink to; they write a **count** into
+  `jobs.progress`, `job_status` carries it, and `rpc`'s `onProgress` gives it to the page.
+  A count and not a label, because the browser owns the words in both languages. Zero is
+  written before the work starts and that is load-bearing: it is the only thing separating
+  "queued, nobody is running this" from "a worker has it". Do not add an ignored `progress`
+  argument to an operation that has no milestones — that is a claim it can say where it is.
+  Clear the count on `fail` and `reap_stale`; a retry starts over, and 3 of 5 would describe
+  work the new attempt has not done. Report a stage when its call **stops running**, not
+  when it succeeds — a failed Overpass block has still been passed, and `incomplete_blocks`
+  is what names it.
+- **Give `Thinking` a `startedAt` wherever it can be remounted mid-wait.** It counts from
+  its own mount otherwise, and `/places` moves it into the active stage the instant the
+  worker first reports — a new position in the tree, so a new mount. The counter reset to
+  zero part-way through a 30-90s wait, which is the precise "it looks like it hung" that
+  counter was added to answer. It reads off the clock now, initial state included so the
+  remount does not flash `0s`.
 - **A field added to the setup draft must also be added to
   `StayPlanner.wholeDraftWithDates`.** `save_setup` defaults every field it is not sent,
   so that function rebuilds the whole payload by hand — and a field missing from its list

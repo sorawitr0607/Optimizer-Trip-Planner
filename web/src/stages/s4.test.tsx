@@ -15,6 +15,10 @@ import type {
 } from "../api/client";
 import type { Language } from "../i18n/copy";
 import { LanguageProvider } from "../i18n/LanguageProvider";
+import { copy } from "../i18n/copy";
+import { Thinking } from "../shared/Thinking";
+import { PLACES_STAGES, PLACES_WORKER_STAGES } from "../shared/buildStages";
+import { BuildStages } from "./BuildStages";
 import { CoordinateMap, ItineraryPage, plotCoordinates } from "./ItineraryPage";
 import { PlacesPage } from "./PlacesPage";
 
@@ -268,6 +272,73 @@ describe("PlacesPage", () => {
     expect(html).toContain("พิพิธภัณฑ์");
     expect(html).toContain("taipei-101");
     expectNoMissingCopy(html);
+  });
+});
+
+describe("the /places stage list", () => {
+  function stages(reached: number): string {
+    return renderToStaticMarkup(
+      <LanguageProvider initial="en">
+        <BuildStages language="en" reached={reached} stages={PLACES_STAGES} />
+      </LanguageProvider>,
+    );
+  }
+
+  it("has one stage per reported milestone and copy for every one of them", () => {
+    // Four from the worker -- geocode, landmarks, baseline, catalogue -- and the
+    // page's own fifth, the ranking and first card that `busy` has always covered.
+    // A sixth would be a claim about work nobody does.
+    expect(PLACES_STAGES).toHaveLength(PLACES_WORKER_STAGES + 1);
+    for (const stage of PLACES_STAGES) {
+      for (const language of ["en", "th"] as const) {
+        expect(copy(`stage_${stage.key}`, language)).not.toContain("⚠");
+        expect(copy(`stage_${stage.key}_detail`, language)).not.toContain("⚠");
+      }
+    }
+  });
+
+  it("marks exactly the stages the worker has reported", () => {
+    // Two returned: the geocode and the landmark block. The baseline -- the slow
+    // half, and the reason this screen needed a stage list at all -- is in flight.
+    const html = stages(2);
+
+    expect(html.match(/build-stage done/g) ?? []).toHaveLength(2);
+    expect(html.match(/build-stage active/g) ?? []).toHaveLength(1);
+    expect(html).toContain("Everything else");
+  });
+
+  it("is still busy when the worker is done, because the ranking is not", () => {
+    const html = stages(PLACES_WORKER_STAGES);
+
+    expect(html).toContain('aria-busy="true"');
+    expect(html.match(/build-stage active/g) ?? []).toHaveLength(1);
+    expect(html).toContain("Your shortlist");
+  });
+});
+
+describe("the elapsed counter on a wait", () => {
+  it("counts from when the work began, not from when it was last re-rendered", () => {
+    // `/places` moves this element into the active stage the moment the worker
+    // reports, which is a new mount. Counting from mount would restart the number
+    // at zero part-way through a 30-90s wait -- "it looks like it hung", which is
+    // the exact report the counter was added to answer.
+    const html = renderToStaticMarkup(
+      <LanguageProvider initial="en">
+        <Thinking language="en" lines={["think_searching"]} startedAt={Date.now() - 42_000} />
+      </LanguageProvider>,
+    );
+
+    expect(html).toContain("42s");
+  });
+
+  it("counts from mount when nothing tells it otherwise", () => {
+    const html = renderToStaticMarkup(
+      <LanguageProvider initial="en">
+        <Thinking language="en" lines={["think_searching"]} />
+      </LanguageProvider>,
+    );
+
+    expect(html).toContain("0s");
   });
 });
 
