@@ -1,3 +1,4 @@
+import type { LucideIcon } from "lucide-react";
 /* eslint-disable react-refresh/only-export-components */
 import type { PropsWithChildren, ReactNode } from "react";
 
@@ -89,8 +90,17 @@ export function Required({ language }: { language: Language }) {
   );
 }
 
-export function Tag({ children }: PropsWithChildren) {
-  return <span className="money-tag">{children}</span>;
+/**
+ * A small label. `icon` is optional and `aria-hidden` when present, because the
+ * word is always the answer and the glyph is only ever a second way to find it.
+ */
+export function Tag({ children, icon: Icon }: PropsWithChildren<{ icon?: LucideIcon }>) {
+  return (
+    <span className="money-tag">
+      {Icon ? <Icon aria-hidden="true" className="money-chip-icon" size={12} /> : null}
+      {children}
+    </span>
+  );
 }
 
 /**

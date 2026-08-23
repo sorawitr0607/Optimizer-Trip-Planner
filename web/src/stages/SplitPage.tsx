@@ -11,6 +11,7 @@ import {
   type SplitSummary,
 } from "../api/client";
 import { copy, copyFormat } from "../i18n/copy";
+import { costIcon } from "../shared/tagIcons";
 import { useLanguage } from "../i18n/LanguageProvider";
 import { categoryName, Donut, Meters, money, Note, Required, Tag, Tile, travellerNames, type CostCategory } from "./money";
 
@@ -354,6 +355,12 @@ export function SplitPage() {
             onClick={() => toggleFilter("category", category)}
             type="button"
           >
+            {/* The glyph is a second channel on the word, `aria-hidden`, exactly as on
+                the setup and readiness chips. See `shared/tagIcons`. */}
+            {(() => {
+              const Icon = costIcon(category);
+              return <Icon aria-hidden="true" className="money-chip-icon" size={14} />;
+            })()}
             {categoryName(category, categoryList.data, language)}
           </button>
         ))}

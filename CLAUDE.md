@@ -147,6 +147,37 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   aborts, and a "Failed to fetch" banner pushes the page down 29px for 12% drift, again on
   unchanged code. **Bigger is not safer.** Re-measure before changing it, and remember that
   a stable-looking intermediate state defeats the settle check entirely.
+- **A wizard chip holds an icon, a number and a short label, and each of the three was
+  measured into place.** `STEP_ICONS` is `aria-hidden` and the button carries an
+  `aria-label` of "Step N of 5 · <title>", because `.wizard-step-label` is `display: none`
+  below 1100px and that had been taking the name out of the accessible tree entirely. The
+  visible label is the **short** `chip_*` form: the full names fit only at 1440px and up,
+  and truncated to "Before y…" / "Owner tri…" below it. `.wizard-step-icon` needs
+  `flex-shrink: 0` — as a flex item in one of five equal columns it was compressed to
+  **2px wide** at 390px, rendered and visible and invisible.
+- **`shared/tagIcons.tsx` is the one place a code becomes a glyph**, for three chip rows:
+  trip-style tags (`/setup`), readiness categories (`/readiness`) and expense categories
+  (`/split`, `/costs`). Every glyph is `aria-hidden` and every chip keeps its word — the
+  icon is a second channel for scanning, never the answer. Two of the three vocabularies
+  are **Python tuples**, so `tests/test_icon_tables.py` is what keeps the tables
+  exhaustive; a Vitest test cannot read `checklist.CATEGORIES`, and a category added there
+  without a glyph would ship wearing the fallback with nothing to say so.
+  `religious_sites` is `Bell`, not `Church`: the label is "Temples & shrines", the pilot
+  destination is Taipei, and lucide has no torii. **Table cells stay plain** — an icon on
+  every row of a dense table is weight, not help.
+- **`shared/dates.ts` owns the calendar arithmetic**, in UTC, and `spanDays` counts **both
+  ends** because a pace does: the balanced five-day pace recommends the 1st to the 5th. Off
+  by one there and `/stay`'s custom range either refuses the app's own recommendation or
+  allows a sixth day the optimizer was never asked to fill. It is a module rather than
+  locals in `StayPlanner` because a file that exports a component may not also export
+  helpers — and because a cap is worth testing directly rather than through a render.
+- **`.setup-group` is a named group of controls, and `.setup-hours` was already one.**
+  Step 2 asks "When are you travelling?" and also holds the flights either end and where
+  you are sleeping; those topics were separated by nothing but proximity. Four
+  `<fieldset>`/`<legend>` groups now, reusing the pattern rather than inventing one. The
+  three `.setup-fields > …` rules are extended to reach inside a group, since wrapping
+  changed what "direct child" means — miss that and every label inside a group loses its
+  layout.
 - **`--tab-bar` is the one place the bottom bar's height is written**: 56px of target plus a
   1px top border. Three rules depend on it — the bar, the sticky setup actions that sit on
   top of it, and the padding that keeps content clear — and as three literals they were

@@ -11,6 +11,7 @@ import {
   type ChecklistVocabulary,
 } from "../api/client";
 import { copy, type Language } from "../i18n/copy";
+import { checklistIcon } from "../shared/tagIcons";
 import { useLanguage } from "../i18n/LanguageProvider";
 import { localizedTask, taskTitle } from "../shared/checklistText";
 
@@ -207,6 +208,12 @@ export function ReadinessPage() {
             }
             type="button"
           >
+            {/* Same second channel as the setup chips: the word stays, the glyph is
+                `aria-hidden`, and the row becomes scannable. See `shared/tagIcons`. */}
+            {(() => {
+              const Icon = checklistIcon(category);
+              return <Icon aria-hidden="true" className="money-chip-icon" size={14} />;
+            })()}
             {copy(category, language)}
           </button>
         ))}

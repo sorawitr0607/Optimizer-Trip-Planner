@@ -3711,3 +3711,82 @@ the deck time to arrive; going further does not help, and 30000 was measured fai
 way — virtual time outruns the real network, a request aborts, and a "Failed to fetch" banner
 shifts the page 29px for 12% drift. The number has a floor and a ceiling and both were paid
 for.
+
+## Setup: icons on the chips, and four groups where there had been one heading, 2026-08-23
+
+Two changes to `/setup`, both the owner's idea, and one of their three was declined.
+
+**The chips.** Hiding `.wizard-step-label` below 1100px was right — the labels ellipsised
+to "Bef…", "Ow…", "Trav…" once the sidebar became a real column — and it left the chips as
+bare numbers: position without subject. An icon carries the subject where the word cannot
+fit. Three things it needed that were not obvious:
+
+- The button's accessible name had been coming from the visible label, so `display: none`
+  removed it. `aria-label` now states "Step N of 5 · <title>" at every width, and the icon
+  is `aria-hidden` — it is a second way of saying the same thing, never the only way.
+- The visible label is a new short `chip_*` form. Measured: the full names fit only at
+  **1440px and above**. Shortening beat adding a fourth breakpoint, and the full name is
+  still in `.wizard-count` directly beneath.
+- `.wizard-step-icon` needs `flex-shrink: 0`. Without it the SVG was compressed to **2px
+  wide** at 390px — rendered, `visibility: visible`, `opacity: 1`, and completely
+  invisible. Screenshot-and-squint would have called it a missing icon; the measurement
+  said 2px and named the cause. With the icon holding its size the chip content then
+  overflowed its own 49px button, so the phone gets a tighter gap and padding.
+
+**The groups.** Step 2's heading asks "When are you travelling?" and the step also holds
+the flights either end and where you are sleeping. Four topics, separated by proximity
+alone — and one of them, `.setup-hours`, was *already* a bordered fieldset with a legend.
+So the other three became the same thing: Your dates, Your day, Getting there and back,
+Where you'll stay. The frame is a by-product of naming the group, not the point.
+
+The trap was CSS, not markup: `.setup-fields > label`, `> .setup-check` and
+`> .setup-check input` are direct-child selectors, and wrapping four groups in fieldsets
+changed what "direct child" means. All three are extended to reach inside a group.
+
+**What was declined.** A "why this matters" frame per section. That copy already exists,
+inline and closer to the field than a frame would put it — "The planner schedules inside
+these. A flight time still wins on its own day." — step 1 exists purely to explain what is
+coming, and the five step headings are already plain questions. Adding it per section
+would have duplicated all of that and lengthened the app's longest screen, pushing the
+sticky Save & continue further away on the one screen where a phone most needs it near.
+
+## Chips got glyphs, and the date picker got a cap, 2026-08-23
+
+**Three chip rows, one table.** `shared/tagIcons.tsx` maps a code to a lucide glyph for
+the 34 trip-style tags on `/setup`, the 12 readiness categories, and the 7 expense
+categories. A chip row is scanned rather than read, and a wall of same-shaped words is
+slow in a way that is nobody's fault. The word always stays and the glyph is always
+`aria-hidden`: a second channel, never the answer.
+
+Two of those vocabularies are Python tuples, which a Vitest test cannot see — so
+`tests/test_icon_tables.py` reads the TSX and compares against `checklist.CATEGORIES` and
+`costs.CATEGORIES` in both directions. Without it a new category ships wearing the
+fallback glyph and looks finished. Parsing TypeScript with a regex is normally wrong; it
+is right here because the alternative is no check, and
+`test_the_tables_were_actually_found` fails loudly if the shape it reads ever changes.
+
+`religious_sites` is a **bell, not a church**. The label is "Temples & shrines", the pilot
+destination is Taipei, lucide offers `Church` and `Mosque` and no torii or pagoda, so a
+neutral glyph common to all of them beat a denominational one. Table cells on `/costs`
+are deliberately left plain — an icon on every row of a dense table is weight, not help.
+
+**More date ranges, and a custom one that cannot overrun the pace.** `/stay`'s picker
+offered three ranges: the guide's best window, the 1st, and the 15th. It now also offers
+late month and the first Saturday — the latter because a trip starting on a Saturday costs
+fewer days off, which is a real constraint the app was ignoring. Late month is anchored to
+the **end** of the month rather than a fixed 22nd, because a nine-day pace from the 22nd
+spills into November and stops being "late October".
+
+The custom range is capped at the pace the owner already chose. That is not a preference:
+the pace *is* how many days the chosen places want, so a longer range is a plan the
+optimizer was never asked to build — the extra days arrive empty and read as the app
+having run out of ideas. Shorter is allowed, because the optimizer drops what does not
+fit. The end input carries `max`, so the browser refuses before the message has to; the
+message stays for a typed date, names the pace rather than a bare number, and the save
+button is disabled while the range is invalid.
+
+`spanDays` counts both ends, and that is the whole rule: the balanced five-day pace
+recommends the 1st to the 5th, so an exclusive count would have refused the app's own
+recommendation. It lives in `shared/dates.ts` with `daysInMonth` and `addDays` — moved out
+of `StayPlanner` because a file exporting a component may not also export helpers, and
+tested directly rather than through a render.

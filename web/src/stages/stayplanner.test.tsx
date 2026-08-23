@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import type { PlanProposal } from "../api/client";
 import { LanguageProvider } from "../i18n/LanguageProvider";
+import { daysInMonth, spanDays } from "../shared/dates";
 import { StayPlanner } from "./StayPlanner";
 
 /**
@@ -70,5 +71,70 @@ describe("StayPlanner", () => {
 
     expect(html).toContain("provisional dates");
     expect(html).toContain("Use these dates");
+  });
+
+  it("offers late-month and Saturday ranges beside the early and mid ones", () => {
+    // October 2026 begins on a Thursday, so the first Saturday is the 3rd; the balanced
+    // five-day pace ends on the 31st when it is placed to finish the month, so late
+    // starts on the 27th.
+    const html = render(new Date("2026-08-07T00:00:00"));
+
+    expect(html).toContain("Early month");
+    expect(html).toContain("Mid month");
+    expect(html).toContain("Late month");
+    expect(html).toContain("2026-10-27");
+    expect(html).toContain("Starts on a Saturday");
+    expect(html).toContain("2026-10-03");
+  });
+
+  it("never runs the late-month range past the end of the month", () => {
+    // The whole reason late is anchored to the *end*: a fixed 22nd start plus a seven
+    // day pace would spill into November and stop being "late October".
+    const html = render(new Date("2026-08-07T00:00:00"));
+    const late = html.match(/Late month[\s\S]{0,120}?(\d{4}-\d{2}-\d{2})[^\d]+(\d{4}-\d{2}-\d{2})/);
+
+    expect(late).not.toBeNull();
+    expect(late![2].slice(0, 7)).toBe("2026-10");
+  });
+
+  it("shows how much of the pace a range uses, and offers a custom one", () => {
+    const html = render(new Date("2026-08-07T00:00:00"));
+
+    expect(html).toContain("Pick your own");
+    // Collapsed until asked for, so the default screen is not four date inputs.
+    expect(html).toContain('aria-expanded="false"');
+  });
+});
+
+/**
+ * The arithmetic behind the custom range, tested directly.
+ *
+ * The cap is "no longer than the pace the owner chose", and the pace is a count of
+ * days — so the whole rule rests on counting a start..end pair the same way the pace
+ * counts. Off by one here and a 5-day pace either refuses its own recommended range or
+ * silently allows six.
+ */
+describe("date arithmetic", () => {
+  it("counts both ends of a range, like the pace does", () => {
+    // The balanced pace is 5 days and its own recommended range is the 1st to the 5th.
+    expect(spanDays("2026-10-01", "2026-10-05")).toBe(5);
+    expect(spanDays("2026-10-01", "2026-10-01")).toBe(1);
+  });
+
+  it("counts across a month and a year boundary", () => {
+    expect(spanDays("2026-10-30", "2026-11-02")).toBe(4);
+    expect(spanDays("2026-12-30", "2027-01-02")).toBe(4);
+  });
+
+  it("returns nothing usable when the end is before the start", () => {
+    // Drives `endsBeforeStart`, which disables the save rather than sending a
+    // backwards range to `save_setup`.
+    expect(spanDays("2026-10-05", "2026-10-01")).toBeLessThanOrEqual(0);
+  });
+
+  it("knows the length of a month, including February in a leap year", () => {
+    expect(daysInMonth(2026, 10)).toBe(31);
+    expect(daysInMonth(2026, 2)).toBe(28);
+    expect(daysInMonth(2028, 2)).toBe(29);
   });
 });

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
+import { CalendarDays, ClipboardCheck, Info, Sparkles, Users } from "lucide-react";
 import { useNavigate, useParams } from "react-router";
 
 import {
@@ -10,6 +11,7 @@ import {
   type Trip,
 } from "../api/client";
 import { copy, copyFormat, copyFrom } from "../i18n/copy";
+import { tagIcon } from "../shared/tagIcons";
 import { Minus, Plus } from "lucide-react";
 
 import { useLanguage } from "../i18n/LanguageProvider";
@@ -30,6 +32,22 @@ const STEP_TITLES = [
   "travellers",
   "review",
 ];
+
+/**
+ * One glyph per step, and the reason it is not decoration.
+ *
+ * `.wizard-step-label` is hidden below 1100px, because five labels across a
+ * content column that now sits beside a real sidebar ellipsised to "Bef…",
+ * "Ow…", "Trav…". That was the right call and it left the chips as bare
+ * numbers — position without subject. The icon carries the subject at a glance
+ * where the word cannot fit.
+ *
+ * `aria-hidden`, always: the button's accessible name comes from `aria-label`
+ * below, which states the number *and* the step, so a screen reader is told
+ * the same thing at every width — the visible label being `display: none` had
+ * been taking it out of the accessible name entirely.
+ */
+const STEP_ICONS = [Info, CalendarDays, Sparkles, Users, ClipboardCheck] as const;
 const STEP_QUESTIONS = [
   "welcome",
   "ask_trip_basics",
@@ -346,6 +364,7 @@ export function SetupPage() {
         {STEP_TITLES.map((title, index) => {
           const number = index + 1;
           const reached = number <= step;
+          const Icon = STEP_ICONS[index];
           return (
             <li
               className={`wizard-step${number === step ? " current" : ""}${
@@ -357,12 +376,24 @@ export function SetupPage() {
                   suits the wizard rather than being a limitation to fix. */}
               <button
                 aria-current={number === step ? "step" : undefined}
+                aria-label={copyFormat("step_of", language, {
+                  current: number,
+                  total: STEP_COUNT,
+                }) + ` · ${copy(title, language)}`}
                 disabled={number >= step || save.isPending}
                 onClick={() => go(number)}
                 type="button"
               >
+                <Icon aria-hidden="true" className="wizard-step-icon" size={15} />
                 <span className="wizard-step-num">{number}</span>
-                <span className="wizard-step-label">{copy(title, language)}</span>
+                {/* The short form, not `title`. Measured: the full names fit only at
+                    1440px and above — "Before you start" and "Owner trip style" across
+                    five equal columns truncated to "Before y…" and "Owner tri…" from
+                    1100 up, and the icon made it slightly worse. Shortening beats a
+                    fourth breakpoint or an ellipsis: the full name sits directly
+                    beneath in `.wizard-count` and is what `aria-label` says at every
+                    width. */}
+                <span className="wizard-step-label">{copy(`chip_${title}`, language)}</span>
               </button>
             </li>
           );
@@ -417,6 +448,15 @@ export function SetupPage() {
           <p className="setup-hint setup-wide" id="setup-basics-help">
             {copy("setup_basics_help", language)}
           </p>
+          {/* Four groups, because the heading asks "When are you travelling?" and the
+              step also holds where you are sleeping. The topics were already distinct —
+              dates, the shape of a day, the flights either end, and the bed — and were
+              separated only by proximity, with one of them (`.setup-hours`) already a
+              bordered fieldset. This makes the other three the same thing rather than
+              inventing a new one. `<fieldset>`/`<legend>` because that is what a group
+              of related controls *is*; the frame is a side effect of naming it. */}
+          <fieldset className="setup-group setup-wide">
+            <legend className="setup-legend">{copy("group_dates", language)}</legend>
           <label className="setup-check">
             <input
               aria-controls={values.start_date !== null ? "start-date end-date" : undefined}
@@ -483,13 +523,14 @@ export function SetupPage() {
               ) : null}
             </>
           )}
+          </fieldset>
           {/* The hours the owner wants to be out, which `_optimizer_input` used to invent
               as 08:00-22:00 for every trip on earth. Two plain time inputs rather than a
               range control: the browser's own picker is the accessible one, and there are
               exactly two values. Pre-filled with the old constants, so leaving them alone
               is the same plan as before. */}
-          <fieldset className="setup-hours setup-wide">
-            <legend className="setup-legend">{copy("active_hours", language)}</legend>
+          <fieldset className="setup-group setup-hours setup-wide">
+            <legend className="setup-legend">{copy("group_hours", language)}</legend>
             <label>
               {copy("active_start", language)}
               <input
@@ -520,6 +561,8 @@ export function SetupPage() {
             {copy("active_hours_help", language)}
           </p>
 
+          <fieldset className="setup-group setup-wide">
+            <legend className="setup-legend">{copy("group_transit", language)}</legend>
           <label className="setup-check">
             <input
               aria-controls={values.arrival_time !== null ? "arrival-time" : undefined}
@@ -600,6 +643,9 @@ export function SetupPage() {
               ) : null}
             </>
           )}
+          </fieldset>
+          <fieldset className="setup-group setup-wide">
+            <legend className="setup-legend">{copy("group_stay", language)}</legend>
           <label>
             {copy("accommodation", language)}
             <select
@@ -621,6 +667,7 @@ export function SetupPage() {
           <p className="setup-hint setup-wide" id="accommodation-help">
             {copy(`accommodation_help_${values.accommodation_status}`, language)}
           </p>
+          </fieldset>
         </div>
       ) : null}
 
@@ -708,6 +755,14 @@ export function SetupPage() {
                   onClick={() => toggle(group, code)}
                   type="button"
                 >
+                  {/* A second channel on the word, never a replacement — the label
+                      stays, and the glyph is `aria-hidden`. Four questions and 34
+                      chips between them is read by scanning, and a wall of
+                      same-shaped words is slow to scan. See `shared/tagIcons`. */}
+                  {(() => {
+                    const Icon = tagIcon(code);
+                    return <Icon aria-hidden="true" className="money-chip-icon" size={14} />;
+                  })()}
                   {copyFrom("TAG_TEXT", code, language)}
                 </button>
               ))}

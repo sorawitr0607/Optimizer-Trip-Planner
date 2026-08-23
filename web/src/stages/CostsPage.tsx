@@ -12,6 +12,7 @@ import {
   type SetupDraft,
 } from "../api/client";
 import { copy } from "../i18n/copy";
+import { costIcon } from "../shared/tagIcons";
 import { useLanguage } from "../i18n/LanguageProvider";
 import { categoryName, money, Note, Required, signed, Tag, Tile, type CostCategory } from "./money";
 
@@ -409,7 +410,13 @@ export function CostsPage() {
               <span className="money-row-main">
                 <strong>{item.label}</strong>
                 <span className="money-row-meta">
-                  <Tag>{categoryName(item.category, categoryList.data, language)}</Tag>{" "}
+                  {/* The same glyph the `/split` filter chips carry, on the same
+                      vocabulary — a cost row and its filter should not name the
+                      category two different ways. Table cells are deliberately left
+                      plain: an icon on every row of a dense table is weight, not help. */}
+                  <Tag icon={costIcon(item.category)}>
+                    {categoryName(item.category, categoryList.data, language)}
+                  </Tag>{" "}
                   {copy(item.payment_state, language)}
                   {isClaimed ? ` · ${copy("costs_claimed", language)}` : ""}
                 </span>

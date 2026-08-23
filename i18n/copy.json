@@ -1693,7 +1693,24 @@
       "tab_checks": "Checks",
       "tab_more": "More",
       "nav_all_screens": "All screens",
-      "nav_close": "Close menu"
+      "nav_close": "Close menu",
+      "group_dates": "Your dates",
+      "group_hours": "Your day",
+      "group_transit": "Getting there and back",
+      "group_stay": "Where you'll stay",
+      "chip_welcome": "Start",
+      "chip_trip_basics": "Dates",
+      "chip_owner_style": "Style",
+      "chip_travellers": "Who",
+      "chip_review": "Review",
+      "dates_late_month": "Late month",
+      "dates_weekend": "Starts on a Saturday",
+      "dates_custom": "Pick your own",
+      "dates_custom_start": "Start",
+      "dates_custom_end": "End",
+      "dates_span_over": "That is {days} days. The {pace} pace needs {allowed} — shorten it, or pick a slower pace above.",
+      "dates_span_ok": "{days} of {allowed} days used.",
+      "dates_end_before": "The end date is before the start."
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -2884,7 +2901,24 @@
       "tab_checks": "ตรวจ",
       "tab_more": "เพิ่มเติม",
       "nav_all_screens": "ทุกหน้าจอ",
-      "nav_close": "ปิดเมนู"
+      "nav_close": "ปิดเมนู",
+      "group_dates": "วันเดินทาง",
+      "group_hours": "ช่วงเวลาในแต่ละวัน",
+      "group_transit": "ขาไปและขากลับ",
+      "group_stay": "ที่พัก",
+      "chip_welcome": "เริ่ม",
+      "chip_trip_basics": "วันที่",
+      "chip_owner_style": "สไตล์",
+      "chip_travellers": "ใคร",
+      "chip_review": "ตรวจ",
+      "dates_late_month": "ปลายเดือน",
+      "dates_weekend": "เริ่มวันเสาร์",
+      "dates_custom": "เลือกเอง",
+      "dates_custom_start": "เริ่ม",
+      "dates_custom_end": "สิ้นสุด",
+      "dates_span_over": "ช่วงนี้ {days} วัน แต่จังหวะ{pace}ต้องการ {allowed} วัน — ลดวันลง หรือเลือกจังหวะที่ช้ากว่าด้านบน",
+      "dates_span_ok": "ใช้ {days} จาก {allowed} วัน",
+      "dates_end_before": "วันสิ้นสุดอยู่ก่อนวันเริ่ม"
     }
   }
 }

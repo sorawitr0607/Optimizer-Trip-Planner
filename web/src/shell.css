@@ -56,6 +56,15 @@
   text-decoration: none;
 }
 
+/* The step's subject, at the size the number is.
+   `flex-shrink: 0` is the whole rule: as a flex item in a chip that is one of five
+   equal columns, the SVG was compressed to **2px wide** at 390px — rendered,
+   visible, and invisible. It is the width where the label is hidden and the icon is
+   the only thing carrying the subject, so it must not be the thing that gives way. */
+.wizard-step-icon {
+  flex-shrink: 0;
+}
+
 /* Not `h2`: see the note in AppShell. The look is unchanged; only the element is. */
 .sidebar nav .nav-section {
   color: var(--text-muted);
@@ -560,15 +569,41 @@
 }
 
 .money-chip {
+  align-items: center;
   background: var(--bg-secondary);
   border: 1.5px solid transparent;
   border-radius: var(--radius-pill);
   color: var(--text-secondary);
   cursor: pointer;
+  display: inline-flex;
   font-size: var(--text-xs);
   font-weight: var(--weight-secondary);
+  gap: 5px;
   padding: 2px 8px;
   transition: opacity var(--duration-fast) ease, background var(--duration-fast) ease;
+}
+
+/* The tag glyph. `currentColor` and the house stroke, so a chip is one object in one
+   colour rather than a mark sitting next to a word — the icon changes with the chip's
+   selected and hover states because it never had a colour of its own.
+   `flex-shrink: 0` for the reason the wizard chip's icon needed it: as a flex item
+   beside a label that wants the room, the SVG is what gives way, and a 2px glyph is
+   rendered, visible and invisible. */
+.money-chip-icon {
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+
+/* `.money-tag` is an inline label rather than a flex row, so the glyph needs aligning
+   to the text baseline box by hand. Same class as the chips deliberately: one rule for
+   "a small mark that belongs to a word". */
+.money-tag .money-chip-icon {
+  margin-right: 3px;
+  vertical-align: -2px;
+}
+
+.money-chip[aria-pressed="true"] .money-chip-icon {
+  opacity: 1;
 }
 
 .money-chip[aria-pressed="true"] {
@@ -795,7 +830,8 @@
   }
 }
 
-.setup-fields > label {
+.setup-fields > label,
+.setup-fields .setup-group > label {
   display: flex;
   flex-direction: column;
   font-size: var(--text-xs);
@@ -891,7 +927,8 @@
 
 /* Two classes, so this beats `.setup-fields > label`'s column direction: a
    checkbox and its label belong on one line. */
-.setup-fields > .setup-check {
+.setup-fields > .setup-check,
+.setup-fields .setup-group > .setup-check {
   align-items: center;
   flex-direction: row;
   gap: 6px;
@@ -899,7 +936,8 @@
   justify-content: flex-start;
 }
 
-.setup-fields > .setup-check input {
+.setup-fields > .setup-check input,
+.setup-fields .setup-group > .setup-check input {
   flex: none;
   margin: 0;
   width: auto;
@@ -1001,6 +1039,19 @@
 @media (max-width: 1100px) {
   .wizard-step-label {
     display: none;
+  }
+}
+
+/* With the label gone the chip still has to hold an icon and a number, and five
+   equal columns of a 390px card give each of them 49px. The desktop `gap: 7px` and
+   `padding: 7px 9px` need 62px for that, so the content overflowed its own button —
+   which is what squashed the icon to 2px before `flex-shrink: 0`. Tightened rather
+   than dropping the number: sequence is what a wizard chip is for. */
+@media (max-width: 600px) {
+  .wizard-step button {
+    gap: 3px;
+    justify-content: center;
+    padding: 7px 3px;
   }
 }
 
@@ -7523,6 +7574,45 @@
   margin: 12px 0 6px;
 }
 
+/* The custom range, revealed under the cards it is the fifth of.
+   Two native date inputs rather than a range widget: the browser's own picker is the
+   accessible one and it already enforces `min`/`max`, which is what stops an over-long
+   range before the message has to explain it. */
+.stay-custom {
+  border-top: 1px dashed var(--bg-card-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 10px;
+  padding-top: 10px;
+}
+
+.stay-custom label {
+  display: flex;
+  flex-direction: column;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-secondary);
+  gap: 4px;
+}
+
+.stay-custom input {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius-house);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  min-height: 44px;
+  padding: 0 8px;
+}
+
+/* The running count sits under both inputs rather than beside one, because it is about
+   the pair. It is a hint while the range fits and an error the moment it does not, so
+   the same line answers "how many days is this" and "why can I not continue". */
+.stay-span-note {
+  flex-basis: 100%;
+  margin: 0;
+}
+
 .stay-window-options {
   display: grid;
   gap: 8px;
@@ -10235,13 +10325,28 @@
 
 /* Two plain time inputs, because the browser's own picker is the accessible one and there
    are exactly two values. Replaces a pair of literals in `_optimizer_input`. */
-.setup-hours {
+/* A named group of related controls. `.setup-hours` was already exactly this — a
+   bordered fieldset with a legend — so the other three groups on step 2 became the
+   same thing rather than a new pattern. The border is the by-product of naming the
+   group, not the point of it: step 2's heading asks "When are you travelling?" while
+   the step also holds the flights either end and where you are sleeping, and those
+   were separated by nothing but proximity.
+
+   `grid`, matching `.setup-fields` itself, so a label inside a group lays out exactly
+   as it does outside one; the three `.setup-fields > …` rules above are extended to
+   reach in, since wrapping changed what "direct child" means. */
+.setup-group {
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
+  display: grid;
+  gap: 12px;
+  padding: 12px 12px 14px;
+}
+
+/* Hours keeps its own row layout: two time inputs side by side is the point of it. */
+.setup-hours {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  padding: 12px;
 }
 
 .setup-hours label {

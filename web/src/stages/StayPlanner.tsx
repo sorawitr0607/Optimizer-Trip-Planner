@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { CalendarRange } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import {
@@ -9,6 +10,7 @@ import {
   type SetupDraft,
 } from "../api/client";
 import { copy, copyFormat, type Language } from "../i18n/copy";
+import { addDays, daysInMonth, spanDays } from "../shared/dates";
 import { Thinking } from "../shared/Thinking";
 
 /**
@@ -77,16 +79,6 @@ function firstOfMonth(month: number, today: Date): string {
   return `${year}-${String(month).padStart(2, "0")}-01`;
 }
 
-/** Date arithmetic in UTC, formatted from UTC parts.
- *
- *  Built on a local `new Date(...)` and `toISOString()` this was a day short east of
- *  Greenwich: local midnight on the 5th is 17:00 on the 4th in UTC+7, so a five-day
- *  trip rendered as 1st to 4th. Caught by the test, not by reading it. */
-function addDays(iso: string, days: number): string {
-  const date = new Date(`${iso}T00:00:00Z`);
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
-}
 
 export interface StayPlannerProps {
   tripId: string;
@@ -106,6 +98,8 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
   // The recommended range, once accepted. Held rather than applied immediately so the
   // dates below stay the single thing that gets saved.
   const [windowChosen, setWindowChosen] = useState<{ start: string; end: string } | null>(null);
+  /** The owner is typing their own range rather than taking one of the offered ones. */
+  const [custom, setCustom] = useState(false);
 
   const chosen = options.find((item) => item.id === pace) ?? options[0];
 
@@ -157,12 +151,65 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
       start: midStart,
       end: addDays(midStart, defaultSpan),
     });
-    
+
+    // Late month, placed so the trip *ends* on the last day rather than starting on a
+    // fixed date and running past it — a 9-day pace from the 22nd would have spilled
+    // into the next month and quietly stopped being "late April".
+    const last = daysInMonth(year, month);
+    const lateDay = Math.max(1, last - defaultSpan);
+    if (lateDay > 15) {
+      const lateStart = `${year}-${mm}-${String(lateDay).padStart(2, "0")}`;
+      optionsList.push({
+        key: "late",
+        label: copy("dates_late_month", language),
+        start: lateStart,
+        end: addDays(lateStart, defaultSpan),
+      });
+    }
+
+    // The first Saturday, because a trip that starts on one costs fewer days off and
+    // that is a real constraint the app otherwise ignores. Offered only when it does
+    // not duplicate a range already listed.
+    const firstOfM = new Date(Date.UTC(year, month - 1, 1));
+    const toSaturday = (6 - firstOfM.getUTCDay() + 7) % 7;
+    const satDay = 1 + toSaturday;
+    if (satDay + defaultSpan <= last) {
+      const satStart = `${year}-${mm}-${String(satDay).padStart(2, "0")}`;
+      if (!optionsList.some((item) => item.start === satStart)) {
+        optionsList.push({
+          key: "weekend",
+          label: copy("dates_weekend", language),
+          start: satStart,
+          end: addDays(satStart, defaultSpan),
+        });
+      }
+    }
+
     return optionsList;
   }, [chosenMonth, month, today, defaultSpan, language]);
 
   const start = windowChosen?.start ?? defaultStart;
   const end = windowChosen?.end ?? (chosen ? addDays(start, defaultSpan) : start);
+
+  /**
+   * A custom range may not be longer than the pace the owner picked above.
+   *
+   * The pace *is* the number of days the chosen places want — `chosen.days` — so a
+   * longer range is not a preference, it is a plan the optimizer was never asked to
+   * build: the extra days arrive empty and read as the app having run out of ideas.
+   * The cap is therefore the pace, and the message names the pace rather than quoting
+   * a bare number the owner would have to go back up the screen to identify.
+   *
+   * Shorter is allowed and deliberately so — someone may want two of the three days
+   * the places want, and the optimizer drops what does not fit rather than failing.
+   */
+  const allowedDays = chosen?.days ?? 0;
+  const usedDays = spanDays(start, end);
+  const endsBeforeStart = usedDays <= 0;
+  const spanTooLong = allowedDays > 0 && usedDays > allowedDays;
+  const rangeInvalid = endsBeforeStart || spanTooLong;
+  /** The latest end the pace allows, so the picker refuses before the message has to. */
+  const latestEnd = allowedDays > 0 ? addDays(start, allowedDays - 1) : undefined;
 
   const save = useMutation({
     mutationFn: async () => {
@@ -313,7 +360,83 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
               </button>
             );
           })}
+          {/* Pick your own. A card in the same row rather than a link somewhere else,
+              because it is the fifth answer to the same question. */}
+          <button
+            aria-expanded={custom}
+            className={`stay-window-card${custom ? " active" : ""}`}
+            onClick={() => {
+              setCustom((open) => !open);
+              setSaved(false);
+            }}
+            type="button"
+          >
+            <div className="stay-window-card-head">
+              <strong>
+                <CalendarRange aria-hidden="true" size={14} /> {copy("dates_custom", language)}
+              </strong>
+            </div>
+          </button>
         </div>
+        {custom ? (
+          <div className="stay-custom">
+            <label>
+              {copy("dates_custom_start", language)}
+              <input
+                onChange={(event) => {
+                  const next = event.target.value;
+                  if (!next) return;
+                  // Moving the start drags the end with it when the end would otherwise
+                  // fall behind, so the pair is never briefly invalid while typing.
+                  const keep = spanDays(next, end);
+                  setWindowChosen({
+                    start: next,
+                    end: keep > 0 && keep <= allowedDays ? end : addDays(next, defaultSpan),
+                  });
+                  setSaved(false);
+                }}
+                type="date"
+                value={start}
+              />
+            </label>
+            <label>
+              {copy("dates_custom_end", language)}
+              <input
+                aria-describedby="stay-span-note"
+                aria-invalid={rangeInvalid || undefined}
+                // The browser refuses the over-long range before the message has to
+                // explain it; the message stays for a typed date, which `max` cannot stop.
+                max={latestEnd}
+                min={start}
+                onChange={(event) => {
+                  if (!event.target.value) return;
+                  setWindowChosen({ start, end: event.target.value });
+                  setSaved(false);
+                }}
+                type="date"
+                value={end}
+              />
+            </label>
+            <p
+              className={rangeInvalid ? "setup-field-error stay-span-note" : "setup-hint stay-span-note"}
+              id="stay-span-note"
+              role={rangeInvalid ? "alert" : undefined}
+            >
+              {endsBeforeStart
+                ? `⚠ ${copy("dates_end_before", language)}`
+                : spanTooLong
+                  ? `⚠ ${copyFormat("dates_span_over", language, {
+                      days: usedDays,
+                      // The pace id *is* its copy key — see the label above, which is
+                      // `copy(item.id, …)`. A `pace_` prefix would have rendered the
+                      // visible `⚠ pace_relaxed` that unknown codes are designed to show.
+                      pace: chosen ? copy(chosen.id, language) : "",
+                      allowed: allowedDays,
+                    })}`
+                  : copyFormat("dates_span_ok", language, { days: usedDays, allowed: allowedDays })}
+            </p>
+          </div>
+        ) : null}
       </div>
 
       <p className="stay-dates">
@@ -345,7 +468,7 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
       <div className="optimize-actions">
         <button
           className="setup-primary"
-          disabled={save.isPending || stored.isPending}
+          disabled={save.isPending || stored.isPending || rangeInvalid}
           onClick={() => save.mutate()}
           type="button"
         >
