@@ -179,6 +179,15 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   Anything worth seeing goes above 200 or below 610, and the waterline sits at 772 rather
   than 646 so there is water to moor a boat on *outside* those rectangles. Re-measure
   before moving an object; twice now something has been drawn correctly and been invisible.
+- **`BuildStages` takes a stage list, and both lists are the calls their page awaits.**
+  `BUILD_STAGES` is `/optimize`'s four; `PLAN_STAGES` is `StayPlanner`'s three —
+  `save_setup`, `discover_places`, `generate_plan_preview`. That press is the longest
+  wait in the app and showed one rotating line, so a slow discovery and a slow proposal
+  looked identical and both looked like a hang. The rule is unchanged and is the whole
+  point: **a stage ticks when its call returns, never on a timer**, and `Thinking` stays
+  nested inside the final stage where `generate_plan_preview` genuinely has no
+  milestones. Adding a stage that no `await` corresponds to is a claim about work that
+  is not happening — `stayplanner.test.tsx` pins the count to three.
 - **`ShoreScene` is `slice`, and `SceneEnvironment` is `none`, and the difference is
   what each one draws.** That comment is right that abstract terrain "is the one thing
   that tolerates" stretching; a lighthouse and a boat do not. Measured, `none` on this

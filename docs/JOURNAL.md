@@ -3947,3 +3947,31 @@ contrast budget, not a taste: 8% invisible, 15% the last value clearing 4.5:1, 2
 And with the sky cropped away the section lead now sits on the bay rather than on air,
 where `--text-secondary` measured **2.87:1** — over an illustration, hierarchy has to come
 from size and weight, because colour is the channel the background can take away.
+
+## The draft build says what it is doing, 2026-08-23
+
+The owner pointed at Roameo's loading screen in the inspiration recording and asked for
+the same where building a draft variant takes too long. Read off the video at 31-34s, it
+is a heading — "Setting up your journey", "Just a moment while we prepare everything" —
+over a five-step vertical timeline: Starting/Initializing, Calculating/Analyzing
+attractions, Generating/Creating your plan, Finalizing/Almost done, Complete/Your
+itinerary is ready. Green ticks behind, orange for the step in flight, a connector down
+the side.
+
+**This app already had that component** and had it pointed at only one screen.
+`BuildStages` is the same shape, and better in the way that matters: its ticks are driven
+by real `await`s rather than by a timer, which is a rule this file enforces. It was wired
+into `/optimize` and nowhere else.
+
+The gap was exactly where the owner guessed. `StayPlanner`'s "use these dates and build
+the plan" awaits three calls — `save_setup`, `discover_places`, `generate_plan_preview` —
+and is the longest wait in the app, and it showed `Thinking`: one rotating line and an
+elapsed counter. That cannot say which of the three it is on, so a slow discovery and a
+slow proposal look identical and both look like a hang. Which is the same report
+`/optimize` got before `BUILD_STAGES` existed.
+
+So `BuildStages` takes a `stages` prop now, `PLAN_STAGES` names the three calls, and
+`Thinking` moves *inside* the last stage — where the long proposal genuinely has no
+milestones and an elapsed counter is the honest thing to show. Three stages because there
+are three `await`s: a fourth would be a claim about work that is not happening, and the
+test pins the count.

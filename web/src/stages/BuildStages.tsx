@@ -26,6 +26,8 @@ import { BUILD_STAGES } from "../shared/buildStages";
 
 export interface BuildStagesProps {
   language: Language;
+  /** Which list of stages to draw. Defaults to `/optimize`'s four. */
+  stages?: readonly { key: string; icon: typeof Check }[];
   /** How many stages have returned. `0` means the first is in flight. */
   reached: number;
   /** Rendered inside the active stage — the elapsed counter on the long one. */
@@ -34,12 +36,18 @@ export interface BuildStagesProps {
   routesMeasured?: number;
 }
 
-export function BuildStages({ language, reached, children, routesMeasured }: BuildStagesProps) {
+export function BuildStages({
+  language,
+  reached,
+  children,
+  routesMeasured,
+  stages = BUILD_STAGES,
+}: BuildStagesProps) {
   return (
-    <div aria-busy={reached < BUILD_STAGES.length} className="build-stages">
+    <div aria-busy={reached < stages.length} className="build-stages">
       <p className="build-stages-title">{copy("build_stages_title", language)}</p>
       <ol>
-        {BUILD_STAGES.map((stage, index) => {
+        {stages.map((stage, index) => {
           const done = index < reached;
           const active = index === reached;
           const Icon = done ? Check : active ? Loader2 : stage.icon;
@@ -68,7 +76,7 @@ export function BuildStages({ language, reached, children, routesMeasured }: Bui
             </li>
           );
         })}
-        <li className={`build-stage${reached >= BUILD_STAGES.length ? " done" : ""}`}>
+        <li className={`build-stage${reached >= stages.length ? " done" : ""}`}>
           <span aria-hidden="true" className="build-stage-mark">
             <Check size={14} />
           </span>

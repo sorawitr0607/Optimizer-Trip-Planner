@@ -11,7 +11,9 @@ import {
 } from "../api/client";
 import { copy, copyFormat, type Language } from "../i18n/copy";
 import { addDays, daysInMonth, spanDays } from "../shared/dates";
+import { PLAN_STAGES } from "../shared/buildStages";
 import { Thinking } from "../shared/Thinking";
+import { BuildStages } from "./BuildStages";
 
 /**
  * The way out of a trip with no dates.
@@ -100,6 +102,9 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
   const [windowChosen, setWindowChosen] = useState<{ start: string; end: string } | null>(null);
   /** The owner is typing their own range rather than taking one of the offered ones. */
   const [custom, setCustom] = useState(false);
+  /** How many of the three calls below have returned. Advanced on each `await`,
+   *  never on a timer — see `PLAN_STAGES` and the rule in `CLAUDE.md`. */
+  const [built, setBuilt] = useState(0);
 
   const chosen = options.find((item) => item.id === pace) ?? options[0];
 
@@ -213,17 +218,21 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
 
   const save = useMutation({
     mutationFn: async () => {
+      setBuilt(0);
       const draft = await rpc<SetupDraft>("save_setup", {
         trip_id: tripId,
         ...wholeDraftWithDates(stored.data ?? null, start, end),
       });
+      setBuilt(1);
       await rpc("discover_places", { trip_id: tripId, force_refresh: false });
+      setBuilt(2);
       // And build a plan against them, which is the only thing that takes this screen
       // off the screen. Writing the dates alone left the stored preview as the dateless
       // `stay_recommendation` it already was, so `/optimize` re-rendered this very date
       // picker — pressing the button appeared to do nothing, and a manual reload did not
       // help either, because the preview it re-read was the same stale one.
       await rpc("generate_plan_preview", { trip_id: tripId });
+      setBuilt(3);
       return draft;
     },
     onSuccess: async () => {
@@ -458,10 +467,21 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
           minute of work — the same silence that had `/optimize` reported as broken. */}
       {save.isPending ? (
         <div className="optimize-working" aria-busy="true">
-          <Thinking
-            language={language}
-            lines={["think_windows", "think_routes", "think_packing", "think_variants", "think_checking", "think_almost"]}
-          />
+          {/* The same checklist `/optimize` shows, on the same terms: a stage is
+              ticked when its call returns. This press does three things and takes
+              about a minute, and it used to report that with one rotating line —
+              which cannot say which of the three it is on, so a slow discovery and
+              a slow proposal looked identical, and both looked like a hang.
+              `Thinking` stays *inside* the last stage, where the long
+              `generate_plan_preview` genuinely has no milestones and an elapsed
+              counter is the honest thing to show. */}
+          <BuildStages language={language} reached={built} stages={PLAN_STAGES}>
+            <Thinking
+              expectSeconds={90}
+              language={language}
+              lines={["think_windows", "think_routes", "think_packing", "think_variants", "think_checking", "think_almost"]}
+            />
+          </BuildStages>
           <p className="setup-hint">{copy("optimizing_note", language)}</p>
         </div>
       ) : null}

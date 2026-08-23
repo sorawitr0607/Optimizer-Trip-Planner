@@ -1,4 +1,4 @@
-import { Clock3, Footprints, MapPinned, Sparkles } from "lucide-react";
+import { CalendarCheck, Clock3, Footprints, MapPinned, Sparkles } from "lucide-react";
 
 /**
  * The four calls `autoResolveAndGenerate` awaits, in the order it awaits them.
@@ -16,4 +16,21 @@ export const BUILD_STAGES = [
   { key: "hours", icon: MapPinned },
   { key: "routes", icon: Footprints },
   { key: "variants", icon: Sparkles },
+] as const;
+
+/**
+ * The three calls `StayPlanner`'s "use these dates" awaits, in order.
+ *
+ * Same idea as `BUILD_STAGES` and the same rule: a stage is marked done when its
+ * call returns, never on a timer. This path is the longest wait in the app — it
+ * writes the dates, rebuilds discovery against the new setup hash, and then runs
+ * a full three-variant proposal at roughly 52s — and it was showing only
+ * `Thinking`: one rotating line and an elapsed counter, which cannot say which of
+ * the three it is on. A wait that reports nothing is the same silence that had
+ * `/optimize` reported as broken before `BUILD_STAGES` existed.
+ */
+export const PLAN_STAGES = [
+  { key: "dates", icon: CalendarCheck },
+  { key: "discovery", icon: MapPinned },
+  { key: "plan", icon: Sparkles },
 ] as const;

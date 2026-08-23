@@ -4,6 +4,9 @@ import { describe, expect, it } from "vitest";
 
 import type { PlanProposal } from "../api/client";
 import { LanguageProvider } from "../i18n/LanguageProvider";
+import { copy } from "../i18n/copy";
+import { PLAN_STAGES } from "../shared/buildStages";
+import { BuildStages } from "./BuildStages";
 import { daysInMonth, spanDays } from "../shared/dates";
 import { StayPlanner } from "./StayPlanner";
 
@@ -136,5 +139,74 @@ describe("date arithmetic", () => {
     expect(daysInMonth(2026, 10)).toBe(31);
     expect(daysInMonth(2026, 2)).toBe(28);
     expect(daysInMonth(2028, 2)).toBe(29);
+  });
+});
+
+/**
+ * The build reports which of its three calls it is on.
+ *
+ * It used to show one rotating line for a press that writes the dates, rebuilds
+ * discovery and runs a full three-variant proposal — so a slow discovery and a slow
+ * proposal looked identical, and both looked like a hang. Same rule as `/optimize`:
+ * a stage is ticked when its call returns, never on a timer.
+ */
+describe("StayPlanner build progress", () => {
+  it("names the three calls the press actually makes", () => {
+    const html = render(new Date("2026-08-07T00:00:00"));
+
+    // Not visible until the build runs, but the stage vocabulary must resolve —
+    // a missing key renders as a visible ⚠ CODE rather than as copy.
+    expect(copy("stage_dates", "en")).toBe("Your dates");
+    expect(copy("stage_discovery", "en")).toBe("Places for those dates");
+    expect(copy("stage_plan", "en")).toBe("Three plan options");
+    expect(html).not.toContain("⚠");
+  });
+
+  it("has one stage per awaited call, and no more", () => {
+    // Three `await`s in the mutation: save_setup, discover_places,
+    // generate_plan_preview. A fourth stage would be a claim about work that is
+    // not happening — which is the defect this whole pattern exists to avoid.
+    expect(PLAN_STAGES).toHaveLength(3);
+    for (const stage of PLAN_STAGES) {
+      expect(copy(`stage_${stage.key}`, "en")).not.toContain("⚠");
+      expect(copy(`stage_${stage.key}_detail`, "en")).not.toContain("⚠");
+      expect(copy(`stage_${stage.key}`, "th")).not.toContain("⚠");
+      expect(copy(`stage_${stage.key}_detail`, "th")).not.toContain("⚠");
+    }
+  });
+});
+
+describe("the build checklist itself", () => {
+  function stages(reached: number): string {
+    return renderToStaticMarkup(
+      <LanguageProvider initial="en">
+        <BuildStages language="en" reached={reached} stages={PLAN_STAGES} />
+      </LanguageProvider>,
+    );
+  }
+
+  it("draws one row per call plus the completion row", () => {
+    const html = stages(0);
+
+    expect(html.match(/class="build-stage[ "]/g) ?? []).toHaveLength(PLAN_STAGES.length + 1);
+    expect(html).toContain("Your dates");
+    expect(html).toContain("Places for those dates");
+    expect(html).toContain("Three plan options");
+    expect(html).toContain("Your plan is ready");
+  });
+
+  it("marks exactly the calls that have returned", () => {
+    // One returned: the first is done, the second is the one in flight.
+    const html = stages(1);
+
+    expect(html.match(/build-stage done/g) ?? []).toHaveLength(1);
+    expect(html.match(/build-stage active/g) ?? []).toHaveLength(1);
+  });
+
+  it("stops claiming work once every call has returned", () => {
+    const html = stages(PLAN_STAGES.length);
+
+    expect(html).toContain('aria-busy="false"');
+    expect(html.match(/build-stage active/g) ?? []).toHaveLength(0);
   });
 });

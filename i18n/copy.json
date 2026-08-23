@@ -1710,7 +1710,13 @@
       "dates_custom_end": "End",
       "dates_span_over": "That is {days} days. The {pace} pace needs {allowed} — shorten it, or pick a slower pace above.",
       "dates_span_ok": "{days} of {allowed} days used.",
-      "dates_end_before": "The end date is before the start."
+      "dates_end_before": "The end date is before the start.",
+      "stage_dates": "Your dates",
+      "stage_dates_detail": "Writing them into setup",
+      "stage_discovery": "Places for those dates",
+      "stage_discovery_detail": "Reading what was already found",
+      "stage_plan": "Three plan options",
+      "stage_plan_detail": "Building and checking each one"
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -2918,7 +2924,13 @@
       "dates_custom_end": "สิ้นสุด",
       "dates_span_over": "ช่วงนี้ {days} วัน แต่จังหวะ{pace}ต้องการ {allowed} วัน — ลดวันลง หรือเลือกจังหวะที่ช้ากว่าด้านบน",
       "dates_span_ok": "ใช้ {days} จาก {allowed} วัน",
-      "dates_end_before": "วันสิ้นสุดอยู่ก่อนวันเริ่ม"
+      "dates_end_before": "วันสิ้นสุดอยู่ก่อนวันเริ่ม",
+      "stage_dates": "วันเดินทางของคุณ",
+      "stage_dates_detail": "บันทึกลงในการตั้งค่า",
+      "stage_discovery": "สถานที่สำหรับวันเหล่านั้น",
+      "stage_discovery_detail": "ใช้ผลที่ค้นไว้แล้ว",
+      "stage_plan": "แผนสามตัวเลือก",
+      "stage_plan_detail": "สร้างและตรวจทีละแบบ"
     }
   }
 }
