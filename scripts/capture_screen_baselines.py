@@ -119,7 +119,18 @@ def _stage(route: str) -> "Screen":
 # approved. The phone set is prefixed, so both live in one directory and
 # `check_screen_baselines.py` picks them up by glob without knowing about either.
 VIEWS = (
-    View("", (1440, 900), tuple(_stage(route) for route in ROUTES)),
+    View(
+        "",
+        (1440, 900),
+        (
+            # The landing page, which had no desktop image at all — the phone set
+            # covered it and the widest surface in the app was guarded only at
+            # 500px. It is also the page most likely to be restyled, being the one
+            # with an opinion about how it looks.
+            Screen("landing", "/trips"),
+            *(_stage(route) for route in ROUTES),
+        ),
+    ),
     # 500 and not 390, and the number is not a preference. Headless Chrome on macOS
     # clamps its window — and with it the layout viewport — to a 500px minimum:
     # `--window-size=320,844` and `--window-size=450,844` both measure 500. A capture
@@ -153,7 +164,11 @@ VIEWS = (
     # have caught going wrong. 900 sits above the 860 phone cut and below the 1100
     # wide-desktop one, which is exactly the band the old 768/900/992 rules disagreed
     # about.
-    View("t900-", (900, 900), tuple(_stage(route) for route in ROUTES)),
+    View(
+        "t900-",
+        (900, 900),
+        (Screen("landing", "/trips"), *(_stage(route) for route in ROUTES)),
+    ),
 )
 CHROME_CANDIDATES = (
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",

@@ -3790,3 +3790,160 @@ recommends the 1st to the 5th, so an exclusive count would have refused the app'
 recommendation. It lives in `shared/dates.ts` with `daysInMonth` and `addDays` — moved out
 of `StayPlanner` because a file exporting a component may not also export helpers, and
 tested directly rather than through a render.
+
+## Three landing sections removed, and the estuary, 2026-08-23
+
+The owner asked for "Why Mathematical Planning Beats Generic AI", "Interactive Bill
+Settlement Engine" and "How Optimizer Compares" to go. The first is worth noting: this file
+already carries a standing rule to grep the landing for `ILP`, `Branch`, `Optimality` and
+`Solve Time` before believing it describes this optimizer, because invented solver claims
+have been removed twice and returned twice. A section titled "why mathematical planning
+beats generic AI" was of that family.
+
+**Deleting a section is not deleting its JSX.** These three orphaned three nav buttons, two
+`useState` hooks, an entire bill-split computation (`totalBill`, `perPerson` and three
+per-person nets that only fed each other), and **51 CSS rules**. `splitCurrency` was the
+interesting one: its only setter lived in the removed sandbox, but the lab's currency table
+still reads it seven times, so it survives as the plain const it had already become rather
+than a `useState` nothing sets. Rules whose selector list mixes dead and live classes were
+left alone — `.benefit-card` beside `.lab-step-card` is inert, and picking those apart
+mechanically risks more than it tidies.
+
+The blueprints section took the removed pain-math background, which meant moving the
+`alpine` environment and its fills together: a terrain painted in reef colours under an
+alpine sky is two places at once.
+
+**The estuary, at the third attempt.** The closing section asks someone to start and holds
+the real trip form while doing it, and its CSS said so — "an environment must never make a
+form harder to read", at `opacity: 0.5`. The owner asked for it to be crafted like the world
+scene. Both are right; the first two attempts got the balance wrong in different directions
+and the owner was right to push back on each.
+
+*First:* a new `coast` entry in `ENVIRONMENTS`, at 0.68, with a sky mixed into
+`--landing-page`. Asked how that was the same as the section it was meant to match, the
+honest answer was that it was not, and the numbers said so plainly: the world scene fills
+702 of its 702px at full strength; that filled **346 of 1046 at 0.68**. A wash with a strip
+along the bottom. The dark sky was worse — `#2a2a24`, a muddy brown-grey picked to satisfy a
+contrast ratio rather than to look like anything, over a lead measuring **1.1:1**.
+
+*Second:* a bespoke full-height SVG, same construction as `.world-scenery`. Right idea,
+wrong projection: `preserveAspectRatio="xMidYMax slice"` into a 1046px band scaled the
+1200-wide composition **1.69x** and cropped it to viewBox x 220..979, putting the boat 60%
+outside the frame. `SceneEnvironment` documents this exact trap and it was hit anyway.
+`none` with a 900-tall viewBox stretches about 1.16x instead — present in the geometry,
+invisible to the eye.
+
+*Third, and the one that works:* the composition laid out **around the cards**, which are
+opaque and cover most of the middle. Measured, the columns occupy viewBox x 90..1110 /
+y 202..609 and the trust strip x 240..960 / y 636..845, so the readable bands are above 200
+and below 610 — and the waterline moved from 646 to 772 so there is water to moor a boat on
+outside those rectangles. Twice in this section something was drawn correctly and was
+invisible; measure the furniture before placing the scenery.
+
+`--landing-estuary-*` is its palette: seven tokens, every one flipping by theme, read by
+both the section's background gradient and the SVG fills — the sky in the gradient and the
+sky in the scene cannot be two skies. Light is a coast at midday, dark the same place at
+dusk with the jetty the one lit thing. The lead measures 6.68:1 and 6.34:1.
+
+The landing also gained a desktop and a tablet baseline. It had none — the widest surface in
+the app was guarded at 500px only, on the one page most likely to be restyled. 128 images
+became 136.
+
+### Refining it against the reference, path by path
+
+Counted rather than eyeballed, the shore scene had roughly the reference's number of paths
+and was missing four things that are what make the style the style:
+
+- **A lit edge on the distant mass.** `w-snow` is not snow, structurally — it is the bright
+  face that stops a silhouette reading as a cut-out. `s-cliff` is the same idea on the
+  headland.
+- **Two halftone screens on the ground, not one.** The world scene lays `w-screen-warm` and
+  `w-screen-coarse` over its terrain; the shore had only the fine one, which is why the
+  sand still read as flat vector.
+- **Colour in exactly one place.** `w-bloom` is eight small dots and the only colour on that
+  ground. Here it is the mooring buoys and the shells.
+- **The dashed route.** `.s-path` takes `.w-path`'s stroke, dash and cap unchanged. It is
+  the page's signature, and a trail through mountains and a trail along a shore drawn
+  differently would be two ideas.
+
+Added with them: gulls in the band above the header, surf where the water actually breaks,
+mooring posts standing off the jetty head, and driftwood.
+
+**And the placement lesson, for the third time in this section.** `s-path`, the shells and
+the pebbles were drawn at viewBox y 872-926, which maps below the fold of a 1046px section
+— rendered, correct, and never seen. Twice before in the same section something was
+invisible for a different reason each time: flex-shrunk to 2px, then cropped by `slice`.
+Measure where a thing lands, not just what it looks like in the file.
+
+### The estuary rebuilt to the brief, 2026-08-23
+
+The owner supplied a design brief — an eight-layer illustrated environment, a named art
+style, and four categories of motion — and said the boat looked ugly. It did: a flat
+quadrilateral hull and a thin triangle sail, which is precisely the "perfectly sterile
+vector" the brief rules out. It is now a hull with a belly, a sail with a fold in it, a
+gunwale stripe, portholes and a pennant.
+
+**Eight layers, each with its own rate.** Sky, distant, large scenery, midground,
+foreground terrain, landmarks, plants, particles — the world scene's four parallax rates
+interpolated to eight, background moving least and the sparks most, all of it vertical
+translation in one plane rather than a 3D set.
+
+**Motion in the four categories, all of it on machinery that already existed.**
+`startWorldMotion` already sets `--scroll-y` from one passive listener, adds
+`.motion-ready`, and hands out `.in-view` through an IntersectionObserver — so the parallax,
+the reveal and the ambient loops are CSS on top of that rather than a second system.
+`WF-026` still holds: no dependency was added for any of it.
+
+- *Ambient*: clouds and gulls drift, the boat and the buoys ride at different periods, the
+  grass sways, sea light twinkles, and the lighthouse blinks two short pulses and a long
+  dark. Nothing travels more than a few pixels and no two cycles are the same length.
+- *Scroll*: the eight rates above.
+- *Reveal*: scenery, then landmarks, then typography, then the columns and trust strip,
+  then the small decorative things — eight delays, not one fade.
+- *Interactive*: the boat, the lighthouse and the jetty transform themselves on hover — a
+  lift, a degree of rotation, a scale inside 1.03-1.06 — and the lighthouse's beam comes up
+  with it. No box-shadows.
+
+**The scene is inert except for those three groups.** `pointer-events: none` on the
+scenery, `auto` on `.s-mark`, verified by hit-testing actual points on each shape: the
+tower body, the lamp house, the jetty deck, the hull and the sail all answer, and the form's
+inputs are still the top element where they sit. Decoration must never be in the way of a
+form.
+
+Everything is inside `prefers-reduced-motion: no-preference`, checked by parsing the
+stylesheet rather than by reading it, and capture mode already freezes animation — so the
+136 baselines are unaffected by any of it.
+
+**One part of the brief was not applied.** It asks for content integrated into the
+illustration rather than in cards, and for navigation over the environment. This section
+holds the real trip form; a form needs an opaque surface to be legible and a card is what
+that is. The scene is composed *around* the cards instead — measured at x 90..1110 /
+y 202..609 for the columns and x 240..960 / y 636..845 for the trust strip — which is why
+the lighthouse stands in the clear left margin and the boat is moored to the right of the
+strip.
+
+### What "distortion" actually meant, 2026-08-23
+
+Two rounds of this went wrong before the owner named it precisely, and both failures are
+worth keeping because they are the same instinct.
+
+**Geometric distortion.** `preserveAspectRatio="none"` was chosen to escape `slice`
+cropping the boat off-frame, and `SceneEnvironment`'s comment endorses it — correctly, for
+what *it* draws: "abstract terrain is the one thing that tolerates" stretching. This scene
+has a lighthouse, a boat and clouds in it. Measured, `none` stretches this box **20% at
+1280x772, 46% at 1920 wide and 276% on a phone**. That is the weirdness. `slice` never
+distorts; it crops the sky instead, which is the right thing to lose in a background.
+
+**Compositional distortion, which is what the owner actually meant.** Chasing visibility,
+the boat was shrunk to 86 units wide to fit the right margin and the jetty flattened into
+the 56-unit band under the columns — objects deformed to survive in the gaps the layout
+left. A miniature crammed into a hole reads worse than a whole object half-covered. It is
+a background: size things to the scene and let the cards cover what they cover.
+
+The cards help, once they were actually translucent. `.landing .stage-card` sets an opaque
+background later in the file at the same specificity, so the new rule did nothing and the
+surface sampled as exactly #181818 twice while it was read as "too subtle". 86% is a
+contrast budget, not a taste: 8% invisible, 15% the last value clearing 4.5:1, 20% failing.
+And with the sky cropped away the section lead now sits on the bay rather than on air,
+where `--text-secondary` measured **2.87:1** — over an illustration, hierarchy has to come
+from size and weight, because colour is the channel the background can take away.

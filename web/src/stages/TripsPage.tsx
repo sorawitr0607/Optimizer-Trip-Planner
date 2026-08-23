@@ -38,13 +38,6 @@ import { startWorldMotion } from "../shared/worldMotion";
 /** Sentinel for the typed fallback. Not a country code, so it cannot collide. */
 const TYPE_IT = "__type_it__";
 
-const BULLETS = [
-  [MapPinned, "landing_bullet_places"],
-  [CalendarClock, "landing_bullet_schedule"],
-  [Wallet, "landing_bullet_money"],
-  [FileSpreadsheet, "landing_bullet_export"],
-] as const;
-
 const TICKER_ITEMS = [
   [Zap, "landing_ticker_tests"],
   [ShieldCheck, "landing_ticker_local"],
@@ -142,6 +135,137 @@ const DEPTHS: {
     </>
   ) },
 ];
+
+/**
+ * The estuary the closing section stands in.
+ *
+ * Its own scene rather than an `ENVIRONMENTS` entry, for the reason the world
+ * section has one: a variant is a ridge line anchored to the foot of a band, and
+ * a band 1046px tall needs a whole place, not a horizon at the bottom of it.
+ *
+ * Built from the same parts as `.world-scenery` so the two read as one hand —
+ * `xMidYMax slice`, the shared `w-rough` filters, four depths that parallax on
+ * `--scroll-y`, the grain over everything last. What differs is the country:
+ * water where that one has rock, and a jetty where it has a path.
+ *
+ * `aria-hidden`, behind everything, no pointer events. The cards that sit on it
+ * carry their own opaque surfaces, so the scene is read in the margins and behind
+ * the header rather than through the form.
+ */
+function ShoreScene() {
+  return (
+    <div aria-hidden="true" className="shore-scenery">
+      {/* Eight layers, back to front, each with its own parallax rate: sky, distant
+          elements, large scenery, midground, foreground terrain, landmarks, plants,
+          particles. `preserveAspectRatio="none"` with a 900-tall box, for the reason
+          `slice` and not `none`, which is the opposite of what `SceneEnvironment`
+          chose — and the difference is what is being drawn. That one is abstract
+          terrain, which its comment correctly says "is the one thing that tolerates"
+          stretching. This has a lighthouse, a boat and clouds in it, and objects do
+          not tolerate it at all: measured, `none` stretches this box **20% at
+          1280x772, 46% at 1920 wide and 276% on a phone**, which is why a scene with
+          natural proportions still looked wrong. `slice` never distorts. It pays for
+          that by cropping — anchored `YMax` so the beach survives and the sky is what
+          goes — and cropping a background is a cost worth paying where deforming a
+          boat is not.
+
+          Proportions are therefore the real ones: a sky, a bay and a beach at the
+          heights those things have. Parts of it sit behind the columns and that is
+          fine — it is a background, and the cards let a little of it through. */}
+      <svg className="shore-svg" preserveAspectRatio="xMidYMax slice" viewBox="0 0 1200 900">
+        {/* 1 — SKY. Cloud banks, cut as paper rather than blurred, out of the
+            headline's box (x 240..960). */}
+        <g className="s-layer s-l-sky" filter="url(#w-rough)">
+          <path className="s-cloud" d="M56,96 a32,32 0 0 1 60,-15 a25,25 0 0 1 42,10 a21,21 0 0 1 -8,40 l-85,0 a25,25 0 0 1 -9,-35 Z M1006,72 a27,27 0 0 1 50,-12 a21,21 0 0 1 35,8 a17,17 0 0 1 -6,33 l-71,0 a21,21 0 0 1 -8,-29 Z" />
+          <path className="s-cloud-far" d="M172,182 a21,21 0 0 1 39,-9 a16,16 0 0 1 27,6 a13,13 0 0 1 -5,25 l-55,0 a16,16 0 0 1 -6,-22 Z" />
+        </g>
+
+        {/* 2 — DISTANT. Islands on the horizon and one sail a long way out. */}
+        <g className="s-layer s-l-far" filter="url(#w-rough-fine)">
+          <path className="s-island" d="M118,336 q18,-30,40,-4 q11,13,20,4 Z M1044,344 q15,-24,33,-3 q9,10,17,3 Z" />
+          <path className="s-far-sail" d="M1136,330 l0,-28 l16,24 Z" />
+        </g>
+
+        {/* 3 — LARGE SCENERY. The far shore and the point that closes the bay. */}
+        <g className="s-layer s-l-large" filter="url(#w-rough)">
+          <path className="s-headland-far" d="M-10,352 Q120,318 250,340 Q350,356 430,330 Q520,300 620,326 Q710,348 800,336 Q910,318 1010,342 Q1110,360 1210,338 L1210,900 L-10,900 Z" />
+          <path className="s-cliff" d="M430,330 L470,352 L448,358 L430,346 L410,360 L388,350 Z M1010,342 L1046,366 L1026,372 L1010,360 L992,374 L972,364 Z" />
+          <path className="s-headland" d="M-10,398 Q150,372 320,390 Q450,404 540,382 Q660,354 790,380 Q930,410 1070,388 Q1160,374 1210,386 L1210,900 L-10,900 Z" />
+          <path className="s-screen" d="M-10,398 Q150,372 320,390 Q450,404 540,382 Q660,354 790,380 Q930,410 1070,388 Q1160,374 1210,386 L1210,900 L-10,900 Z" />
+        </g>
+
+        {/* 4 — MIDGROUND. The bay, at the height a bay actually sits. */}
+        <g className="s-layer s-l-mid" filter="url(#w-rough)">
+          <path className="s-water" d="M-10,452 Q300,446 600,452 T1210,448 L1210,900 L-10,900 Z" />
+          <path className="s-ripple" d="M14,520 q40,-7,80,0 t80,0 M1030,506 q40,-7,80,0 t80,0 M20,614 q40,-7,80,0 t80,0 M1046,632 q40,-7,80,0 t80,0 M16,706 q36,-6,72,0 M1112,700 q36,-6,72,0" fill="none" />
+          <path className="s-buoy" d="M52,566 m-8,0 a8,8 0 1 0 16,0 a8,8 0 1 0 -16,0 M1150,590 m-7,0 a7,7 0 1 0 14,0 a7,7 0 1 0 -14,0 M40,672 m-6,0 a6,6 0 1 0 12,0 a6,6 0 1 0 -12,0" />
+        </g>
+
+        {/* 5 — FOREGROUND TERRAIN. The beach, in the band under the columns. */}
+        <g className="s-layer s-l-terrain" filter="url(#w-rough)">
+          <path className="s-wet" d="M-10,762 Q220,746 470,760 T940,752 T1210,766 L1210,900 L-10,900 Z" />
+          <path className="s-sand" d="M-10,812 Q200,796 430,810 T860,802 T1210,816 L1210,900 L-10,900 Z" />
+          <path className="s-screen-warm" d="M-10,812 Q200,796 430,810 T860,802 T1210,816 L1210,900 L-10,900 Z" />
+          <path className="s-screen-coarse" d="M-10,812 Q200,796 430,810 T860,802 T1210,816 L1210,900 L-10,900 Z" />
+          <path className="s-shade" d="M-10,812 Q200,796 430,810 T860,802 T1210,816 L1210,842 Q860,830 430,838 T-10,844 Z" />
+          <path className="s-surf" d="M-10,768 q54,-10,108,-2 t108,-1 M700,760 q54,-10,108,-2 t108,0 M980,770 q46,-8,92,-1" fill="none" />
+          <path className="s-path" d="M-16,876 Q180,864 400,872 T840,866 T1216,874" fill="none" />
+        </g>
+
+        {/* 6 — LANDMARKS, at the size the things actually are. The lighthouse stands
+            on the point in the clear left margin; the jetty walks out from the beach
+            and the boat is pulled up beside it, both in the band under the columns. */}
+        <g className="s-layer s-l-marks">
+          <g className="s-mark s-mark-light" filter="url(#w-rough-fine)">
+            <path className="s-tower" d="M18,806 L30,556 h32 L74,806 Z" />
+            <path className="s-tower-band" d="M26,684 h40 v28 h-40 Z M30,610 h34 v24 h-34 Z" />
+            <path className="s-lamp-house" d="M28,556 h36 v-26 h-36 Z" />
+            <path className="s-lamp" d="M34,530 h24 v-14 h-24 Z" />
+            <path className="s-beam" d="M64,524 l120,-28 l0,52 Z" />
+          </g>
+          {/* A jetty the length a jetty is: out from the beach and into the water,
+              with the posts getting longer as the bottom drops away. It was squeezed
+              into the 56-unit band under the columns to keep it visible, which made
+              it a toy. Sized to the scene now; the cards cover part of it and that is
+              what a background is for. */}
+          <g className="s-mark s-mark-jetty" filter="url(#w-rough-fine)">
+            <path className="s-jetty" d="M96,742 h316 v15 h-316 Z M124,757 h13 v96 h-13 Z M202,757 h13 v88 h-13 Z M280,757 h13 v78 h-13 Z M358,757 h13 v66 h-13 Z" />
+            <path className="s-post" d="M452,752 h12 v58 h-12 Z M486,760 h11 v50 h-11 Z" />
+          </g>
+          {/* Moored off the jetty head, at the size a boat is beside one. It was
+              shrunk to 86 units wide to fit the right margin — a miniature squeezed
+              into a gap, which reads worse than a whole object half behind a card.
+              Placed by the composition now, not by where there happened to be room. */}
+          <g className="s-mark s-mark-boat" filter="url(#w-rough-fine)">
+            <path className="s-sail" d="M556,700 L556,568 q66,40 56,82 q-6,29 -56,36 Z" />
+            <path className="s-sail-fold" d="M556,700 L556,568 q28,46 19,84 q-3,18 -19,34 Z" />
+            <path className="s-mast" d="M550,702 v-142 h9 v142 Z" />
+            <path className="s-pennant" d="M559,560 l34,11 l-34,11 Z" />
+            <path className="s-hull" d="M478,702 h150 q-16,48 -75,48 q-59,0 -75,-48 Z" />
+            <path className="s-gunwale" d="M478,702 h150 v10 h-150 Z" />
+            <path className="s-porthole" d="M528,724 m-7,0 a7,7 0 1 0 14,0 a7,7 0 1 0 -14,0 M572,724 m-7,0 a7,7 0 1 0 14,0 a7,7 0 1 0 -14,0" />
+          </g>
+        </g>
+
+        {/* 7 — PLANTS AND DETAILS, along the beach. */}
+        <g className="s-layer s-l-flora" filter="url(#w-rough-fine)">
+          <path className="s-grass" d="M470,872 l5,-38 l6,38 Z M490,876 l5,-30 l6,30 Z M510,868 l5,-42 l6,42 Z M880,868 l5,-36 l6,36 Z M900,872 l5,-28 l6,28 Z M920,864 l5,-40 l6,40 Z M1046,880 l5,-32 l6,32 Z M1066,884 l5,-26 l6,26 Z" />
+          <path className="s-driftwood" d="M840,862 q32,-9,64,-2 l3,9 q-33,-5,-65,2 Z M104,872 q28,-8,56,-2 l2,8 q-29,-4,-57,2 Z" />
+          <path className="s-pebble" d="M560,884 a15,11 0 0 1 30,0 Z M790,890 a11,8 0 0 1 22,0 Z M964,886 a13,10 0 0 1 26,0 Z M240,890 a12,9 0 0 1 24,0 Z" />
+          <path className="s-shell" d="M330,884 m-5,0 a5,5 0 1 0 10,0 a5,5 0 1 0 -10,0 M620,890 m-5,0 a5,5 0 1 0 10,0 a5,5 0 1 0 -10,0 M1002,894 m-4,0 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0" />
+        </g>
+
+        {/* 8 — PARTICLES. Gulls over the bay and light on the water. */}
+        <g className="s-layer s-l-spark">
+          <path className="s-gull" d="M120,240 q12,-16,24,0 q12,-16,24,0 M198,196 q9,-12,18,0 q9,-12,18,0 M1006,214 q11,-15,22,0 q11,-15,22,0 M1124,262 q9,-12,18,0 q9,-12,18,0" fill="none" />
+          <path className="s-spark" d="M34,616 l4,-11 l4,11 l11,4 l-11,4 l-4,11 l-4,-11 l-11,-4 Z M1154,536 l3,-9 l3,9 l9,3 l-9,3 l-3,9 l-3,-9 l-9,-3 Z M28,486 l3,-9 l3,9 l9,3 l-9,3 l-3,9 l-3,-9 l-9,-3 Z M1160,676 l3,-8 l3,8 l8,3 l-8,3 l-3,8 l-3,-8 l-8,-3 Z" />
+        </g>
+
+        <rect className="w-grain" filter="url(#w-grain)" height="900" width="1200" x="0" y="0" />
+      </svg>
+    </div>
+  );
+}
 
 /**
  * The environment a section stands in.
@@ -884,7 +1008,6 @@ export function TripsPage() {
   const [pacingMode, setPacingMode] = useState<PacingMode>("balanced");
 
   // Interactive Pain/Math Tabs
-  const [painTab, setPainTab] = useState<"ai" | "optimizer">("optimizer");
 
   // Interactive Product Lab Stepper
   const [activeLabStep, setActiveLabStep] = useState<number>(0);
@@ -897,10 +1020,10 @@ export function TripsPage() {
   const [labExcelTab, setLabExcelTab] = useState<number>(0);
 
   // Interactive Split Calculator Sandbox State
-  const [splitCurrency, setSplitCurrency] = useState<string>("$");
-  const [sampleBill1, setSampleBill1] = useState<number>(120);
-  const [sampleBill2, setSampleBill2] = useState<number>(60);
-  const [sampleBill3, setSampleBill3] = useState<number>(45);
+  /** The symbol the lab's conversion table prints. It was a `useState` driven by the
+   *  split sandbox's currency picker; that section is gone and nothing sets it any
+   *  more, so it is the constant it had already become. */
+  const splitCurrency = "$";
 
   // FAQ Accordion State
   const [openFaq, setOpenFaq] = useState<number | null>(0);
@@ -964,13 +1087,6 @@ export function TripsPage() {
   const selectedCityData = DEMO_DESTINATIONS.find((d) => d.id === activeCityId) ?? DEMO_DESTINATIONS[0];
   const selectedPacingData = selectedCityData.pacing[pacingMode];
 
-  // Bill split computation: Alex paid Bill1, Sam paid Bill2, Jordan paid Bill3
-  const totalBill = sampleBill1 + sampleBill2 + sampleBill3;
-  const perPerson = Math.round((totalBill / 3) * 10) / 10;
-  const alexNet = Math.round((sampleBill1 - perPerson) * 10) / 10;
-  const samNet = Math.round((sampleBill2 - perPerson) * 10) / 10;
-  const jordanNet = Math.round((sampleBill3 - perPerson) * 10) / 10;
-
   return (
     // derives-from: element 5 .hero-content as .landing-hero
     <main
@@ -995,17 +1111,8 @@ export function TripsPage() {
           <span className="nav-version-badge">v2.0 · MIT</span>
         </div>
         <div className="landing-nav-links">
-          <button onClick={() => scrollToSection("pain-math")} type="button">
-            {copy("landing_nav_story", language)}
-          </button>
           <button onClick={() => scrollToSection("lab")} type="button">
             {copy("landing_nav_demo", language)}
-          </button>
-          <button onClick={() => scrollToSection("split-sandbox")} type="button">
-            {copy("landing_nav_split", language)}
-          </button>
-          <button onClick={() => scrollToSection("comparison")} type="button">
-            {copy("landing_nav_compare", language)}
           </button>
           <button onClick={() => scrollToSection("faq")} type="button">
             {copy("landing_nav_faq", language)}
@@ -1368,83 +1475,7 @@ export function TripsPage() {
       </div>
 
       {/* -------------------------------------------------------------
-          SECTION 2: copy("landing_pain_tabs_label", language) (Interactive Before/After)
-          ------------------------------------------------------------- */}
-      <section className="landing-section pain-math-section" id="pain-math">
-        <SceneEnvironment variant="alpine" />
-        <SceneProp kind="foldedMap" place="mid" />
-        <SceneProp kind="compass" place="tl" />
-        <SceneProp kind="stamp" place="br" />
-        <div className="section-header">
-          <span className="section-badge">{copy("landing_solutions_badge", language)}</span>
-          <h2>{copy("landing_pain_title", language)}</h2>
-          <p className="section-lead">{copy("landing_pain_lead", language)}</p>
-        </div>
-
-        {/* Tab Switcher */}
-        <div className="pain-math-switch">
-          <button
-            aria-pressed={painTab === "ai"}
-            className={`pain-tab ${painTab === "ai" ? "active-ai" : ""}`}
-            onClick={() => setPainTab("ai")}
-            type="button"
-          >
-            <XCircle aria-hidden="true" size={16} />
-            {copy("landing_pain_ai_tab", language)}
-          </button>
-          <button
-            aria-pressed={painTab === "optimizer"}
-            className={`pain-tab ${painTab === "optimizer" ? "active-opt" : ""}`}
-            onClick={() => setPainTab("optimizer")}
-            type="button"
-          >
-            <CheckCircle2 aria-hidden="true" size={16} />
-            {copy("landing_pain_opt_tab", language)}
-          </button>
-        </div>
-
-        {/* 3 Core Benefit Cards */}
-        <div className="benefits-grid">
-          <div className={`benefit-card ${painTab === "ai" ? "pain-card-ai" : "pain-card-opt"}`}>
-            <div className="benefit-icon-box">
-              <CalendarClock aria-hidden="true" size={24} />
-            </div>
-            <h3>{copy("landing_benefit_1_title", language)}</h3>
-            <p>
-              {painTab === "ai"
-                ? copy("landing_benefit_1_risk", language)
-                : copy("landing_benefit_1_desc", language)}
-            </p>
-          </div>
-
-          <div className={`benefit-card ${painTab === "ai" ? "pain-card-ai" : "pain-card-opt"}`}>
-            <div className="benefit-icon-box">
-              <Timer aria-hidden="true" size={24} />
-            </div>
-            <h3>{copy("landing_benefit_2_title", language)}</h3>
-            <p>
-              {painTab === "ai"
-                ? copy("landing_benefit_2_risk", language)
-                : copy("landing_benefit_2_desc", language)}
-            </p>
-          </div>
-
-          <div className={`benefit-card ${painTab === "ai" ? "pain-card-ai" : "pain-card-opt"}`}>
-            <div className="benefit-icon-box">
-              <Wallet aria-hidden="true" size={24} />
-            </div>
-            <h3>{copy("landing_benefit_3_title", language)}</h3>
-            <p>
-              {painTab === "ai"
-                ? copy("landing_benefit_3_risk", language)
-                : copy("landing_benefit_3_desc", language)}
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* -------------------------------------------------------------
-          SECTION 3: 4-STAGE PRODUCT LABORATORY (Interactive Walkthrough)
+          SECTION 2: 4-STAGE PRODUCT LABORATORY (Interactive Walkthrough)
           ------------------------------------------------------------- */}
       <section className="landing-section showcase-section" id="lab">
         <SceneEnvironment variant="deciduous" />
@@ -1777,183 +1808,12 @@ export function TripsPage() {
       </section>
 
       {/* -------------------------------------------------------------
-          SECTION 4: INTERACTIVE MULTI-CURRENCY BILL SPLIT SANDBOX
-          ------------------------------------------------------------- */}
-      <section className="landing-section split-sandbox-section" id="split-sandbox">
-        <SceneEnvironment variant="mangrove" />
-        <SceneProp kind="luggageTag" place="tr" />
-        <img
-          alt=""
-          aria-hidden="true"
-          className="scene-art"
-          loading="lazy"
-          src="/illustrations/currency-conversion.svg"
-        />
-        <SceneProp kind="postcard" place="tl" />
-        <div className="section-header">
-          <span className="section-badge">
-            <Calculator aria-hidden="true" size={13} /> {copy("landing_bullet_money", language)}
-          </span>
-          <h2>{copy("landing_split_sandbox_title", language)}</h2>
-          <p className="section-lead">{copy("landing_split_sandbox_lead", language)}</p>
-        </div>
-
-        <div className="split-sandbox-card">
-          {/* Quick Preset Selector & Currency Switcher */}
-          <div className="split-sandbox-toolbar">
-            <div className="split-currency-pills">
-              {(["$", "€", "¥", "฿"] as const).map((curr) => (
-                <button
-                  aria-label={`${copy("landing_split_currency", language)} ${curr}`}
-                  aria-pressed={splitCurrency === curr}
-                  className={`curr-pill ${splitCurrency === curr ? "active" : ""}`}
-                  key={curr}
-                  onClick={() => setSplitCurrency(curr)}
-                  type="button"
-                >
-                  {curr}
-                </button>
-              ))}
-            </div>
-
-            <div className="split-quick-presets">
-              <span className="presets-label">{copy("landing_sample_bills", language)}</span>
-              <button
-                className="split-preset-btn"
-                onClick={() => {
-                  setSampleBill1(120);
-                  setSampleBill2(60);
-                  setSampleBill3(45);
-                }}
-                type="button"
-              >
-                🍱 Dinner &amp; Transit
-              </button>
-              <button
-                className="split-preset-btn"
-                onClick={() => {
-                  setSampleBill1(320);
-                  setSampleBill2(180);
-                  setSampleBill3(100);
-                }}
-                type="button"
-              >
-                🏖️ Beach Villa ({splitCurrency}600)
-              </button>
-              <button
-                className="split-preset-btn"
-                onClick={() => {
-                  setSampleBill1(450);
-                  setSampleBill2(450);
-                  setSampleBill3(150);
-                }}
-                type="button"
-              >
-                🚄 Transit Passes ({splitCurrency}1,050)
-              </button>
-            </div>
-          </div>
-
-          <div className="split-sandbox-inputs">
-            <div className="split-input-row">
-              <label htmlFor="bill-1">
-                <strong>Alex</strong> paid (Dinner &amp; Drinks):
-              </label>
-              <div className="input-affix">
-                <span>{splitCurrency}</span>
-                <input
-                  id="bill-1"
-                  min="0"
-                  onChange={(e) => setSampleBill1(Number(e.target.value) || 0)}
-                  type="number"
-                  value={sampleBill1}
-                />
-              </div>
-            </div>
-
-            <div className="split-input-row">
-              <label htmlFor="bill-2">
-                <strong>Sam</strong> paid (Taxi &amp; Train passes):
-              </label>
-              <div className="input-affix">
-                <span>{splitCurrency}</span>
-                <input
-                  id="bill-2"
-                  min="0"
-                  onChange={(e) => setSampleBill2(Number(e.target.value) || 0)}
-                  type="number"
-                  value={sampleBill2}
-                />
-              </div>
-            </div>
-
-            <div className="split-input-row">
-              <label htmlFor="bill-3">
-                <strong>Jordan</strong> paid (Museum Tickets):
-              </label>
-              <div className="input-affix">
-                <span>{splitCurrency}</span>
-                <input
-                  id="bill-3"
-                  min="0"
-                  onChange={(e) => setSampleBill3(Number(e.target.value) || 0)}
-                  type="number"
-                  value={sampleBill3}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Real-time calculated settlement */}
-          <div className="split-sandbox-results">
-            <div className="split-summary-box">
-              <div className="split-stat">
-                <span className="split-label">{copy("landing_total_expense", language)}</span>
-                <span className="split-val">{splitCurrency}{totalBill}</span>
-              </div>
-              <div className="split-stat">
-                <span className="split-label">{copy("landing_fair_share", language)}</span>
-                <span className="split-val">{splitCurrency}{perPerson}</span>
-              </div>
-            </div>
-
-            <div className="split-transfers-box">
-              <h6>
-                <Zap aria-hidden="true" size={13} /> Minimal Settlement Transfers (0ms Math)
-              </h6>
-              <ul className="split-transfers-list">
-                {jordanNet < 0 && (
-                  <li>
-                    <span className="transfer-flow">
-                      <strong className="debtor">Jordan</strong>
-                      <span className="flow-arrow">── owes {splitCurrency}{Math.abs(jordanNet)} ──▶</span>
-                      <strong className="creditor">Alex</strong>
-                    </span>
-                  </li>
-                )}
-                {samNet < 0 && (
-                  <li>
-                    <span className="transfer-flow">
-                      <strong className="debtor">Sam</strong>
-                      <span className="flow-arrow">── owes {splitCurrency}{Math.abs(samNet)} ──▶</span>
-                      <strong className="creditor">Alex</strong>
-                    </span>
-                  </li>
-                )}
-                {jordanNet >= 0 && samNet >= 0 && alexNet === 0 && (
-                  <li className="all-settled">✓ All balances perfectly settled!</li>
-                )}
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* -------------------------------------------------------------
-          SECTION 5: 1-CLICK CURATED DESTINATION BLUEPRINTS
+          SECTION 3: 1-CLICK CURATED DESTINATION BLUEPRINTS
           ------------------------------------------------------------- */}
       <section className="landing-section presets-section" id="presets">
-        <SceneEnvironment variant="reef" />
+        {/* Alpine, inherited from the removed "Why mathematical planning" section —
+            the owner asked for its ground and light here rather than the reef's. */}
+        <SceneEnvironment variant="alpine" />
         <SceneProp kind="boardingPass" place="bl" />
         <img
           alt=""
@@ -1994,91 +1854,19 @@ export function TripsPage() {
       </section>
 
       {/* -------------------------------------------------------------
-          SECTION 6: WHY US (Comprehensive Comparison Table)
-          ------------------------------------------------------------- */}
-      <section className="landing-section comparison-section" id="comparison">
-        <SceneEnvironment variant="desert" />
-        <img alt="" aria-hidden="true" className="scene-art" loading="lazy" src="/illustrations/decide-night.svg" />
-        <SceneProp kind="compass" place="tl" />
-        <SceneProp kind="suitcase" place="tr" />
-        <div className="section-header">
-          <span className="section-badge">{copy("landing_comparison_badge", language)}</span>
-          <h2>{copy("landing_comparison_title", language)}</h2>
-        </div>
-
-        <div className="comparison-table-wrapper">
-          <table className="comparison-table">
-            <thead>
-              <tr>
-                <th>{copy("landing_comparison_col_feature", language)}</th>
-                <th>{copy("landing_comparison_col_generic", language)}</th>
-                <th className="highlight-col">{copy("landing_comparison_col_optimizer", language)}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>
-                  <strong>{copy("landing_comp_row1_title", language)}</strong>
-                </td>
-                <td className="bad-cell">
-                  <XCircle aria-hidden="true" size={16} />
-                  {copy("landing_comp_row1_bad", language)}
-                </td>
-                <td className="good-cell highlight-col">
-                  <CheckCircle2 aria-hidden="true" size={16} />
-                  {copy("landing_comp_row1_good", language)}
-                </td>
-              </tr>
-              <tr>
-                <td>
-                  <strong>{copy("landing_comp_row2_title", language)}</strong>
-                </td>
-                <td className="bad-cell">
-                  <XCircle aria-hidden="true" size={16} />
-                  {copy("landing_comp_row2_bad", language)}
-                </td>
-                <td className="good-cell highlight-col">
-                  <CheckCircle2 aria-hidden="true" size={16} />
-                  {copy("landing_comp_row2_good", language)}
-                </td>
-              </tr>
-              <tr>
-                <td>
-                  <strong>{copy("landing_comp_row3_title", language)}</strong>
-                </td>
-                <td className="bad-cell">
-                  <XCircle aria-hidden="true" size={16} />
-                  {copy("landing_comp_row3_bad", language)}
-                </td>
-                <td className="good-cell highlight-col">
-                  <CheckCircle2 aria-hidden="true" size={16} />
-                  {copy("landing_comp_row3_good", language)}
-                </td>
-              </tr>
-              <tr>
-                <td>
-                  <strong>{copy("landing_comp_row4_title", language)}</strong>
-                </td>
-                <td className="bad-cell">
-                  <XCircle aria-hidden="true" size={16} />
-                  {copy("landing_comp_row4_bad", language)}
-                </td>
-                <td className="good-cell highlight-col">
-                  <CheckCircle2 aria-hidden="true" size={16} />
-                  {copy("landing_comp_row4_good", language)}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {/* -------------------------------------------------------------
-          SECTION 7: ACTION WORKSPACE (Creator Form + Saved Trips)
+          SECTION 4: ACTION WORKSPACE (Creator Form + Saved Trips)
           ------------------------------------------------------------- */}
       <section className="landing-section action-workspace-section" id="start-a-trip">
-        <SceneEnvironment variant="savanna" />
-        <img alt="" aria-hidden="true" className="scene-art" loading="lazy" src="/illustrations/booking.svg" />
+        {/* An estuary, drawn the way the world scene is drawn.
+            The first attempt used the generic `SceneEnvironment`, and measured against
+            the section it was meant to match it was not close: the world scene covers
+            702 of its 702px at full strength, that one covered 346 of 1046 at 0.68 —
+            a wash and a strip at the foot rather than somewhere you stand. This is the
+            same construction as `.world-scenery`: one full-height SVG, `xMidYMax
+            slice`, the same `w-rough` presses, four parallax depths and the grain last.
+            Different place, same hand — which is what was asked for. */}
+        <ShoreScene />
+        <SceneProp kind="boardingPass" place="tr" />
         <div className="section-header">
           <span className="section-badge">{copy("start_planning", language)}</span>
           <h2>{copy("landing_cta_section_title", language)}</h2>
@@ -2258,24 +2046,10 @@ export function TripsPage() {
           </aside>
         </div>
 
-        <div className="landing-trust-strip">
-          <ul className="landing-bullets">
-            {BULLETS.map(([Icon, code]) => (
-              <li key={code}>
-                <span className="landing-bullet-icon">
-                  <Icon aria-hidden="true" size={16} />
-                </span>
-                {copy(code, language)}
-              </li>
-            ))}
-          </ul>
-          <p className="landing-note">{copy("landing_local_note", language)}</p>
-          <p className="landing-note">{copy("landing_free_note", language)}</p>
-        </div>
       </section>
 
       {/* -------------------------------------------------------------
-          SECTION 8: FAQ ACCORDION (Objection Handling)
+          SECTION 5: FAQ ACCORDION (Objection Handling)
           ------------------------------------------------------------- */}
       <section className="landing-section faq-section" id="faq">
         <SceneEnvironment variant="taiga" />

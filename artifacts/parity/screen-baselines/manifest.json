@@ -7,6 +7,7 @@
         900
       ],
       "screens": [
+        "landing",
         "setup",
         "places",
         "stay",
@@ -47,6 +48,7 @@
         900
       ],
       "screens": [
+        "landing",
         "setup",
         "places",
         "stay",
@@ -68,8 +70,8 @@
     "en",
     "th"
   ],
-  "expected": 128,
-  "written": 128,
+  "expected": 136,
+  "written": 136,
   "failed": [],
   "note": "Captured on one fixed machine at fixed viewports. Cross-platform font rendering is what makes these gates flaky, so a capture from another machine is not comparable."
 }

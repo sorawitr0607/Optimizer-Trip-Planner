@@ -193,6 +193,17 @@
      dark text on the dark hero. Same lesson as the accent: a token that fills a
      surface *and* inks the text on another cannot be flipped by theme. */
   --landing-page: #1c1207;
+  /* Dusk over the water. The first attempt at this was #2a2a24 — a muddy lift
+     chosen to satisfy a contrast number, which read as brown murk and not as a sky
+     at all. These are a dusk palette on purpose: deep blue overhead, the water
+     darker than the sky, the sand barely warm, and the jetty the one lit thing. */
+  --landing-estuary-sky: #16232e;
+  --landing-estuary-far: #22323f;
+  --landing-estuary-near: #2b4150;
+  --landing-estuary-water: #24404f;
+  --landing-estuary-wet: #33372f;
+  --landing-estuary-sand: #3a3a30;
+  --landing-estuary-ink: #c98a4e;
   --landing-step: #2a1d0e;
 }
 
@@ -579,6 +590,29 @@ button:disabled {
      which is also what the reference does — sand in front, water and peaks
      behind. Body text clears 5.11 on the darkest range that remains. */
   --landing-sky-high: #cdeef5;
+  /* The air over the closing section's estuary. Its own token because it is the
+     one atmosphere painted over `--landing-page`, which flips by theme — mixing a
+     fixed sky into a dark ground gave a mid grey-blue that dropped the section
+     lead to about 1.1:1. Light: a cool sky over cream. Dark: a faint lift off the
+     night ground, because at night an atmosphere is barely there. */
+  /* THE ESTUARY — the closing section's own place, and its own palette.
+
+     Its own rather than borrowed, because every colour it needs has to flip by
+     theme and most of the landing's do not: the mountain tokens are fixed, so a
+     scene built from them is a bright noon coast sitting inside a dark page. Seven
+     values, light and dark, and the section's background gradient and its SVG
+     fills both read from them — the sky in the gradient and the sky in the scene
+     cannot be two different skies.
+
+     Light is a coast at midday. Dark is the same place at dusk, which is the hour
+     the section is about anyway. */
+  --landing-estuary-sky: #cfe9f2;
+  --landing-estuary-far: #a9c6d1;
+  --landing-estuary-near: #7fa8b8;
+  --landing-estuary-water: #6f9fb2;
+  --landing-estuary-wet: #d8caa0;
+  --landing-estuary-sand: #ece0bb;
+  --landing-estuary-ink: #7d3908;
   --landing-sky-low: #e9f6f0;
   --landing-peak-far: #a8c9d3;
   --landing-peak-mid: #78a6b7;
