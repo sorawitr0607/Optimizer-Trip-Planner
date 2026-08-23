@@ -894,6 +894,33 @@ be rebuilt.
 **The worker is a long-lived process and Vercel has no home for it.** A container or small VM is
 required somewhere; "Vercel + Supabase" alone does not run this app.
 
+Today it is a process on the owner's laptop, and on 2026-08-23 it was **not running at all** — the
+deployment answered `job_timeout` at 300 s on every job for hours, which reads as an application
+fault and is not one. `deploy/macos/install.sh` installs a launchd agent that keeps it up across
+crash, sleep and reboot; `deploy/macos/worker.sh` is the wrapper it runs and the one place the
+start-up rules are enforced rather than remembered. The same script is the control surface —
+`status`, `logs`, `restart`, `stop`, `start`, `uninstall`. **Restart it after changing anything
+the worker imports**: the process holds the code it started with, which is the `ensure_web_build()`
+trap in a second place. `stop` leaves the plist, so launchd loads it again at the next login;
+only `uninstall` is permanent. And `kill` is not a stop — `KeepAlive` returns the worker within
+seconds, so it is a slow `restart` wearing a misleading name.
+
+**Diagnose the worker by its python child, never by the `uv` wrapper.** `uv run` leaves two
+processes and the parent holds nothing, so `lsof -p <uv pid> | grep -c psycopg` is `0` on a
+perfectly healthy worker. `deploy/macos/install.sh status` prints both, plus the `draining
+PostgresStore` line that is the actual answer.
+
+**The agent needs `/bin/bash` in Full Disk Access, once per machine.** The repo lives under
+`~/Documents`, which macOS protects, and a launchd agent gets neither access nor a prompt — the
+first install failed with exit 126 and `Operation not permitted` on a script that runs perfectly
+from a terminal, because Terminal holds the grant and launchd does not. Two consequences worth
+keeping. The grant is attributed to the binary launchd spawns, so the plist names `/bin/bash`
+explicitly instead of exec'ing the script through a `#!/usr/bin/env bash` shebang whose image PATH
+would choose. And the secret stays out of it either way: a plist in `~/Library/LaunchAgents` is
+world-readable, so the URL is read from `.env` at start rather than written into
+`EnvironmentVariables` — `worker.sh` reads **`POSTGRES_URL_NON_POOLING`**, per the template rule
+above, and passes it to one process without exporting it.
+
 **Sharing.** The token is a random value the browser keeps in `localStorage` — not a credential and not
 offered as one; it separates several people's trips, which was the actual problem. Two consequences:
 trips are per-browser, so the same person in a second browser sees an empty list, and **the spend cap

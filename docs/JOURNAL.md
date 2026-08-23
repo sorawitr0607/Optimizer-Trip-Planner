@@ -3975,3 +3975,81 @@ So `BuildStages` takes a `stages` prop now, `PLAN_STAGES` names the three calls,
 milestones and an elapsed counter is the honest thing to show. Three stages because there
 are three `await`s: a fourth would be a claim about work that is not happening, and the
 test pins the count.
+
+
+## Nothing was keeping the worker alive, 2026-08-23
+
+The deployment answered `job_timeout` at 300 s on every job for hours. Nothing was wrong
+with the code: **no worker process was running at all**, and the stranded job drained in
+33.4 s once one was started by hand. That is the whole failure — the queue has exactly one
+consumer, it lives on the owner's laptop, and it had been started by typing a command into
+a terminal, so it survived nothing. It looks like an application fault and is not one.
+
+So `deploy/macos/` now holds a launchd agent, mirroring the naming and the "fail loudly
+rather than start a worker that cannot connect" principle `deploy/oracle/setup.sh` already
+set for systemd. `worker.sh` is the wrapper and the one place the start-up rules are
+enforced rather than remembered: it reads `POSTGRES_URL_NON_POOLING` (not the
+`TOURIST_DB_URL` template line), refuses a missing, template or non-postgres URL instead of
+silently draining the local SQLite file, finds `uv` off launchd's bare
+`/usr/bin:/bin:/usr/sbin:/sbin`, and passes the URL to one process without exporting it.
+
+**The URL is deliberately not in the plist.** `EnvironmentVariables` would have been the
+obvious place and is the wrong one: `~/Library/LaunchAgents` is world-readable, so that
+copies a live database credential to a second location on disk. It is read from `.env`
+(600, gitignored) at each start.
+
+### macOS refused, and the refusal reads like a broken script
+
+The first install failed with exit 126 and `Operation not permitted` on a script that runs
+perfectly from a terminal. That is not a permissions bit and not a shebang problem — it is
+TCC. The repo is under `~/Documents`, which macOS protects, and a launchd agent gets
+**neither access nor a prompt**; Terminal works because Terminal holds the grant.
+
+Worth proving rather than assuming, because every part of it looks like an ordinary
+scripting bug. A throwaway agent living outside the protected tree reported `ls DENIED`,
+`read DENIED` on `.env`, and `control OK` on `~/Library/Logs` — the same process, denied in
+one directory and allowed in another, which no chmod explains.
+
+Two consequences shaped the fix. The grant is attributed to **the binary launchd spawns**,
+so the plist names `/bin/bash` explicitly instead of exec'ing the script through
+`#!/usr/bin/env bash`, whose image would be chosen by a PATH lookup at exec time — not a
+thing to leave to chance when a permission is keyed to it. And the grant itself is the
+owner's to make in System Settings; three ways round it were offered (grant Full Disk
+Access to `/bin/bash`, a terminal-supervised loop needing no grant but not surviving a
+reboot, or moving the repo out of `~/Documents`) and the first was chosen.
+
+### Verified by killing it
+
+`SIGKILL` on the python child, `last exit code = 137`, and launchd had a new pair up
+immediately — the new child holding 12 `psycopg` handles and logging `draining
+PostgresStore`. Immediately rather than after `ThrottleInterval 30`, which is correct: the
+throttle bounds respawn *rate*, and the job had been up far longer than that. A worker that
+dies instantly on a broken config still gets the 30 s spacing, which is what keeps a bad URL
+from scrolling the log.
+
+**Diagnose the worker by its python child.** `uv run` leaves two processes and the parent
+holds nothing, so `lsof -p <uv pid> | grep -c psycopg` reads `0` on a perfectly healthy
+worker. `status` prints both, which is the only way that number is not a trap.
+
+### Two mistakes made while building it
+
+The `status` command warned about TCC beside a healthy worker, because it grepped the whole
+log and the log keeps the pre-grant errors for good. Reporting a solved problem as a current
+one is its own defect. It now compares the line position of the last denial against the last
+`draining` line, and five log shapes are checked: grant-applied, regressed-after-working,
+never-started, clean, and empty.
+
+That check reported five failures on its first run and every one was the harness — this
+shell is zsh, which does not word-split an unquoted `$t`, so `set -- $t` left the whole pair
+in `$1`. Run it under an explicit `bash <<'EOF'`.
+
+### Controlling it
+
+`status`, `logs`, `restart`, `stop`, `start`, `uninstall`. Three distinctions that are not
+cosmetic: **restart after changing anything the worker imports**, since the process holds the
+code it started with — the `ensure_web_build()` trap in a second place. **`stop` is not
+`uninstall`** — both unload the agent but `stop` leaves the plist, so launchd loads it again
+at the next login. And **`kill` is not a stop**: `KeepAlive` returns the worker within
+seconds, so it is a slow `restart` wearing a misleading name. `restart` uses `kickstart -k`
+for the same reason — `stop` then `start` races launchd's own respawn and can leave two
+workers or none.
