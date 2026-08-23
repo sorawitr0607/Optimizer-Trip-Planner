@@ -1,12 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
-import { Check, Compass, Languages, Lock, Menu, Plus, SunMoon } from "lucide-react";
+import { Check, Compass, Languages, Lock, Plus, SunMoon, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate, useParams } from "react-router";
 
 import { rpc, type Journey, type Trip } from "../api/client";
 import { copy, copyFormat } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
+import { StageTabs } from "./StageTabs";
 import { useTheme } from "./ThemeProvider";
+import { PHONE, useMediaQuery } from "./useMediaQuery";
 import { DeleteTrip } from "./DeleteTrip";
 import { Recovery } from "./Recovery";
 import { stageStatus, type StageRoute } from "./stages";
@@ -49,6 +51,8 @@ export function AppShell() {
   const navigate = useNavigate();
   const location = useLocation();
   const [navOpen, setNavOpen] = useState(false);
+  // Which navigation surface exists at all -- see `useMediaQuery`.
+  const phone = useMediaQuery(PHONE);
 
   // Every route change starts at the top.
   //
@@ -129,20 +133,33 @@ export function AppShell() {
 
   return (
     <div className="app-shell">
-      {/* derives-from: element 17 .sidebar as .sidebar. Auto-Bill has no phone precedent
-          because its sidebar was informational; a nine-item nav list sitting
-          above the content on every phone screen is why this collapse exists. */}
-      <button
-        aria-controls="stage-nav"
-        aria-expanded={navOpen}
-        className="nav-toggle"
-        onClick={() => setNavOpen((open) => !open)}
-        type="button"
-      >
-        <Menu aria-hidden="true" size={18} />
-        {trip?.name || copy("stage_setup", language)}
-      </button>
-      <aside className={`sidebar${navOpen ? " open" : ""}`} id="stage-nav">
+      {/* Context, in the top zone where a phone expects to find it — which trip is
+          open and where it goes. It replaced a hamburger that carried the trip name:
+          the name was the only thing that button said, while what it actually did was
+          navigate, so it answered "which trip" in the place a reader looks for "where
+          am I" and hid all ten destinations behind itself. Navigation now lives in
+          `<StageTabs>` at the bottom, and this states the trip and nothing else.
+          derives-from: element 17 .sidebar-title as .trip-bar */}
+      {phone ? (
+        <header className="trip-bar">
+          <Compass aria-hidden="true" size={17} />
+          <span className="trip-bar-name">{trip?.name || copy("app_name", language)}</span>
+          {trip ? <span className="trip-bar-where">{trip.destination}</span> : null}
+        </header>
+      ) : null}
+      {/* On a phone the sidebar *is* the More sheet, rendered only while it is open —
+          so the tab bar and the full stage list are never in the document together and
+          exactly one of them can claim to be the current page. */}
+      {/* derives-from: element 17 .sidebar as .sidebar. The citation used to sit on the
+          phone hamburger, which this change deleted — taking the sidebar's parity pair
+          with it. It belongs on the sidebar itself. */}
+      {!phone || navOpen ? (
+      <aside className={`sidebar${navOpen ? " open" : ""}${phone ? " sheet" : ""}`} id="stage-nav">
+        {phone ? (
+          <button className="sheet-close" onClick={() => setNavOpen(false)} type="button">
+            <X aria-hidden="true" size={18} /> {copy("nav_close", language)}
+          </button>
+        ) : null}
         {/* `end`, or `/trips` matches every `/trips/:id/*` descendant and both of these
             links claim `aria-current="page"` on every stage screen. Three elements
             claiming to be the current page is three contradictory answers to a screen
@@ -279,9 +296,19 @@ export function AppShell() {
           </button>
         </div>
       </aside>
+      ) : null}
       <main className="stage-main">
         <Outlet />
       </main>
+      {phone && !navOpen ? (
+        <StageTabs
+          journey={journey.data}
+          language={language}
+          onMore={() => setNavOpen(true)}
+          stage={stage}
+          tripId={tripId}
+        />
+      ) : null}
     </div>
   );
 }

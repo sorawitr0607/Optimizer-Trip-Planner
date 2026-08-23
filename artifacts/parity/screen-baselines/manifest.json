@@ -9,6 +9,7 @@
       "screens": [
         "setup",
         "places",
+        "stay",
         "evidence",
         "optimize",
         "itinerary",
@@ -28,8 +29,34 @@
         "landing",
         "setup",
         "places",
+        "stay",
+        "evidence",
+        "optimize",
         "itinerary",
+        "readiness",
+        "costs",
+        "split",
+        "revise",
         "tour"
+      ]
+    },
+    {
+      "prefix": "t900-",
+      "viewport": [
+        900,
+        900
+      ],
+      "screens": [
+        "setup",
+        "places",
+        "stay",
+        "evidence",
+        "optimize",
+        "itinerary",
+        "readiness",
+        "costs",
+        "split",
+        "revise"
       ]
     }
   ],
@@ -41,8 +68,8 @@
     "en",
     "th"
   ],
-  "expected": 56,
-  "written": 56,
+  "expected": 128,
+  "written": 128,
   "failed": [],
   "note": "Captured on one fixed machine at fixed viewports. Cross-platform font rendering is what makes these gates flaky, so a capture from another machine is not comparable."
 }

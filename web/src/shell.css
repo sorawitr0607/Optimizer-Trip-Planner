@@ -1,3 +1,21 @@
+/* ---------------------------------------------------------------------------
+   Breakpoints: there are three, and adding a fourth needs a reason.
+
+       max-width:  600px   narrow phone
+       max-width:  860px   phone            (min-width: 861px  = not a phone)
+       max-width: 1100px   below wide       (min-width: 1101px = wide desktop)
+
+   This file used to carry **twelve** distinct width values — 500, 560, 600, 720,
+   768, 860, 861, 900, 992, 1000, 1040, 1100 — mixing min and max, so 860 and 861
+   and 900 all meant "about here" and no two rules agreed where a phone stopped.
+   Nothing caught that, because the capture set photographed 500 and 1440 and
+   nothing in between; the `t900-` view exists now so the middle is covered.
+
+   860 is the one that matters: it is also `PHONE` in `shared/useMediaQuery.ts`,
+   which decides whether the sidebar or the bottom tab bar is rendered at all.
+   Change one and you must change the other, or the shell will draw a navigation
+   the stylesheet is not expecting.
+   --------------------------------------------------------------------------- */
 .app-shell {
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
@@ -246,7 +264,7 @@
   font-weight: var(--weight-secondary);
 }
 
-@media (max-width: 992px) {
+@media (max-width: 860px) {
   .app-shell,
   .trips-page {
     display: block;
@@ -764,7 +782,7 @@
    or six rows inside 34rem. A second, elastic track takes that space: the text inputs
    stay in the measured column, and anything spanning `1 / -1` -- which is every chip
    fieldset and every traveller card -- gets the full width. */
-@media (min-width: 1040px) {
+@media (min-width: 1101px) {
   .setup-fields {
     grid-template-columns: minmax(0, 34rem) minmax(0, 1fr);
   }
@@ -973,7 +991,14 @@
   color: var(--color-on-accent);
 }
 
-@media (max-width: 768px) {
+/* 1100, not 860. Below the wide tier the stepper has five labels to fit across a
+   content column that is now `900 - 260` rather than the full window — the sidebar
+   became a real column here when the old 992px `display: block` rule moved to 860 —
+   and they ellipsised to "Bef…", "Ow…", "Trav…", "Revi…", which is worse than the
+   numbered circle alone. Nothing is lost: the line directly beneath spells out
+   "Step 2 of 5 · Trip basics · Setup confirmed". Found by the `t900-` captures,
+   which is what that viewport was added for. */
+@media (max-width: 1100px) {
   .wizard-step-label {
     display: none;
   }
@@ -1041,7 +1066,7 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-@media (max-width: 768px) {
+@media (max-width: 860px) {
   .optimize-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1113,37 +1138,273 @@
   text-decoration: none;
 }
 
-/* The phone collapse. Designed rather than lifted: Auto-Bill's sidebar was
-   informational, so it never needed one. Above 992px the sidebar is always
-   open and the toggle does not exist. */
-.nav-toggle {
-  display: none;
+/* ---------------------------------------------------------------------------
+   The phone shell: context at the top, navigation at the bottom.
+   Designed rather than lifted; Auto-Bill's sidebar was informational and its tab
+   strip sat at the top of a two-screen app, so neither had a phone precedent.
+
+   What this replaced was a hamburger holding all ten stages. `AppShell` now
+   renders *either* the sidebar (desktop, and the phone's More sheet) or
+   `<StageTabs>`, never both — see `useMediaQuery`, and keep `PHONE` there equal
+   to the 860px here.
+   --------------------------------------------------------------------------- */
+
+/* The bottom bar's real height: 56px of target plus its 1px top border. Three rules
+   depend on it — the bar itself, the sticky setup actions that sit directly on top of
+   it, and the padding that keeps page content clear of both — and they were three
+   separate literals, which showed up as a 1px overlap between the action bar and the
+   tab bar's border. One value, derived once. */
+.app-shell {
+  --tab-bar: 57px;
 }
 
-@media (max-width: 992px) {
-  .nav-toggle {
+/* Which trip is open. States it; does not navigate. */
+.trip-bar {
+  align-items: center;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--bg-card-border);
+  display: flex;
+  gap: 8px;
+  /* Under a notch, and never behind it. */
+  padding: max(10px, env(safe-area-inset-top)) 16px 10px;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+
+.trip-bar-name {
+  font-weight: var(--weight-selected);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trip-bar-where {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The bottom tab bar. Five targets, each its own column, each at least 56px tall
+   before the safe-area inset — a thumb, not a cursor. */
+.stage-tabs {
+  background: var(--bg-card);
+  border-top: 1px solid var(--bg-card-border);
+  bottom: 0;
+  box-shadow: var(--shadow-md);
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  left: 0;
+  padding-bottom: env(safe-area-inset-bottom);
+  position: fixed;
+  right: 0;
+  z-index: 40;
+}
+
+.stage-tab {
+  align-items: center;
+  background: none;
+  border: 0;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-secondary);
+  gap: 3px;
+  justify-content: center;
+  /* The floor the rest of this stylesheet does not meet. 56 > 44, because a tab
+     bar is aimed at without looking. */
+  min-height: 56px;
+  padding: 6px 2px;
+  position: relative;
+  text-decoration: none;
+}
+
+/* One line, ellipsised rather than wrapped: a two-line tab changes the height of
+   the whole bar, and Thai labels are longer than English ones. */
+.stage-tab-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stage-tab[aria-current="page"] {
+  color: var(--color-accent);
+}
+
+/* The active tab is named by colour *and* by a bar, because colour alone cannot
+   carry a state — the same rule the sidebar's ticks and padlocks follow. */
+.stage-tab[aria-current="page"]::before {
+  background: var(--color-accent);
+  content: "";
+  height: 2px;
+  left: 12px;
+  position: absolute;
+  right: 12px;
+  top: 0;
+}
+
+.stage-tab[data-state="locked"] {
+  cursor: not-allowed;
+  opacity: var(--opacity-disabled);
+}
+
+/* The sidebar's "next" badge, with no room for the word. */
+.stage-tab-dot {
+  background: var(--color-accent);
+  border-radius: var(--radius-pill);
+  height: 6px;
+  position: absolute;
+  right: 22%;
+  top: 8px;
+  width: 6px;
+}
+
+@media (max-width: 860px) {
+  /* One column. The shell is `260px minmax(0, 1fr)`, and with no sidebar rendered
+     the main element would otherwise land in the 260px track. */
+  .app-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* The sheet: the full ten stages, over the page rather than beside it. */
+  .sidebar.sheet {
+    inset: 0;
+    margin: 0;
+    max-height: 100dvh;
+    overflow-y: auto;
+    padding: 12px 16px calc(24px + env(safe-area-inset-bottom));
+    position: fixed;
+    top: 0;
+    z-index: 50;
+  }
+
+  .sheet-close {
     align-items: center;
-    background: var(--bg-card);
+    align-self: flex-end;
+    background: none;
     border: 1px solid var(--bg-card-border);
     border-radius: var(--radius-house);
-    box-shadow: var(--shadow-sm);
     color: var(--text-primary);
     cursor: pointer;
     display: flex;
-    font-size: var(--text-sm);
-    font-weight: var(--weight-selected);
-    gap: 8px;
-    margin: 20px 20px 0;
-    padding: 8px 12px;
-    width: calc(100% - 40px);
+    font-size: var(--text-xs);
+    gap: 6px;
+    min-height: 44px;
+    padding: 8px 14px;
   }
 
-  .sidebar {
-    display: none;
+  /* Room for the bar, so the last control on a page is reachable rather than
+     sitting underneath it. */
+  .stage-main {
+    padding: 12px 16px calc(var(--tab-bar) + 16px + env(safe-area-inset-bottom));
   }
 
-  .sidebar.open {
+  /* The primary action, in the thumb zone and shaped like the main thing on the
+     card.
+
+     `.setup-primary` (30 call sites) and `.primary-link` (12) are the app's two
+     primary actions, and both were `padding: 8px 14px` around their own label —
+     about 40px tall and as wide as their text. On a monitor that is a normal
+     button; on a phone it is a small target somewhere in a column of prose, and
+     the screen stops saying what it wants you to do. Full width makes it the
+     widest thing in the card, which is the whole of Fitt's law applied to a
+     one-column layout, and 48px clears the 44px floor with room to spare.
+
+     Width comes from the parent, so this needs no per-screen work — every one of
+     the 42 sites is inside a card or an action row that is already the content
+     width. `.setup-actions` below keeps its two buttons side by side, because
+     Back and Next are a pair and stacking them puts Back under the thumb. */
+  .setup-primary,
+  .primary-link {
     display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
+    padding: 12px 16px;
+    width: 100%;
+  }
+
+  /* An action row stacks on a phone rather than squeezing.
+     With the primary at `width: 100%` its siblings get whatever is left, which put
+     "Search again" and "Continue with provisional assumptions" onto two cramped
+     lines each. Wrapping gives every button its own full-width line, which is the
+     mobile shape anyway — and the pair that must stay a row opts out below. */
+  .optimize-actions,
+  .setup-actions {
+    flex-wrap: wrap;
+  }
+
+  /* Back and Next stay a row, and the row sticks — on setup only.
+     Setup is the one screen in the app that is genuinely linear: five steps, one
+     commit each, and its actions sat at the end of a form long enough to scroll.
+     Pinned above the tab bar, "what do I press to go on" needs no hunting for.
+
+     Scoped to `.setup-screen`, and that scope is load-bearing rather than tidy.
+     `.setup-actions` is a shared class: `/evidence` uses it for its continue pair
+     and `/places` uses it for a photo gallery's prev/next. An unscoped rule pinned
+     a photo stepper to the bottom of the viewport, which is how this was found. */
+  .setup-screen .setup-actions {
+    background: var(--bg-card);
+    border-top: 1px solid var(--bg-card-border);
+    bottom: calc(var(--tab-bar) + env(safe-area-inset-bottom));
+    flex-wrap: nowrap;
+    /* -18px, matching `.stage-card`'s phone padding below, so the bar reaches the
+       card edge instead of stopping two pixels short of it. */
+    margin: 16px -18px 0;
+    /* Plain 10px at the foot, not `10px + safe-area`. The bar's bottom edge already
+       sits at `56px + inset` — the top of the tab bar — so the inset is the tab
+       bar's to pay, and adding it again here opened a gap the width of a notch. */
+    padding: 10px 18px;
+    position: sticky;
+    z-index: 20;
+  }
+
+  /* Secondaries size to their label; the primary takes what is left.
+     Equal thirds (`flex: 1 1 0`) looked tidy and wrapped "Save & continue" onto two
+     lines at 500px while "Back" sat in 150px of empty button — three identical
+     shapes, none of them saying which one goes forward. */
+  .setup-screen .setup-actions button {
+    flex: 0 1 auto;
+    min-height: 48px;
+  }
+
+  .setup-screen .setup-actions .setup-primary {
+    flex: 1 1 auto;
+    width: auto;
+  }
+
+  /* The touch-target floor, applied where a pointer is coarse rather than to
+     every screen: 61 interactive rules in this stylesheet compute under 44px,
+     which is correct for a mouse and not for a thumb. Scoped to the shell so the
+     landing page — which has its own scale — is untouched.
+
+     `a`, not `a.stage-link`. The narrower selector was written while looking at the
+     sidebar and missed every other link styled as a control: measured in a real
+     browser at 390px, `/itinerary`'s five `.plan-next-action` links came out at
+     **42px**. Bare `a` is safe for running prose, because `min-height` does not
+     apply to a non-replaced inline element — the map's "© OpenStreetMap
+     contributors" credit stays 16px, as it should. */
+  .app-shell button,
+  .app-shell select,
+  .app-shell input:not([type="checkbox"]):not([type="radio"]),
+  .app-shell summary,
+  .app-shell a {
+    min-height: 44px;
+  }
+}
+
+/* Neither surface exists above the phone breakpoint; `AppShell` does not render
+   them, and these keep a stale class from painting if it ever does. */
+@media (min-width: 861px) {
+  .stage-tabs,
+  .trip-bar {
+    display: none;
   }
 }
 
@@ -2068,7 +2329,7 @@
   padding: 10px;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 860px) {
   .place-detail-grid {
     grid-template-columns: 1fr;
   }
@@ -2249,7 +2510,7 @@
 }
 
 /* Stacked on a phone, so the action never has to share a line it cannot fit on. */
-@media (max-width: 768px) {
+@media (max-width: 860px) {
   .revise-pick {
     align-items: stretch;
     flex-direction: column;
@@ -2502,7 +2763,7 @@
   text-align: center;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 860px) {
   .day-stepper {
     font-size: var(--text-xs);
     gap: 6px;
@@ -2615,7 +2876,7 @@
   font-weight: var(--weight-secondary);
 }
 
-@media (max-width: 720px) {
+@media (max-width: 860px) {
   .dayhead {
     aspect-ratio: auto;
     grid-template-columns: 1fr;
@@ -4191,7 +4452,7 @@
   filter: brightness(1.06);
 }
 
-@media (max-width: 560px) {
+@media (max-width: 600px) {
   .landing-nav {
     gap: 8px;
     padding: 10px 12px;
@@ -4554,7 +4815,7 @@
   padding: 5px 12px;
 }
 
-@media (min-width: 1000px) {
+@media (min-width: 1101px) {
   .landing-hero {
     gap: clamp(24px, 4vw, 56px);
     grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
@@ -4591,7 +4852,7 @@
   z-index: 2;
 }
 
-@media (min-width: 1000px) {
+@media (min-width: 1101px) {
   .hero-demo {
     display: grid;
   }
@@ -5074,7 +5335,7 @@
   }
 }
 
-@media (max-width: 500px) {
+@media (max-width: 600px) {
   .lab-stepper-grid {
     grid-template-columns: 1fr;
   }
@@ -5142,7 +5403,7 @@
   padding: 24px;
 }
 
-@media (min-width: 1000px) {
+@media (min-width: 1101px) {
   .showcase-section {
     align-items: start;
     display: grid;
@@ -5648,7 +5909,7 @@
   border-color: var(--landing-route);
 }
 
-@media (max-width: 768px) {
+@media (max-width: 860px) {
   .split-sandbox-card {
     grid-template-columns: 1fr;
   }
@@ -5797,13 +6058,13 @@
   max-width: 68rem;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 860px) {
   .presets-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 }
 
-@media (max-width: 500px) {
+@media (max-width: 600px) {
   .presets-grid {
     grid-template-columns: 1fr;
   }
@@ -6729,7 +6990,7 @@
   font-weight: var(--weight-secondary);
 }
 
-@media (max-width: 768px) {
+@media (max-width: 860px) {
   .optimize-unfit-list li {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -6887,7 +7148,7 @@
    its own row, full width, and stops at the top edge when the page scrolls past it --
    always reachable, never over anything. The panel it opens is a bottom sheet, so the
    two do not meet. */
-@media (max-width: 768px) {
+@media (max-width: 860px) {
   .shortlist-handle {
     justify-content: center;
     margin-bottom: 12px;
@@ -8506,7 +8767,7 @@
    inline actions that are not primary — the deck's own dots, tags and eyebrow
    text carry no tap target at all.
    --------------------------------------------------------------------------- */
-@media (max-width: 768px) {
+@media (max-width: 860px) {
   button,
   select,
   textarea,
@@ -8617,6 +8878,30 @@
   line-height: 1.25;
 }
 
+/* The same measure the landing page already gets, finally applied to the nine
+   screens that carry the actual reading.
+
+   `.stage-main` and `.stage-card` have never had a `max-width`, so on a 1440px
+   window a paragraph runs the full 1130px of card — about 140 characters, roughly
+   double the 75 the note above `--measure-body` gives as the point where the eye
+   starts losing the left margin. The readiness board is the worst of it: every
+   item prints a consequence sentence at full card width. That note was written
+   for the landing page in the same round the stage screens were left out.
+
+   `max-width` is the safe half of the pair — it can only ever narrow, so a
+   paragraph already inside a narrow grid cell is unaffected and nothing reflows
+   on a phone, where the card is far below the cap. No `margin-inline: auto`
+   here, unlike the landing page: this copy is left-aligned in a left-aligned
+   card, and centring it would leave the text floating away from its heading. */
+.stage-card > p,
+.stage-card > header p,
+.stage-card > section > p,
+.stage-blocked > p,
+.money-row-note,
+.money-row-meta {
+  max-width: var(--measure-body);
+}
+
 .stage-card h3:not(.money-eyebrow) {
   font-size: var(--text-lg);
   font-weight: var(--weight-selected);
@@ -8664,7 +8949,7 @@
   background: var(--color-accent-hover);
 }
 
-@media (max-width: 768px) {
+@media (max-width: 860px) {
   .stage-card,
   .stage-blocked {
     padding: 18px;
@@ -9180,7 +9465,7 @@
    there being one column; on a desktop they belong side by side, and the map does not
    need three-fifths of the viewport's height to say what it says.
    --------------------------------------------------------------------------- */
-@media (min-width: 900px) {
+@media (min-width: 861px) {
   .plan-map {
     align-items: start;
     column-gap: 16px;
@@ -9720,7 +10005,7 @@
 
 /* From 900px the map and the stops sit side by side, because on a wide screen the point
    is seeing where you are going *and* in what order. */
-@media (min-width: 900px) {
+@media (min-width: 861px) {
   .trip-now {
     padding: 18px 20px;
   }

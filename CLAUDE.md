@@ -109,6 +109,77 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
 
 **The interface**
 
+- **There are three breakpoints — 600, 860, 1100 — and `shell.css`'s header block is the list.**
+  It carried **twelve** distinct width values (500, 560, 600, 720, 768, 860, 861, 900, 992, 1000,
+  1040, 1100), mixing min and max, so three different rules disagreed about where a phone stopped.
+  **860 is load-bearing**: it is also `PHONE` in `shared/useMediaQuery.ts`, which decides whether the
+  sidebar or the tab bar is rendered at all, so changing one without the other draws a navigation the
+  stylesheet is not expecting. The old `max-width: 992px` block — which turned the shell into
+  `display: block` — is the one whose move actually changes something: with the sidebar no longer
+  rendered below 861, it had become a band where a full-width ten-link sidebar stacked above every page.
+- **The capture set has a third viewport, `t900-`, because 500 and 1440 left the middle untested.**
+  Consolidating those twelve breakpoints was a change no gate could have caught going wrong. The phone
+  set also covers **every** stage route now, not the four it began with.
+- **The type scale's small end is not to be touched, and the heading end is where the contrast went.**
+  241 of 279 uses sit in the 12-15px band while `h1` was 27px — about 1.8x body, which is why screens
+  read as one flat grey. `--text-4xl` is 30 (28 on a phone, where 30 wraps "Split actual bills" at
+  500px), `5xl` 34, `6xl` 42; `2xs`/`xs`/`sm` are unchanged because a global bump would reflow 241
+  dense-UI call sites. `font-size` is not one of the five properties the parity gate compares.
+  On a phone `tokens.css` redefines `2xs`/`xs`/`sm` one notch up on `:root`, so the relationships hold
+  and nothing that lined up stops lining up.
+- **The touch floor covers `a`, not just `a.stage-link` — and the headless capture cannot check it.**
+  Headless Chrome on macOS clamps its window to a 500px minimum, so the `m500-` set is not a
+  phone. Driven through cmux at a real **390px**, `/itinerary`'s five `.plan-next-action`
+  links measured **42px** while every capture said the screen was fine. Bare `a` is safe for
+  running prose because `min-height` does not apply to a non-replaced inline element, which
+  is why the map's "© OpenStreetMap contributors" credit correctly stays 16px.
+  **Measure the phone in a real browser before believing the phone baselines.**
+  `cmux browser <surface> viewport 390 844` plus `eval` is the whole harness; it also
+  confirmed the 861/860 boundary is exact, that no route overflows horizontally, and that
+  everything past the right edge on `/costs` and `/itinerary` is inside a legitimate
+  `overflow-x: auto` scroller (`.money-table`, `.day-tabs`) or an SVG map viewBox.
+- **`--virtual-time-budget` is 15000 and both directions of that number were measured.**
+  `/places` is the only screen whose content arrives asynchronously. At 5000 the deck is
+  still showing "Looking it up on the map…", and a loading placeholder is *stable*, so
+  `stable_capture`'s two-identical-shots rule accepts it happily — one run caught the
+  placeholder, the next caught the card, and the gate reported 2.9% drift on unchanged
+  code. At 30000 it fails the other way: virtual time outruns the real network, a request
+  aborts, and a "Failed to fetch" banner pushes the page down 29px for 12% drift, again on
+  unchanged code. **Bigger is not safer.** Re-measure before changing it, and remember that
+  a stable-looking intermediate state defeats the settle check entirely.
+- **`--tab-bar` is the one place the bottom bar's height is written**: 56px of target plus a
+  1px top border. Three rules depend on it — the bar, the sticky setup actions that sit on
+  top of it, and the padding that keeps content clear — and as three literals they were
+  already 1px out of register.
+- **No touch control may render below 16px, and the rule that enforces it is `!important` on purpose.**
+  iOS Safari zooms the whole page when a focused input's text is under 16px and never zooms back. Nine
+  rules in `shell.css` set a control to 12, 14 or 15px, all class-scoped, and `shell.css` is imported
+  after `tokens.css` — so a bare element selector loses twice over. It is a floor, not a style.
+- **Prose on the stage screens takes `--measure-body`, the same cap the landing page already had.**
+  `.stage-main` and `.stage-card` have no `max-width`, so a paragraph ran the full 1130px of card at
+  1440 — about 140 characters against the ~75 that note gives as the limit. `max-width` only ever
+  narrows, so it is a no-op inside a narrow grid cell and on a phone. Do not write a measure by hand
+  and do not write one in `ch`; the note above `--measure-body` explains what that costs.
+- **`.setup-primary` and `.primary-link` go full width and 48px tall on a phone**, which is Fitt's law
+  in a one-column layout — the primary action becomes the widest thing in the card. `.setup-actions`
+  is additionally sticky above the tab bar, and **only there**: setup is the one linear screen, and a
+  permanent action bar on a board or a report claims a primary action it does not have.
+- **The phone and the desktop get *different* navigation, and only one of them is ever in the DOM.**
+  `AppShell` renders the sidebar above 860px and `<StageTabs>` below it, chosen by `useMediaQuery` —
+  not by CSS — because rendering both puts two `aria-current="page"` claims in one document, which is
+  the exact defect `navSemantics.test.tsx` exists to catch. On the phone the sidebar *is* the More
+  sheet and appears only while it is open, so the tab bar and the stage list are never both present.
+  `useMediaQuery` answers `false` without `matchMedia`, so the node test environment renders the
+  desktop shell; assert the phone surface through `StageTabs.test.tsx` rather than by stubbing globals.
+  Keep `PHONE` in `useMediaQuery.ts` equal to the 860px in `shell.css`.
+- **A tab may be current for a route it does not link to, so the tabs use `Link` and not `NavLink`.**
+  `NavLink` derives `aria-current` from its own route match and overrides the prop, which silenced the
+  Money tab on `/split` — the one case the feature exists for. The four `covers` sets must stay
+  disjoint, or more than one tab claims the page.
+- **`stay`, `evidence`, `revise` and `split` never report `done`** — only the five gate keys do, as
+  `stages.ts` says. Anything deriving "the first unfinished stage" from `state !== "complete"` will
+  therefore stick on `stay` forever; `StageTabs.buildTarget` reads `journey.next` instead, which is the
+  same answer `/` redirects to.
 - **Before adding a control to `/optimize`, grep for `autoResolveAndGenerate.mutate()` and count the
   call sites.** That control has been wrong three times, each time a second button running the same
   mutation under a different label.
@@ -159,10 +230,25 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   `prefers-color-scheme`, and neither stylesheet contains such a block, so
   `[data-theme="dark"]` is the only path to dark. It remains a default and not a lock: the
   toggle still works and is still remembered.
-- **A screen-baseline run must reuse one Chrome profile.** Trip ownership is a localStorage token; a
-  fresh profile per image lets the first image claim the scratch trip and makes every later image show
-  `Trip not found`. Capture mode suppresses the one-time plan-ready dialog so the itinerary baselines
-  cover the dashboard beneath it. Open changed images before approving them.
+- **A screen-baseline run must reuse one Chrome profile *and* be handed the trip's owner token.**
+  Trip ownership is a localStorage token. Reusing one profile stops the images disagreeing with each
+  other; it does not make the run an owner, because a throwaway profile mints a *new* token on load and
+  `list_trips` filters on it. With only the first half fixed, **52 of the 56 captures were the
+  unknown-trip recovery screen** — every stage route, both viewports, both themes, both languages — and
+  the gate passed on all of them, because an error page compared against an error page is clean. It sat
+  green across three handoffs while covering nothing, and "the screen baselines are approved" was
+  reported as an achievement. `--owner` is therefore **required**, `capture_screen_baselines.py` puts it
+  on the URL as `baseline_owner`, and `web/src/main.tsx` writes it to `localStorage` inside the same
+  capture-mode block that already reads `baseline_theme`. Get it with
+  `sqlite3 data/tourist.sqlite3 "select owner_token from trips where id = '<trip>'"`.
+  Capture mode suppresses the one-time plan-ready dialog so the itinerary baselines cover the dashboard
+  beneath it. **Open changed images before approving them** — that rule already existed and would have
+  caught this on any of the three occasions it was not followed. A blank-detector over the capture set
+  is two lines of Pillow and is worth more than reading the percentages.
+- **The phone capture's viewport is ~745px tall, not the 844 in its filename.** Headless Chrome sizes
+  the *window*, and its chrome eats the difference, so a 500x844 image carries about 99px of dead white
+  below the page — visible in a dark-theme shot, where the band stays white. A `position: fixed` bottom
+  bar therefore lands at y≈745 in the image and is correctly pinned all the same. Do not "fix" it.
 - **Before penalising an `avoid` chip in `ranking.py`, check the vocabulary.** None of the five is a
   word the place vocabulary uses (`AVOID_TAGS ∩ candidate tags = ∅`), so a deduction keyed on
   candidate tags is dead code that looks like a feature. They reach the engine as optimizer

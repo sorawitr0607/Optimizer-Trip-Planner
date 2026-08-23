@@ -5,6 +5,7 @@ import { createBrowserRouter, RouterProvider } from "react-router";
 
 import "../../tokens.css";
 import "./shell.css";
+import { OWNER_KEY } from "./api/client";
 import type { Language } from "./i18n/copy";
 import { LanguageProvider } from "./i18n/LanguageProvider";
 import { routes } from "./routes";
@@ -62,6 +63,24 @@ if (theme === "dark" || theme === "light") {
   if (parameters.get("baseline_tour") === "open") {
     document.documentElement.dataset.captureTour = "1";
   }
+  // Who the capture is, and the reason 52 of 56 baselines photographed "Trip not
+  // found" rather than the app.
+  //
+  // Trips are keyed to a random `localStorage` token (`ownerToken` in `api/client`),
+  // and the capture runs in a throwaway Chrome profile — so it minted a *new* token
+  // on load, `list_trips` filtered on it, and every stage route rendered the
+  // unknown-trip recovery screen. Both sets agreed, so the gate passed: it was
+  // comparing an error page against an error page on nine desktop routes and four
+  // phone routes, in two themes and two languages, and could not have failed on any
+  // layout change. The comment above about one shared profile fixed a *different*
+  // symptom — the images disagreeing with each other — and left this one, because a
+  // profile shared by all 56 is still a profile that owns nothing.
+  //
+  // Read only inside capture mode and written before `createRoot` below, so the
+  // first `list_trips` already carries it. Outside a capture the parameter does
+  // nothing, and the owner's own token is never touched.
+  const owner = parameters.get("baseline_owner");
+  if (owner) localStorage.setItem(OWNER_KEY, owner);
 }
 // Passed only when the seam asked for it. Handing `LanguageProvider` a default of
 // "en" on every load would make the capture parameter indistinguishable from no

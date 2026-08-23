@@ -1686,7 +1686,14 @@
       "active_hours": "Hours you want to be out",
       "active_start": "From",
       "active_end": "Until",
-      "active_hours_help": "The planner schedules inside these. A flight time still wins on its own day."
+      "active_hours_help": "The planner schedules inside these. A flight time still wins on its own day.",
+      "tab_build": "Build",
+      "tab_itinerary": "Itinerary",
+      "tab_money": "Money",
+      "tab_checks": "Checks",
+      "tab_more": "More",
+      "nav_all_screens": "All screens",
+      "nav_close": "Close menu"
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -2870,7 +2877,14 @@
       "active_hours": "ช่วงเวลาที่อยากออกไปเที่ยว",
       "active_start": "ตั้งแต่",
       "active_end": "ถึง",
-      "active_hours_help": "ระบบจัดตารางในช่วงนี้ · เวลาเครื่องบินยังมีผลเหนือกว่าในวันนั้น"
+      "active_hours_help": "ระบบจัดตารางในช่วงนี้ · เวลาเครื่องบินยังมีผลเหนือกว่าในวันนั้น",
+      "tab_build": "สร้าง",
+      "tab_itinerary": "ตาราง",
+      "tab_money": "เงิน",
+      "tab_checks": "ตรวจ",
+      "tab_more": "เพิ่มเติม",
+      "nav_all_screens": "ทุกหน้าจอ",
+      "nav_close": "ปิดเมนู"
     }
   }
 }

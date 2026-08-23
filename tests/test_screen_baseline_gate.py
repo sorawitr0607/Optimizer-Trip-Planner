@@ -77,15 +77,65 @@ class StaleCaptureGuardTest(unittest.TestCase):
         self.assertEqual([], self.run_guard())
 
 
-class CaptureOwnerSessionTest(unittest.TestCase):
-    """Every screen in one run must carry the same browser owner token."""
+class UncomparedScreenTest(unittest.TestCase):
+    """An approved screen with no capture must fail, not be mentioned in passing.
 
-    def test_one_browser_profile_is_reused_for_the_whole_capture_set(self) -> None:
+    It used to append a note and `continue`, so a screen that was never photographed
+    left the gate green — `stable_capture` declines to write an image it cannot
+    settle, which is exactly how a flaky screen would drop out of the comparison
+    without anyone noticing. Same family as the owner-token defect above: the gate
+    reported on the screens it happened to look at, not on the set it approved.
+    """
+
+    def _run(self, capture_names: tuple[str, ...]) -> int:
+        from PIL import Image
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            baselines, current = root / "baselines", root / "current"
+            baselines.mkdir(), current.mkdir()
+            for name in ("setup-light-en.png", "places-light-en.png"):
+                Image.new("RGB", (8, 8), "white").save(baselines / name)
+            for name in capture_names:
+                Image.new("RGB", (8, 8), "white").save(current / name)
+            with patch.object(gate, "BASELINES", baselines), patch.object(
+                gate, "CURRENT", current
+            ), patch.object(gate, "stale_sources", return_value=[]):
+                return gate.main()
+
+    def test_a_screen_that_was_not_captured_fails_the_gate(self) -> None:
+        self.assertEqual(1, self._run(("setup-light-en.png",)))
+
+    def test_a_complete_matching_set_passes(self) -> None:
+        self.assertEqual(
+            0, self._run(("setup-light-en.png", "places-light-en.png"))
+        )
+
+
+class CaptureOwnerSessionTest(unittest.TestCase):
+    """Every screen in one run must be the *same owner*, and must be an owner.
+
+    The first half of that was already asserted and was not enough. Trips are keyed
+    to a random `localStorage` token, a shared throwaway Chrome profile mints no
+    token at all, and so 52 of 56 baselines photographed the unknown-trip recovery
+    screen. Both sets agreed, the gate passed, and it covered nothing — a whole
+    round of "the baselines are green" rested on an error page compared against
+    itself. One shared profile is necessary and says nothing about whose it is.
+    """
+
+    def _run(self) -> tuple[list[str], list[str], list[int]]:
+        """Capture one view: the profiles used, the URLs asked for, and the budgets."""
+
         view = capture.View("", (500, 844), (capture.Screen("setup", "/setup"),))
         profiles: list[str] = []
+        urls: list[str] = []
 
-        def record(*args) -> bool:
+        budgets: list[int] = []
+
+        def record(*args, **kwargs) -> bool:
+            urls.append(args[1])
             profiles.append(args[4])
+            budgets.append(kwargs.get("budget"))
             return True
 
         with TemporaryDirectory() as directory, patch.object(
@@ -99,12 +149,51 @@ class CaptureOwnerSessionTest(unittest.TestCase):
         ), patch.object(capture, "chrome", return_value="chrome"), patch.object(
             capture, "stable_capture", side_effect=record
         ), patch(
-            "sys.argv", ["capture_screen_baselines.py", "--trip", "trip_test"]
+            "sys.argv",
+            [
+                "capture_screen_baselines.py",
+                "--trip", "trip_test",
+                "--owner", "owner-token-1",
+            ],
         ):
             self.assertEqual(0, capture.main())
+        return profiles, urls, budgets
+
+    def test_one_browser_profile_is_reused_for_the_whole_capture_set(self) -> None:
+        profiles, _, _ = self._run()
 
         self.assertEqual(2, len(profiles))
         self.assertEqual(1, len(set(profiles)))
+
+    def test_every_screen_is_asked_for_as_the_trip_owner(self) -> None:
+        _, urls, _ = self._run()
+
+        self.assertEqual(2, len(urls))
+        for url in urls:
+            self.assertIn("baseline_owner=owner-token-1", url)
+
+    def test_each_screen_carries_its_own_virtual_time_budget(self) -> None:
+        # `/places` needs 15000 and every other screen must not pay for it: raising the
+        # budget globally tripled a 128-image run. The fixture screen is "setup", so the
+        # default is what should arrive here.
+        _, _, budgets = self._run()
+
+        self.assertEqual([5000, 5000], budgets)
+        places = next(
+            screen for view in capture.VIEWS for screen in view.screens
+            if screen.name == "places"
+        )
+        self.assertEqual(capture.PLACES_BUDGET, places.budget)
+        self.assertGreater(capture.PLACES_BUDGET, 5000)
+
+    def test_the_owner_token_is_required(self) -> None:
+        # Optional, it would go on being omitted, and the failure is silent: the
+        # images are written, the gate compares them, and every one is the same
+        # recovery screen.
+        with patch(
+            "sys.argv", ["capture_screen_baselines.py", "--trip", "trip_test"]
+        ), self.assertRaises(SystemExit):
+            capture.main()
 
 if __name__ == "__main__":
     unittest.main()

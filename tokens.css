@@ -334,6 +334,21 @@
   --measure-body: 36em;
   --measure-lead: 38em;
 
+  /* The scale, and where its contrast went.
+
+     Counted across this file and `shell.css`: 82 uses of `2xs`, 96 of `xs`, 63 of
+     `sm` — **241 of 279** sit in the 12-15px band, while `h1` was `4xl` at 27px.
+     Body against heading is therefore about 1.8x, which is why every screen reads
+     as one weight of grey no matter how the markup is structured. The step sizes
+     were the visible symptom (15, 16 and 17 are three tokens nobody can tell
+     apart) but the cause is that the top of the scale was never far enough from
+     the bottom.
+
+     So the small end is left exactly as it is — 241 call sites, all of them dense
+     UI that a global bump would reflow — and the heading end is widened instead.
+     `h1` at 30 against a 15px body is 2.0x, and `h2` at 22 now has somewhere to
+     sit between them. `font-size` is not one of the five properties the parity
+     gate compares, so none of this moves a declared deviation. */
   --text-2xs: 0.75rem;    /* 12px — metadata only */
   --text-xs: 0.875rem;    /* 14px */
   --text-sm: 0.9375rem;   /* 15px */
@@ -341,11 +356,11 @@
   --text-md: 1.0625rem;   /* 17px */
   --text-lg: 1.125rem;    /* 18px */
   --text-xl: 1.25rem;     /* 20px */
-  --text-2xl: 1.375rem;   /* 22px */
+  --text-2xl: 1.375rem;   /* 22px — h2 */
   --text-3xl: 1.5rem;     /* 24px */
-  --text-4xl: 1.6875rem;  /* 27px */
-  --text-5xl: 1.8125rem;  /* 29px */
-  --text-6xl: 2.25rem;    /* 36px */
+  --text-4xl: 1.875rem;   /* 30px — h1, was 27 */
+  --text-5xl: 2.125rem;   /* 34px — was 29 */
+  --text-6xl: 2.625rem;   /* 42px — landing hero, was 36 */
 
   --ease-standard: ease;
   --ease-out: ease-out;
@@ -420,6 +435,43 @@ button:disabled {
 :focus-visible {
   outline: 2.5px solid var(--color-purple);
   outline-offset: 2.5px;
+}
+
+/* The phone reads the same scale one notch up.
+   12px of metadata is legible on a monitor at arm's length and squinted at on a
+   handset, and this app puts 82 things at that size. Raising the floor in the
+   tokens rather than in 82 rules keeps the relationships intact — everything
+   moves together, so nothing that lined up stops lining up. The desktop scale is
+   untouched. 860px is the phone breakpoint; see the header of `shell.css`. */
+@media (max-width: 860px) {
+  :root {
+    --text-2xs: 0.8125rem; /* 13px */
+    --text-xs: 0.9375rem;  /* 15px */
+    --text-sm: 1rem;       /* 16px */
+    --text-4xl: 1.75rem;   /* 28px — a 30px h1 wraps "Split actual bills" at 500px */
+    --text-6xl: 2.25rem;   /* 36px */
+  }
+}
+
+/* iOS Safari zooms the whole page when a focused control's text is under 16px,
+   and the page never zooms back — you land on a form and the layout jumps sideways.
+   Nine rules in `shell.css` set a form control to 12, 14 or 15px. Rather than chase
+   each one, the floor is set here on the controls themselves, at the one breakpoint
+   where a touch keyboard exists. `font: inherit` above means most controls already
+   comply; these are the ones that override it. */
+@media (max-width: 860px) {
+  input,
+  select,
+  textarea {
+    /* `!important`, deliberately, and it is the reason this rule works at all.
+       The nine offenders are class-scoped (`.readiness-item-controls input`), so
+       they outrank a bare element selector, and `shell.css` is imported after this
+       file so source order does not save it either. Matching their specificity
+       would mean nine more rules that the tenth one silently escapes. This is a
+       floor rather than a style: no touch control may render below 16px, whatever
+       else it asks for. `max()` keeps anything already larger. */
+    font-size: max(16px, 1em) !important;
+  }
 }
 
 /* ---------------------------------------------------------------------------

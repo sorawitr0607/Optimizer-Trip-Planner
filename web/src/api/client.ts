@@ -899,7 +899,7 @@ export class ApiError extends Error {
  * `crypto.randomUUID` where it exists; a random string where it does not, because
  * the value only has to be unlikely to collide across ten people.
  */
-const OWNER_KEY = "planner.owner";
+export const OWNER_KEY = "planner.owner";
 
 function ownerToken(): string {
   if (typeof localStorage === "undefined") return "";

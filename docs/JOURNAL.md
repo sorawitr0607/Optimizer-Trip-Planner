@@ -3562,3 +3562,152 @@ mounts because the bare `:root` palette is already the light one.
 It is a default and not a lock, which is the distinction worth recording: the stamped root
 still wins for capture, a stored choice still wins for the owner, and someone on a dark
 phone who presses the toggle still gets dark on their next visit too.
+
+## The baselines were photographing an error page, 2026-08-23
+
+**52 of the 56 approved images were "Trip not found".** Every stage route, both viewports,
+both themes, both languages — only the four landing shots were real. Both sets agreed, so
+`check_screen_baselines.py` passed, because an error page compared against an error page is
+clean to any tolerance. The entry two sections above records the set being approved as an
+achievement after blocking three handoffs; it was approving a wall of recovery screens.
+
+The cause is one the previous round half-found. Trips are keyed to a random `localStorage`
+token and the capture runs in a throwaway Chrome profile, so it minted a *new* token on load
+and `list_trips` filtered every trip out. The note that already existed — "a screen-baseline
+run must reuse one Chrome profile" — fixed the images disagreeing with *each other*, which
+was a different symptom of the same fact. A shared profile is still a profile that owns
+nothing, and the first fix's own comment says "all 55 later ones photograph Trip not found"
+without noticing that one profile for all 56 photographs it 56 times.
+
+`--owner` is now required rather than optional, because the failure is silent: the images
+are written, the gate compares them happily, and nothing anywhere says the app never
+rendered. It travels as `baseline_owner` on the URL and `web/src/main.tsx` writes it to
+`localStorage` inside the capture-mode block that already handles `baseline_theme`.
+
+**A second hole in the same gate, found while fixing the first.** An approved screen with no
+current capture appended a note and continued, so the run still passed. `stable_capture`
+declines to write an image it cannot settle — that is precisely how a flaky screen would
+drop out of the comparison and be reported as green. It is a failure now.
+
+The rule that would have caught all of this already existed: *open changed images before
+approving them*. A blank-detector over the capture set is about ten lines of Pillow and is
+worth more than reading the drift percentages.
+
+## The phone got navigation, 2026-08-23
+
+Ten stage links behind a hamburger at the top of the screen is a desktop sidebar with a
+collapse, not a phone design: every destination was two taps away, both out of thumb reach,
+and the toggle's label was the *trip name* — so the one control that navigated answered
+"which trip" in the place a reader looks for "where am I".
+
+`<StageTabs>` is four tabs and More, pinned to the bottom. The grouping is the app's own —
+Build is the sequence you walk once, Itinerary is what it produces, Money is cost and actual
+spend, Checks is the board you keep — and no tab invents a route. The sidebar becomes the
+More sheet, and a slim `.trip-bar` states the trip at the top.
+
+**Only one navigation surface is ever in the DOM**, chosen by `useMediaQuery` rather than by
+CSS, because rendering both puts two `aria-current="page"` claims in one document — the exact
+defect `navSemantics.test.tsx` was written to catch. It answers `false` without `matchMedia`,
+so the node test environment renders the desktop shell and the existing assertions describe
+the same single nav they always did.
+
+Two bugs the new tests caught, both worth keeping in mind:
+
+- `buildTarget` first read "the first build stage that is not `complete`". Only the five gate
+  keys report `done` and `stay` is not one of them, so it is never complete and the tab
+  pinned itself to `/stay` for good. It reads `journey.next` now — the same answer `/`
+  redirects to.
+- `NavLink` derives `aria-current` from its own route match and **overrides the prop**, so
+  the Money tab went silent on `/split` — the one case a tab has to speak for a route it does
+  not link to. Plain `Link`, with the state computed alongside the lock and the next-dot.
+
+## Four things the audit turned up behind the navigation, 2026-08-23
+
+**Twelve breakpoints became three.** 500, 560, 600, 720, 768, 860, 861, 900, 992, 1000, 1040
+and 1100, mixing min and max, so no two rules agreed where a phone stopped. 860 is now the
+one that matters because `useMediaQuery` reads the same number. The `max-width: 992px` block
+was the one whose move changes behaviour: it set `display: block`, and with the sidebar no
+longer rendered below 861 it had quietly become a band where a full-width ten-link sidebar
+stacked above every page.
+
+**A third viewport, because that change was otherwise unverifiable.** The set photographed
+500 and 1440 and nothing between, so consolidating those breakpoints was a change no gate
+could have caught going wrong. `t900-` covers the middle, the phone set went from four
+screens to all of them, and `stay` — a route since 2026-08-14 — turned out to have no image
+at *any* viewport. 56 images became 128. It earned its keep immediately: at 900 the wizard's
+five step labels ellipsised to "Bef…", "Ow…", "Trav…", "Revi…", because the sidebar had just
+become a real column there and took 260px out of the content width.
+
+**The type scale's contrast was at the wrong end.** 241 of 279 uses sit in the 12-15px band
+while `h1` was 27px — about 1.8x body, which is why every screen reads as one flat grey. The
+step sizes were the visible symptom (15, 16 and 17 are three tokens nobody can distinguish)
+but the cause is that the top was never far enough from the bottom. The small end is
+untouched: 241 dense-UI call sites is not a reflow worth risking. Headings widened instead,
+and on a phone `tokens.css` lifts `2xs`/`xs`/`sm` one notch on `:root` so the relationships
+hold.
+
+**Nine form controls were under 16px, which makes iOS Safari zoom the page and never zoom
+back.** All nine are class-scoped and `shell.css` is imported after `tokens.css`, so a bare
+element selector loses twice over; the floor is `!important` on purpose. It is a floor, not
+a style.
+
+**And the measure the landing page already had.** `--measure-body` exists, carries a written
+explanation of why `ch` is the wrong unit for it, and had never been applied to the nine
+screens that carry the actual reading — a paragraph ran the full 1130px of card at 1440,
+about 140 characters against the ~75 that note gives as the limit.
+
+`.setup-primary` and `.primary-link` go full width and 48px on a phone. `.setup-actions` is
+additionally sticky above the tab bar and **scoped to `.setup-screen`**, which is
+load-bearing rather than tidy: that class is shared, and unscoped it pinned `/places`'s photo
+gallery prev/next stepper to the bottom of the viewport.
+
+## The phone was measured in a real browser, and the captures had been lying about it, 2026-08-23
+
+The `m500-` set is not a phone. Headless Chrome on macOS clamps its window — and with it the
+layout viewport — to a 500px minimum, which the capture script's own comment says plainly and
+which is easy to read as a technicality. It is not: 500px is a small tablet, and the whole
+point of the set is the width where things break.
+
+Driven through cmux at a genuine **390 x 844**, with `eval` doing the measuring rather than a
+screenshot doing the suggesting:
+
+- **Every route clean** on horizontal overflow, `aria-current` count, tab-bar pinning, and the
+  16px input floor — ten routes, checked rather than assumed.
+- **One real defect the captures could not have shown.** `/itinerary`'s five
+  `.plan-next-action` links measured **42px**. The touch floor had been written as
+  `a.stage-link` while looking at the sidebar, so every other link styled as a control was
+  outside it. Widened to bare `a`, which is safe for running prose because `min-height` does
+  not apply to a non-replaced inline element — the map's "© OpenStreetMap contributors"
+  credit correctly stays 16px and is the only sub-44px link left.
+- **The 861/860 boundary is exact.** At 861 the sidebar renders and the tab bar does not; at
+  860 they swap; `h1` moves 30 → 28 with them. `useMediaQuery`'s `PHONE` and the stylesheet
+  agree to the pixel, which is the thing that had to be true and had never been checked.
+- **The prose measure works.** The longest readiness consequence line is 504px at 1440,
+  against the ~1130px it had before.
+- **Two false alarms, both worth recording so they are not "fixed" later.** Elements past the
+  right edge on `/costs` and `/itinerary` are inside legitimate `overflow-x: auto` scrollers
+  (`.money-table`, `.day-tabs`), and the three that appeared genuinely clipped are SVG map
+  tiles inside their own viewBox, which is how a map draws.
+
+`--tab-bar` came out of the same pass: the bar is 56px of target plus a 1px border, and the
+sticky action bar's `bottom` was the literal 56, so the two sat 1px out of register. One
+value now, read by three rules.
+
+**A measurement is evidence about what was measured.** That rule was already in `CLAUDE.md`
+for screenshots-versus-measurements; this is the same rule one level up. The captures were
+green on a viewport nobody uses.
+
+### The settle check does not catch a stable placeholder
+
+Six `places` images failed the gate on code that had not changed between the approve run and
+the verify run twenty minutes later. The cause is not drift and not fonts: the baseline had
+photographed the deck reading "Looking it up on the map…" and the recapture had photographed
+the card.
+
+`stable_capture` accepts a shot once two consecutive attempts are byte-identical, which is a
+good test for a fade or a half-painted board and **no test at all for a loading state**, since
+a placeholder sits perfectly still. Raising `--virtual-time-budget` from 5000 to 15000 gives
+the deck time to arrive; going further does not help, and 30000 was measured failing the other
+way — virtual time outruns the real network, a request aborts, and a "Failed to fetch" banner
+shifts the page 29px for 12% drift. The number has a floor and a ceiling and both were paid
+for.

@@ -369,7 +369,7 @@ describe("OptimizePage", () => {
 });
 
 describe("AppShell", () => {
-  it("renders the sidebar, the trip selector and the phone toggle", () => {
+  it("renders the sidebar and the trip selector, and no phone surface", () => {
     const html = render(<AppShell />, "en");
 
     expect(html).toContain("Build the trip");
@@ -378,9 +378,14 @@ describe("AppShell", () => {
     expect(html).toContain("trip-context");
     expect(html).toContain("Taipei New Year");
     expect(html).toContain("Taipei, Taiwan");
-    // Designed, not lifted: the donor has no phone precedent for a nav sidebar.
-    expect(html).toContain("nav-toggle");
-    expect(html).toContain('aria-expanded="false"');
+    // This used to assert a `nav-toggle` hamburger holding all ten stages. It is
+    // gone: the phone gets `<StageTabs>` in the thumb zone and the sidebar only as
+    // the More sheet. `useMediaQuery` answers false without `matchMedia`, which the
+    // node test environment does not have, so this render is the desktop one — and
+    // asserting the phone surface is *absent* here is what pins that, since the two
+    // must never be in one document. `StageTabs.test.tsx` covers the phone side.
+    expect(html).not.toContain("stage-tabs");
+    expect(html).not.toContain("trip-bar");
     expectNoMissingCopy(html);
   });
 

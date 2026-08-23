@@ -92,7 +92,8 @@ def main() -> int:
         if len(stale) > 5:
             print(f"  - ...and {len(stale) - 5} more", file=sys.stderr)
         print(
-            "  run: uv run --locked python scripts/capture_screen_baselines.py --trip <id>",
+            "  run: uv run --locked python scripts/capture_screen_baselines.py "
+            "--trip <id> --owner <trips.owner_token>",
             file=sys.stderr,
         )
         return 1
@@ -112,7 +113,15 @@ def main() -> int:
     for baseline in approved:
         current = CURRENT / baseline.name
         if not current.is_file():
-            notes.append(f"{baseline.name} has no current capture")
+            # A failure, not a note. An approved screen with nothing to compare it
+            # against is a screen this run did not test, and it used to pass with a
+            # line of prose — the same shape as the defect this file's own docstring
+            # warns about. `stable_capture` skips writing an image it could not
+            # settle, so this is exactly how a flaky screen would go quiet.
+            failures.append(
+                f"{baseline.name}: approved but not captured, so it was not compared; "
+                "re-run the capture and check it settled"
+            )
             continue
         with Image.open(baseline) as left, Image.open(current) as right:
             if left.size != right.size:
