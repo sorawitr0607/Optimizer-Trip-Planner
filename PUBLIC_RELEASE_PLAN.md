@@ -1,9 +1,31 @@
 # Public release improvement plan
 
-Status: **deferred until the owner decides to operate a public service**. The current product is a
-strong local, single-owner pilot. It must not be exposed directly to the Internet: its stdlib API,
-localhost `Host` allowlist, local SQLite file and local provider credentials were designed for one
-trusted machine, not anonymous or multi-user traffic.
+Status: **deferred until the owner decides to operate a public service** — but the app itself is no
+longer local. It has been deployed on Vercel and shared since **2026-08-19**, so the paragraph that
+stood here, saying it "must not be exposed directly to the Internet", stopped describing reality on
+that date and is corrected rather than kept.
+
+**What the deployment did address.** The three specifics that sentence named are gone: the stdlib
+API and its localhost `Host` allowlist were replaced by `api/rpc.py` on a serverless runtime, and the
+local SQLite file by a hosted Postgres. Provider credentials live in the platform's environment, not
+on a laptop.
+
+**What it did not.** These are the reasons this plan is still open, and every one of them is live
+today:
+
+- **There are no accounts.** Trips are separated by a random token the browser keeps in
+  `localStorage`. It is not a credential, is not treated as one, and separating several people's
+  trips is the whole of what it does.
+- **The paid spend cap is global**, US$10/month, so **any visitor can spend the owner's provider
+  keys**. Nothing rate-limits per person, because there are no persons to limit.
+- **Credentials that reached git history have not been rotated**, by the owner's decision. Anything
+  in that database should be treated as readable by anyone who reads the history.
+- **The long work depends on a worker the platform does not host**, currently a launchd agent on the
+  owner's laptop. When it is down, queued jobs time out after five minutes and the app looks broken
+  rather than unattended.
+
+So: shared, deliberately, with people the owner chose — not a public service, and not ready to be
+one. The gates below are what would close that gap.
 
 This is the canonical plan for turning that pilot into a public product. The audit evidence and
 local closure record remain in
@@ -22,7 +44,10 @@ Make this decision before changing the architecture:
 | Broad public service | Open registration or anonymous use | Beta gates plus abuse controls, support capacity, public policies and a proven operating history |
 
 The plan below assumes a hosted, account-based service. Keep the planning core, immutable plan
-versions and snapshot-only exporters; replace only the local-only operating boundary.
+versions and snapshot-only exporters; replace only the local-only operating boundary — **the
+transport and storage half of which is already replaced**, per the status above. The checklists
+below are deliberately left unticked: hosting happened, the account model did not, and a box marked
+done because part of its section shipped is how a gate stops meaning anything.
 
 ## 2. Build a production trust boundary
 

@@ -13,7 +13,25 @@ nine routes; there is one runnable surface now.
 
 ## Release status
 
-This repository is a **local, single-user personal travel planner**, designed to run privately on your own machine. Its local server, SQLite database, and credential model are built for trusted local environments. When planning a hosted multi-user release, follow [the public release improvement plan](PUBLIC_RELEASE_PLAN.md).
+**The app has been deployed and shared since 2026-08-19.** It runs on Vercel against a
+hosted Postgres, and anything in this repository that still calls it local-only predates
+that. It remains a personal project rather than a public service — the remaining gates
+are in [the public release improvement plan](PUBLIC_RELEASE_PLAN.md) — but three
+consequences of being reachable are worth stating plainly:
+
+- **Trips are separated by a token the browser keeps in `localStorage`.** That is not a
+  credential and is not offered as one. The same person in a second browser sees an
+  empty list.
+- **The paid spend cap is global**, US$10/month, so any visitor can spend the owner's
+  provider keys. Everything the app needs to plan a trip is free; the paid calls are
+  opt-in and priced on their own buttons.
+- **A serverless function cannot run the long work**, so discovery and optimization are
+  queued and a separate long-lived worker drains them. Vercel has no home for that
+  process; `deploy/macos/` runs it as a launchd agent on the owner's machine. Without a
+  worker somewhere, queued jobs simply time out.
+
+Running it privately on your own machine is still fully supported and needs none of the
+above — `localserver` does the same work inline, with SQLite and no queue.
 
 ## Supported platforms
 
@@ -83,19 +101,25 @@ Edit `secrets.local.json` with your optional keys:
 
 Never commit `secrets.local.json` or `.env`.
 
-## The 9 core workflow routes
+## The 10 core workflow routes
 
-Every trip flows through nine real, interactive screens:
+Every trip flows through ten real, interactive screens:
 
 1. **Setup (`/trips/:id/setup`)**: 5-step wizard configuring destination country/city, travel dates, pacing constraints, and traveler preferences.
 2. **Places (`/trips/:id/places`)**: Candidate place discovery via free OpenStreetMap/Overpass data or custom place additions.
-3. **Evidence (`/trips/:id/evidence`)**: Verify opening hours, exact coordinates, admission fees, and transit requirements.
-4. **Optimize (`/trips/:id/optimize`)**: Deterministic constraint-aware solver computing optimal daily visit orders and route pacing.
-5. **Itinerary (`/trips/:id/itinerary`)**: Interactive day-by-day timetable rendered on the map along the actual walking routes, with one-tap handoff to phone navigation.
-6. **Readiness (`/trips/:id/readiness`)**: Actionable pre-trip checklist proposals (reservations, packing, documents) with readiness scoring.
-7. **Costs (`/trips/:id/costs`)**: Budget tracking, currency conversion, and categorized expense recording.
-8. **Split (`/trips/:id/split`)**: Multi-currency group bill splitting ledger calculating exact settlement transactions.
-9. **Revise (`/trips/:id/revise`)**: In-trip live adjustments, stop reordering, weather adaptations, and schedule rescheduling.
+3. **Stay (`/trips/:id/stay`)**: Where to base the trip, recommended by transit station rather than by hotel or district — the only unit whose travel time the app can measure exactly.
+4. **Evidence (`/trips/:id/evidence`)**: Verify opening hours, exact coordinates, admission fees, and transit requirements.
+5. **Optimize (`/trips/:id/optimize`)**: Deterministic constraint-aware solver computing optimal daily visit orders and route pacing.
+6. **Itinerary (`/trips/:id/itinerary`)**: Interactive day-by-day timetable rendered on the map along the actual walking routes, with one-tap handoff to phone navigation.
+7. **Readiness (`/trips/:id/readiness`)**: Actionable pre-trip checklist proposals (reservations, packing, documents) with readiness scoring.
+8. **Costs (`/trips/:id/costs`)**: Budget tracking, currency conversion, and categorized expense recording.
+9. **Split (`/trips/:id/split`)**: Multi-currency group bill splitting ledger calculating exact settlement transactions.
+10. **Revise (`/trips/:id/revise`)**: In-trip live adjustments, stop reordering, weather adaptations, and schedule rescheduling.
+
+A long wait says where it has got to rather than only that it is running. Discovery and
+the draft build are queued jobs, so the worker reports the stages it has finished — the
+two Overpass blocks, each plan variant — and the screen draws them. A stage is marked
+when its call **returns**, never on a timer.
 
 ### The map
 
@@ -116,7 +140,16 @@ Zoom out far enough and the destination country's own outline appears, so a plac
 ## Repository map
 
 - `PUBLIC_RELEASE_PLAN.md` — the deferred build and evidence gates for a future hosted public service.
-- `api/` — stdlib localhost transport and the local webapp entry point.
+- `api/rpc.py` — the hosted entry point, a Vercel serverless function. It serves the API
+  *and* the static app, because that runtime routes every request to one entrypoint.
+- `localserver/` — the same dispatch over a stdlib HTTP server for running locally. The
+  two share `static_response` rather than implementing it twice.
+- `travel_planner/jobs.py` and `travel_planner/worker.py` — the job queue and the
+  long-lived process that drains it. Discovery is 30-90s and a full proposal ~52s, which
+  no serverless function will sit through.
+- `deploy/macos/` — the launchd agent that keeps that worker alive across crash, sleep
+  and reboot, and the `status` / `logs` / `restart` control surface for it.
+- `supabase/schema.sql` — generated from `store.SCHEMA`, never hand-edited.
 - `web/` — React, TypeScript, Tailwind, route shell, and stage gates.
 - `i18n/copy.json` and `tokens.css` — copy and design truth shared across renderers.
 - `travel_planner/` — planner domain logic, storage, providers, ranking, and optimization.
@@ -125,7 +158,8 @@ Zoom out far enough and the destination country's own outline appears, so a plac
 - `web/src/stages/PlaceMap.tsx` and `web/src/shared/tiles.ts` — the map component and tile arithmetic.
 - `travel_planner/destinations.py` — country/city picker table.
 - `tests/` — deterministic unit tests and historic trip regressions.
-- `artifacts/parity/` — donor style capture and 56 approved screen baselines.
+- `artifacts/parity/` — donor style capture and 136 approved screen baselines: ten stage
+  routes at three viewports, in both themes and both languages.
 - `scripts/` — validation, regression, provider, and Graphify maintenance commands.
 - `data/reference-itineraries/<city>/` — source workbooks and PDF itineraries.
 - `graphify-out/` — checked-in graph snapshot.
