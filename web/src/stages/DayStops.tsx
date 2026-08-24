@@ -6,7 +6,7 @@ import {
   Route,
   Utensils,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
 import { mapsLink } from "../shared/map";
@@ -80,6 +80,14 @@ export function DayStops({
 }: DayStopsProps) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null);
+  const lightboxDialog = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const node = lightboxDialog.current;
+    if (!node) return;
+    if (lightbox && !node.open) node.showModal();
+    if (!lightbox && node.open) node.close();
+  }, [lightbox]);
 
   if (!items.length) return <p className="day-stops-empty">{emptyText}</p>;
 
@@ -239,20 +247,30 @@ export function DayStops({
         })}
       </ol>
 
-      {/* A plain overlay rather than `<dialog>`: `showModal()` needs an effect and a ref
-          to open, and this is one image with one way out. */}
-      {lightbox ? (
-        <div
-          className="day-stop-lightbox"
-          onClick={() => setLightbox(null)}
-          role="presentation"
-        >
+      {/* Native modal behavior supplies Escape, focus containment and an inert page. */}
+      <dialog
+        className="day-stop-lightbox"
+        onCancel={(event) => {
+          event.preventDefault();
+          setLightbox(null);
+        }}
+        onClick={(event) => {
+          if (event.target === event.currentTarget) setLightbox(null);
+        }}
+        onClose={() => {
+          if (lightbox) setLightbox(null);
+        }}
+        ref={lightboxDialog}
+      >
+        {lightbox ? (
+          <>
           <img alt={lightbox.alt} src={lightbox.src} />
           <button onClick={() => setLightbox(null)} type="button">
             {copy("close_photo", language)}
           </button>
-        </div>
-      ) : null}
+          </>
+        ) : null}
+      </dialog>
     </>
   );
 }

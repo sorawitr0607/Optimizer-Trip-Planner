@@ -363,6 +363,17 @@ resolving tickets are throwaway artifacts, not the build.
   and a JSON import/export backup, because `WF-024` decided no importer is built. Detail in
   [Decide what the interface owes a reader who is not the owner](tickets/049-decide-what-the-interface-owes-a-reader-who-is-not-the-owner.md).
 
+- [Decide how feedback-driven dashboards show progress and estimates](tickets/050-decide-how-feedback-driven-dashboards-show-progress-and-estimates.md) —
+  owner testing made the shared failure visible: several controls changed state somewhere
+  other than the thing pressed. Card-paid photos now act on and reload that card; discovery
+  skeletons wait for a catalogue; every plan build immediately shows reported dot-and-line
+  stages; zero-count lanes disappear; and route passes are one queued server job. The
+  itinerary coordinates the existing active snapshot, map, clock and timeline without
+  duplicating readiness or either ledger. Plan-derived costs offer five editable THB tiers,
+  write only on explicit Save, omit zero counts, use setup dates for nights and upsert one
+  stable row per category. Redundant progress prose was removed while safety, provisional
+  and paid-action boundaries remain.
+
 ## Not yet specified
 
 <!-- In-scope fog: suspected questions not yet sharp enough to ticket. Graduates as the frontier advances. -->

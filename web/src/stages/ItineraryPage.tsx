@@ -181,6 +181,7 @@ export function CoordinateMap({
   basemap = null,
   outline = null,
   shapes = [],
+  onSelectStop,
 }: {
   anchor: ExportSnapshot["accommodation"]["anchor"];
   stops: ExportStop[];
@@ -194,6 +195,8 @@ export function CoordinateMap({
   shapes?: RouteShapes["shapes"];
   /** Changing this replays the day's trace: the itinerary passes the day's own date. */
   autoTraceKey?: string;
+  /** Selecting a numbered pin pins the dashboard clock to that itinerary stop. */
+  onSelectStop?: (subjectId: string) => void;
 }) {
   // The same map `/places` draws, on the screen that is actually carried.
   //
@@ -226,6 +229,7 @@ export function CoordinateMap({
         latitude: stop.latitude,
         longitude: stop.longitude,
         status: stop.status,
+        interactive: true,
       });
     }
   }
@@ -293,6 +297,7 @@ export function CoordinateMap({
           outline={outline}
           paths={walked}
           places={points}
+          onSelectPlace={onSelectStop}
           route
           title={copy("tab_map", language)}
           tripId={tripId}
@@ -391,7 +396,6 @@ export function ItineraryPage() {
     retry: false,
   });
   const { language } = useLanguage();
-  const [chosenDate, setChosenDate] = useState("");
   // **The map opens first as of 2026-08-10**, and which tab is open lives in the URL.
   //
   // It was the timeline, from when the map was a strip of dots on grey and there was
@@ -408,9 +412,18 @@ export function ItineraryPage() {
   // owner too.
   const [params, setParams] = useSearchParams();
   const tab: "timeline" | "map" = params.get("view") === "timeline" ? "timeline" : "map";
+  // The reference dashboard remembers its selected day. The URL is the existing state
+  // boundary here: it survives reloads and makes a day shareable without another
+  // localStorage key beside the tab's query parameter.
+  const chosenDate = params.get("date") ?? "";
   const setTab = (next: "timeline" | "map") => {
     const updated = new URLSearchParams(params);
     updated.set("view", next);
+    setParams(updated, { replace: true });
+  };
+  const setChosenDate = (date: string) => {
+    const updated = new URLSearchParams(params);
+    updated.set("date", date);
     setParams(updated, { replace: true });
   };
   const snapshot = useQuery({
@@ -472,6 +485,9 @@ export function ItineraryPage() {
   const plan = snapshot.data.data;
   const moment = pinned ?? new Date();
   const needle = query.trim().toLowerCase();
+  // A cross-trip search has no single day map to show, so it uses the timeline even if
+  // the map was the last mobile view. Clearing the query restores that view from the URL.
+  const visibleTab: "timeline" | "map" = needle ? "timeline" : tab;
   /** Matches across the whole trip, or the chosen day when nothing is being searched. */
   const matches = needle
     ? allItems.filter((item) =>
@@ -524,6 +540,25 @@ export function ItineraryPage() {
   if (!day) return <p>{copy("no_schedule", language)}</p>;
   const totals = day.totals;
   const versionTag = plan.stamp.plan_version_id.replace(/^plan_/, "").slice(0, 12);
+  const stopsById = new Map(
+    plan.days.flatMap((entry) => entry.stops.map((stop) => [stop.subject_id, stop] as const)),
+  );
+  const pinTo = (next: Date) => {
+    setPinned(next);
+    // The result of pressing a time or pin is the card at the top. If it has scrolled
+    // away, leaving the reader beside the control makes the press look inert.
+    const card = typeof document === "undefined"
+      ? null
+      : document.querySelector<HTMLElement>(".trip-now");
+    if (card && card.getBoundingClientRect().bottom < 0) {
+      card.scrollIntoView({
+        block: "nearest",
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+          ? "auto"
+          : "smooth",
+      });
+    }
+  };
   // Query form, not path form. A hosted deployment routes every /api/* through
   // one function with a rewrite, and a rewrite replaces the path -- so a download
   // whose path carried the trip and the format would arrive asking for nothing.
@@ -543,7 +578,6 @@ export function ItineraryPage() {
       ) : null}
       <header className="money-head">
         <h1>{copy("use_title", language)}</h1>
-        <p>{copy("use_help", language)}</p>
       </header>
 
       {/* The answer to the question this screen is opened with, before anything that
@@ -560,6 +594,12 @@ export function ItineraryPage() {
         }}
         items={allItems}
         language={language}
+        mapHrefOf={(item) => {
+          const stop = stopsById.get(item.subject_id);
+          return stop?.latitude != null && stop.longitude != null
+            ? mapsLink(stop.latitude, stop.longitude)
+            : null;
+        }}
         nameOf={nameOf}
         onPin={setPinned}
         onSelectDay={setChosenDate}
@@ -705,6 +745,16 @@ export function ItineraryPage() {
               className="day-tab"
               key={entry.date}
               onClick={() => setChosenDate(entry.date)}
+              onKeyDown={(event) => {
+                const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+                if (!step) return;
+                event.preventDefault();
+                const target = Math.min(plan.days.length - 1, Math.max(0, index + step));
+                setChosenDate(plan.days[target].date);
+                event.currentTarget.parentElement
+                  ?.querySelectorAll<HTMLButtonElement>(".day-tab")[target]
+                  ?.focus();
+              }}
               type="button"
             >
               <span className="day-tab-name">
@@ -752,55 +802,61 @@ export function ItineraryPage() {
       </div>
 
       <div className="plan-tabs">
-        <button aria-pressed={tab === "timeline"} onClick={() => setTab("timeline")} type="button">{copy("timeline", language)}</button>
-        <button aria-pressed={tab === "map"} onClick={() => setTab("map")} type="button">{copy("tab_map", language)}</button>
+        <button aria-pressed={visibleTab === "timeline"} onClick={() => setTab("timeline")} type="button">{copy("timeline", language)}</button>
+        <button aria-pressed={visibleTab === "map"} disabled={Boolean(needle)} onClick={() => setTab("map")} type="button">{copy("tab_map", language)}</button>
       </div>
-      {tab === "timeline" ? (
-        <DayStops
-          coordsOf={(subjectId) => {
-            const stop = day.stops.find((entry) => entry.subject_id === subjectId);
-            return stop && stop.latitude != null && stop.longitude != null
-              ? { latitude: stop.latitude, longitude: stop.longitude }
-              : null;
-          }}
-          emptyText={copy(needle ? "find_nothing" : "no_schedule_day", language)}
-          isDone={ticks.isDone}
-          items={needle ? matches : dayItems}
-          language={language}
-          moment={moment}
-          nameOf={nameOf}
-          onPin={setPinned}
-          onToggle={ticks.toggle}
-          pinned={pinned}
-        />
-      ) : (
-        <CoordinateMap
-          accommodationStatus={plan.accommodation.status}
-          autoTraceKey={day.date}
-          anchor={plan.accommodation.anchor}
-          basemap={basemap.data ?? null}
-          language={language}
-          outline={outline.data ?? null}
-          shapes={shapes.data?.shapes ?? []}
-          stops={day.stops}
-          tripId={tripId}
-        />
-      )}
-
-      {/* The day's contingencies. `Timeline` carried these and the dashboard replaced it,
-          so they are rendered here rather than lost -- what to drop when the day runs
-          late is exactly the thing wanted while the day is running late. */}
-      {tab === "timeline" && !needle && day.fallbacks.length ? (
-        <div className="day-fallbacks">
-          {day.fallbacks.map((item) => (
-            <FallbackRow
-              fallback={item}
-              key={`${item.primary_id}-${item.fallback_id}`}
-              language={language}
-            />
-          ))}
+      <div className="itinerary-panels">
+        <div className="itinerary-panel timeline" data-active={visibleTab === "timeline"}>
+          <DayStops
+            coordsOf={(subjectId) => {
+              const stop = day.stops.find((entry) => entry.subject_id === subjectId);
+              return stop && stop.latitude != null && stop.longitude != null
+                ? { latitude: stop.latitude, longitude: stop.longitude }
+                : null;
+            }}
+            emptyText={copy(needle ? "find_nothing" : "no_schedule_day", language)}
+            isDone={ticks.isDone}
+            items={needle ? matches : dayItems}
+            language={language}
+            moment={moment}
+            nameOf={nameOf}
+            onPin={pinTo}
+            onToggle={ticks.toggle}
+            pinned={pinned}
+          />
+          {/* What to drop when the day runs late is wanted while it is running late. */}
+          {!needle && day.fallbacks.length ? (
+            <div className="day-fallbacks">
+              {day.fallbacks.map((item) => (
+                <FallbackRow
+                  fallback={item}
+                  key={`${item.primary_id}-${item.fallback_id}`}
+                  language={language}
+                />
+              ))}
+            </div>
+          ) : null}
         </div>
-      ) : null}
+        {!needle ? (
+          <div className="itinerary-panel map" data-active={visibleTab === "map"}>
+            <CoordinateMap
+              accommodationStatus={plan.accommodation.status}
+              autoTraceKey={day.date}
+              anchor={plan.accommodation.anchor}
+              basemap={basemap.data ?? null}
+              language={language}
+              onSelectStop={(subjectId) => {
+                const item = dayItems.find((entry) => entry.subject_id === subjectId);
+                if (item) pinTo(item.startAt);
+              }}
+              outline={outline.data ?? null}
+              shapes={shapes.data?.shapes ?? []}
+              stops={day.stops}
+              tripId={tripId}
+            />
+          </div>
+        ) : null}
+      </div>
 
       {/* What is still outstanding before departure.
           Deliberately a summary and not the board: `/readiness` already renders every

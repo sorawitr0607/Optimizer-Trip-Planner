@@ -11,6 +11,9 @@ export interface MapPlace {
    *  it — a locked stop and a re-check are not the same pin, and the plan is read by
    *  glancing at which is which. */
   status?: string;
+  /** True when this pin represents a timed itinerary stop rather than context such as
+   *  the hotel. The itinerary uses it as the same time control as the timeline row. */
+  interactive?: boolean;
 }
 
 /**

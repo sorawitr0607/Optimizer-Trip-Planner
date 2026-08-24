@@ -77,6 +77,8 @@ export interface TripNowProps {
   dayLabelOf: (date: string) => string;
   /** A stop's own name, which the itinerary spells from the plan's names table. */
   nameOf: (item: TimedItem) => string;
+  /** Exact coordinate handoff for a place stop; null for rows with nowhere to pin. */
+  mapHrefOf?: (item: TimedItem) => string | null;
 }
 
 export function TripNow({
@@ -88,6 +90,7 @@ export function TripNow({
   onSelectDay,
   dayLabelOf,
   nameOf,
+  mapHrefOf,
 }: TripNowProps) {
   // Only while live: a pinned moment must not move under the reader.
   const ticking = useMinuteClock(pinned === null);
@@ -96,6 +99,7 @@ export function TripNow({
   const moment = pinned ?? ticking;
   const live = liveItem(items, moment);
   const upcoming = nextItem(items, moment);
+  const liveMapHref = live && mapHrefOf ? mapHrefOf(live) : null;
   const first = items[0];
   const last = items[items.length - 1];
   const before = moment < first.startAt;
@@ -136,6 +140,16 @@ export function TripNow({
           <div className="trip-now-bar">
             <i style={{ width: `${progressPercent(live, moment)}%` }} />
           </div>
+          {liveMapHref ? (
+            <a
+              className="primary-link trip-now-map"
+              href={liveMapHref}
+              rel="noopener"
+              target="_blank"
+            >
+              {copy("open_in_maps", language)} ↗
+            </a>
+          ) : null}
         </>
       ) : (
         <>

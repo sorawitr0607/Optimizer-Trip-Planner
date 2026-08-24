@@ -101,7 +101,7 @@ const BUILD_LINES = [
  * `Thinking` sits inside whichever stage is active, because the long stage really does
  * have nothing to say beyond "still running, this many seconds so far".
  */
-function BuildProgress({
+export function BuildProgress({
   language,
   stage,
   previewStage,
@@ -129,15 +129,16 @@ function BuildProgress({
         <BuildStages language={language} reached={stage} routesMeasured={routesMeasured}>
           {thinking}
         </BuildStages>
-      ) : previewStage !== undefined ? (
+      ) : (
         /* The plain and paid builds are a single `generate_plan_preview`, so they have
            no calls of their own to count -- but the optimizer now says which of its
-           three variants it has finished, which is the same kind of fact. */
-        <BuildStages language={language} reached={previewStage} stages={PREVIEW_STAGES}>
+           three variants it has finished, which is the same kind of fact. Start at
+           zero rather than falling back to a spinner while the job is still queued:
+           the first dot is active immediately, and no dot is marked done until the
+           worker reports it. */
+        <BuildStages language={language} reached={previewStage ?? 0} stages={PREVIEW_STAGES}>
           {thinking}
         </BuildStages>
-      ) : (
-        thinking
       )}
       <p className="setup-hint">{copy("optimizing_note", language)}</p>
     </div>
@@ -200,10 +201,15 @@ export function OptimizePage() {
   });
   const acceptRoutes = useMutation({
     mutationFn: async () => {
+      setPreviewStage(undefined);
       await rpc("accept_route_estimates", { trip_id: tripId });
       // Rebuilt straight away: the estimates only reach the plan through a new
       // `_optimizer_input`, so accepting without rebuilding would look like nothing.
-      return rpc<PlanPreview>("generate_plan_preview", { trip_id: tripId });
+      return rpc<PlanPreview>(
+        "generate_plan_preview",
+        { trip_id: tripId },
+        setPreviewStage,
+      );
     },
     onSuccess: async () => {
       setRefusal(null);
@@ -214,6 +220,7 @@ export function OptimizePage() {
 
   const acceptAll = useMutation({
     mutationFn: async (rules: ComfortTradeoffReport["rules"]) => {
+      setPreviewStage(undefined);
       for (const rule of rules) {
         await rpc("accept_comfort_tradeoff", {
           trip_id: tripId,
@@ -223,7 +230,11 @@ export function OptimizePage() {
       }
       // The plan is judged at build time, so agreeing to a figure changes nothing until
       // it is rebuilt. Without this the button would appear to do nothing at all.
-      return rpc<PlanPreview>("generate_plan_preview", { trip_id: tripId });
+      return rpc<PlanPreview>(
+        "generate_plan_preview",
+        { trip_id: tripId },
+        setPreviewStage,
+      );
     },
     onSuccess: async () => {
       setRefusal(null);
@@ -341,6 +352,9 @@ export function OptimizePage() {
       await queryClient.invalidateQueries({ queryKey: ["journey", tripId] });
     },
     onError: (error) => setRefusal(error instanceof ApiError ? error.code : String(error)),
+    onSettled: () => {
+      buildingRef.current = false;
+    },
   });
 
   // Drop one place and rebuild without it. `save_candidate_choice` with `not_for_trip`
@@ -349,13 +363,18 @@ export function OptimizePage() {
   // reconciliation table describing a plan that no longer exists is worse than none.
   const dropAndRebuild = useMutation({
     mutationFn: async (placeId: string) => {
+      setPreviewStage(undefined);
       await rpc("save_candidate_choice", {
         trip_id: tripId,
         place_id: placeId,
         action: "not_for_trip",
         reason: null,
       });
-      return rpc<PlanPreview>("generate_plan_preview", { trip_id: tripId });
+      return rpc<PlanPreview>(
+        "generate_plan_preview",
+        { trip_id: tripId },
+        setPreviewStage,
+      );
     },
     onSuccess: async () => {
       setRefusal(null);
@@ -366,13 +385,15 @@ export function OptimizePage() {
       ]);
     },
     onError: (error) => setRefusal(error instanceof ApiError ? error.code : String(error)),
-    onSettled: () => {
-      buildingRef.current = false;
-    },
   });
 
   const building =
-    generate.isPending || autoResolveAndGenerate.isPending || buyThenGenerate.isPending;
+    generate.isPending ||
+    autoResolveAndGenerate.isPending ||
+    buyThenGenerate.isPending ||
+    acceptRoutes.isPending ||
+    acceptAll.isPending ||
+    dropAndRebuild.isPending;
 
   const activate = useMutation({
     mutationFn: (variant: string) =>
@@ -401,12 +422,6 @@ export function OptimizePage() {
   const variants = proposal?.variants ?? [];
   const variant: PlanVariant | undefined =
     variants.find((item) => item.variant_id === variantId) ?? variants[0];
-  const routeBlocked = variants.some((item) =>
-    (item.reconciliation ?? []).some(
-      (entry) => entry.status === "cannot_currently_fit" && entry.reason === "ROUTE_UNVERIFIED",
-    ),
-  );
-
   const provisionalAllowed = Boolean(
     trip?.planning_mode === "explore_first" &&
       variant?.status === "provisional" &&
@@ -466,9 +481,6 @@ export function OptimizePage() {
             {autoResolveAndGenerate.isPending ? copy("loading", language) : autoResolveLabel}
           </button>
           <small className="setup-hint">{copy("auto_resolve_note", language)}</small>
-          {autoResolveAndGenerate.isPending ? (
-            <BuildProgress language={language} routesMeasured={routesMeasured} stage={buildStage} />
-          ) : null}
         </div>
       ) : null}
 
@@ -598,12 +610,22 @@ export function OptimizePage() {
       {/* This screen showed a disabled button and nothing else for the ~52s a full
           optimize takes, and was reported as "I still can't build a plan" — the work
           was succeeding every time and the screen never said so. */}
-      {generate.isPending || autoResolveAndGenerate.isPending ? (
+      {building ? (
         <div aria-busy="true">
           <BuildProgress
             language={language}
+            routesMeasured={routesMeasured}
+            stage={autoResolveAndGenerate.isPending ? buildStage : undefined}
             previewStage={previewStage}
-            startedAt={generate.submittedAt || undefined}
+            startedAt={
+              (autoResolveAndGenerate.isPending && autoResolveAndGenerate.submittedAt) ||
+              (generate.isPending && generate.submittedAt) ||
+              (buyThenGenerate.isPending && buyThenGenerate.submittedAt) ||
+              (acceptRoutes.isPending && acceptRoutes.submittedAt) ||
+              (acceptAll.isPending && acceptAll.submittedAt) ||
+              (dropAndRebuild.isPending && dropAndRebuild.submittedAt) ||
+              undefined
+            }
           />
           <div className="skeleton-card">
             <span className="skeleton skeleton-line wide" />
@@ -679,26 +701,6 @@ export function OptimizePage() {
               {copy("open_evidence", language)}
             </Link>
           </details>
-        </div>
-      ) : null}
-
-      {/* All variants share one route snapshot, so its acceptance sits at draft level
-          instead of being buried inside whichever variant happens to be selected. */}
-      {routeBlocked ? (
-        <div className="optimizer-resolve">
-          <p className="field-error">
-            ⚠ {copyFrom("OPTIMIZER_CODE_TEXT", "ROUTE_UNVERIFIED", language)}
-          </p>
-          <button
-            className="setup-primary"
-            disabled={acceptRoutes.isPending}
-            onClick={() => acceptRoutes.mutate()}
-            type="button"
-          >
-            {acceptRoutes.isPending
-              ? copy("loading", language)
-              : copy("accept_route_estimates", language)}
-          </button>
         </div>
       ) : null}
 
@@ -893,24 +895,21 @@ export function OptimizePage() {
                     here is where the failure is described. It fixes every listed place
                     at once; the per-place drop below it stays, for the one place that
                     will not come good however the legs are estimated. */}
-                {needsRoutes && !autoResolveAndGenerate.isPending ? (
+                {needsRoutes && !acceptRoutes.isPending ? (
                   <>
                     <p className="field-error" role="status">
                       ⚠ {copy("routes_unverified_warning", language)}
                     </p>
                     <button
                       className="setup-primary"
-                      onClick={() => autoResolveAndGenerate.mutate()}
+                      onClick={() => acceptRoutes.mutate()}
                       type="button"
                     >
                       {copy("accept_criteria_rebuild", language)}
                     </button>
                   </>
                 ) : null}
-                {autoResolveAndGenerate.isPending ? (
-            <BuildProgress language={language} routesMeasured={routesMeasured} stage={buildStage} />
-          ) : null}
-                <ul className="optimize-unfit-list" hidden={autoResolveAndGenerate.isPending}>
+                <ul className="optimize-unfit-list" hidden={acceptRoutes.isPending}>
                   {unfit.map((item) => (
                     <li key={item.place_id}>
                       <span className="optimize-unfit-name">

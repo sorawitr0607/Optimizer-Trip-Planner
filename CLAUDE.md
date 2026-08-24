@@ -375,6 +375,18 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   above them said the search had not finished — there is no catalogue to draw a card from
   until `discover_places` returns. Show a skeleton for the request that is actually in
   flight, not for the wait in general.
+- **Plan-cost tiers are editable seeds, not forecasts.** `/costs` offers Budget, Value,
+  Standard, Premium and Luxury in THB, but selecting one writes nothing; only the explicit
+  Save creates or updates estimate rows. Accommodation is per room for two people, the
+  other units are per traveller, nights come from setup's travel dates rather than prep
+  days, and a zero-count category is omitted. Keep `related_item_id=plan-estimate:<category>`
+  as the row identity so changing language or itinerary counts updates one row rather than
+  creating another; the localized label is only the backward-compatible fallback.
+- **The itinerary dashboard is another view of the active export snapshot, not another
+  source of trip state.** It may coordinate day, clock, map pins, timeline, search and
+  photo dialog, but readiness remains writable only on `/readiness`, planned money on
+  `/costs`, and actual bills on `/split`. A wide screen shows map and timeline together;
+  a phone switches between them. Do not duplicate those authoritative boards into it.
 - **Give `Thinking` a `startedAt` wherever it can be remounted mid-wait.** It counts from
   its own mount otherwise, and `/places` moves it into the active stage the instant the
   worker first reports — a new position in the tree, so a new mount. The counter reset to
@@ -417,6 +429,9 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   beneath it. **Open changed images before approving them** — that rule already existed and would have
   caught this on any of the three occasions it was not followed. A blank-detector over the capture set
   is two lines of Pillow and is worth more than reading the percentages.
+- **The visible build stamp is volatile capture data.** It remains visible in the real
+  interface, but `data-volatile="build"` freezes it under `baseline_theme`; otherwise every
+  rebuild changes unchanged `t900-` screens by about 0.117% and forces unrelated approvals.
 - **The phone capture's viewport is ~745px tall, not the 844 in its filename.** Headless Chrome sizes
   the *window*, and its chrome eats the difference, so a 500x844 image carries about 99px of dead white
   below the page — visible in a dark-theme shot, where the band stays white. A `position: fixed` bottom
@@ -1044,6 +1059,15 @@ must stay directed. Rebuild only through `python3 scripts/build_project_graph.py
 `OPENAI_API_KEY`; wraps extract → normalize → cluster-only → export and restores the previous graph on
 failure), and only when explicitly asked or after a topology-changing milestone. After any graph
 change, `--check` must pass before committing. See `AGENTS.md`.
+
+**Rebuilt on 2026-08-24 for `WF-050` and `--check` passes**: **3091 nodes, 7245
+directed edges, 223 communities**. The first extraction cost US$0.064237 and failed after
+clustering lost 140 valid endpoint pairs. It also exposed a failure-path bug: `cluster_raw_graph()`
+deleted `.graphify_raw.json` in `finally`, before `build()` could preserve the raw graph it promised
+to keep for diagnosis. The staged raw graph now survives until validation succeeds, and its test
+pins that lifecycle. The warm retry was 88 hits / 2 misses, cost US$0.003505 and passed; this rebuild
+therefore cost **US$0.067742** in total. If validation fails again, inspect both
+`failed-raw.json` and `failed-clustered.json` before paying for another extraction.
 
 **Rebuilt on 2026-08-22 after the itinerary dashboard and `--check` passes**: **2964 nodes, 6970
 directed edges, 220 communities**, up from 2389/5732/200 — seven new modules

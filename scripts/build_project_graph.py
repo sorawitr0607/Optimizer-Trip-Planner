@@ -388,23 +388,21 @@ def extracted_edge_issues(
     return missing_pairs, changed_relations
 
 
-def cluster_raw_graph(graphify: str) -> None:
-    """Cluster from a staged raw graph so Graphify's shrink guard cannot retain it."""
+def cluster_raw_graph(graphify: str) -> Path:
+    """Cluster from a staged raw graph and keep it until validation succeeds."""
 
     raw_graph = OUT / ".graphify_raw.json"
     shutil.move(GRAPH, raw_graph)
-    try:
-        run(
-            graphify,
-            "cluster-only",
-            str(ROOT),
-            "--graph",
-            str(raw_graph),
-            "--no-label",
-            "--no-viz",
-        )
-    finally:
-        raw_graph.unlink(missing_ok=True)
+    run(
+        graphify,
+        "cluster-only",
+        str(ROOT),
+        "--graph",
+        str(raw_graph),
+        "--no-label",
+        "--no-viz",
+    )
+    return raw_graph
 
 
 def validate(expected: set[tuple[str, str, str]] | None = None) -> tuple[int, int]:
@@ -522,10 +520,11 @@ def build() -> tuple[int, int]:
                 if saved_memory.exists():
                     shutil.move(saved_memory, memory)
             expected = normalize_raw_graph()
-            cluster_raw_graph(graphify)
+            raw_graph = cluster_raw_graph(graphify)
             annotate_report_cost()
             run(graphify, "export", "html")
             result = validate(expected)
+            raw_graph.unlink(missing_ok=True)
         except Exception:
             # Keep the raw extraction and the clustered graph that failed, under
             # names `GENERATED` does not cover, so the next run can diagnose

@@ -275,7 +275,7 @@ export function AppShell() {
             testing were spent on fixes that were already shipped and simply not loaded,
             and nothing about behaviour is worth discussing until this matches the build
             that was just made. */}
-        <p className="build-stamp" title="Build">
+        <p className="build-stamp" data-volatile="build" title="Build">
           build {__BUILD_ID__}
         </p>
         <div className="sidebar-controls">

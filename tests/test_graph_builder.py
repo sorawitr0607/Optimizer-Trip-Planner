@@ -218,7 +218,7 @@ class DuplicateModuleNodeTest(unittest.TestCase):
 
 
 class GraphBuilderEdgeValidationTest(unittest.TestCase):
-    def test_cluster_reads_a_staged_raw_graph_and_writes_a_fresh_output(self) -> None:
+    def test_cluster_keeps_the_staged_raw_graph_until_the_caller_validates(self) -> None:
         with TemporaryDirectory() as directory:
             out = Path(directory)
             graph = out / "graph.json"
@@ -235,10 +235,11 @@ class GraphBuilderEdgeValidationTest(unittest.TestCase):
                 patch.object(build_project_graph, "GRAPH", graph),
                 patch.object(build_project_graph, "run", side_effect=fake_run),
             ):
-                cluster_raw_graph("graphify")
+                raw = cluster_raw_graph("graphify")
 
             self.assertEqual("clustered", graph.read_text(encoding="utf-8"))
-            self.assertFalse((out / ".graphify_raw.json").exists())
+            self.assertEqual(out / ".graphify_raw.json", raw)
+            self.assertEqual("raw", raw.read_text(encoding="utf-8"))
 
     def test_duplicate_node_ids_follow_networkx_last_attributes_win(self) -> None:
         nodes = deduplicate_nodes(

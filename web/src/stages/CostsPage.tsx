@@ -11,10 +11,34 @@ import {
   type Frozen,
   type SetupDraft,
 } from "../api/client";
-import { copy } from "../i18n/copy";
+import { copy, copyFormat } from "../i18n/copy";
 import { costIcon } from "../shared/tagIcons";
+import { spanDays } from "../shared/dates";
 import { useLanguage } from "../i18n/LanguageProvider";
 import { categoryName, money, Note, Required, signed, Tag, Tile, type CostCategory } from "./money";
+
+const COST_TIERS = {
+  budget: { accommodation: 1000, food: 150, fees: 150, transport: 100 },
+  value: { accommodation: 2000, food: 250, fees: 300, transport: 180 },
+  standard: { accommodation: 3500, food: 450, fees: 600, transport: 300 },
+  premium: { accommodation: 7000, food: 900, fees: 1200, transport: 600 },
+  luxury: { accommodation: 15000, food: 1800, fees: 2500, transport: 1200 },
+} as const;
+
+type CostTier = keyof typeof COST_TIERS;
+type EstimatedCategory = keyof (typeof COST_TIERS)[CostTier];
+
+/** Rough editable totals: lodging per two people; the other units per person. */
+function suggestedPlanCost(
+  tier: CostTier,
+  category: EstimatedCategory,
+  count: number,
+  headcount: number,
+): number {
+  const people = Math.max(1, Math.floor(headcount));
+  const units = category === "accommodation" ? Math.ceil(people / 2) : people;
+  return Math.round(Math.max(0, count) * units * COST_TIERS[tier][category]);
+}
 
 /**
  * The overview screen, and the one place the two ledgers are read together.
@@ -69,6 +93,8 @@ export function CostsPage() {
     paid: false,
   });
   const [flash, setFlash] = useState("");
+  const [costTier, setCostTier] = useState<CostTier>("standard");
+  const [seedAmounts, setSeedAmounts] = useState<Record<string, string>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement | null>(null);
   const saveCategories = useMutation({
@@ -110,60 +136,78 @@ export function CostsPage() {
     },
   });
 
-  // What the plan commits you to paying *for*. Deliberately not an amount: nothing in
-  // this app knows the price of a museum entry, a bowl of noodles or a metro ride, and
-  // a number invented here would be indistinguishable on screen from one the owner
-  // entered. So it counts, and leaves the figures to them.
+  const headcount = 1 + (setup.data?.snapshot.data.travellers?.length ?? 0);
+  // What the plan commits you to paying for. Tiers provide an editable starting point;
+  // the owner still presses Save before any figure becomes part of the ledger.
   const shape = (() => {
     const days = plan.data?.data?.days ?? [];
     if (!days.length) return null;
     const rows = days.flatMap((day) => day.items ?? []);
+    const basics = setup.data?.snapshot.data.trip_basics;
+    const datedDays = basics?.start_date && basics.end_date
+      ? spanDays(basics.start_date, basics.end_date)
+      : days.length;
     return {
-      nights: Math.max(0, days.length - 1),
+      nights: Math.max(0, datedDays - 1),
       meals: rows.filter((row) => row.type === "meal").length,
       visits: rows.filter((row) => row.type === "visit").length,
       legs: rows.filter((row) => row.type === "travel").length,
     };
   })();
-  const planSeeds: { label: string; category: string }[] = shape
+  const makeSeed = (key: string, category: EstimatedCategory, count: number) => {
+    const description = copy(key, language);
+    return {
+      label: `${description} (${count})`,
+      description,
+      category,
+      count,
+      relatedItemId: `plan-estimate:${category}`,
+    };
+  };
+  const planSeeds = shape
     ? [
-        { label: `${copy("plan_shape_nights", language)} (${shape.nights})`, category: "accommodation" },
-        { label: `${copy("plan_shape_meals", language)} (${shape.meals})`, category: "food" },
-        { label: `${copy("plan_shape_visits", language)} (${shape.visits})`, category: "fees" },
-        { label: `${copy("plan_shape_legs", language)} (${shape.legs})`, category: "transport" },
-      ]
+        makeSeed("plan_shape_nights", "accommodation", shape.nights),
+        makeSeed("plan_shape_meals", "food", shape.meals),
+        makeSeed("plan_shape_visits", "fees", shape.visits),
+        makeSeed("plan_shape_legs", "transport", shape.legs),
+      ].filter((seed) => seed.count > 0)
     : [];
-  const allSeedsExist = Boolean(
-    planSeeds.length &&
-      planSeeds.every((seed) =>
-        (items.data ?? []).some(
-          (item) => item.label === seed.label && item.category === seed.category,
-        ),
-      ),
+  const existingSeed = (seed: (typeof planSeeds)[number]) =>
+    (items.data ?? []).find(
+      (item) => item.related_item_id === seed.relatedItemId
+        || (item.label === seed.label && item.category === seed.category),
+    );
+  const seedAmount = (seed: (typeof planSeeds)[number]) =>
+    seedAmounts[seed.category]
+      ?? String(
+        existingSeed(seed)?.original_amount
+        || suggestedPlanCost(costTier, seed.category, seed.count, headcount),
+      );
+  const seedsReady = Boolean(
+    planSeeds.length && planSeeds.every((seed) => Number(seedAmount(seed)) > 0),
   );
 
   const seedRows = useMutation({
     mutationFn: async () => {
-      const existing = new Set(
-        (items.data ?? []).map((item) => `${item.category}\u0000${item.label}`),
-      );
       return Promise.all(
-        planSeeds
-          .filter((seed) => !existing.has(`${seed.category}\u0000${seed.label}`))
-          .map((seed) =>
+        planSeeds.map((seed) => {
+          const existing = existingSeed(seed);
+          return (
             rpc<CostItem>("save_cost_item", {
               trip_id: tripId,
+              cost_id: existing?.cost_id ?? null,
               item: {
                 label: seed.label,
                 category: seed.category,
-                // Zero, not a guess. The row exists so there is somewhere to put the real
-                // figure; a plausible-looking placeholder would be read as a forecast.
-                original_amount: 0,
-                original_currency: draft.currency,
+                // The tier is only a starting value, kept editable and saved explicitly.
+                original_amount: Number(seedAmount(seed)),
+                original_currency: "THB",
                 payment_state: "estimate",
+                related_item_id: seed.relatedItemId,
               },
-            }),
-          ),
+            })
+          );
+        }),
       );
     },
     onSuccess: async () => {
@@ -183,7 +227,6 @@ export function CostsPage() {
   if (items.isError) return <p className="field-error">⚠ {items.error.message}</p>;
 
   const figures = totals.data;
-  const headcount = 1 + (setup.data?.snapshot.data.travellers?.length ?? 0);
   const claimed = new Set(figures.claimed_cost_ids);
   const categories = Object.entries(figures.by_category_comparison);
   const vocabulary = categoryList.data;
@@ -197,24 +240,63 @@ export function CostsPage() {
         <p>{copy("costs_planned_help", language)}</p>
       </header>
 
-      {/* What the activated plan will cost money for. Counted, never priced. */}
+      {/* The plan supplies counts; the owner supplies the price. */}
       <section className="money-plan-shape">
         <h2 className="money-eyebrow">{copy("plan_shape_title", language)}</h2>
         {shape ? (
           <>
             <ul className="money-shape-list">
-              <li><strong>{shape.nights}</strong> {copy("plan_shape_nights", language)}</li>
-              <li><strong>{shape.meals}</strong> {copy("plan_shape_meals", language)}</li>
-              <li><strong>{shape.visits}</strong> {copy("plan_shape_visits", language)}</li>
-              <li><strong>{shape.legs}</strong> {copy("plan_shape_legs", language)}</li>
+              {planSeeds.map((seed) => (
+                <li key={seed.category}>
+                  <strong>{seed.count}</strong> {seed.description}
+                </li>
+              ))}
             </ul>
             <p className="setup-hint" id="plan-shape-help">
-              {copy("plan_shape_help", language)}
+              {copyFormat("plan_shape_help", language, { headcount })}
             </p>
+            <label className="money-shape-tier">
+              {copy("plan_shape_tier", language)}
+              <select
+                onChange={(event) => {
+                  const next = event.target.value as CostTier;
+                  setCostTier(next);
+                  setSeedAmounts(Object.fromEntries(planSeeds.map((seed) => [
+                    seed.category,
+                    String(suggestedPlanCost(next, seed.category, seed.count, headcount)),
+                  ])));
+                }}
+                value={costTier}
+              >
+                {(Object.keys(COST_TIERS) as CostTier[]).map((tier) => (
+                  <option key={tier} value={tier}>{copy(`cost_tier_${tier}`, language)}</option>
+                ))}
+              </select>
+            </label>
+            <div className="money-shape-estimates">
+              {planSeeds.map((seed) => (
+                <label key={seed.category}>
+                  {copyFormat("plan_shape_amount", language, {
+                    category: categoryName(seed.category, categoryList.data, language),
+                  })}
+                  <input
+                    inputMode="decimal"
+                    min="0.01"
+                    onChange={(event) => setSeedAmounts((current) => ({
+                      ...current,
+                      [seed.category]: event.target.value,
+                    }))}
+                    step="0.01"
+                    type="number"
+                    value={seedAmount(seed)}
+                  />
+                </label>
+              ))}
+            </div>
             <button
               aria-describedby="plan-shape-help"
               className="setup-primary"
-              disabled={seedRows.isPending || allSeedsExist}
+              disabled={seedRows.isPending || !seedsReady}
               onClick={() => seedRows.mutate()}
               type="button"
             >
@@ -223,7 +305,7 @@ export function CostsPage() {
             {/* Beside the button, not only in the flash further down. The rows this adds
                 land below the fold, so the page changed and nothing near the press did —
                 which reads as a button that did nothing. */}
-            {seedRows.isSuccess || allSeedsExist ? (
+            {seedRows.isSuccess ? (
               <p className="setup-hint" aria-live="polite">
                 ✓ {copy("plan_shape_seeded", language)}
               </p>

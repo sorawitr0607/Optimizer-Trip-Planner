@@ -256,7 +256,7 @@ describe("PlaceDeck", () => {
   it("offers the free fetch when a card has no imagery yet", () => {
     const html = render({});
     expect(html).toContain("Load free descriptions");
-    expect(html).toContain("no charge and no key");
+    expect(html).toContain("free, no key");
     expect(html).not.toContain("Photo 1 of");
   });
 

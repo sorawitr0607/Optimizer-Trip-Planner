@@ -796,7 +796,6 @@ export function PlaceDeck({
           </div>
         ) : (
           <div className="place-deck-photo place-deck-photo-empty">
-            <p className="setup-hint">{copy("descriptions_are_free", language)}</p>
             <p className="setup-hint">{copy("photos_load_themselves", language)}</p>
             <button onClick={() => onWantSummary(entry.place_id)} type="button">
               {copy("load_descriptions", language)}

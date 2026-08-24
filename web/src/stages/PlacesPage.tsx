@@ -237,6 +237,13 @@ export function PlacesPage() {
     queryFn: () => rpc<Ranking>("rank_candidates", { trip_id: tripId }),
     enabled: catalog.length > 0,
   });
+  // An empty lane is not a choice. Keep City Icons as the preferred opening only when
+  // discovery actually found one; otherwise start on the first lane with cards and do
+  // not leave a zero-count category in either lane picker.
+  const availableLanes = ranking.data
+    ? LANES.filter((value) => laneEntries(ranking.data!, value).length > 0)
+    : [...LANES];
+  const activeLane = availableLanes.includes(lane) ? lane : (availableLanes[0] ?? lane);
 
   // The lane, capped. A 431-card City Icons list and a 662-card "For your trip" are not
   // a shortlist to work through, they are a catalogue — and the deck deals them in score
@@ -263,8 +270,8 @@ export function PlacesPage() {
   // unseen place has had a decision" is only true once all twenty really are. `dealMore`
   // extends it. Derived on first render rather than seeded in an effect, because seeding
   // from `useEffect` left the first paint with no cards and six tests caught it.
-  const allEntries = ranking.data ? laneEntries(ranking.data, lane) : [];
-  const held = windowIds[lane] ?? [];
+  const allEntries = ranking.data ? laneEntries(ranking.data, activeLane) : [];
+  const held = windowIds[activeLane] ?? [];
   // Anything already in the window keeps its place; the rest of the page is topped up
   // from the lane, which has excluded the decided ones server-side.
   const windowNow = held.length
@@ -272,7 +279,7 @@ export function PlacesPage() {
         .slice(0, shown)
     : allEntries.slice(0, shown).map((e) => e.place_id);
   if (windowNow.join(",") !== held.join(",")) {
-    setWindowIds((current) => ({ ...current, [lane]: windowNow }));
+    setWindowIds((current) => ({ ...current, [activeLane]: windowNow }));
   }
   const inWindow = new Set(windowNow);
   const entries = allEntries.filter((entry) => inWindow.has(entry.place_id));
@@ -668,7 +675,6 @@ export function PlacesPage() {
       <header className="money-head places-head">
         <div>
           <h1>{copy("discover_title", language)}</h1>
-          <p>{copy("discover_help", language)}</p>
         </div>
         <PlacesTour language={language} tripId={tripId} />
       </header>
@@ -704,9 +710,6 @@ export function PlacesPage() {
           {copy("refresh", language)}
         </button>
       </div>
-      {discovery.data && !discover.isPending ? (
-        <p className="setup-hint">{copy("discover_done", language)}</p>
-      ) : null}
       {!discovery.data ? <p className="setup-hint">{copy("ranking_wait", language)}</p> : null}
 
       {discovery.data && report ? (
@@ -922,10 +925,10 @@ export function PlacesPage() {
               once, and which lane you are in is then readable without opening anything. */}
           <div className="places-pickers">
             <div className="lane-tabs" role="group" aria-label={copy("lane", language)}>
-              {LANES.map((value) => (
+              {availableLanes.map((value) => (
                 <button
-                  aria-pressed={lane === value}
-                  className={`lane-tab${lane === value ? " active" : ""}`}
+                  aria-pressed={activeLane === value}
+                  className={`lane-tab${activeLane === value ? " active" : ""}`}
                   key={value}
                   onClick={() => pickLane(value)}
                   type="button"
@@ -960,7 +963,6 @@ export function PlacesPage() {
           <div className={mode === "deck" ? "places-workspace" : undefined} hidden={busy}>
           {mode === "deck" ? (
             <>
-              <p className="setup-hint">{copy("deck_help", language)}</p>
               {/* The tab counts the whole lane and the deck deals a page of it, so
                   without this the two numbers look like a bug. */}
               {laneRemaining > 0 ? (
@@ -1012,9 +1014,9 @@ export function PlacesPage() {
                 onWantSummary={(placeId) => fetchCard.mutate(placeId)}
                 paidPhotoUsd={paidAllowed ? paidEstimate : null}
                 summaryLoading={summaryPendingForCard}
-                lane={lane}
+                lane={activeLane}
                 laneRemaining={laneRemaining}
-                lanes={LANES}
+                lanes={availableLanes}
                 onPickLane={(next) => pickLane(next as Lane)}
                 onShowMore={dealMore}
                 ranking={ranking.data}

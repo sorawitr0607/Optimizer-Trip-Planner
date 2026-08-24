@@ -16,10 +16,7 @@ import { Minus, Plus } from "lucide-react";
 
 import { useLanguage } from "../i18n/LanguageProvider";
 
-// Six, because the wizard now opens on a step that asks for nothing and only says
-// what the other five want and why. The step indicator was already
-// step-count-agnostic by S3's decision, so this is a constant change, not a
-// component change.
+// Five, including the short introduction before the four editable sections.
 const STEP_COUNT = 5;
 // The step *indicator* keeps the short nouns, because a progress rail has room for a
 // word and not for a sentence. The heading above each step asks the question instead:
@@ -356,10 +353,9 @@ export function SetupPage() {
     <section className="stage-card setup-screen">
       <header className="money-head">
         <h1>{copy("setup", language)}</h1>
-        <p>{copy("setup_help", language)}</p>
       </header>
 
-      {/* derives-from: element 7 .wizard-progress-4 as .wizard-steps (six steps) */}
+      {/* derives-from: element 7 .wizard-progress-4 as .wizard-steps */}
       <ol aria-label={copy("setup_progress", language)} className="wizard-steps">
         {STEP_TITLES.map((title, index) => {
           const number = index + 1;
@@ -391,20 +387,13 @@ export function SetupPage() {
                     five equal columns truncated to "Before y…" and "Owner tri…" from
                     1100 up, and the icon made it slightly worse. Shortening beats a
                     fourth breakpoint or an ellipsis: the full name sits directly
-                    beneath in `.wizard-count` and is what `aria-label` says at every
-                    width. */}
+                    in the button's accessible name at every width. */}
                 <span className="wizard-step-label">{copy(`chip_${title}`, language)}</span>
               </button>
             </li>
           );
         })}
       </ol>
-      <p className="wizard-count">
-        {copyFormat("step_of", language, { current: step, total: STEP_COUNT })}
-        {` · ${copy(STEP_TITLES[step - 1], language)}`}
-        {confirmed ? ` · ${copy("confirmed", language)}` : ` · ${copy("draft", language)}`}
-      </p>
-
       <form
         className="setup-step-form"
         noValidate
@@ -428,7 +417,6 @@ export function SetupPage() {
           or how long it runs. */}
       {step === 1 ? (
         <div className="setup-intro">
-          <p className="setup-intro-lead">{copy("setup_intro_lead", language)}</p>
           <h2>{copy("setup_intro_what_we_ask", language)}</h2>
           <ol className="setup-intro-list">
             {INTRO_STEPS.map(([title, detail]) => (
@@ -439,7 +427,6 @@ export function SetupPage() {
             ))}
           </ol>
           <p className="setup-hint">{copy("setup_intro_time", language)}</p>
-          <p className="setup-hint">{copy("setup_intro_next", language)}</p>
         </div>
       ) : null}
 

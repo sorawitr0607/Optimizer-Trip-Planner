@@ -271,6 +271,8 @@ export interface PlaceMapProps {
    *  them skip a level. A screen reader reads the outline to decide what contains
    *  what, so the depth is the caller's fact, not the map's. */
   headingLevel?: 2 | 3 | 4;
+  /** Makes timed pins the same control as their timeline row. Context pins stay inert. */
+  onSelectPlace?: (placeId: string) => void;
 }
 
 export function PlaceMap({
@@ -286,6 +288,7 @@ export function PlaceMap({
   route = false,
   paths = [],
   headingLevel = 3,
+  onSelectPlace,
 }: PlaceMapProps) {
   // Zoom and pan, because at city scale several hundred dots and a dozen pins overlap
   // and no amount of styling separates them — the answer to "where is it" is sometimes
@@ -759,7 +762,9 @@ export function PlaceMap({
         onPointerUp={() => { drag.current = null; setDragging(false); }}
         onPointerCancel={() => { drag.current = null; setDragging(false); }}
         ref={svgRef}
-        role="img"
+        // An image is an accessibility-tree leaf, so interactive itinerary pins would
+        // disappear inside one. It becomes a labelled group only for that map.
+        role={onSelectPlace ? "group" : "img"}
         style={{ "--map-zoom": view.zoom } as CSSProperties}
         viewBox={`${view.x} ${view.y} ${FRAME.width / view.zoom} ${FRAME.height / view.zoom}`}
       >
@@ -953,11 +958,26 @@ export function PlaceMap({
         ) : null}
         {pinPoints.map((point) => {
           const isFocus = point.place_id === focusId;
+          const selectable = Boolean(point.interactive && onSelectPlace);
           return (
             <g
+              aria-label={selectable
+                ? copyFormat("map_show_place", language, { name: point.name })
+                : undefined}
               className={`plan-map-point${point.status ? ` ${point.status}` : ""}`
                 + `${isFocus ? " current" : ""}${focusId && !isFocus ? " context" : ""}`}
               key={point.place_id}
+              onClick={selectable ? () => onSelectPlace?.(point.place_id) : undefined}
+              onKeyDown={selectable
+                ? (event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onSelectPlace?.(point.place_id);
+                    }
+                  }
+                : undefined}
+              role={selectable ? "button" : undefined}
+              tabIndex={selectable ? 0 : undefined}
             >
               <circle cx={point.x} cy={point.y} r={(isFocus ? 10 : 8) / view.zoom} />
               <text textAnchor="middle" x={point.x} y={point.y + 3 / view.zoom}>

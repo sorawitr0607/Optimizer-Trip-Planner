@@ -247,6 +247,8 @@ describe("SetupPage", () => {
 
     expect(html).toContain("Step 2 of 5");
     expect(html).toContain("wizard-steps");
+    expect(html).not.toContain("wizard-count");
+    expect(html).not.toContain("Setup confirmed. Discovery is now available.");
     // The saved draft is what the form opens on, not an empty one.
     expect(html).toContain("2026-12-29");
     expect(html).toContain("value=\"17:00\"");
@@ -354,7 +356,7 @@ describe("OptimizePage", () => {
     expect(html).not.toContain("OPENING_UNVERIFIED");
   });
 
-  it("shows route-estimate acceptance at draft level when any variant is blocked", () => {
+  it("offers one route fix inside the places that did not make the plan", () => {
     const blocked = structuredClone(PREVIEW) as PlanPreview;
     blocked.proposal.data.variants![0].reconciliation[0] = {
       ...blocked.proposal.data.variants![0].reconciliation[0],
@@ -364,7 +366,10 @@ describe("OptimizePage", () => {
 
     const html = render(<OptimizePage />, "en", blocked);
 
-    expect(html).toContain("Accept a walking estimate and rebuild");
+    expect(html).toContain("Places that did not make the plan");
+    expect(html).toContain("Accept criteria and rebuild");
+    expect(html).not.toContain("Accept a walking estimate and rebuild");
+    expect(html.match(/Accept criteria and rebuild/g) ?? []).toHaveLength(1);
   });
 });
 

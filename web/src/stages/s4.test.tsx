@@ -18,9 +18,12 @@ import { LanguageProvider } from "../i18n/LanguageProvider";
 import { copy } from "../i18n/copy";
 import { Thinking } from "../shared/Thinking";
 import { PLACES_STAGES, PLACES_WORKER_STAGES, PREVIEW_STAGES } from "../shared/buildStages";
+import { flattenDays } from "../shared/tripClock";
 import { BuildStages } from "./BuildStages";
 import { CoordinateMap, ItineraryPage, plotCoordinates } from "./ItineraryPage";
+import { BuildProgress } from "./OptimizePage";
 import { PlacesPage } from "./PlacesPage";
+import { TripNow } from "./TripNow";
 
 const TRIP = "taipei";
 const SETUP = {
@@ -224,6 +227,19 @@ describe("PlacesPage", () => {
     expect(html).toContain("lane-tabs");
   });
 
+  it("hides empty place lanes and falls back to the first lane with cards", () => {
+    const html = render(<PlacesPage />, "en", (client) => {
+      client.setQueryData(["ranking", TRIP], {
+        ...RANKING,
+        lanes: { ...RANKING.lanes, city_icons: [] },
+      });
+    });
+
+    expect(html).not.toMatch(/<button[^>]*>City Icons/);
+    expect(html).toMatch(/aria-pressed="true" class="lane-tab active"[^>]*>For your trip/);
+    expect(html).toContain("Taipei 101");
+  });
+
   it("leads a card with the free description and photo, not the templated line", () => {
     const html = render(<PlacesPage />, "en");
     expect(html).toContain("About this place");
@@ -317,6 +333,18 @@ describe("the /places stage list", () => {
 });
 
 describe("the draft build's stage list", () => {
+  it("shows the dot-and-line steps immediately, before worker progress arrives", () => {
+    const html = renderToStaticMarkup(
+      <LanguageProvider initial="en">
+        <BuildProgress language="en" />
+      </LanguageProvider>,
+    );
+
+    expect(html.match(/build-stage done/g) ?? []).toHaveLength(0);
+    expect(html.match(/build-stage active/g) ?? []).toHaveLength(1);
+    expect(html).toContain("Balanced plan");
+  });
+
   it("has one stage per variant plus the write, with copy for every one", () => {
     // Three variants and then the stored draft. A fourth variant row would be a
     // claim about work the optimizer does not do.
@@ -380,6 +408,7 @@ describe("ItineraryPage", () => {
     }
     expect(html).toContain("Fallback for this half-day");
     expect(html.indexOf("Fallback for this half-day")).toBeGreaterThan(html.indexOf("Longshan Temple"));
+    expect(html).toContain('<dialog class="day-stop-lightbox"');
     expect(html).toContain(`/api/export?trip=${TRIP}&amp;kind=workbook.xlsx`);
     expect(html).toContain(`/api/export?trip=${TRIP}&amp;kind=checklist.ics`);
     const mapHtml = render(<ItineraryPage />, "en", undefined, "?view=map");
@@ -391,6 +420,54 @@ describe("ItineraryPage", () => {
       expect(query[1]).toMatch(/^-?\d+\.\d+,-?\d+\.\d+$/);
     }
     expectNoMissingCopy(html);
+  });
+
+  it("keeps the chosen day in the URL and renders the dashboard's two wide-screen panels", () => {
+    const second = {
+      ...SNAPSHOT.data.days[0],
+      date: "2030-01-02",
+      items: SNAPSHOT.data.days[0].items.map((item) => ({
+        ...item,
+        date: "2030-01-02",
+        item_id: item.item_id.replace("d#", "d2#"),
+      })),
+    };
+    const html = render(
+      <ItineraryPage />,
+      "en",
+      (client) => client.setQueryData(["export_snapshot", TRIP, "en"], {
+        ...SNAPSHOT,
+        data: { ...SNAPSHOT.data, days: [...SNAPSHOT.data.days, second] },
+      }),
+      "?view=timeline&date=2030-01-02",
+    );
+
+    expect(html).toContain("2030-01-02");
+    expect(html).toMatch(/aria-pressed="true" class="day-tab"[^>]*><span[^>]*>Day 2 of 2/);
+    expect(html).toContain('class="itinerary-panels"');
+    expect(html.match(/class="itinerary-panel /g) ?? []).toHaveLength(2);
+  });
+
+  it("offers an exact Maps handoff from the pinned current stop", () => {
+    const item = flattenDays(SNAPSHOT.data.days)[2];
+    const html = renderToStaticMarkup(
+      <LanguageProvider initial="en">
+        <TripNow
+          currentDayDate={item.dayDate}
+          dayLabelOf={() => "Day 1 of 1"}
+          items={flattenDays(SNAPSHOT.data.days)}
+          language="en"
+          mapHrefOf={() => "https://www.google.com/maps/search/?api=1&query=25.000000,121.000000"}
+          nameOf={(entry) => entry.display_name ?? entry.type}
+          onPin={() => undefined}
+          onSelectDay={() => undefined}
+          pinned={item.startAt}
+        />
+      </LanguageProvider>,
+    );
+
+    expect(html).toContain("Open in Maps");
+    expect(html).toContain("25.000000,121.000000");
   });
 
   it("carries the D10 day header with its four judged numbers", () => {
@@ -435,6 +512,7 @@ describe("CoordinateMap", () => {
         accommodationStatus={SNAPSHOT.data.accommodation.status}
         anchor={SNAPSHOT.data.accommodation.anchor}
         language="en"
+        onSelectStop={() => undefined}
         stops={SNAPSHOT.data.days[0].stops}
       />,
       "en",
@@ -443,6 +521,8 @@ describe("CoordinateMap", () => {
     expect(html).toContain("Ximen hotel area");
     expect(html).toContain("Longshan Temple · 🔒 Locked");
     expect(html).toContain("25.03654, 121.49992");
+    expect(html.match(/role="button"/g) ?? []).toHaveLength(1);
+    expect(html).toContain("Show Longshan Temple in the trip");
     expectNoMissingCopy(html);
   });
 });

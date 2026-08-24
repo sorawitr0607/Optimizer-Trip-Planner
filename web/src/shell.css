@@ -717,7 +717,7 @@
 .wizard-steps {
   display: grid;
   gap: 6px;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   list-style: none;
   margin: 0;
   padding: 0;
@@ -783,12 +783,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.wizard-count {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-  margin: 0;
 }
 
 .setup-flash {
@@ -1033,9 +1027,9 @@
    content column that is now `900 - 260` rather than the full window — the sidebar
    became a real column here when the old 992px `display: block` rule moved to 860 —
    and they ellipsised to "Bef…", "Ow…", "Trav…", "Revi…", which is worse than the
-   numbered circle alone. Nothing is lost: the line directly beneath spells out
-   "Step 2 of 5 · Trip basics · Setup confirmed". Found by the `t900-` captures,
-   which is what that viewport was added for. */
+   numbered circle alone. Nothing is lost: the button's accessible name still spells
+   out the step and title. Found by the `t900-` captures, which is what that viewport
+   was added for. */
 @media (max-width: 1100px) {
   .wizard-step-label {
     display: none;
@@ -2083,6 +2077,15 @@
 .plan-tabs button[aria-pressed="true"] {
   background: var(--color-accent-light);
   color: var(--color-accent);
+}
+
+.plan-tabs button:disabled {
+  cursor: default;
+  opacity: var(--opacity-disabled);
+}
+
+.itinerary-panel[data-active="false"] {
+  display: none;
 }
 
 .plan-timeline > section {
@@ -6976,7 +6979,7 @@
   text-decoration: none;
 }
 
-/* What the plan will cost money for: counted, never priced. */
+/* What the plan will cost money for: its counts beside owner-entered totals. */
 .money-plan-shape {
   border-top: 1px solid var(--bg-card-border);
   display: grid;
@@ -6998,6 +7001,25 @@
 .money-shape-list strong {
   font-family: var(--font-mono);
   font-size: var(--text-lg);
+}
+
+.money-shape-estimates {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  width: 100%;
+}
+
+.money-shape-estimates label {
+  display: grid;
+  gap: 4px;
+}
+
+.money-shape-tier {
+  display: grid;
+  gap: 4px;
+  max-width: 220px;
+  width: 100%;
 }
 
 /* Places that did not make the plan, each with its remedy on the same line. */
@@ -9709,6 +9731,11 @@
   padding: 0 12px;
 }
 
+.trip-now-map {
+  align-self: flex-start;
+  margin-top: 10px;
+}
+
 /* The time control. There is no scrubber — see `TripNow`. */
 .trip-now-clock {
   align-items: center;
@@ -10075,15 +10102,29 @@
 
 .day-stop-lightbox {
   align-items: center;
-  background: var(--landing-scrim);
+  background: transparent;
+  border: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  height: 100%;
   inset: 0;
   justify-content: center;
+  margin: 0;
+  max-height: none;
+  max-width: none;
   padding: 16px;
   position: fixed;
+  width: 100%;
   z-index: 60;
+}
+
+.day-stop-lightbox:not([open]) {
+  display: none;
+}
+
+.day-stop-lightbox::backdrop {
+  background: var(--landing-scrim);
 }
 
 .day-stop-lightbox img {
@@ -10111,6 +10152,44 @@
 /* From 900px the map and the stops sit side by side, because on a wide screen the point
    is seeing where you are going *and* in what order. */
 @media (min-width: 861px) {
+  .plan-tabs {
+    display: none;
+  }
+
+  .itinerary-panels {
+    align-items: start;
+    display: grid;
+    gap: 16px;
+    grid-template-columns: minmax(300px, 0.85fr) minmax(0, 1.15fr);
+  }
+
+  .itinerary-panel[data-active] {
+    display: block;
+    min-width: 0;
+  }
+
+  .itinerary-panel.map {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  /* The map already owns the left dashboard column. Its older desktop rule split that
+     column again between drawing and key, leaving each too narrow to read. */
+  .itinerary-panel.map .plan-map {
+    display: block;
+  }
+
+  .itinerary-panel.map .plan-map > :is(ul, ol) {
+    margin-top: 9px;
+    max-height: none;
+    overflow-y: visible;
+  }
+
+  .itinerary-panel.timeline {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
   .trip-now {
     padding: 18px 20px;
   }

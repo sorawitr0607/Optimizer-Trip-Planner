@@ -4236,3 +4236,71 @@ than the `padding: 0` above it, so the one row with a date collected it once per
 Measured at 390px: 167px for a day-start row before, 123px after — and 73px for a travel
 row and 97px for a visit, which is exactly the lines they carry. No sideways scroll on
 the table and none on the document.
+
+## The feedback screens became one coordinated dashboard, 2026-08-24
+
+The remaining owner report connected four surfaces that had previously been tested in
+isolation: the reference dashboards, itinerary, plan costs and Places lanes. The solution
+reused the data boundaries already in the app rather than building a second dashboard.
+
+### Itinerary coordinates the controls it already had
+
+The four reference dashboard exports agree on the useful interaction: a chosen day, a
+clock, a map and the ordered rows move together. `/itinerary` already held all four, but
+its map pins were inert, the chosen day disappeared on reload, and a wide screen still
+made the owner switch between map and timeline.
+
+The day and mobile view now live in the URL. A numbered timed pin is the same control as
+its timeline time: either pins the clock and, when the Now card has scrolled away, brings
+the result back into view. Wide screens render map and timeline together; phones keep the
+two-button view switch. Search temporarily owns the timeline because a cross-trip result
+has no single map. Photos use a native dialog, day tabs take arrow keys, and the live card
+gets the exact coordinate Maps handoff.
+
+Readiness and money were deliberately not copied into the dashboard. The active export
+snapshot remains the only plan data source, `/readiness` remains the writable checklist,
+`/costs` the planned ledger and `/split` actual bills. The four dashboard artifacts pass
+their own structural checker.
+
+### Plan shape now starts with a number, without pretending it is a quote
+
+The old “Add these as estimate rows” created four rows whose amount was literally zero,
+so the planned/actual comparison remained zero after the button was pressed. It now
+offers Budget, Value, Standard, Premium and Luxury THB seeds, makes every category total
+editable, and writes only after explicit Save. Accommodation is per room for two people;
+food, fees and transport are per traveller. Nights come from setup's dates, not the plan's
+preparation day, and a category with count zero is absent.
+
+`related_item_id=plan-estimate:<category>` is the stable identity. A language change or a
+new itinerary count updates the same estimate row; matching the old localized label stays
+only for upgrading rows created by the previous button. A browser press against the
+scratch trip changed the total from zero to a non-zero comparison and showed the success
+beside the pressed button.
+
+### Empty choices and repeated sentences left
+
+Places now derives its lane buttons from non-empty ranked lanes, using City Icons as the
+preferred first lane only when one exists. Setup no longer repeats “Step N of 5”, the
+section title and saved state under a visual five-step control. Places no longer repeats
+the free-search promise, the already-visible completion, or “one card at a time”; itinerary
+no longer explains that its one export snapshot cannot disagree. Safety, provisional
+results, provider use and paid-action prices remain.
+
+### The gate stopped changing because the clock did
+
+The first clean comparison showed six otherwise untouched tablet routes at 0.117% drift.
+The only moving pixels were the visible build timestamp. It remains visible in the real
+sidebar and is marked `data-volatile` only for capture mode, like the paid ledger and
+export time already were. The reviewed set was approved 136/136, captured again after
+approval, compared 136/136, and swept to zero blank and zero exact-duplicate images.
+
+`WF-050` required the project graph rebuild the previous handoff had declined to pay for.
+The first extraction cost US$0.064237 and failed after clustering lost 140 endpoint pairs;
+it also proved the failure path deleted its promised raw diagnostic. The raw graph now
+survives until validation passes, with a regression test. The warm retry cost US$0.003505
+and closed at 3091 nodes / 7245 directed edges / 223 communities.
+
+The complete gate passed 12/12 in 52.4 seconds: 645 Python tests, all 27 historical
+optimizer cases over three variants, 158 web tests, graph/provider/design/parity/reference
+checks, and the 136-screen comparison. All application work used disposable SQLite
+copies; `data/tourist.sqlite3` was not opened.

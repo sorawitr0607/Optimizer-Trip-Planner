@@ -110,6 +110,7 @@ export interface CostItem {
   cost_id: string;
   label: string;
   category: string;
+  related_item_id?: string | null;
   original_amount: number;
   original_currency: string;
   payment_state: "estimate" | "committed" | "paid";

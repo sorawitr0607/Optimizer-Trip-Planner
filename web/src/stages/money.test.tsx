@@ -20,6 +20,7 @@ const SETUP = {
         { traveller_id: "member_1", label: "Mum" },
         { traveller_id: "member_2", label: "Dad" },
       ],
+      trip_basics: { start_date: "2026-10-10", end_date: "2026-10-11" },
     },
     sha256: "abc",
   },
@@ -179,6 +180,21 @@ function render(page: ReactNode, language: Language): string {
   client.setQueryData(["setup", TRIP], SETUP);
   client.setQueryData(["split_summary", TRIP], SUMMARY);
   client.setQueryData(["split_rows", TRIP], SPLIT_ROWS);
+  client.setQueryData(["cost_categories", TRIP], [
+    { code: "accommodation", label: null, built_in: true },
+    { code: "fees", label: null, built_in: true },
+    { code: "food", label: null, built_in: true },
+    { code: "transport", label: null, built_in: true },
+  ]);
+  client.setQueryData(["export_snapshot", TRIP], {
+    data: {
+      days: [
+        { items: [{ type: "preparation" }] },
+        { items: [{ type: "visit" }, { type: "meal" }, { type: "travel" }] },
+        { items: [{ type: "visit" }, { type: "meal" }, { type: "travel" }] },
+      ],
+    },
+  });
   return renderToStaticMarkup(
     <QueryClientProvider client={client}>
       <LanguageProvider initial={language}>
@@ -211,6 +227,25 @@ describe("CostsPage", () => {
     expect(html).toContain('type="submit"');
     expect(html).toContain("Edit");
     expectNoMissingCopy(html);
+  });
+
+  it("starts with editable Standard estimates instead of adding four zero rows", () => {
+    const html = render(<CostsPage />, "en");
+
+    expect(html).toContain("Budget");
+    expect(html).toContain("Value");
+    expect(html).toContain("Standard");
+    expect(html).toContain("Premium");
+    expect(html).toContain("Luxury");
+    expect(html).toContain("Accommodation estimate (THB)");
+    expect(html.match(/min="0.01"/g) ?? []).toHaveLength(4);
+    expect(html).toContain('value="7000"');
+    expect(html).toContain('value="2700"');
+    expect(html).toContain('value="3600"');
+    expect(html).toContain('value="1800"');
+    expect(html).toMatch(/<button[^>]*>Save plan estimates<\/button>/);
+    expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*>Save plan estimates<\/button>/);
+    expect(html).not.toContain("Add these as estimate rows");
   });
 
   it("renders the planned-versus-actual comparison in English", () => {
