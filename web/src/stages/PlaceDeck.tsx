@@ -5,7 +5,7 @@ import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
 import { flyToShortlist } from "../shared/flyToShortlist";
 import { distinguishingCons, evaluatedEffort, evaluatedFeasibility } from "../shared/cards";
 import { PHOTO_THIN_AT, galleryFor } from "../shared/photos";
-import { PlaceMap } from "./PlaceMap";
+import { tagIcon } from "../shared/tagIcons";
 
 /**
  * The swipe deck `WF-005` decided on 2026-07-28 and `WF-036` left to prototype.
@@ -754,43 +754,36 @@ export function PlaceDeck({
           // Wikidata entry at all. Offering the fetch button again would be a control
           // that cannot work, which reads as the app being broken rather than the
           // encyclopedia being empty.
-          // A place with no free photograph anywhere still gets something to look at:
-          // where it is. Measured on the owner's Sapporo catalogue, six places had a QID,
-          // no image property, no OpenStreetMap tag and nothing that passed the Commons
-          // name filter — two of them stone monuments whose names are two characters,
-          // which the name filter refuses by design. There is no picture to find for
-          // those, and inventing one is fabrication, so this shows the map instead and
-          // says that is what it is. A swipe decision made on a location is a worse
-          // decision than one made on a photograph, and a much better one than a
-          // decision made on a grey box.
-          <div className="place-deck-photo place-deck-photo-empty">
+          // A place with no free photograph still gets something to look at, and for a
+          // while that was a map. It is not a map any more, for two reasons the owner
+          // gave: the detail panel beside the deck already draws one for the selected
+          // place, so the card was the second copy; and a map is an interactive surface
+          // sitting inside a swipe target. It sets `touch-action: none` and captures
+          // pointers so it can be panned and pinched, which is exactly what a card being
+          // swiped must not do — pinching the card fought the map underneath it.
+          //
+          // What replaces it says the one thing still known about the place: what kind of
+          // thing it is. The glyph comes from `shared/tagIcons.tsx`, the same table the
+          // setup chips read, so a category the app can name is a category this can draw.
+          // No words, because the caption under the card already prints the category —
+          // and nothing here takes a pointer, so the swipe is the card's alone.
+          <div className="place-deck-photo place-deck-photo-empty place-deck-photo-kind">
             {(() => {
-              // No coordinates is the one case with nothing to draw either. Discovery
-              // refuses a candidate without them, so this is defence rather than a
-              // branch the catalogue reaches.
-              const spot = candidates[entry.place_id];
-              if (spot?.latitude == null || spot.longitude == null) {
-                return <p className="setup-hint">{copy("no_description_yet", language)}</p>;
-              }
+              const kind = candidates[entry.place_id]?.category;
+              const Glyph = tagIcon(kind ?? "");
               return (
-                <PlaceMap
-                  focusId={entry.place_id}
-                  headingLevel={4}
-                  language={language}
-                  places={[
-                    {
-                      place_id: entry.place_id,
-                      name,
-                      label: name,
-                      latitude: spot.latitude,
-                      longitude: spot.longitude,
-                    },
-                  ]}
-                  title={copy("photo_none_map", language)}
-                  withKey={false}
+                <Glyph
+                  aria-hidden="true"
+                  className="place-deck-kind-glyph"
+                  size={64}
+                  strokeWidth={1.25}
                 />
               );
             })()}
+            {/* The glyph is decoration and says so; this sentence is the actual answer to
+                "why is there no picture", and a reader who cannot see the glyph still
+                needs it. */}
+            <p className="setup-hint">{copy("photo_none_kind", language)}</p>
           </div>
         ) : (
           <div className="place-deck-photo place-deck-photo-empty">

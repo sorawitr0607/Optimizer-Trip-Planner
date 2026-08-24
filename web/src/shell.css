@@ -10633,3 +10633,20 @@
   grid-column: 1 / -1;
   margin: 0;
 }
+
+/* A place with no free photograph. What used to be a map here was a second copy of the
+   one in the detail panel, and worse, an interactive surface inside a swipe target:
+   `touch-action: none` and pointer capture are what a map needs and what a card being
+   swiped must not have. A glyph takes no pointer at all. */
+.place-deck-photo-kind {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  justify-content: center;
+}
+
+.place-deck-kind-glyph {
+  color: var(--text-muted);
+  opacity: 0.55;
+}

@@ -243,6 +243,34 @@ class RouteRefreshTest(unittest.TestCase):
         self.assertEqual(sweep["fetched"], reached[-1])
         self.assertEqual(sorted(reached), reached, "the count may only go up")
 
+    def test_a_sweep_hands_the_worker_back_before_it_starves_the_queue(self) -> None:
+        """One worker runs one job, so a long job is a queue-wide outage.
+
+        Measured on the deployment: an 843-second sweep left `generate_plan_preview` —
+        three seconds of work — waiting 482 seconds to be claimed, and the browser
+        reported `job_timeout` on a build that had not started. Discovery waited 885.
+        The sweep stops on its own clock and says what is left.
+        """
+
+        with patch("travel_planner.actions.MAX_ROUTE_REQUESTS", 1), patch(
+            "travel_planner.actions.ROUTE_SWEEP_SECONDS", 0.0
+        ):
+            stopped = self.actions.refresh_routes(self.trip.trip_id, max_passes=12)
+
+        # A zero budget still does one pass -- the deadline is checked between passes,
+        # so the job always makes progress rather than returning empty-handed.
+        self.assertEqual(1, stopped["passes_run"])
+        self.assertEqual(1, stopped["fetched"])
+        # And it reports that asking again is worth doing.
+        self.assertTrue(stopped["more_pairs"])
+
+    def test_a_finished_sweep_does_not_ask_the_caller_to_come_back(self) -> None:
+        with patch("travel_planner.actions.MAX_ROUTE_REQUESTS", 2):
+            done = self.actions.refresh_routes(self.trip.trip_id, max_passes=12)
+
+        self.assertEqual(0, done["skipped_over_cap"])
+        self.assertFalse(done["more_pairs"])
+
     def test_a_sweep_stops_rather_than_re_buying_what_force_already_bought(self) -> None:
         """`force` refetches cached pairs, so the pass list never shrinks.
 

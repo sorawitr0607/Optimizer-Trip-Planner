@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 import os
 from pathlib import Path
 import re
+from time import monotonic
 from typing import Any
 
 from .core import (
@@ -110,6 +111,25 @@ PROVIDER_NO_MATCH_KIND = "provider_no_match"
 PROVIDER_NO_MATCH_DAYS = 90
 
 MAX_ROUTE_REQUESTS = 60
+
+#: Wall-clock a single `refresh_routes` job may hold the worker for.
+#:
+#: **This is a fairness limit, not a work limit.** One worker runs one job at a time,
+#: so a long job starves every short one behind it: measured on the deployment, a
+#: 843-second sweep left `generate_plan_preview` — which runs in *three seconds* —
+#: waiting 482 seconds to be claimed, and the browser reported `job_timeout` on a build
+#: that had not started. Discovery waited 885.
+#:
+#: It bounds when a *new* pass may start, not when the job must end, so one job is this
+#: budget plus whatever pass is already running — about 110 seconds against a provider
+#: pacing at 1.8s a route. That is the number to compare with the client's five-minute
+#: patience, and it leaves room for a short job to sit behind one and still be claimed.
+#:
+#: The effect is per-pass on a slow provider and several passes on a fast or cached one,
+#: which is the right shape either way: the same work as before the sweep existed when
+#: routes are expensive, and the round-trips saved when they are not. Nothing is lost
+#: when it stops early — `more_pairs` says so and the caller comes straight back.
+ROUTE_SWEEP_SECONDS = 60.0
 
 #: How many capped passes one `refresh_routes` sweep may make. Forty-one places need
 #: 1640 ordered pairs and a pass covers sixty, so this is a ceiling that stops a stuck
@@ -3158,6 +3178,7 @@ class PlannerActions:
             if progress is not None:
                 progress(base + within_pass)
 
+        deadline = monotonic() + ROUTE_SWEEP_SECONDS
         result = self._refresh_routes_with(
             provider, trip_id, force=force, on_stored=relay
         )
@@ -3170,6 +3191,11 @@ class PlannerActions:
             # fetch nothing again, and a pass that left nothing over the cap has
             # finished the sweep.
             if result["fetched"] == 0 or result["skipped_over_cap"] == 0:
+                break
+            # Hand the worker back rather than start a pass that would hold it for
+            # another two minutes. Whatever is left is still outstanding and the reply
+            # says so; the caller asks again and the queue gets a turn in between.
+            if monotonic() >= deadline:
                 break
             base = stored
             result = self._refresh_routes_with(
@@ -3184,6 +3210,11 @@ class PlannerActions:
         # sweep rather than only its final leg -- `fetched` is what the caller counts.
         result["fetched"] = stored
         result["passes_run"] = run
+        # Whether asking again would do anything. The last pass left pairs over its cap
+        # and was still finding them, so the sweep stopped early rather than finished.
+        result["more_pairs"] = bool(
+            result["skipped_over_cap"] and result["fetched"]
+        )
         return result
 
     def refresh_transit_routes(

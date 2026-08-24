@@ -128,6 +128,18 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   photograph again. **Note the shape of `list_place_evidence`** — it returns the stored
   snapshot, not the row, so anything that needs `place_id` back must put it *inside* the
   value, which is why `list_venue_notices` does.
+- **One worker runs one job at a time, so a long job is a queue-wide outage.** Measured:
+  an 843-second `refresh_routes` sweep left `generate_plan_preview` — *three seconds* of
+  work — waiting 482s to be claimed, and discovery waiting 885s, which the client
+  correctly reported as `job_timeout` on a build that had not started. **Bound anything
+  that can run long.** `ROUTE_SWEEP_SECONDS` stops a sweep starting a new pass after
+  sixty seconds, so a job is that plus the pass in flight — about 110s at the provider's
+  1.8s-a-route pacing, which is what the design did before the sweep existed and never
+  starved anything. A job that stops early must say so (`more_pairs`) and the caller must
+  come back; when it does, `onProgress` needs a running base, because each job counts from
+  zero and a stage that restarts at every request is worse than no count.
+  Do not "fix" a long job by widening the client's patience — that hides the starvation
+  from the one place that can see it.
 - **A queued operation is expensive to ask for, so do not loop on one from the browser.**
   Every RPC for slow work is a job: enqueue, poll at 1.5s, wait for the worker to claim
   it, poll again — four to twelve seconds of latency before the work starts.
@@ -400,6 +412,11 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   The only map on that screen lives in the shortlist drawer, so while it is closed the
   element is `0x0` — measuring against it sends the viewBox to `-Infinity` and reads as a
   broken map. Open the drawer, or pick the element with a non-zero box.
+- **Nothing inside a swipe target may take a pointer.** A place with no free photograph
+  used to show a map on its deck card: an interactive surface with `touch-action: none`
+  and pointer capture, sitting inside a card whose whole job is to be swiped. Pinching the
+  card fought the map under it. It is a `tagIcon` glyph and a sentence now — and it was a
+  second copy of the detail panel's map anyway, which is the other half of why it went.
 - **A control in the deck acts on the card in the deck, never on `selectedId`.** The deck
   deals from a lane and the list has its own selection; they are usually different places.
   `saveChoice` carries the comment saying so and `onWantSummary` obeys it, but

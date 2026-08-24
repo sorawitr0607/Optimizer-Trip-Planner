@@ -4475,3 +4475,55 @@ and would have offered the same purchase again. The button withdraws once a plac
 enriched — the same rule as the remembered `provider_no_match`, on the side where Google
 answered rather than the side where it had nothing.
 
+## The single worker was the bottleneck all along, 2026-08-25
+
+`job_timeout` on the plan build again, after the deadline was taught to measure silence.
+The queue says why, and it is not what the last entry assumed:
+
+```
+kind                   status  progress  waited  ran
+generate_plan_preview  done    4         482s    3s
+generate_plan_preview  done    4         167s    3s
+discover_places        done    4         885s    1s
+refresh_routes         done    462       0s      843s
+```
+
+**The build takes three seconds.** It timed out waiting to be *claimed*. One worker runs
+one job at a time, so the 843-second sweep was a queue-wide outage — discovery waited
+nearly fifteen minutes behind it. The silence deadline behaved exactly as designed: an
+unclaimed job reports nothing, so nothing resets its clock, and five minutes of not being
+picked up is the failure it exists to report. It was right, and the thing it was reporting
+was real.
+
+So the fault was one layer down, and it was mine twice over. Collapsing twelve
+round-trips into one job removed the latency it targeted and replaced it with head-of-line
+blocking — which is worse, because the original design's jobs were about **110 seconds**
+each and never starved anything.
+
+`ROUTE_SWEEP_SECONDS` bounds a job at sixty seconds *before starting another pass*, so one
+job is the budget plus the pass already running: about 110s against a provider pacing at
+1.8s a route, which is where this started. On a slow provider that is one pass per job,
+the shape the design had before the sweep; on a cached or fast one it is several, which is
+the round-trip saving that was worth having. `more_pairs` tells the caller whether coming
+back would do anything, and `collectRouteEvidence` loops on it — with a running base under
+`onProgress`, since each job counts its own routes from zero and the routes stage must not
+restart at every request.
+
+**Why the fourteen minutes cannot be shortened.** 462 routes at 1.82 seconds each is
+OpenRouteService's own pacing, not a courtesy pause of ours — there is no sleep in the
+happy path. The work is the work; only its effect on everything else was fixable.
+
+### The map came off the swipe card
+
+A place with no free photograph was shown a map of where it is. Two things wrong with
+that, both the owner's: the detail panel beside the deck already draws one for the
+selected place, so the card was a second copy — and a map is an interactive surface inside
+a swipe target. It sets `touch-action: none` and captures pointers precisely so it can be
+panned and pinched, which is what a card being swiped must not do. Pinching the card
+fought the map underneath it, which is the gesture bug.
+
+It is a category glyph now, from the `shared/tagIcons.tsx` table the setup chips already
+read, over one line saying no free source has a photograph. The glyph is `aria-hidden`
+because the sentence carries the meaning, and nothing in the tile takes a pointer, so the
+swipe belongs to the card again.
+

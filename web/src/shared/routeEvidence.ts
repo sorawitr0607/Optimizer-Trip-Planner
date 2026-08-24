@@ -5,6 +5,9 @@ import { rpc } from "../api/client";
 interface RouteRefreshReply {
   pairs_needed: number;
   fetched: number;
+  /** The sweep stopped on its own clock with pairs still outstanding, so asking
+   *  again continues rather than repeats. Absent on an older server. */
+  more_pairs?: boolean;
 }
 
 /** A ceiling on passes, not on the trip — and it lives on the server now, as
@@ -37,19 +40,30 @@ export async function collectRouteEvidence(
 ): Promise<number> {
   let stored = 0;
   try {
-    // One request for the whole sweep. This used to be a loop of up to twelve, and on
-    // the deployment each turn of it was a queued job: enqueue, poll at 1.5s, wait for
-    // the worker to claim it, poll again. Minutes of round-trip before any routing,
-    // which is most of what a ten-minute build was doing. The passes are the same
-    // passes, made consecutively by the worker; `onProgress` still ticks per pass,
-    // reported through the job row rather than inferred from twelve replies.
-    const reply = await rpc<RouteRefreshReply>(
-      "refresh_routes",
-      { trip_id: tripId, max_passes: MAX_PASSES },
-      (measured) => onProgress?.(measured),
-    );
-    stored = reply.fetched;
-    onProgress?.(stored);
+    // Several passes per request, and several requests if the trip needs them.
+    //
+    // This was one request for the whole sweep, which removed eleven queue round-trips
+    // and replaced them with a job that held the single worker for **843 seconds** —
+    // starving a three-second plan build behind it until the browser gave up on a
+    // build that had not started. `ROUTE_SWEEP_SECONDS` bounds one job at sixty now, so
+    // the loop is back, but each turn does as many capped passes as fit in a minute
+    // rather than exactly one. Fewer round-trips than the original, and none of them
+    // long enough to block the queue.
+    for (let call = 0; call < MAX_PASSES; call += 1) {
+      const base = stored;
+      const reply = await rpc<RouteRefreshReply>(
+        "refresh_routes",
+        { trip_id: tripId, max_passes: MAX_PASSES },
+        // Each job counts from zero, so the running total is the caller's, not the
+        // job's — without the base the routes stage would restart at every request.
+        (measured) => onProgress?.(base + measured),
+      );
+      stored = base + reply.fetched;
+      onProgress?.(stored);
+      // Nothing came back, or nothing is outstanding. Either way asking again is a
+      // request that buys nothing.
+      if (!reply.fetched || !reply.more_pairs) break;
+    }
   } catch {
     /* whatever earlier passes stored still stands */
   }

@@ -23,17 +23,43 @@ import { collectRouteEvidence } from "./routeEvidence";
 afterEach(() => vi.restoreAllMocks());
 
 describe("collectRouteEvidence", () => {
-  it("asks for the whole sweep in one request, not one request per pass", async () => {
-    const rpc = vi.spyOn(client, "rpc").mockResolvedValue({ pairs_needed: 110, fetched: 110 });
+  it("asks once when one sweep finished the trip", async () => {
+    const rpc = vi.spyOn(client, "rpc")
+      .mockResolvedValue({ pairs_needed: 110, fetched: 110, more_pairs: false });
 
     await collectRouteEvidence("trip_1");
 
-    // One walking request, then transit — which is asked for once whatever walking did.
-    // Twelve round-trips became one, and that is the whole point of the change.
+    // One walking request, then transit — asked for once whatever walking did.
     expect(rpc).toHaveBeenCalledTimes(2);
     expect(rpc.mock.calls[0][0]).toBe("refresh_routes");
     expect(rpc.mock.calls[0][1]).toEqual({ trip_id: "trip_1", max_passes: 12 });
     expect(rpc).toHaveBeenLastCalledWith("refresh_transit_routes", { trip_id: "trip_1" });
+  });
+
+  it("comes back when the sweep stopped on its own clock, and totals across the calls", async () => {
+    // `ROUTE_SWEEP_SECONDS` bounds one job so it cannot starve the single worker, so a
+    // big trip takes several. Each job counts its own routes from zero; the number the
+    // routes stage shows is the caller's running total, and it must not restart.
+    const seen: number[] = [];
+    const rpc = vi.spyOn(client, "rpc").mockImplementation((async (
+      method: string,
+      _payload?: Record<string, unknown>,
+      onProgress?: (n: number) => void,
+    ) => {
+      if (method === "refresh_transit_routes") return { pairs_needed: 0, fetched: 0 };
+      const call = rpc.mock.calls.filter((c) => c[0] === "refresh_routes").length;
+      onProgress?.(30);
+      onProgress?.(60);
+      return { pairs_needed: 200, fetched: 60, more_pairs: call < 3 };
+    }) as unknown as typeof client.rpc);
+
+    const stored = await collectRouteEvidence("trip_1", (n) => seen.push(n));
+
+    expect(rpc.mock.calls.filter((c) => c[0] === "refresh_routes")).toHaveLength(3);
+    expect(stored).toBe(180);
+    // Never goes backwards across the job boundary, which it would without the base.
+    expect([...seen].sort((a, b) => a - b)).toEqual(seen);
+    expect(seen).toContain(90);
   });
 
   it("passes the worker's running count straight through", async () => {
