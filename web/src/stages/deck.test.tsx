@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import type { DiscoveryCandidate, PlaceSummary, Ranking } from "../api/client";
+import type { DiscoveryCandidate, PlaceInsight, PlaceSummary, Ranking } from "../api/client";
 import { PlaceDeck } from "./PlaceDeck";
 
 /**
@@ -86,6 +86,7 @@ function render(
   rejected: string[] = [],
   summaryLoading = false,
   ranking: Ranking = RANKING,
+  insights: Record<string, PlaceInsight> = {},
 ) {
   return renderToStaticMarkup(
     <PlaceDeck
@@ -95,11 +96,14 @@ function render(
         ...rejected.map((place_id) => ({ place_id, action: "not_for_trip", reason: null }) as never),
       ]}
       entries={entries}
+      insights={insights}
       language="en"
       altNameOf={(placeId) => (placeId === "first" ? "台北101" : null)}
       nameOf={(placeId) => (placeId === "first" ? "Taipei 101" : "A quiet park")}
       onDecide={() => {}}
+      onWantPhotos={() => {}}
       onWantSummary={() => {}}
+      paidPhotoUsd={0.075}
       ranking={ranking}
       summaryLoading={summaryLoading}
       summaries={summaries}
@@ -267,6 +271,30 @@ describe("PlaceDeck", () => {
 
     expect(html).toContain("Special:FilePath/Quiet_Park.jpg");
     expect(html).toContain("Photo 1 of 1");
+  });
+
+  it("reloads the whole card with the paid session gallery", () => {
+    const blank = {
+      first: {
+        ...SUMMARY.first,
+        image_url: null,
+        image_urls: [],
+      },
+    };
+    const paid = {
+      first: {
+        photo_gallery: [
+          { uri: "https://places.example/paid-one.jpg" },
+          { uri: "https://places.example/paid-two.jpg" },
+        ],
+      },
+    };
+
+    const html = render(blank, [], RANKING.lanes.main_queue, [], false, RANKING, paid);
+
+    expect(html).toContain("places.example/paid-one.jpg");
+    expect(html).toContain("Photo 1 of 2");
+    expect(html).not.toContain("Get photographs from Google");
   });
 
   it("names all four directions, up included", () => {

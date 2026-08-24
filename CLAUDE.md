@@ -1041,6 +1041,10 @@ unit price per `provider:operation`, `actions._spend()` refuses a call that woul
 records what it cost, and free-tier operations are recorded at zero so call counts stay reconcilable.
 Every paid provider call must route through `_spend`; an unpriced operation raises rather than being
 assumed free. Ledger rows are append-only by SQLite trigger.
+`enrich_place_card` photographs are a **session overlay**, not a `place_summaries` write. Both the
+detail panel and swipe deck must read `PlaceInsight` directly; invalidating the free-summary query
+cannot reveal paid photographs and leaves the charged card blank. Disable the card's paid control
+while that overlay is arriving so one press cannot become two charges.
 
 
 ## Graphify: this repo overrides the parent instructions

@@ -4168,6 +4168,15 @@ card should reload.
 correctly; `saveChoice` even carries the comment explaining why — "the card in the deck is
 not the card in the select". One of the three did not get the memo.
 
+Live verification after that fix found a second seam. The right Sapporo card was charged
+US$0.075 and its detail panel received five photographs, but the deck stayed on its map and
+kept offering the paid button. `enrich_place_card` returns a deliberately session-only
+`PlaceInsight`; it never writes those licensed images into the free `place_summaries` store.
+Refetching that store therefore returned the same blank record. The deck now merges the
+paid overlay into the card gallery directly, paid images lead so the press visibly changes
+the card, and the paid button disables during the request and withdraws when images arrive.
+`deck.test.tsx` holds the blank-card-to-paid-gallery transition without a network call.
+
 ### The skeleton was describing work that had not started
 
 Two placeholder cards sat under the new stage list from the moment the button was
@@ -4300,7 +4309,7 @@ it also proved the failure path deleted its promised raw diagnostic. The raw gra
 survives until validation passes, with a regression test. The warm retry cost US$0.003505
 and closed at 3091 nodes / 7245 directed edges / 223 communities.
 
-The complete gate passed 12/12 in 52.4 seconds: 645 Python tests, all 27 historical
-optimizer cases over three variants, 158 web tests, graph/provider/design/parity/reference
+The complete gate passed 12/12 in 55.3 seconds: 645 Python tests, all 27 historical
+optimizer cases over three variants, 159 web tests, graph/provider/design/parity/reference
 checks, and the 136-screen comparison. All application work used disposable SQLite
 copies; `data/tourist.sqlite3` was not opened.

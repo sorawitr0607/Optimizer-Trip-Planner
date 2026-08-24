@@ -26,9 +26,9 @@ reference dashboards but did not coordinate its map, clock and timeline as one s
   pure observer in `travel_planner/optimizer.py`, with deterministic output pinned by
   `tests/test_optimizer.py`. Route passes move into `travel_planner/actions.py` so the
   browser queues one job; forced refresh remains one pass.
-- A card action uses the card's own id. `web/src/stages/PlacesPage.tsx` invalidates the
-  tapped card after a paid photograph arrives, hides discovery skeletons until discovery
-  has returned, and omits every zero-count lane.
+- A card action uses the card's own id. `web/src/stages/PlacesPage.tsx` gives the paid
+  session overlay back to `PlaceDeck` for that exact card, hides discovery skeletons until
+  discovery has returned, and omits every zero-count lane.
 - The itinerary is an interactive view over the one active export snapshot.
   `web/src/stages/ItineraryPage.tsx` coordinates URL-backed day/view state, the live clock,
   selectable map pins and timeline rows; wide screens show both panels and phones switch.
@@ -58,6 +58,13 @@ simultaneous wide panels and horizontal overflow.
 The capture seam in `web/src/shared/AppShell.tsx` also marks the visible build timestamp as
 volatile only during baseline capture. The real interface keeps the diagnostic while
 unchanged tablet screens stop drifting on every rebuild.
+
+Live verification found the first paid-photo fix was incomplete: the correct card id was
+charged, and its detail panel received five photographs, but the deck still read only the
+free-summary store. The paid result is deliberately session-only, so invalidating that
+store could never update the card. `PlaceDeck` now leads with the paid overlay directly,
+withdraws the paid control when it arrives, and disables that control while the call is
+pending. A static regression test pins the whole-card transition.
 
 ## Related
 

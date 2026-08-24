@@ -451,15 +451,11 @@ export function PlacesPage() {
         place_id: placeId ?? selectedId,
         language,
       }),
-    onSuccess: async (value, placeId) => {
+    onSuccess: (value, placeId) => {
       setInsights((current) => ({ ...current, [placeId ?? selectedId]: value }));
-      // The photographs were bought and then nothing asked for them. `insights` holds
-      // the rating and the reviews, but the gallery is read from `place_summaries` --
-      // so the card kept showing no picture, and the button offering to buy pictures
-      // kept offering, because `thinlyPictured` is computed from that same query. One
-      // invalidation makes the photographs appear and the button withdraw, which is
-      // the same fact observed twice.
-      await queryClient.invalidateQueries({ queryKey: ["place_summaries", tripId] });
+      // The deck reads this session overlay directly. The paid provider does not write
+      // into the free-summary store, so refetching that query only returns the old blank
+      // card and leaves the paid photographs stranded in the detail panel.
     },
   });
 
@@ -1011,6 +1007,7 @@ export function PlacesPage() {
                 }}
                 onCardChange={setCardId}
                 onWantPhotos={(placeId) => enrich.mutate(placeId)}
+                photosLoading={enrich.isPending}
                 onWantSummary={(placeId) => fetchCard.mutate(placeId)}
                 paidPhotoUsd={paidAllowed ? paidEstimate : null}
                 summaryLoading={summaryPendingForCard}
@@ -1021,6 +1018,7 @@ export function PlacesPage() {
                 onShowMore={dealMore}
                 ranking={ranking.data}
                 summaries={summaries.data ?? {}}
+                insights={insights}
               />
             </>
           ) : null}

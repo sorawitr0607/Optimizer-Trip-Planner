@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import type { CandidateChoice, DiscoveryCandidate, PlaceSummary, Ranking } from "../api/client";
+import type { CandidateChoice, DiscoveryCandidate, PlaceInsight, PlaceSummary, Ranking } from "../api/client";
 import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
 import { flyToShortlist } from "../shared/flyToShortlist";
 import { distinguishingCons, evaluatedEffort, evaluatedFeasibility } from "../shared/cards";
@@ -138,6 +138,8 @@ export interface PlaceDeckProps {
   /** The normalized catalogue by place id, for OpenStreetMap's own photo tag. */
   candidates: Record<string, DiscoveryCandidate>;
   summaries: Record<string, PlaceSummary>;
+  /** Paid, session-only photographs keyed by the card they were bought for. */
+  insights?: Record<string, PlaceInsight>;
   choices: CandidateChoice[];
   language: Language;
   /** Resolves a display name. Passed in so `shared/names.ts` stays the one place
@@ -153,6 +155,8 @@ export interface PlaceDeckProps {
   onPendingChange?: (pending: boolean) => void;
   /** Buy Google's photographs for a place no free source has one for. */
   onWantPhotos?: (placeId: string) => void;
+  /** Prevents a second paid press while the first gallery is still arriving. */
+  photosLoading?: boolean;
   /** What that costs, so the price is on the button rather than a screen away. */
   paidPhotoUsd?: number | null;
   /** Fetches the free description and photographs for one place. */
@@ -180,6 +184,7 @@ export function PlaceDeck({
   entries,
   candidates,
   summaries,
+  insights = {},
   choices,
   language,
   nameOf,
@@ -187,6 +192,7 @@ export function PlaceDeck({
   onDecide,
   onPendingChange,
   onWantPhotos,
+  photosLoading = false,
   paidPhotoUsd,
   onWantSummary,
   summaryLoading = false,
@@ -268,16 +274,26 @@ export function PlaceDeck({
   const photoIndex = currentId === shownCard ? photo : 0;
 
   const about = entry ? summaries[entry.place_id] : undefined;
-  // Encyclopedia photographs plus OpenStreetMap's own tag, which costs no extra request
-  // and is often the only picture a place without an article has.
-  const gallery = galleryFor(about, entry ? candidates[entry.place_id] : undefined);
+  // Paid photographs lead once the owner asks for them; free encyclopedia and
+  // OpenStreetMap images remain behind them. `enrich_place_card` deliberately returns a
+  // session overlay, so invalidating the free-summary query cannot make these appear.
+  const paidGallery = entry
+    ? (insights[entry.place_id]?.photo_gallery ?? []).map((photo) => photo.uri)
+    : [];
+  const gallery = [...new Set([
+    ...paidGallery,
+    ...galleryFor(about, entry ? candidates[entry.place_id] : undefined),
+  ])];
 
   // Wikimedia serves every one of these through a `Special:FilePath` redirect, so the
   // first byte costs two round trips. Warming the next photo and the next card's
   // first photo while this one is being read is the whole fix for "images load very
   // slowly": by the time the card turns over, the bytes are in the browser cache.
   const nextEntry = queue[Math.min(cursor + 1, queue.length - 1)];
-  const nextUrl = nextEntry ? summaries[nextEntry.place_id]?.image_url : null;
+  const nextUrl = nextEntry
+    ? insights[nextEntry.place_id]?.photo_gallery?.[0]?.uri
+      ?? summaries[nextEntry.place_id]?.image_url
+    : null;
   // Which photo is on screen, and which one has finished arriving. Held as the URL
   // rather than a boolean so that tapping through a gallery shows the placeholder again
   // for each new picture, and a cached one never flashes it at all.
@@ -787,6 +803,7 @@ export function PlaceDeck({
             {onWantPhotos && paidPhotoUsd != null ? (
               <button
                 className="place-deck-buy-photo"
+                disabled={photosLoading}
                 onClick={() => onWantPhotos(entry.place_id)}
                 type="button"
               >
