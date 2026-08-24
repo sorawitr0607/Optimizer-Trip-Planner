@@ -293,6 +293,10 @@ def normalize_raw_graph() -> set[tuple[str, str, str]]:
     if not nodes or not isinstance(edges, list):
         raise RuntimeError("Graphify did not produce a raw extraction graph")
 
+    # The provider has already been paid even when a later integrity guard rejects
+    # the extraction. Record usage before those guards can raise.
+    record_cost(data)
+
     node_ids = {node["id"] for node in nodes}
     candidates: dict[str, list[str]] = {}
     for node_id in node_ids:
@@ -358,7 +362,6 @@ def normalize_raw_graph() -> set[tuple[str, str, str]]:
             edge_keys.add(key)
 
     data["directed"] = True
-    record_cost(data)
     GRAPH.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return {
         (edge["source"], edge["target"], edge.get("relation", ""))

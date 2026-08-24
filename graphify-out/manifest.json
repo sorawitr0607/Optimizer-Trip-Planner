@@ -45,9 +45,9 @@
     "semantic_hash": "32602bedeed6e5b3a68e98f4a680bfaa"
   },
   "scripts/build_project_graph.py": {
-    "mtime": 1787564532.7053583,
-    "ast_hash": "d44dc976275345d18695734970f32984",
-    "semantic_hash": "d44dc976275345d18695734970f32984"
+    "mtime": 1787571346.2667348,
+    "ast_hash": "ad021b3ed1420f8d1a5f7ea5147b0430",
+    "semantic_hash": "ad021b3ed1420f8d1a5f7ea5147b0430"
   },
   "scripts/capture_screen_baselines.py": {
     "mtime": 1787471932.2139037,
@@ -165,9 +165,9 @@
     "semantic_hash": "581c0e168e1bd11fe4a23ff3571e919b"
   },
   "tests/test_graph_builder.py": {
-    "mtime": 1787564532.8237662,
-    "ast_hash": "f7dcd8a8d4ae4701fd9d0586b9960639",
-    "semantic_hash": "f7dcd8a8d4ae4701fd9d0586b9960639"
+    "mtime": 1787571346.4791048,
+    "ast_hash": "8714fc455d095ceaef04c08dc307bfbd",
+    "semantic_hash": "8714fc455d095ceaef04c08dc307bfbd"
   },
   "tests/test_icon_tables.py": {
     "mtime": 1787468999.5243943,
@@ -680,9 +680,9 @@
     "semantic_hash": "ca7ceec1f45e0672b487e381e0314f08"
   },
   "web/src/stages/PlaceDeck.tsx": {
-    "mtime": 1787546763.382846,
-    "ast_hash": "d188eb82c9bdb0595a37c278ec298dcd",
-    "semantic_hash": "d188eb82c9bdb0595a37c278ec298dcd"
+    "mtime": 1787567246.042789,
+    "ast_hash": "5cd70a09c5f4385c83220f334c9d260a",
+    "semantic_hash": "5cd70a09c5f4385c83220f334c9d260a"
   },
   "web/src/stages/PlaceMap.tsx": {
     "mtime": 1787545749.07111,
@@ -690,9 +690,9 @@
     "semantic_hash": "8a577280725b7b9f6a5278ee882f301d"
   },
   "web/src/stages/PlacesPage.tsx": {
-    "mtime": 1787546763.2738075,
-    "ast_hash": "d31682be19a7a9b3bd35ef34b07467b4",
-    "semantic_hash": "d31682be19a7a9b3bd35ef34b07467b4"
+    "mtime": 1787567246.1448286,
+    "ast_hash": "595940c32f7a87d108b8200c3a888277",
+    "semantic_hash": "595940c32f7a87d108b8200c3a888277"
   },
   "web/src/stages/PlacesTour.tsx": {
     "mtime": 1786593048.0276554,
@@ -750,9 +750,9 @@
     "semantic_hash": "0f4f92f17c64b6e0f26dd717ab114dbb"
   },
   "web/src/stages/deck.test.tsx": {
-    "mtime": 1787546772.6460845,
-    "ast_hash": "cc19fdef287e7ca1c3f8d7b4b8e8e062",
-    "semantic_hash": "cc19fdef287e7ca1c3f8d7b4b8e8e062"
+    "mtime": 1787567221.222719,
+    "ast_hash": "25d43c3b41fdb3cbf27964558438e9ad",
+    "semantic_hash": "25d43c3b41fdb3cbf27964558438e9ad"
   },
   "web/src/stages/evidence.test.tsx": {
     "mtime": 1786986235.9109251,
@@ -1155,9 +1155,9 @@
     "semantic_hash": "a2d7464302f4c82943fea8f1331252fe"
   },
   ".wayfinder/tickets/050-decide-how-feedback-driven-dashboards-show-progress-and-estimates.md": {
-    "mtime": 1787564319.5582316,
-    "ast_hash": "db86b2a0f0f5616448461fa6fe5c147b",
-    "semantic_hash": "db86b2a0f0f5616448461fa6fe5c147b"
+    "mtime": 1787570729.9741242,
+    "ast_hash": "c54f3ba55cec79575daeed7bb3228d36",
+    "semantic_hash": "c54f3ba55cec79575daeed7bb3228d36"
   },
   "AGENTS.md": {
     "mtime": 1785766520.9028397,
@@ -1165,14 +1165,24 @@
     "semantic_hash": "1eadb8bff2a10ce33d7930a6411d1154"
   },
   "CLAUDE.md": {
-    "mtime": 1787564214.660485,
-    "ast_hash": "0947cc5d348edf7fda6fac79f8406d3c",
-    "semantic_hash": "0947cc5d348edf7fda6fac79f8406d3c"
+    "mtime": 1787568374.8367596,
+    "ast_hash": "4b6ff4acac35bb0900ac6537f44cd8fd",
+    "semantic_hash": "4b6ff4acac35bb0900ac6537f44cd8fd"
+  },
+  "PUBLIC_RELEASE_PLAN.md": {
+    "mtime": 1787507857.138042,
+    "ast_hash": "2bac64d699e15bd915a02b07e4236b9d",
+    "semantic_hash": "2bac64d699e15bd915a02b07e4236b9d"
+  },
+  "README.md": {
+    "mtime": 1787570972.6540644,
+    "ast_hash": "6fa22325fe60139f8f854c28219b2e92",
+    "semantic_hash": "6fa22325fe60139f8f854c28219b2e92"
   },
   "docs/JOURNAL.md": {
-    "mtime": 1787505613.373227,
-    "ast_hash": "ea6e660f950cb036be345b486d27f74a",
-    "semantic_hash": "ea6e660f950cb036be345b486d27f74a"
+    "mtime": 1787570730.1694634,
+    "ast_hash": "10b667566d61009600355bd43298b54b",
+    "semantic_hash": "10b667566d61009600355bd43298b54b"
   },
   "i18n/notes.md": {
     "mtime": 1785767189.5124507,

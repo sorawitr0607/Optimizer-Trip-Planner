@@ -106,13 +106,13 @@ Never commit `secrets.local.json` or `.env`.
 Every trip flows through ten real, interactive screens:
 
 1. **Setup (`/trips/:id/setup`)**: 5-step wizard configuring destination country/city, travel dates, pacing constraints, and traveler preferences.
-2. **Places (`/trips/:id/places`)**: Candidate place discovery via free OpenStreetMap/Overpass data or custom place additions.
+2. **Places (`/trips/:id/places`)**: Candidate place discovery via free OpenStreetMap/Overpass data or custom place additions. Empty categories stay hidden, and an optional paid-photo request refreshes the card that was pressed without making the licensed images permanent trip data.
 3. **Stay (`/trips/:id/stay`)**: Where to base the trip, recommended by transit station rather than by hotel or district — the only unit whose travel time the app can measure exactly.
 4. **Evidence (`/trips/:id/evidence`)**: Verify opening hours, exact coordinates, admission fees, and transit requirements.
-5. **Optimize (`/trips/:id/optimize`)**: Deterministic constraint-aware solver computing optimal daily visit orders and route pacing.
-6. **Itinerary (`/trips/:id/itinerary`)**: Interactive day-by-day timetable rendered on the map along the actual walking routes, with one-tap handoff to phone navigation.
+5. **Optimize (`/trips/:id/optimize`)**: Deterministic constraint-aware solver computing optimal daily visit orders and route pacing, with reported progress for route evidence and each plan variant.
+6. **Itinerary (`/trips/:id/itinerary`)**: Interactive day-by-day dashboard coordinating the map, timeline, live clock, search, photographs, and one-tap phone navigation. Wide screens show map and timeline together; phones use a compact view switch.
 7. **Readiness (`/trips/:id/readiness`)**: Actionable pre-trip checklist proposals (reservations, packing, documents) with readiness scoring.
-8. **Costs (`/trips/:id/costs`)**: Budget tracking, currency conversion, and categorized expense recording.
+8. **Costs (`/trips/:id/costs`)**: Planned-versus-actual tracking, currency conversion, and categorized expenses. Budget, Value, Standard, Premium, and Luxury provide editable THB starting estimates; nothing is written until Save.
 9. **Split (`/trips/:id/split`)**: Multi-currency group bill splitting ledger calculating exact settlement transactions.
 10. **Revise (`/trips/:id/revise`)**: In-trip live adjustments, stop reordering, weather adaptations, and schedule rescheduling.
 
@@ -190,4 +190,3 @@ This project is licensed under the [MIT License](LICENSE).
 ## Credits
 
 The split ledger and interface visual language derive from **Auto-Bill-Splitter**, this project's earlier application, absorbed as a read-only donor in Phase 2. Attributions are declared individually in the source via `derives-from:` tokens validated against `artifacts/parity/2026-08-04-auto-bill-donor/`. Map data is `© OpenStreetMap contributors` under the ODbL.
-

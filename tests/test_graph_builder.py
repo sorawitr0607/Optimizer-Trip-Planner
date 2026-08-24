@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -10,6 +11,7 @@ from scripts.build_project_graph import (
     cluster_raw_graph,
     deduplicate_nodes,
     extracted_edge_issues,
+    normalize_raw_graph,
     resolve_ticket_node,
 )
 
@@ -218,6 +220,35 @@ class DuplicateModuleNodeTest(unittest.TestCase):
 
 
 class GraphBuilderEdgeValidationTest(unittest.TestCase):
+    def test_paid_cost_is_recorded_before_ticket_validation(self) -> None:
+        with TemporaryDirectory() as directory:
+            graph = Path(directory) / "graph.json"
+            graph.write_text(
+                json.dumps(
+                    {
+                        "nodes": [{"id": "node", "label": "Node"}],
+                        "edges": [],
+                        "input_tokens": 3,
+                        "output_tokens": 2,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with (
+                patch.object(build_project_graph, "GRAPH", graph),
+                patch.object(build_project_graph, "record_cost") as record_cost,
+                patch.object(
+                    build_project_graph,
+                    "wayfinder_blocker_edges",
+                    side_effect=RuntimeError("missing ticket node"),
+                ),
+                self.assertRaisesRegex(RuntimeError, "missing ticket node"),
+            ):
+                normalize_raw_graph()
+
+            record_cost.assert_called_once()
+
     def test_cluster_keeps_the_staged_raw_graph_until_the_caller_validates(self) -> None:
         with TemporaryDirectory() as directory:
             out = Path(directory)
