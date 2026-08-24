@@ -1073,6 +1073,44 @@ pins that lifecycle. The warm retry was 88 hits / 2 misses, cost US$0.003505 and
 therefore cost **US$0.067742** in total. If validation fails again, inspect both
 `failed-raw.json` and `failed-clustered.json` before paying for another extraction.
 
+**The report's "Suggested Questions" are prompts, not defects, and three of the four
+standing ones are answered by the architecture.** Asked on 2026-08-24 and settled by
+comparing each node's reach with inferred edges included against `EXTRACTED` edges only —
+twenty lines over `graph.json`, and the check to repeat rather than re-deriving the
+argument:
+
+| Node | communities bridged, all edges | on `EXTRACTED` only | inference-only |
+|---|---|---|---|
+| `PlannerActions` | 64 | **41** | 23 |
+| `SQLiteStore` | 20 | **15** | 5 |
+| `PlannerRefusal` | 39 | 12 | **27** |
+
+So `PlannerActions` bridging everything is **the design working**, not a smell: it is the
+only coordinator, by decision, and it still reaches 41 communities with every inferred
+edge removed. `SQLiteStore` is the same story one layer down. Neither is a refactoring
+target, and a graph metric is not an argument for splitting them.
+
+**`PlannerRefusal` is the one that is an artifact, and the proof is exact.** Its 27
+outgoing inferred edges are *byte-identical* to `PlannerActions`' — same relations, same
+targets, nothing unique to it — so the graph claims a two-line exception class `uses`
+`CandidateChoice`, `DiscoveryRun` and `PlanVersion`. It does not. Thirty same-file groups
+show the same shape: every top-level class in a module inherits one inferred edge set.
+**Inference in this graph is attributed at file granularity**, so an `INFERRED` edge means
+"something in this file does this", never "this symbol does this". Read them that way and
+do not cite one as evidence about a class.
+
+This was left unpruned on purpose. The obvious guard — drop a copied edge when the class
+never names the target — removes **468 of 691** inferred edges, and it cannot tell
+indirect use from invention: a test that calls `self.actions` really does use
+`PlannerActions` without ever writing the word. Deleting true relationships to tidy a
+report section is the worse trade, and the endpoint-pair guard exists because guesses
+about this graph have been wrong before.
+
+Two counting traps when reading that report. It reports **outgoing** inferred edges only,
+so "27 inferred relationships involving `PlannerActions`" is 27 of its 150. And its
+community lists are filtered — 105 thin communities are omitted — so "connects Community 0
+to 17 others" is not the 64 the graph holds.
+
 **Rebuilt on 2026-08-22 after the itinerary dashboard and `--check` passes**: **2964 nodes, 6970
 directed edges, 220 communities**, up from 2389/5732/200 — seven new modules
 (`shared/tripClock.ts`, `shared/cards.ts`, `shared/ticks.ts`, `shared/checklistText.ts`,

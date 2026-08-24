@@ -4325,3 +4325,57 @@ in 134–146ms and finished in 21s. One criteria-accept control existed, inside
 showed map and timeline together. Saving Standard costs changed the category table from
 zero to THB2,700. The throwaway hosted trip was permanently deleted, and the paid ledger
 closed at US$5.857 of US$10.
+
+## The graph's suggested questions, answered, 2026-08-24
+
+`GRAPH_REPORT.md` ends with questions it generates from centrality: why `PlannerActions`
+bridges so many communities, why `SQLiteStore` does, and whether the inferred edges on
+either are correct. They read like findings. Three of the four are the architecture
+working, and the fourth is real but narrow — and telling them apart took one measurement
+rather than an opinion.
+
+### Separate the architecture from the inference
+
+Every edge carries `confidence`, `EXTRACTED` or `INFERRED`, so a node's reach can be
+counted twice: once as the graph presents it, once with every model-reasoned edge removed.
+`PlannerActions` bridges 64 communities as presented and **41 with inference stripped**;
+`SQLiteStore` 20 and 15. Those are real, and they are exactly what `CLAUDE.md` describes —
+one coordinator, one storage layer. A betweenness score is not an argument for splitting
+either, and anyone reaching for that refactor should be shown the 41.
+
+`PlannerRefusal` inverts: 12 extracted, 39 presented, so **27 of its bridges exist only
+because a model inferred them**. That is the whole of its apparent importance.
+
+### The proof, and what it generalises to
+
+Its 27 outgoing inferred edges are byte-identical to `PlannerActions`' — same relations,
+same targets, zero difference either way. A two-line exception class at `actions.py:111`
+is credited with using `CandidateChoice`, `DiscoveryRun`, `PlanVersion` and twenty-four
+more, because it happens to live in the same file as the class that does.
+
+Thirty groups across the repo have that shape: `localserver`'s three classes share seven
+edges, `tests/test_routes.py`'s twelve share ten, `providers.py`'s nineteen share two.
+**Inference here is file-scoped.** An `INFERRED` edge means "something in this file does
+this". It is not evidence about a symbol, and the report's phrasing — "relationships
+involving `PlannerRefusal`" — invites reading it as though it were.
+
+### Why nothing was pruned
+
+The guard almost written: drop an inferred edge when it is a same-file copy *and* the
+class body never names the target. Both conditions, deliberately, because either alone is
+worse — the copy test would delete the many provider classes that genuinely raise
+`ProviderUnavailable`, and the naming test alone cannot see `self.store`.
+
+Together they still drop **468 of 691**. That is the reason not to ship it. The
+discriminator cannot distinguish indirect use from invention, a test calling
+`self.actions` uses `PlannerActions` without writing the word, and the failure mode is
+silent deletion of true relationships from the canonical graph. Against that, the harm is
+a report section asking a question that has now been answered in `CLAUDE.md`. The trade is
+the wrong way round, and this repo has a rule about not weakening graph guards on a hunch.
+
+### Two ways to misread the report
+
+It counts **outgoing** inferred edges only — `PlannerActions` shows 27 of its 150,
+`SQLiteStore` 10 of 30, `ProviderUnavailable` 2 of 60. And its community lists are
+filtered, with 105 thin communities omitted, so the seventeen it names are not the 64 the
+graph holds. Both were checked against `graph.json` rather than assumed.
