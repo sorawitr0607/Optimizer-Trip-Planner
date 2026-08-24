@@ -21,6 +21,18 @@ const COMMONS = "https://commons.wikimedia.org/wiki/Special:FilePath/";
  * an image, so it is dropped rather than guessed at. `image` sometimes holds a direct
  * http URL, which is used as-is, and sometimes a bare filename.
  */
+/**
+ * At or below this many photographs, a card counts as thin and the paid lookup is
+ * worth offering.
+ *
+ * **One, not zero.** A single Commons geosearch shot of the car park next door is as
+ * short of a picture of the place as no shot at all, and the owner asked for the offer
+ * on both. It lives here because two screens decide the same thing — the deck's buy
+ * button and the detail panel's `thinlyPictured` — and they were separate literals that
+ * had already drifted: the panel said one, the deck said none.
+ */
+export const PHOTO_THIN_AT = 1;
+
 export function osmPhotoUrl(reference: string | null | undefined): string | null {
   const value = (reference ?? "").trim();
   if (!value) return null;

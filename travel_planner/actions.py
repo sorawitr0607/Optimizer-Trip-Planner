@@ -57,6 +57,7 @@ from .providers import (
     WikidataSummaryProvider,
     OpenStreetMapProvider,
     ProviderBudgetExceeded,
+    ProviderNoMatch,
     ProviderUnavailable,
 )
 from .ranking import build_ranking, validate_choice, _distance_metres
@@ -98,6 +99,16 @@ CHECKLIST_TEMPLATE_FIELDS = (
 
 # ponytail: a sparse matrix, capped. Every skipped pair is reported, never
 # silently dropped, so a thin route set is visible rather than assumed complete.
+#: Evidence kind recording that a paid provider searched for a place and had nothing.
+#: A fact about the provider's index, not about the trip, and the one kind that exists
+#: to stop a call rather than to inform one.
+PROVIDER_NO_MATCH_KIND = "provider_no_match"
+
+#: How long that refusal stands. Long, because Google's index does not change hourly
+#: and every re-ask is US$0.025; bounded, because it does change eventually and a
+#: permanent refusal would be a worse lie than the repeated charge it replaces.
+PROVIDER_NO_MATCH_DAYS = 90
+
 MAX_ROUTE_REQUESTS = 60
 
 #: How many capped passes one `refresh_routes` sweep may make. Forty-one places need
@@ -713,17 +724,54 @@ class PlannerActions:
             raise PlannerRefusal("unknown_candidate", place_id=place_id)
 
         provider = self.card_provider or GooglePlacesCardProvider()
+
+        # Refuse before spending if the last answer was "no such place".
+        #
+        # The screen already told the owner that "asking again will not find more",
+        # and nothing made that true: `_spend` is recorded *before* the request, so a
+        # place Google does not hold charged US$0.025 for a refusal every time the
+        # button was pressed. It is not a failure to retry — Google's index is not
+        # going to acquire a bicycle practice ground under a bridge because we asked
+        # twice — so the refusal is remembered and costs nothing to repeat.
+        if any(
+            row.get("place_id") == place_id
+            for row in self.store.list_place_evidence(trip_id, PROVIDER_NO_MATCH_KIND)
+        ):
+            raise PlannerRefusal("place_not_in_provider", place_id=place_id)
+
         self._spend(
             operation=provider.details_operation,
             count=1,
             trip_id=trip_id,
             detail={"place_id": place_id},
         )
-        details = provider.details(
-            candidate,
-            destination=trip.destination,
-            language="th" if language == "th" else "en",
-        )
+        try:
+            details = provider.details(
+                candidate,
+                destination=trip.destination,
+                language="th" if language == "th" else "en",
+            )
+        except ProviderNoMatch:
+            # Written with an expiry like any other evidence, so a place Google adds
+            # later becomes askable again rather than being refused for ever.
+            now = datetime.now(timezone.utc)
+            self.store.upsert_place_evidence(
+                trip_id=trip_id,
+                place_id=place_id,
+                kind=PROVIDER_NO_MATCH_KIND,
+                # `place_id` inside the value, not only in the row: `list_place_evidence`
+                # returns the stored snapshot and the row's own columns are not part of
+                # it, which is why `list_venue_notices` reads the id from the payload too.
+                value={
+                    "place_id": place_id,
+                    "provider": str(provider.name),
+                    "operation": provider.details_operation,
+                },
+                provider=str(provider.name),
+                retrieved_at=now.isoformat(),
+                expires_at=(now + timedelta(days=PROVIDER_NO_MATCH_DAYS)).isoformat(),
+            )
+            raise
         details = {**details, "retrieved_at": datetime.now(timezone.utc).isoformat()}
         photos = details.get("photos") or (
             [details["photo"]] if details.get("photo") else []
@@ -3104,7 +3152,15 @@ class PlannerActions:
         # is the only safe reading of "force" here.
         passes = 1 if force else max(1, min(int(max_passes), MAX_ROUTE_PASSES))
 
-        result = self._refresh_routes_with(provider, trip_id, force=force)
+        base = 0
+
+        def relay(within_pass: int) -> None:
+            if progress is not None:
+                progress(base + within_pass)
+
+        result = self._refresh_routes_with(
+            provider, trip_id, force=force, on_stored=relay
+        )
         stored = int(result["fetched"])
         if progress is not None:
             progress(stored)
@@ -3115,7 +3171,10 @@ class PlannerActions:
             # finished the sweep.
             if result["fetched"] == 0 or result["skipped_over_cap"] == 0:
                 break
-            result = self._refresh_routes_with(provider, trip_id, force=force)
+            base = stored
+            result = self._refresh_routes_with(
+                provider, trip_id, force=force, on_stored=relay
+            )
             stored += int(result["fetched"])
             if progress is not None:
                 progress(stored)
@@ -3456,8 +3515,19 @@ class PlannerActions:
         )
         return counts, True
 
+    #: How often a sweep says how far it has got, in routes stored. Every route would
+    #: be one hosted write apiece against a queue read on a metered connection; every
+    #: pass is too rare, because the browser gives up after five minutes of silence and
+    #: a slow provider can spend that inside one pass of sixty.
+    ROUTE_PROGRESS_EVERY = 10
+
     def _refresh_routes_with(
-        self, provider: Any, trip_id: str, *, force: bool = False
+        self,
+        provider: Any,
+        trip_id: str,
+        *,
+        force: bool = False,
+        on_stored: Callable[[int], None] | None = None,
     ) -> dict[str, Any]:
         trip = self.store.get_trip(trip_id)
         if trip is None:
@@ -3561,6 +3631,8 @@ class PlannerActions:
                 ).isoformat(),
             )
             fetched += 1
+            if on_stored is not None and fetched % self.ROUTE_PROGRESS_EVERY == 0:
+                on_stored(fetched)
 
         return {
             "places": len(points),

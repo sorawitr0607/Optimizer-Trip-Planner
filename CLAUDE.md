@@ -107,6 +107,27 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   comma-separated segment, so a city-only string silently loses the destination accent.
 - **A slow operation must be queued.** `DEFERRED` is derived from `HANDLERS`; anything inline over
   ~60s answers `http_504` on the deployment while working perfectly locally.
+- **A queued job's client deadline measures *silence*, not duration.** It always meant
+  "fire when the worker is down, not when the work is slow", and as a flat ceiling on
+  total runtime it did the opposite: a `refresh_routes` sweep stored 462 routes in **843
+  seconds**, finished cleanly, and the browser had thrown `job_timeout` at 300. Any rise
+  in the reported count resets the clock, and `run_one` writes a `0` on claim so being
+  picked up resets it too — five minutes unclaimed still fails, which is the case worth
+  reporting. An operation that reports nothing keeps the flat five minutes; every
+  operation is bounded server-side anyway. The corollary: **an operation that can outlive
+  the deadline must report often enough to prove it is alive.** A sweep speaking only
+  between passes was still at risk, since a slow provider can spend five minutes inside
+  one pass of sixty — `ROUTE_PROGRESS_EVERY` is why it speaks every ten routes.
+- **A paid refusal must be remembered, or it is bought again.** `_spend` is recorded
+  *before* the request, so a `ProviderNoMatch` costs US$0.025 and returns nothing — and
+  the screen said "asking again will not find more" while the button sat there letting
+  you. A `provider_no_match` evidence row now refuses the second ask before spending,
+  expiring after `PROVIDER_NO_MATCH_DAYS` so a place Google later indexes becomes askable
+  again. The same rule on the other side: the deck's buy button withdraws once a place has
+  been enriched, because a purchase that returned one photograph will return one
+  photograph again. **Note the shape of `list_place_evidence`** — it returns the stored
+  snapshot, not the row, so anything that needs `place_id` back must put it *inside* the
+  value, which is why `list_venue_notices` does.
 - **A queued operation is expensive to ask for, so do not loop on one from the browser.**
   Every RPC for slow work is a job: enqueue, poll at 1.5s, wait for the worker to claim
   it, poll again — four to twelve seconds of latency before the work starts.
@@ -363,6 +384,22 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   work the new attempt has not done. Report a stage when its call **stops running**, not
   when it succeeds — a failed Overpass block has still been passed, and `incomplete_blocks`
   is what names it.
+- **`PHOTO_THIN_AT` is "one or none", written once in `shared/photos.ts`.** The detail
+  panel's `thinlyPictured` always meant one; the deck offered its buy button only at zero,
+  because the control lived inside the branch that draws a map where a photograph should
+  be. A single Commons shot of the car park next door is as short of a picture of the
+  place as nothing at all. Two literals for one threshold is how they drifted.
+- **A touch gesture cannot be verified from here — put its arithmetic in a module.**
+  A dispatched `PointerEvent` does not drive this map, and that was checked against the
+  deployment on code predating the pinch rather than assumed; cmux says the same, raw
+  input injection is `not_supported`. So `shared/pinch.ts` holds the maths and is tested,
+  the wheel path is the regression check that `setView` still works, and the gesture
+  itself needs a finger on a real phone. Do not claim a gesture is verified because a
+  synthetic event returned without error.
+- **`document.querySelector(".places-map-svg")` on `/places` finds the *hidden* one.**
+  The only map on that screen lives in the shortlist drawer, so while it is closed the
+  element is `0x0` — measuring against it sends the viewBox to `-Infinity` and reads as a
+  broken map. Open the drawer, or pick the element with a non-zero box.
 - **A control in the deck acts on the card in the deck, never on `selectedId`.** The deck
   deals from a lane and the list has its own selection; they are usually different places.
   `saveChoice` carries the comment saying so and `onWantSummary` obeys it, but

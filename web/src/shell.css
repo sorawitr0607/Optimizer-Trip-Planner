@@ -10625,3 +10625,11 @@
     padding-top: 12px;
   }
 }
+
+/* A card's own failure, above the card. `.places-workspace` is a grid, so an error
+   dropped into it would otherwise take one column and sit beside the deck rather than
+   over it. */
+.places-card-error {
+  grid-column: 1 / -1;
+  margin: 0;
+}

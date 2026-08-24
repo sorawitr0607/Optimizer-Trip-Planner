@@ -5,6 +5,7 @@ import { copy, copyFormat, type Language } from "../i18n/copy";
 import type { MapPlace } from "../shared/map";
 import { tilesFor } from "../shared/tiles";
 import { projectionOf } from "./ItineraryPage";
+import { centreOf, pinchedZoom, spreadOf } from "../shared/pinch";
 
 /**
  * Where places are, drawn once and used twice.
@@ -300,6 +301,12 @@ export function PlaceMap({
   // read during render cannot re-render and React rightly refuses it.
   const [dragging, setDragging] = useState(false);
   const drag = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
+  /** Every finger currently on the map, by pointer id. A pinch needs two, and the
+   *  browser reports them as separate pointers rather than as one gesture. */
+  const touches = useRef(new Map<number, { x: number; y: number }>());
+  /** The spread and zoom a pinch started from, so the gesture scales relative to
+   *  where it began rather than accumulating per move event. */
+  const pinch = useRef<{ spread: number; zoom: number } | null>(null);
   const [detail, setDetail] = useState<MapDetail | null>(null);
   // Tiles are the picture when there is a network and the vector map is the picture when
   // there is not. One failed image is enough to decide: they come from one host, so if
@@ -744,13 +751,49 @@ export function PlaceMap({
         className={`places-map-svg${dragging ? " dragging" : ""}`}
         onPointerDown={(event) => {
           event.currentTarget.setPointerCapture(event.pointerId);
+          touches.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+          if (touches.current.size === 2) {
+            // A second finger ends the drag and starts a pinch. Without this the map
+            // kept panning from whichever finger landed first, so the gesture fought
+            // itself and nothing zoomed.
+            drag.current = null;
+            pinch.current = { spread: spreadOf(touches.current), zoom: view.zoom };
+            setDragging(false);
+            return;
+          }
           drag.current = { x: event.clientX, y: event.clientY, ox: view.x, oy: view.y };
           setDragging(true);
         }}
         onPointerMove={(event) => {
+          if (touches.current.has(event.pointerId)) {
+            touches.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+          }
+          const box = event.currentTarget.getBoundingClientRect();
+          const held2 = pinch.current;
+          if (held2 && touches.current.size >= 2) {
+            // Pinch. The map had wheel zoom and nothing else, so on a phone — where
+            // there is no wheel and `touch-action: none` also suppresses the browser's
+            // own gesture — it could not be zoomed at all.
+            const spread = spreadOf(touches.current);
+            if (!spread || !held2.spread) return;
+            const midpoint = centreOf(touches.current);
+            setView((current) => {
+              const zoom = pinchedZoom(held2, spread, minZoom, maxZoom);
+              if (zoom === current.zoom) return current;
+              // Hold the point between the fingers still, the same rule the wheel uses
+              // for the point under the cursor.
+              const px = (midpoint.x - box.left) / box.width;
+              const py = (midpoint.y - box.top) / box.height;
+              return {
+                zoom,
+                x: current.x + (FRAME.width / current.zoom - FRAME.width / zoom) * px,
+                y: current.y + (FRAME.height / current.zoom - FRAME.height / zoom) * py,
+              };
+            });
+            return;
+          }
           const held = drag.current;
           if (!held) return;
-          const box = event.currentTarget.getBoundingClientRect();
           // Pixels to viewBox units, so a drag moves the map exactly as far as the hand.
           const scale = FRAME.width / view.zoom / box.width;
           setView((current) => ({
@@ -759,8 +802,21 @@ export function PlaceMap({
             y: held.oy - (event.clientY - held.y) * scale,
           }));
         }}
-        onPointerUp={() => { drag.current = null; setDragging(false); }}
-        onPointerCancel={() => { drag.current = null; setDragging(false); }}
+        onPointerUp={(event) => {
+          touches.current.delete(event.pointerId);
+          // Lifting one finger of a pinch leaves the other one resting on the map. It
+          // must not become a pan from wherever that finger happens to be, or the map
+          // jumps at the end of every zoom.
+          if (touches.current.size < 2) pinch.current = null;
+          drag.current = null;
+          setDragging(false);
+        }}
+        onPointerCancel={(event) => {
+          touches.current.delete(event.pointerId);
+          if (touches.current.size < 2) pinch.current = null;
+          drag.current = null;
+          setDragging(false);
+        }}
         ref={svgRef}
         // An image is an accessibility-tree leaf, so interactive itinerary pins would
         // disappear inside one. It becomes a labelled group only for that map.

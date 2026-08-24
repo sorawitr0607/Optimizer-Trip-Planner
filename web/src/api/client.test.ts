@@ -80,6 +80,60 @@ describe("rpc", () => {
     expect(reached).toEqual([0, 2, 4]);
   }, 20_000);
 
+  it("keeps waiting while the job is still reporting, and gives up when it goes quiet", async () => {
+    // The deadline used to be a ceiling on total runtime. `refresh_routes` sweeps its
+    // passes in one job now, and a measured run stored 462 routes in 843 seconds --
+    // finished perfectly, while the browser had already thrown `job_timeout` at 300.
+    // Silence is the thing worth reporting, not slowness.
+    vi.useFakeTimers();
+    try {
+      let polls = 0;
+      vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+        if (url.endsWith("/api/refresh_routes")) {
+          return new Response('{"job_id":"job_9","status":"queued"}', { status: 202 });
+        }
+        polls += 1;
+        // Six minutes of work, reported every other poll, then done. Under the old
+        // flat ceiling this threw before it ever finished.
+        vi.setSystemTime(new Date(Date.now() + 120_000));
+        const body = polls < 4
+          ? `{"job_id":"job_9","status":"running","progress":${polls * 10},"error":null,"result":null}`
+          : '{"job_id":"job_9","status":"done","progress":60,"error":null,"result":{"fetched":60}}';
+        return new Response(body, { status: 200 });
+      }));
+
+      const call = rpc("refresh_routes", { trip_id: "t", max_passes: 12 });
+      await vi.advanceTimersByTimeAsync(60_000);
+      await expect(call).resolves.toEqual({ fetched: 60 });
+    } finally {
+      vi.useRealTimers();
+    }
+  }, 20_000);
+
+  it("still gives up on a job that is claimed and then says nothing", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+        if (url.endsWith("/api/discover_places")) {
+          return new Response('{"job_id":"job_a","status":"queued"}', { status: 202 });
+        }
+        // Claimed, reported 0 once, and then frozen: the count never moves again.
+        vi.setSystemTime(new Date(Date.now() + 60_000));
+        return new Response(
+          '{"job_id":"job_a","status":"running","progress":0,"error":null,"result":null}',
+          { status: 200 },
+        );
+      }));
+
+      const call = rpc("discover_places", { trip_id: "t" });
+      const settled = expect(call).rejects.toMatchObject({ code: "job_timeout" });
+      await vi.advanceTimersByTimeAsync(60_000);
+      await settled;
+    } finally {
+      vi.useRealTimers();
+    }
+  }, 20_000);
+
   it("raises the job's own error when it fails", async () => {
     stubFetch([
       { status: 202, body: '{"job_id":"job_2","status":"queued"}' },

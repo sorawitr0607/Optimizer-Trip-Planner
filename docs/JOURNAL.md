@@ -4379,3 +4379,99 @@ It counts **outgoing** inferred edges only — `PlannerActions` shows 27 of its 
 `SQLiteStore` 10 of 30, `ProviderUnavailable` 2 of 60. And its community lists are
 filtered, with 105 thin communities omitted, so the seventeen it names are not the 64 the
 graph holds. Both were checked against `graph.json` rather than assumed.
+
+## Three from the hosted build, 2026-08-25
+
+One of them was mine, introduced by the fix for the ten-minute build two days earlier.
+
+### `job_timeout` on a job that had already succeeded
+
+Reported as a timeout building the plan variants. The queue says otherwise:
+
+```
+kind                  status  progress  ran_for
+refresh_routes        done    462       843s
+```
+
+Fourteen minutes, 462 routes stored, finished cleanly — and the browser gave up on it
+at 300 seconds. Collapsing twelve `refresh_routes` round-trips into one job removed the
+queue latency it was meant to remove and left a single job far longer than the deadline
+the client waits on, which had never been tested against anything but short jobs. The
+optimize path then reported `job_timeout` for work that was on disk.
+
+**The deadline now measures silence, not duration**, which is what its own comment always
+claimed: "fire when the worker is down, not when the work is merely slow". Any rise in the
+reported count resets it. `run_one` writes a `0` the moment a worker claims a job, so the
+reset also covers being picked up — five minutes unclaimed still fails, which is the case
+worth reporting — and an operation that reports nothing keeps the flat five minutes it
+had. Nothing is unbounded: `MAX_ROUTE_PASSES`, `DISCOVERY_BUDGET_SECONDS` and one time
+limit per variant bound every operation server-side already.
+
+A sweep that spoke only between passes would still have been at risk, since a slow
+provider can spend five minutes inside one pass of sixty. `_refresh_routes_with` reports
+every ten routes now — often enough that silence means something, rare enough that 462
+routes is 46 writes rather than 462.
+
+### A place Google does not have was charged for every time it was asked about
+
+"Google has no record of this place ... asking again will not find more" is true, and
+nothing enforced it. `_spend` is recorded *before* the request, so a `ProviderNoMatch`
+cost US$0.025 and returned a refusal — and the button stayed, so the next press did it
+again. The message told the owner not to, which is not the same as the app not letting
+them.
+
+Why it happens at all is worth stating plainly: it is usually not a fixable lookup. 61% of
+a Taipei catalogue has no `name:en`, and the places that come back empty are things like a
+bicycle practice ground under a bridge. Retrying with a differently-shaped query would
+cost another US$0.025 per attempt to find out, which is the owner's money spent guessing.
+
+So the refusal is **remembered** — a `provider_no_match` evidence row, expiring after 90
+days so a place Google later indexes becomes askable again rather than being refused for
+ever. A second press is refused before `_spend` and costs nothing. The place id has to go
+*inside* the stored value, not only in the row: `list_place_evidence` returns the snapshot
+and the row's own columns are not part of it, which is why `list_venue_notices` reads the
+id from the payload too. That cost one wrong assumption and two failing tests to find.
+
+The message also moved. It was rendering in the page-top banner, several screens above the
+deck by the time cards are being dealt, so on a phone the answer to "get photographs"
+scrolled out of sight and the button looked inert. It sits beside the card now.
+
+### The map could not be zoomed with fingers
+
+It had wheel zoom and nothing else. On a phone there is no wheel, and `touch-action: none`
+also suppresses the browser's own gesture, so the map could not be zoomed at all. Two
+pointers now drive a pinch, scaled from where the fingers started rather than from the
+previous move, so going out and back lands where it began.
+
+**This one is not verified by test or by capture, and the reason is worth recording.** A
+dispatched `PointerEvent` does not move this map — not with the pinch, and not on the code
+that predates it, which was checked against the deployment rather than assumed. cmux says
+as much: raw input injection is `not_supported`. So the arithmetic lives in
+`shared/pinch.ts` and is pinned there, the wheel path was re-measured to prove `setView`
+still works (1.20× exactly), and the gesture itself needs a finger on a real phone.
+
+Two things found while trying: `document.querySelector(".places-map-svg")` on `/places`
+returns the map inside the **closed shortlist drawer**, which is `hidden` and therefore
+0×0 — measuring against it sent the viewBox to `-Infinity` and read as a broken map. And
+`spreadOf` returning zero has to be handled for the same reason.
+
+### The buy button only appeared at zero photographs
+
+Asked for during the same round: a card with **one** picture should offer it too. It was
+rendered inside the branch that draws a map where a photograph should be, so it existed
+only when there were none — and a card carrying a single Commons shot of the car park
+next door is exactly as short of a picture of the place as one carrying nothing, with no
+way to ask for better.
+
+The threshold was already written down correctly somewhere else. `thinlyPictured` on the
+detail panel has always meant "one or none"; the deck disagreed with it by being a
+different literal in a different branch. `PHOTO_THIN_AT` now lives in `shared/photos.ts`,
+next to the `galleryFor` both screens read, and the button moved out of the photo block so
+it sits under the carousel and under the map alike.
+
+One consequence of moving the threshold: `gallery` already merges the *paid* photographs
+ahead of the free ones, so a purchase that returns a single picture leaves the card thin
+and would have offered the same purchase again. The button withdraws once a place has been
+enriched — the same rule as the remembered `provider_no_match`, on the side where Google
+answered rather than the side where it had nothing.
+

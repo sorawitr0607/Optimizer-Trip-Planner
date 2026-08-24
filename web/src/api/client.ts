@@ -918,10 +918,21 @@ function ownerToken(): string {
  *  answer; 1.5s keeps it under forty and still feels immediate at the end. */
 const JOB_POLL_MS = 1_500;
 
-/** Give up on a queued job after five minutes. Longer than the slowest measured
- *  operation by a wide margin, so this fires when the worker is *down* rather
- *  than when the work is merely slow -- which is the case worth reporting, since
- *  nothing on Vercel runs the worker. */
+/** Give up after five minutes of **silence**, not five minutes of work.
+ *
+ * The intent was always "fire when the worker is down, not when the work is slow",
+ * and as a flat ceiling on total runtime it did not do that. `refresh_routes` sweeps
+ * up to twelve capped passes in one job now; a measured run stored 462 routes in
+ * **843 seconds**, finished perfectly, and the browser had already given up on it at
+ * 300 — reporting `job_timeout` for work that succeeded.
+ *
+ * So the clock is reset every time the job says something new. An operation in
+ * `jobs.REPORTS_PROGRESS` reports a rising count, and `run_one` writes a `0` the
+ * moment a worker claims the job, so the reset also covers the wait to be picked up:
+ * five minutes with nobody claiming it still fails, which is the case worth
+ * reporting. An operation that reports nothing keeps the flat five minutes it always
+ * had, and every operation is bounded server-side anyway — `MAX_ROUTE_PASSES`,
+ * `DISCOVERY_BUDGET_SECONDS`, and one time limit per variant. */
 const JOB_TIMEOUT_MS = 300_000;
 
 interface JobEnvelope {
@@ -1013,14 +1024,23 @@ export async function rpc<T>(
   if (first.status !== 202) return first.value as T;
 
   const { job_id: jobId } = first.value as { job_id: string };
-  const deadline = Date.now() + JOB_TIMEOUT_MS;
+  let deadline = Date.now() + JOB_TIMEOUT_MS;
+  let reported: number | null = null;
   for (;;) {
     await new Promise((resume) => setTimeout(resume, JOB_POLL_MS));
     const { value } = await post("job_status", { job_id: jobId }, 30_000);
     const job = value as JobEnvelope;
     // Before the exits, so the last count reported still reaches the caller on the
     // poll that also carries the result.
-    if (typeof job.progress === "number") onProgress?.(job.progress);
+    if (typeof job.progress === "number") {
+      if (job.progress !== reported) {
+        // News. Whatever else is true, this job is not abandoned, so the clock that
+        // exists to catch abandonment starts again.
+        reported = job.progress;
+        deadline = Date.now() + JOB_TIMEOUT_MS;
+      }
+      onProgress?.(job.progress);
+    }
     if (job.status === "done") return job.result as T;
     if (job.status === "failed") throw new ApiError(job.error ?? "job_failed", { job_id: jobId });
     if (Date.now() > deadline) throw new ApiError("job_timeout", { job_id: jobId });

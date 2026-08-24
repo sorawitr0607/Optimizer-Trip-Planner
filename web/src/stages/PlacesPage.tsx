@@ -25,7 +25,7 @@ import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
 import { mergeNames, placeAltName, placeName } from "../shared/names";
 import { distinguishingCons, evaluatedFeasibility } from "../shared/cards";
-import { galleryFor } from "../shared/photos";
+import { PHOTO_THIN_AT, galleryFor } from "../shared/photos";
 import { mapPlaces } from "../shared/map";
 import { loadBasemap } from "../shared/basemap";
 import { PlaceMap } from "./PlaceMap";
@@ -615,7 +615,7 @@ export function PlacesPage() {
   // picture is not a gallery, so "one or none" is the line.
   const thinlyPictured = selectedChoices.filter((choice) => {
     const about = summaries.data?.[choice.place_id];
-    return galleryFor(about, byId[choice.place_id]).length <= 1;
+    return galleryFor(about, byId[choice.place_id]).length <= PHOTO_THIN_AT;
   });
   // One card's worth, priced from the same rate card the cap uses so this number and
   // the cap cannot disagree: one details call plus up to PHOTO_LIMIT photographs.
@@ -631,7 +631,14 @@ export function PlacesPage() {
     .replace("{cost:.3f}", paidEstimate.toFixed(3))
     .replace("{count}", String(PHOTO_LIMIT));
   const mutationError = detailsCost.error ?? photosCost.error
-    ?? discover.error ?? saveChoice.error ?? clearChoice.error ?? enrich.error;
+    ?? discover.error ?? saveChoice.error ?? clearChoice.error;
+  // Not in the banner above. `enrich` is pressed *on a card*, and the banner sits at
+  // the top of a page that is several screens long by the time the deck is dealing —
+  // so on a phone the answer to "get photographs" scrolled off before it could be
+  // read, and the button looked like it had done nothing. It renders beside the card
+  // instead, which is the same rule the comfort accept follows: a message about a
+  // thing belongs next to the thing.
+  const cardError = enrich.error;
 
   /* Discovery is two Overpass blocks and runs 30-90s; paced at the low end so the
      lines are not still arriving after the places are. Named rather than inlined
@@ -957,6 +964,11 @@ export function PlacesPage() {
               and owns no decision buttons — the deck is where deciding happens, and two
               sets of them under one card was the duplication reported earlier. */}
           <div className={mode === "deck" ? "places-workspace" : undefined} hidden={busy}>
+          {cardError ? (
+            <p className="field-error places-card-error" aria-live="polite">
+              ⚠ {errorText(cardError, language)}
+            </p>
+          ) : null}
           {mode === "deck" ? (
             <>
               {/* The tab counts the whole lane and the deck deals a page of it, so

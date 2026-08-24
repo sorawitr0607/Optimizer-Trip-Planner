@@ -4,7 +4,7 @@ import type { CandidateChoice, DiscoveryCandidate, PlaceInsight, PlaceSummary, R
 import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
 import { flyToShortlist } from "../shared/flyToShortlist";
 import { distinguishingCons, evaluatedEffort, evaluatedFeasibility } from "../shared/cards";
-import { galleryFor } from "../shared/photos";
+import { PHOTO_THIN_AT, galleryFor } from "../shared/photos";
 import { PlaceMap } from "./PlaceMap";
 
 /**
@@ -791,25 +791,6 @@ export function PlaceDeck({
                 />
               );
             })()}
-            {/* The one path that can actually produce a picture of this place, offered
-                where the absence is felt rather than in a panel further down.
-                Investigated 2026-08-17: for the places that come up blank the free
-                sources genuinely hold nothing — Commons returns an 18th-century
-                philosophy book for "Taro Quad Bikes" and a ministerial PDF for "Puri
-                Agung Peliatan", and the name filter is right to refuse them. The
-                photographs the owner has seen are on Google and TripAdvisor, which are
-                licensed sources. So the honest answer is not "none exists" but "none is
-                free", with the price of the one that is not. */}
-            {onWantPhotos && paidPhotoUsd != null ? (
-              <button
-                className="place-deck-buy-photo"
-                disabled={photosLoading}
-                onClick={() => onWantPhotos(entry.place_id)}
-                type="button"
-              >
-                {copyFormat("photo_buy_one", language, { cost: paidPhotoUsd.toFixed(3) })}
-              </button>
-            ) : null}
           </div>
         ) : (
           <div className="place-deck-photo place-deck-photo-empty">
@@ -819,6 +800,41 @@ export function PlaceDeck({
             </button>
           </div>
         )}
+
+        {/* The one path that can actually produce a picture of this place, offered
+            where the absence is felt rather than in a panel further down. Investigated
+            2026-08-17: for the places that come up blank the free sources genuinely hold
+            nothing — Commons returns an 18th-century philosophy book for "Taro Quad
+            Bikes" and a ministerial PDF for "Puri Agung Peliatan", and the name filter is
+            right to refuse them. The photographs the owner has seen are on Google and
+            TripAdvisor, which are licensed sources. So the honest answer is not "none
+            exists" but "none is free", with the price of the one that is not.
+
+            **One photograph is also thin.** This used to live inside the branch that
+            draws a map where a picture should be, so it appeared only at zero — and a
+            card carrying a single Commons shot of a car park is exactly as short of a
+            picture as one carrying none, with no way to ask for a better one. The
+            threshold is `PHOTO_THIN_AT`, the same "one or none" the detail panel has
+            always used for `thinlyPictured`; the two disagreeing was the bug. Outside
+            the photo block now, so it sits under the carousel and under the map alike. */}
+        {onWantPhotos
+          && paidPhotoUsd != null
+          && gallery.length <= PHOTO_THIN_AT
+          // Bought already. Google was asked about this place and this is what it had,
+          // so offering the same purchase again spends the same money for the same
+          // answer — the failure the remembered `provider_no_match` closes on the other
+          // side, where the answer was nothing at all. One photograph back is still
+          // thin, and still not a reason to pay twice.
+          && !insights[entry.place_id] ? (
+          <button
+            className="place-deck-buy-photo"
+            disabled={photosLoading}
+            onClick={() => onWantPhotos(entry.place_id)}
+            type="button"
+          >
+            {copyFormat("photo_buy_one", language, { cost: paidPhotoUsd.toFixed(3) })}
+          </button>
+        ) : null}
 
         <h3>
           {name}

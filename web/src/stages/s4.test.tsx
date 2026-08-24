@@ -21,6 +21,7 @@ import { PLACES_STAGES, PLACES_WORKER_STAGES, PREVIEW_STAGES } from "../shared/b
 import { flattenDays } from "../shared/tripClock";
 import { BuildStages } from "./BuildStages";
 import { CoordinateMap, ItineraryPage, plotCoordinates } from "./ItineraryPage";
+import { centreOf, pinchedZoom, spreadOf } from "../shared/pinch";
 import { BuildProgress } from "./OptimizePage";
 import { PlacesPage } from "./PlacesPage";
 import { TripNow } from "./TripNow";
@@ -366,6 +367,42 @@ describe("the draft build's stage list", () => {
 
     expect(html.match(/build-stage done/g) ?? []).toHaveLength(2);
     expect(html).toContain("More highlights");
+  });
+});
+
+describe("pinch to zoom", () => {
+  // The map had wheel zoom and nothing else, so on a phone — where there is no wheel,
+  // and `touch-action: none` also suppresses the browser's own gesture — it could not
+  // be zoomed at all. The gesture cannot be driven from a test: a dispatched
+  // `PointerEvent` does not move this map even on the code that predates the pinch,
+  // checked against the deployment. The arithmetic is what is pinned here.
+  const two = (a: number, b: number) =>
+    new Map([[1, { x: a, y: 0 }], [2, { x: b, y: 0 }]]);
+
+  it("measures the spread and the point to hold still", () => {
+    expect(spreadOf(two(100, 220))).toBe(120);
+    expect(centreOf(two(100, 220))).toEqual({ x: 160, y: 0 });
+    // One finger is not a pinch.
+    expect(spreadOf(new Map([[1, { x: 5, y: 5 }]]))).toBe(0);
+  });
+
+  it("scales from where the fingers started, not from the last move", () => {
+    const start = { spread: 60, zoom: 4 };
+    // Out to triple the spread, then back to where it began.
+    expect(pinchedZoom(start, 180, 1, 24)).toBeCloseTo(12);
+    expect(pinchedZoom(start, 30, 1, 24)).toBeCloseTo(2);
+    expect(pinchedZoom(start, 60, 1, 24)).toBeCloseTo(4);
+  });
+
+  it("respects the zoom floor and ceiling the wheel uses", () => {
+    expect(pinchedZoom({ spread: 10, zoom: 20 }, 1000, 1, 24)).toBe(24);
+    expect(pinchedZoom({ spread: 1000, zoom: 2 }, 10, 1, 24)).toBe(1);
+  });
+
+  it("does nothing when a finger has not moved apart at all", () => {
+    // A zero spread would divide by zero and send the viewBox to Infinity.
+    expect(pinchedZoom({ spread: 0, zoom: 6 }, 120, 1, 24)).toBe(6);
+    expect(pinchedZoom({ spread: 120, zoom: 6 }, 0, 1, 24)).toBe(6);
   });
 });
 

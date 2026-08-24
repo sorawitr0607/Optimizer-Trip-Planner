@@ -11,8 +11,9 @@ from unittest.mock import patch
 
 
 from travel_planner import ranking
+from travel_planner.providers import ProviderNoMatch
 from travel_planner.setup import AVOID_TAGS, COMFORT_TAGS
-from travel_planner.actions import PlannerActions
+from travel_planner.actions import PlannerActions, PlannerRefusal
 from travel_planner.providers import GooglePlacesCardProvider, ProviderUnavailable
 from travel_planner.ranking import FORMULA_WEIGHTS, build_ranking
 from travel_planner.setup import build_setup_payload
@@ -565,6 +566,90 @@ class CardEnrichmentTest(unittest.TestCase):
             self.assertEqual(1, usage["google_places:card_details"]["requests"])
             self.assertEqual(5, usage["google_places:photo"]["requests"])
             self.assertEqual([], actions.store.list_place_evidence(trip.trip_id, "card_details"))
+
+
+class ProviderNoMatchIsRememberedTest(unittest.TestCase):
+    """A place Google does not hold must not be bought twice.
+
+    `_spend` is recorded *before* the request, so a refusal still costs US$0.025. The
+    screen already said "asking again will not find more" and nothing enforced it, so
+    every press of a button the card still offered spent the owner's money to be told
+    the same thing.
+    """
+
+    class Missing:
+        """A card provider that has never heard of anything."""
+
+        name = "google_places"
+        details_operation = "google_places:card_details"
+        photo_operation = "google_places:photo"
+        calls = 0
+
+        def details(self, place, *, destination, language):  # noqa: ARG002
+            type(self).calls += 1
+            raise ProviderNoMatch("Places returned no live match for this place")
+
+    def test_the_refusal_is_recorded_and_the_second_ask_is_free(self) -> None:
+        with TemporaryDirectory() as directory:
+            provider = self.Missing()
+            type(provider).calls = 0
+            actions = PlannerActions(
+                Path(directory) / "nomatch.sqlite3",
+                place_provider=RankingActionsTest.Provider(),
+                card_provider=provider,
+            )
+            trip = actions.create_trip(name="Taipei", destination="Taipei")
+            actions.save_setup(
+                trip_id=trip.trip_id, main_style=["sightseeing"], confirmed=True
+            )
+            actions.discover_places(trip_id=trip.trip_id)
+            place_id = actions.rank_candidates(trip.trip_id)["lanes"]["browse_all"][0]
+
+            with self.assertRaises(ProviderNoMatch):
+                actions.enrich_place_card(trip.trip_id, place_id)
+            spent_once = actions.paid_usage_status()["by_operation"]
+            self.assertEqual(1, spent_once["google_places:card_details"]["requests"])
+
+            # The same press again. Refused, and this time for nothing.
+            with self.assertRaises(PlannerRefusal) as caught:
+                actions.enrich_place_card(trip.trip_id, place_id)
+            self.assertEqual("place_not_in_provider", caught.exception.code)
+            self.assertEqual(1, type(provider).calls, "the provider was asked twice")
+            spent_twice = actions.paid_usage_status()["by_operation"]
+            self.assertEqual(
+                1,
+                spent_twice["google_places:card_details"]["requests"],
+                "the second refusal was billed",
+            )
+
+    def test_another_place_is_unaffected(self) -> None:
+        """The refusal is about one place, not about the provider."""
+        with TemporaryDirectory() as directory:
+            actions = PlannerActions(
+                Path(directory) / "nomatch2.sqlite3",
+                place_provider=RankingActionsTest.Provider(),
+                card_provider=FakeCardProvider(),
+            )
+            trip = actions.create_trip(name="Taipei", destination="Taipei")
+            actions.save_setup(
+                trip_id=trip.trip_id, main_style=["sightseeing"], confirmed=True
+            )
+            actions.discover_places(trip_id=trip.trip_id)
+            lanes = actions.rank_candidates(trip.trip_id)["lanes"]["browse_all"]
+            actions.store.upsert_place_evidence(
+                trip_id=trip.trip_id,
+                place_id=lanes[0],
+                kind="provider_no_match",
+                value={"place_id": lanes[0], "provider": "google_places"},
+                provider="google_places",
+                retrieved_at="2026-08-25T00:00:00+00:00",
+                expires_at="2126-08-25T00:00:00+00:00",
+            )
+
+            with self.assertRaises(PlannerRefusal):
+                actions.enrich_place_card(trip.trip_id, lanes[0])
+            # The next place along still works and still bills.
+            self.assertEqual(4.7, actions.enrich_place_card(trip.trip_id, lanes[1])["rating"])
 
 
 class CategoryVarietyTest(unittest.TestCase):
