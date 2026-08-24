@@ -4313,3 +4313,15 @@ The complete gate passed 12/12 in 55.3 seconds: 645 Python tests, all 27 histori
 optimizer cases over three variants, 159 web tests, graph/provider/design/parity/reference
 checks, and the 136-screen comparison. All application work used disposable SQLite
 copies; `data/tourist.sqlite3` was not opened.
+
+The corrective deployment was driven end to end at 390px. Discovery showed its dot-line
+at 0s with zero card skeletons. The shortlist rested at 53–97px below the 0–45px trip bar,
+with zero overlap and its centre hit-testing to the button after a 2,173px scroll. The
+same Hakkenzan Kajuen Yakenyama Orchard card went from zero photographs to `Photo 1 of 5`;
+the paid button disabled while the request ran and disappeared after it. The initial
+undated recommendation took 81s; applying dates and both timetable builds showed stages
+in 134–146ms and finished in 21s. One criteria-accept control existed, inside
+`optimize-unfit`; the 390px timeline was 324/324px with block cells and the 1,200px view
+showed map and timeline together. Saving Standard costs changed the category table from
+zero to THB2,700. The throwaway hosted trip was permanently deleted, and the paid ledger
+closed at US$5.857 of US$10.

@@ -66,6 +66,14 @@ store could never update the card. `PlaceDeck` now leads with the paid overlay d
 withdraws the paid control when it arrives, and disables that control while the call is
 pending. A static regression test pins the whole-card transition.
 
+The corrective production deployment was then verified on the same zero-photo Sapporo
+card: the paid button locked in flight, the deck changed to `Photo 1 of 5`, and the button
+withdrew. The 390px shortlist had zero overlap with the 45px bar and received the centre
+tap; itinerary stages appeared in 134–146ms, actual draft/rebuild calls finished in 21s;
+the sole criteria accept lived inside the unfit-place section; the mobile timeline had no
+overflow; and Standard cost seeds changed the comparison total from 0 to THB2,700. The
+named production trip was deleted. Paid usage closed at US$5.857 / US$10.
+
 ## Related
 
 - [Decide what the journey must explain before it asks](048-decide-what-the-journey-must-explain-before-it-asks.md)
