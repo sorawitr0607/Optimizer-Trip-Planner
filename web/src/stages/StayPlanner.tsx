@@ -9,7 +9,7 @@ import {
   type PlanProposal,
   type SetupDraft,
 } from "../api/client";
-import { copy, copyFormat, type Language } from "../i18n/copy";
+import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
 import { addDays, daysInMonth, spanDays } from "../shared/dates";
 import { PLAN_STAGES } from "../shared/buildStages";
 import { Thinking } from "../shared/Thinking";
@@ -454,7 +454,10 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
       </div>
       {save.error ? (
         <p className="field-error">
-          ⚠ {save.error instanceof ApiError ? save.error.code : String(save.error)}
+          ⚠{" "}
+          {save.error instanceof ApiError
+            ? copyFrom("OPTIMIZER_CODE_TEXT", save.error.code, language)
+            : String(save.error)}
         </p>
       ) : null}
       {saved ? (

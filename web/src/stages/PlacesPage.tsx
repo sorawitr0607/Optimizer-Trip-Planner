@@ -22,6 +22,7 @@ import {
   type SetupDraft,
 } from "../api/client";
 import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
+import { Loading } from "../shared/Loading";
 import { useLanguage } from "../i18n/LanguageProvider";
 import { mergeNames, placeAltName, placeName } from "../shared/names";
 import { distinguishingCons, evaluatedFeasibility } from "../shared/cards";
@@ -515,7 +516,7 @@ export function PlacesPage() {
   }, [upcoming.join(","), summaries.data, fetchSummary.isPending]);
 
   if (setup.isPending || discovery.isPending || choices.isPending) {
-    return <p>{copy("loading", language)}</p>;
+    return <Loading language={language} />;
   }
   const readError = setup.error ?? discovery.error ?? choices.error;
   if (readError) return <p className="field-error">⚠ {errorText(readError, language)}</p>;

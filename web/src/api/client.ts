@@ -902,6 +902,23 @@ export class ApiError extends Error {
  */
 export const OWNER_KEY = "planner.owner";
 
+/** The one credential that is a credential: proves the right to raise the global
+ *  spend cap. Typed by the owner once, kept beside the owner token, sent as
+ *  `X-Planner-Admin`; the server compares it against `TOURIST_ADMIN_KEY`. Unlike
+ *  the owner token this is offered as a secret — `set_paid_cap` is the single
+ *  action whose effect is deployment-wide. */
+export const ADMIN_KEY = "planner.admin";
+
+export function setAdminKey(key: string): void {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(ADMIN_KEY, key.trim());
+}
+
+function adminToken(): string {
+  if (typeof localStorage === "undefined") return "";
+  return localStorage.getItem(ADMIN_KEY) ?? "";
+}
+
 function ownerToken(): string {
   if (typeof localStorage === "undefined") return "";
   const held = localStorage.getItem(OWNER_KEY);
@@ -963,6 +980,7 @@ async function post(
         // rather than dispatching every call to the same wrong name.
         "X-Planner-Method": method,
         "X-Planner-Owner": ownerToken(),
+        "X-Planner-Admin": adminToken(),
       },
       body: JSON.stringify(payload),
       signal: controller.signal,

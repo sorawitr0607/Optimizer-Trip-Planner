@@ -194,7 +194,8 @@ class JobQueue:
         other worker steps over it rather than blocking on it. SQLite has no such
         clause and does not need one — it serialises writers, and the local app is
         a single process — so there the update is simply guarded on the status it
-        expected to find, which fails harmlessly if another writer got there.
+        expected to find, and its rowcount is what decides: zero rows means another
+        writer got there first, and this worker steps over the job.
         """
         with self.store.connect() as connection:
             if self.is_postgres:
@@ -214,11 +215,19 @@ class JobQueue:
             if candidate is None:
                 return None
             job_id = candidate["id"]
-            connection.execute(
+            claimed = connection.execute(
                 "UPDATE jobs SET status = ?, claimed_by = ?, claimed_at = ?,"
                 " attempts = attempts + 1 WHERE id = ? AND status = ?",
                 (RUNNING, worker_id, _now(), job_id, QUEUED),
             )
+            # The guarded update is the whole race check, so its rowcount is the
+            # answer — not a re-read. Zero rows means another worker claimed
+            # between the select and the update, and re-reading the row would find
+            # `running` *because they set it*: returning it here handed the same
+            # job to both workers, duplicate paid work included. This worker steps
+            # over it and comes back around.
+            if claimed.rowcount != 1:
+                return None
             row = connection.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
             return dict(row) if row and row["status"] == RUNNING else None
 

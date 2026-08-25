@@ -3,7 +3,7 @@ import { Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { ApiError, rpc, type Trip } from "../api/client";
-import { copy, copyFormat } from "../i18n/copy";
+import { copy, copyFormat, copyFrom } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
 
 /**
@@ -45,7 +45,11 @@ export function DeleteTrip({ trip, onDeleted, compact = false }: DeleteTripProps
   });
 
   // Whitespace only, because a name is typed by a person: "Family Trip " must count.
-  const matches = typed.trim() === trip.name.trim() && trip.name.trim() !== "";
+  // Case-insensitive too: the instruction above the field renders uppercase via CSS,
+  // so a person typing what they see typed "FAMILY TRIP" and the button stayed dead.
+  const matches =
+    typed.trim().toLowerCase() === trip.name.trim().toLowerCase() &&
+    trip.name.trim() !== "";
   const errorCode =
     remove.error instanceof ApiError ? remove.error.code : remove.error?.message;
 
@@ -78,7 +82,11 @@ export function DeleteTrip({ trip, onDeleted, compact = false }: DeleteTripProps
           value={typed}
         />
       </label>
-      {errorCode ? <p className="field-error">⚠ {errorCode}</p> : null}
+      {errorCode ? (
+        <p className="field-error">
+          ⚠ {remove.error instanceof ApiError ? copyFrom("OPTIMIZER_CODE_TEXT", errorCode, language) : errorCode}
+        </p>
+      ) : null}
       <div className={`trip-slot-actions${compact ? " compact" : ""}`}>
         <button
           className="trip-slot-delete"

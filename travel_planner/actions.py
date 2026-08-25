@@ -112,6 +112,23 @@ PROVIDER_NO_MATCH_DAYS = 90
 
 MAX_ROUTE_REQUESTS = 60
 
+#: Ceiling on the caller-supplied `time_limit_seconds` of `generate_plan_preview`.
+#:
+#: The optimizer spends up to one limit **per variant**, so a client-supplied
+#: 100 000 would hold the single worker for days — past `STALE_AFTER_SECONDS`,
+#: where `reap_stale` would return the still-running job to the queue and a second
+#: worker would start the same work. "Every operation is bounded server-side" is
+#: the repo's own rule; this is the bound. One second is the floor: zero and
+#: negatives are refused by the optimizer, and a caller asking for less than that
+#: is asking for the default, not for an error.
+
+
+def bounded_preview_seconds(value: float) -> int:
+    """Clamp the caller's per-variant budget into what one job may hold."""
+
+    return min(max(int(round(float(value))), 1), 60)
+
+
 #: Wall-clock a single `refresh_routes` job may hold the worker for.
 #:
 #: **This is a fairness limit, not a work limit.** One worker runs one job at a time,
@@ -1302,7 +1319,7 @@ class PlannerActions:
         optimizer_input = self._optimizer_input(trip_id)
         proposal = optimize_trip(
             optimizer_input,
-            time_limit_seconds=time_limit_seconds,
+            time_limit_seconds=bounded_preview_seconds(time_limit_seconds),
             on_variant=progress,
         )
         preview = self.store.save_optimization_preview(

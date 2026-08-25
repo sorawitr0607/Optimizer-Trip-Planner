@@ -7,23 +7,11 @@ import { rpc, type Journey, type Trip } from "./api/client";
 import { copy } from "./i18n/copy";
 import { useLanguage } from "./i18n/LanguageProvider";
 import { AppShell } from "./shared/AppShell";
+import { Loading } from "./shared/Loading";
 import { Recovery, RouteError } from "./shared/Recovery";
 import { StageGate } from "./shared/StageGate";
 import { STAGE_GATE, STAGE_ROUTES, type StageRoute } from "./shared/stages";
 import { TripsPage } from "./stages/TripsPage";
-
-function Loading() {
-  const { language } = useLanguage();
-  // A word alone on an empty page is the picture of a broken site, and this one is
-  // shown for the three sequential calls `/` makes before it knows where to send
-  // anyone. Reported as "I start from the root and can't see anything".
-  return (
-    <p aria-busy="true" aria-live="polite" className="thinking">
-      <span className="thinking-dot" />
-      <span>{copy("loading", language)}</span>
-    </p>
-  );
-}
 
 function Landing() {
   const landing = useQuery({

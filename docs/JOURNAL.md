@@ -4527,3 +4527,113 @@ read, over one line saying no free source has a photograph. The glyph is `aria-h
 because the sentence carries the meaning, and nothing in the tile takes a pointer, so the
 swipe belongs to the card again.
 
+## The audit that ended in a key, 2026-08-25
+
+An owner-requested full audit: backend, frontend, and the live deployment driven at
+390px and 1440px through the real browser. Every finding was traced against source
+before it earned a fix — two agent reports between them claimed twenty-seven findings,
+and the tracing kept the ones that survived. Eleven shipped; the rest are recorded
+below as deliberately unfixed.
+
+### The cap had no gate
+
+`set_paid_cap` sat on the public allowlist, took no `trip_id`, so `dispatch`'s ownership
+check never applied — `POST /api/set_paid_cap {"cap_usd": 999999}` from any visitor,
+no token needed, silently raised the global stop. Its own docstring has said "Only the
+owner may raise the stop threshold" since it was written; nothing implemented that. The
+Evidence page's cap control is the legitimate caller, so removal was not an option.
+
+The owner chose the admin key. The browser presents `X-Planner-Admin`; `dispatch`
+compares it against `TOURIST_ADMIN_KEY` when the deployment has configured one, and
+`api/rpc.py` refuses outright when it has not — hosted is fail-closed, because a
+deployment with no key configured has nothing to compare against. A local single-user
+run without the variable keeps working; the only person who can reach that server is
+its operator. The Evidence page prompts on the first refusal, keeps the key beside the
+owner token, and retries once. Unlike the owner token — which the docs are careful to
+call not-a-credential — this one is offered as a secret, because raising the cap is the
+single action whose effect is deployment-wide.
+
+### The ownership rule had a 109th and 110th method
+
+"Trip ownership is checked in `dispatch` only" was the rule, and the rule was the hole:
+`job_status` and the deferred enqueues never reach `dispatch`, so any job id answered
+with its whole result payload — a finished plan, a full discovery — and knowing a trip
+id was enough to enqueue discovery against someone else's trip and overwrite their
+`latest`. Both paths now ask the same question `dispatch` asks. The browser always
+sends its token, so the legitimate app cannot tell the difference; only misuse can.
+
+### The worker was one dropped connection from a crash-loop
+
+`reap_stale()` and `run_one()` were called bare in the loop. One transient Postgres
+drop raised straight out of `main()` and ended the process with the job still marked
+`running`. launchd masks this into a 30-second restart loop, and the stranded job waits
+for a reap up to `STALE_AFTER_SECONDS` later. The loop survives now: the failure is
+named in the log, and the next iteration retries after the idle backoff. Recording the
+failure stays inside `run_one` — if `fail` itself cannot reach the database there is
+nowhere to record it, and the reap is the honest recovery.
+
+### A client could size its own job
+
+`generate_plan_preview` accepted `time_limit_seconds` from the payload, and the
+optimizer spends one limit **per variant** — the code's own comment admits the worst
+case. A queued job with `time_limit_seconds=100000` outlives the reap window, so
+`reap_stale` returns the still-running job to the queue and a second worker starts the
+same work. "Every operation is bounded server-side anyway" was in the client's own
+comments; `bounded_preview_seconds` is the bound, clamped to one variant-minute and
+tested directly, because a cap is worth testing directly.
+
+### Two smaller teeth
+
+SQLite `claim()`'s lost-race check re-read the row and tested `status == running` — true
+because the *other* worker had just set it, so both workers took the same job, duplicate
+paid work included. The guarded UPDATE's rowcount is the answer; the comment claiming it
+"fails harmlessly" was wrong and is gone.
+
+Malformed JSON answered 500 on the hosted entry and 400 locally. The local server had it
+right; parity is the contract.
+
+### What the screens said
+
+All of these were confirmed live before fixing, which is the only way to know what a
+first-time user actually meets:
+
+- Every English swipe card wore `⚠ landmark` where its category should be —
+  `CATEGORY_TEXT` shipped 1 English key against 25 Thai, and only the deck's cousin in
+  `PlacesPage` had a fallback. Backfilled, and `copy.test.ts` now asserts en/th key
+  parity across **every** table, which is the guard that would have caught it.
+- `job_timeout` and `job_failed` were not in `OPTIMIZER_CODE_TEXT`, so the two longest
+  waits in the app failed in machine code; StayPlanner printed the raw code with no
+  table at all. Both codes speak now, in both languages, and StayPlanner and DeleteTrip
+  read the table.
+- The delete confirmation renders its instruction uppercase through CSS and matched the
+  typed name case-sensitively — typing what you see disabled the button. Verified twice
+  on the deployment before reading the code. Case-insensitive now.
+- A trip slot's badge says "Itinerary → Continue" while its link opened the setup
+  wizard. The link reads `journey.next` now, from the same query the badge uses.
+- Seven pages opened with a bare `Loading…` paragraph — the exact anti-pattern
+  `routes.tsx`'s own comment names. One shared `Loading` component, seven imports.
+- "No trips yet. Create the first one on the right." is wrong wherever the form is not
+  to the right. The direction is gone.
+
+### Deliberately not fixed, and why
+
+- **`enqueue`'s SELECT-then-INSERT race** — the clean fix is a partial unique index,
+  which is a schema change against the hosted database, and the rules refuse that
+  without the owner deciding what a hosted migration is.
+- **`complete`/`fail` are unfenced and `reap_stale` ignores `max_attempts`** — a reaped
+  job's zombie can overwrite its successor, and a payload that kills its worker cycles
+  forever. With the preview bounded at three variant-minutes the zombie window shrinks
+  below the practical; the fencing is a small diff that deserves its own tests rather
+  than a rider on this batch.
+- **The More sheet drops focus and ignores Escape** — real, verified live; it wants the
+  native-`<dialog>` treatment PlacesTour already uses, and then a finger on a real
+  phone, which this session cannot provide.
+- Deck undo, skipped-card revisit, the setup review's missing rows, unit-less stat
+  blocks, color-only day dots: polish, recorded for prioritising.
+
+### Two traps for the next session
+
+Two `scripts/check.py` runs in parallel fail in a way that looks like drift: the second
+run's baseline stage read "approved: 2" while the first held the directory. One gate at
+a time. And the stray `FAILED: 1 screen(s) drifted` inside the unit-test stage is
+`test_screen_baseline_gate.py` exercising the failure path — its stdout, not a result.

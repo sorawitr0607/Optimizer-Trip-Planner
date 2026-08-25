@@ -21,6 +21,7 @@ import {
   type ComfortTradeoffReport,
 } from "../api/client";
 import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
+import { Loading } from "../shared/Loading";
 import { useLanguage } from "../i18n/LanguageProvider";
 import { placeName } from "../shared/names";
 import { collectRouteEvidence } from "../shared/routeEvidence";
@@ -411,7 +412,7 @@ export function OptimizePage() {
       setRefusal(error instanceof ApiError ? error.code : String(error)),
   });
 
-  if (choices.isPending || preview.isPending) return <p>{copy("loading", language)}</p>;
+  if (choices.isPending || preview.isPending) return <Loading language={language} />;
   if (choices.isError) return <p className="field-error">⚠ {choices.error.message}</p>;
   if (preview.isError) return <p className="field-error">⚠ {preview.error.message}</p>;
 

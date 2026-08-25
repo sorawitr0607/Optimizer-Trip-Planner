@@ -11,6 +11,7 @@ import {
   type ChecklistVocabulary,
 } from "../api/client";
 import { copy, type Language } from "../i18n/copy";
+import { Loading } from "../shared/Loading";
 import { checklistIcon } from "../shared/tagIcons";
 import { useLanguage } from "../i18n/LanguageProvider";
 import { localizedTask, taskTitle } from "../shared/checklistText";
@@ -110,7 +111,7 @@ export function ReadinessPage() {
     },
   });
 
-  if (items.isPending || words.isPending) return <p>{copy("loading", language)}</p>;
+  if (items.isPending || words.isPending) return <Loading language={language} />;
   if (items.isError) return <p className="field-error">⚠ {items.error.message}</p>;
   if (words.isError) return <p className="field-error">⚠ {words.error.message}</p>;
 

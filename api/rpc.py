@@ -35,7 +35,14 @@ from urllib.parse import urlsplit
 
 # `_download` is private to the package, and this is the package. Importing it
 # beats a second copy of the export route regex.
-from localserver import ACTIONS, _download, dispatch, error_response, static_response
+from localserver import (
+    ACTIONS,
+    OWNER_ONLY_ACTIONS,
+    _download,
+    dispatch,
+    error_response,
+    static_response,
+)
 from travel_planner.actions import PlannerActions
 from travel_planner.jobs import HANDLERS, JobQueue
 
@@ -106,7 +113,10 @@ def _method(handler: BaseHTTPRequestHandler) -> str:
 
 
 def handle(
-    method: str, payload: dict[str, Any], owner: str | None = None
+    method: str,
+    payload: dict[str, Any],
+    owner: str | None = None,
+    admin_key: str | None = None,
 ) -> tuple[int, Any]:
     """Run or enqueue one call. Returns the status and the body."""
     actions, queue = _planner()
@@ -115,6 +125,14 @@ def handle(
         job = queue.get(str(payload.get("job_id", "")))
         if job is None:
             return 404, {"code": "unknown_job"}
+        # Same question `dispatch` asks of every trip-scoped call, asked here
+        # because the job row never reaches dispatch. Without it, any job id
+        # answered with its whole result payload -- a finished plan, a full
+        # discovery. Trips that predate owners stay readable, as in dispatch.
+        if owner:
+            held = actions.store.trip_owner(job["trip_id"])
+            if held is not None and held != owner:
+                return 403, {"code": "not_your_trip", "detail": {"trip_id": job["trip_id"]}}
         return 200, {
             "job_id": job["id"], "status": job["status"], "kind": job["kind"],
             "attempts": job["attempts"], "error": job["error"],
@@ -129,14 +147,38 @@ def handle(
         trip_id = payload.get("trip_id")
         if not isinstance(trip_id, str) or not trip_id:
             return 400, {"code": "trip_id_required"}
+        # An enqueue mutates its trip -- discovery overwrites `latest` -- and spends
+        # shared worker time, so it answers to the same ownership check as
+        # everything else rather than only to knowing a trip id.
+        if owner:
+            held = actions.store.trip_owner(trip_id)
+            if held is not None and held != owner:
+                return 403, {"code": "not_your_trip", "detail": {"trip_id": trip_id}}
         rest = {k: v for k, v in payload.items() if k != "trip_id"}
         # Already queued or running for this trip returns that job rather than
         # buying the same 30-90s answer twice.
-        return 202, {"job_id": queue.enqueue(method, trip_id, rest), "status": "queued"}
+        try:
+            job_id = queue.enqueue(method, trip_id, rest)
+        except ValueError as error:
+            # An allowlist violation is the caller's mistake, not the deployment's.
+            return 400, {"code": "bad_request", "detail": {"message": str(error)}}
+        return 202, {"job_id": job_id, "status": "queued"}
+
+    if method in OWNER_ONLY_ACTIONS and not os.environ.get("TOURIST_ADMIN_KEY", "").strip():
+        # Hosted is fail-closed. A deployment with no key configured has nothing
+        # to compare a presented key against, so raising the cap is refused with
+        # the reason stated rather than silently allowed.
+        return 503, {
+            "code": "admin_key_required",
+            "detail": {"message": (
+                "TOURIST_ADMIN_KEY is not set on this deployment;"
+                " the paid cap cannot be changed until it is"
+            )},
+        }
 
     if method not in ACTIONS:
         return 404, {"code": "unknown_action"}
-    return 200, dispatch(actions, method, payload, owner=owner)
+    return 200, dispatch(actions, method, payload, owner=owner, admin_key=admin_key)
 
 
 class handler(BaseHTTPRequestHandler):
@@ -180,7 +222,13 @@ class handler(BaseHTTPRequestHandler):
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            payload = json.loads(self.rfile.read(length) or b"{}")
+            try:
+                payload = json.loads(self.rfile.read(length) or b"{}")
+            except json.JSONDecodeError as error:
+                # The local server answers the same body with 400; a hosted 500
+                # for a typo in the JSON read as an outage, not a mistake.
+                self._send(400, {"code": "bad_request", "detail": {"message": str(error)}})
+                return
             if not isinstance(payload, dict):
                 self._send(400, {"code": "body_must_be_an_object"})
                 return
@@ -190,6 +238,10 @@ class handler(BaseHTTPRequestHandler):
                 # and not offered as one -- it separates ten people's trips, which is
                 # the actual problem, and copying someone's token is copying a link.
                 (self.headers.get("X-Planner-Owner") or "").strip() or None,
+                # The one credential that is a credential: proves the right to raise
+                # the global spend cap. Compared against `TOURIST_ADMIN_KEY` in
+                # `dispatch`; absent here means "not the owner" there.
+                (self.headers.get("X-Planner-Admin") or "").strip() or None,
             )
             self._send(status, body)
         except Exception as error:  # transport boundary

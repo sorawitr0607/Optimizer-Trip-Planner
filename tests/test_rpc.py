@@ -15,6 +15,7 @@ drives rather than the part we wrote.
 from __future__ import annotations
 
 import json
+import os
 import threading
 import unittest
 import unittest.mock
@@ -103,6 +104,71 @@ class RpcOverHttpTest(unittest.TestCase):
         with self.assertRaises(urllib.error.HTTPError) as caught:
             urllib.request.urlopen(request)
         self.assertEqual(caught.exception.code, 415)
+
+    def test_malformed_json_is_400_not_500(self):
+        # The local server answers the same body 400. A hosted 500 for a typo
+        # read as an outage; parity is the contract.
+        request = urllib.request.Request(
+            f"{self.base}/api/list_trips", data=b"{not json",
+            headers={"Content-Type": "application/json"}, method="POST")
+        try:
+            with urllib.request.urlopen(request) as response:
+                status = response.status
+        except urllib.error.HTTPError as error:
+            status = error.code
+        self.assertEqual(400, status)
+
+    def test_job_status_answers_only_the_owners_browser(self):
+        # The job row never reaches `dispatch`, so without a check here any job id
+        # answered with its whole result payload -- a finished plan, a full
+        # discovery -- to whoever held the id.
+        _, trip = self.call(
+            "create_trip", {"name": "O", "destination": "Kyoto"},
+            headers={"X-Planner-Owner": "tok_a"})
+        _, body = self.call(
+            "discover_places", {"trip_id": trip["trip_id"]},
+            headers={"X-Planner-Owner": "tok_a"})
+        job_id = body["job_id"]
+        status, _ = self.call("job_status", {"job_id": job_id}, headers={"X-Planner-Owner": "tok_b"})
+        self.assertEqual(403, status)
+        status, _ = self.call("job_status", {"job_id": job_id}, headers={"X-Planner-Owner": "tok_a"})
+        self.assertEqual(200, status)
+
+    def test_deferred_work_on_another_owners_trip_is_refused(self):
+        # An enqueue mutates its trip -- discovery overwrites `latest` -- and
+        # spends shared worker time, so knowing a trip id is not enough to queue
+        # against it.
+        _, trip = self.call(
+            "create_trip", {"name": "O", "destination": "Kyoto"},
+            headers={"X-Planner-Owner": "tok_a"})
+        status, body = self.call(
+            "discover_places", {"trip_id": trip["trip_id"]},
+            headers={"X-Planner-Owner": "tok_b"})
+        self.assertEqual(403, status)
+        self.assertEqual("not_your_trip", body["code"])
+
+    def test_raising_the_cap_needs_the_admin_key(self):
+        # `set_paid_cap` is deployment-wide, so trip ownership cannot scope it.
+        # The presented `X-Planner-Admin` must match `TOURIST_ADMIN_KEY`.
+        with unittest.mock.patch.dict(os.environ, {"TOURIST_ADMIN_KEY": "sekrit"}):
+            status, body = self.call("set_paid_cap", {"cap_usd": 20})
+            self.assertEqual(403, status)
+            self.assertEqual("not_admin", body["code"])
+            status, _ = self.call(
+                "set_paid_cap", {"cap_usd": 20}, headers={"X-Planner-Admin": "wrong"})
+            self.assertEqual(403, status)
+            status, _ = self.call(
+                "set_paid_cap", {"cap_usd": 20}, headers={"X-Planner-Admin": "sekrit"})
+            self.assertEqual(200, status)
+
+    def test_a_deployment_without_a_configured_key_refuses_cap_changes(self):
+        # Hosted is fail-closed: nothing to compare against means refuse with the
+        # reason, not silently allow.
+        env = {key: value for key, value in os.environ.items() if key != "TOURIST_ADMIN_KEY"}
+        with unittest.mock.patch.dict(os.environ, env, clear=True):
+            status, body = self.call("set_paid_cap", {"cap_usd": 20})
+            self.assertEqual(503, status)
+            self.assertEqual("admin_key_required", body["code"])
 
     def test_method_falls_back_to_the_header_when_the_path_is_rewritten(self):
         # What a platform rewrite of /api/* onto one function looks like if it

@@ -14,9 +14,11 @@ missing it.
 
 from __future__ import annotations
 
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from localserver import dispatch
 from travel_planner.actions import PlannerActions, PlannerRefusal
@@ -79,6 +81,28 @@ class TripOwnershipTest(unittest.TestCase):
         self.make("Mine", "tok_me")
         self.make("Theirs", "tok_you")
         self.assertEqual(2, len(dispatch(self.actions, "list_trips", {})))
+
+    def test_raising_the_cap_answers_to_the_admin_key(self):
+        # The one action trip ownership cannot scope: the cap is global. Its
+        # docstring said "only the owner" for its whole life; this is that
+        # promise kept. Checked here because this is where the rule lives --
+        # `dispatch`, not the method.
+        with mock.patch.dict(os.environ, {"TOURIST_ADMIN_KEY": "sekrit"}):
+            with self.assertRaises(PlannerRefusal) as caught:
+                dispatch(self.actions, "set_paid_cap", {"cap_usd": 20.0})
+            self.assertEqual("not_admin", caught.exception.code)
+            with self.assertRaises(PlannerRefusal):
+                dispatch(self.actions, "set_paid_cap", {"cap_usd": 20.0}, admin_key="wrong")
+            dispatch(self.actions, "set_paid_cap", {"cap_usd": 20.0}, admin_key="sekrit")
+
+    def test_a_local_run_without_a_configured_key_keeps_its_cap_control(self):
+        # A single-user machine has no anonymous visitors to defend against, and
+        # the local server has always been able to raise its own cap. The gate
+        # arms itself when `TOURIST_ADMIN_KEY` exists.
+        env = {key: value for key, value in os.environ.items() if key != "TOURIST_ADMIN_KEY"}
+        with mock.patch.dict(os.environ, env, clear=True):
+            dispatch(self.actions, "set_paid_cap", {"cap_usd": 20.0})
+        self.assertEqual(20.0, self.actions.store.get_paid_cap())
 
 
 if __name__ == "__main__":

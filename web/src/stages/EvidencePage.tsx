@@ -6,6 +6,7 @@ import {
   type OpeningEvidenceOptions,
   ApiError,
   rpc,
+  setAdminKey,
   type CandidateChoice,
   type Journey,
   type OpeningIntervals,
@@ -16,6 +17,7 @@ import {
   type VenueNotice,
 } from "../api/client";
 import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
+import { Loading } from "../shared/Loading";
 import { useLanguage } from "../i18n/LanguageProvider";
 import { placeNameFrom } from "../shared/names";
 import { collectRouteEvidence } from "../shared/routeEvidence";
@@ -204,7 +206,23 @@ export function EvidencePage() {
   const saveCap = useMutation({
     mutationFn: () => rpc<number>("set_paid_cap", { cap_usd: Number(cap ?? 0) }),
     onSuccess: done(copy("cap_saved", language)),
-    onError: fail,
+    onError: (error) => {
+      // Raising the cap is the one owner-only action, and the deployment compares
+      // `X-Planner-Admin` against `TOURIST_ADMIN_KEY`. First refusal asks for the
+      // key, keeps it beside the owner token, and retries the same save once —
+      // so the owner types it once per browser, and a visitor is never asked.
+      if (error instanceof ApiError && (error.code === "not_admin" || error.code === "admin_key_required")) {
+        const typed = window.prompt(copy("admin_key_prompt", language)) ?? "";
+        if (typed.trim()) {
+          setAdminKey(typed);
+          saveCap.mutate();
+          return;
+        }
+        setFlash({ tone: "bad", text: copy("cap_not_saved", language) });
+        return;
+      }
+      fail(error);
+    },
   });
 
   const autoResolveAll = useMutation({
@@ -234,7 +252,7 @@ export function EvidencePage() {
     onError: fail,
   });
 
-  if (intervals.isPending || usage.isPending) return <p>{copy("loading", language)}</p>;
+  if (intervals.isPending || usage.isPending) return <Loading language={language} />;
   if (intervals.isError) return <p className="field-error">⚠ {intervals.error.message}</p>;
 
   const spend = usage.data;

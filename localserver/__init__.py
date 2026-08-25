@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from dataclasses import fields, is_dataclass
 import gzip
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+import hmac
 import inspect
 import json
 import mimetypes
@@ -158,7 +159,13 @@ ACTIONS = (
     "journey",
 )
 
+# Methods whose effect is deployment-wide, so trip ownership cannot scope them.
+# `set_paid_cap` is the only member: the cap is global, and its docstring has
+# promised "only the owner" since it was written.
+OWNER_ONLY_ACTIONS = frozenset({"set_paid_cap"})
+
 REFUSAL_STATUS = {
+    "not_admin": 403,
     "not_your_trip": 403,
     "place_not_in_provider": 404,
     "unknown_trip": 404,
@@ -217,6 +224,7 @@ def dispatch(
     payload: Mapping[str, Any],
     *,
     owner: str | None = None,
+    admin_key: str | None = None,
 ) -> Any:
     """Run one allowlisted method, scoped to its caller.
 
@@ -233,6 +241,20 @@ def dispatch(
     if method not in ACTIONS:
         raise PlannerRefusal("unknown_action")
     action = getattr(actions, method)
+
+    if method in OWNER_ONLY_ACTIONS:
+        # The cap is global, so raising it is the one action that must never answer
+        # to an anonymous visitor — its docstring has said "only the owner" since it
+        # was written, and nothing enforced it. The owner's browser presents
+        # `X-Planner-Admin`; the deployment compares it against `TOURIST_ADMIN_KEY`.
+        # A local single-user run without the variable keeps working: the only
+        # person who can reach that server is its operator. `api/rpc.py` adds the
+        # hosted half — there, an unset variable refuses outright, because a
+        # deployment with no key configured has nothing to compare against.
+        expected = os.environ.get("TOURIST_ADMIN_KEY", "").strip()
+        presented = (admin_key or "").strip()
+        if expected and (not presented or not hmac.compare_digest(presented, expected)):
+            raise PlannerRefusal("not_admin")
 
     if owner:
         # Trips that predate owners belong to whoever arrives first: this deployment's
@@ -519,7 +541,13 @@ class PlannerHandler(SimpleHTTPRequestHandler):
             if not isinstance(payload, Mapping):
                 raise BadRequest("request body must be a JSON object")
             owner = (self.headers.get("X-Planner-Owner") or "").strip() or None
-            self._json(200, dispatch(self.server.actions, method, payload, owner=owner))
+            admin_key = (self.headers.get("X-Planner-Admin") or "").strip() or None
+            self._json(
+                200,
+                dispatch(
+                    self.server.actions, method, payload, owner=owner, admin_key=admin_key
+                ),
+            )
         except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as error:
             self._error(BadRequest(str(error)) if not isinstance(error, PlannerRefusal) else error)
         except Exception as error:  # transport boundary
@@ -627,6 +655,7 @@ def main(argv: list[str] | None = None) -> None:
 
 __all__ = (
     "ACTIONS",
+    "OWNER_ONLY_ACTIONS",
     "error_response",
     "PlannerHTTPServer",
     "dispatch",

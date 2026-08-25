@@ -1882,13 +1882,7 @@ export function TripsPage() {
                 <ol className="stage-list">
                   {trips.data.map((trip) => (
                     <li key={trip.trip_id}>
-                      <Link to={`/trips/${trip.trip_id}/setup`}>
-                        <span className="trip-list-name">
-                          <strong>{trip.name}</strong>
-                          <small>{trip.destination}</small>
-                        </span>
-                        <TripResume tripId={trip.trip_id} />
-                      </Link>
+                      <TripSlot tripId={trip.trip_id} name={trip.name} destination={trip.destination} />
                       <DeleteTrip trip={trip} />
                     </li>
                   ))}
@@ -2123,6 +2117,34 @@ export function TripsPage() {
         </div>
       </footer>
     </main>
+  );
+}
+
+// The slot's label announces the stage it resumes to ("Itinerary → Continue"), so the
+// link it wraps must land there and not at /setup. Same query key as the badge, so
+// react-query serves both from one fetch; until it lands the link falls back to setup,
+// which every trip owns.
+function TripSlot({
+  tripId,
+  name,
+  destination,
+}: {
+  tripId: string;
+  name: string;
+  destination: string;
+}) {
+  const journey = useQuery({
+    queryKey: ["journey", tripId],
+    queryFn: () => rpc<Journey>("journey", { trip_id: tripId }),
+  });
+  return (
+    <Link to={`/trips/${tripId}/${journey.data?.next ?? "setup"}`}>
+      <span className="trip-list-name">
+        <strong>{name}</strong>
+        <small>{destination}</small>
+      </span>
+      <TripResume tripId={tripId} />
+    </Link>
   );
 }
 

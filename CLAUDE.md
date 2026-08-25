@@ -57,6 +57,10 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   second source of truth.
 - Every paid provider call routes through `actions._spend()`. An unpriced operation raises rather than
   being assumed free, and the ledger is append-only by trigger.
+- **A client-supplied bound is a server-side clamp.** `generate_plan_preview`'s `time_limit_seconds`
+  is spent once per variant, so an unbounded value held the single worker for as long as the caller
+  liked — past `STALE_AFTER_SECONDS`, where the still-running job is handed to a second worker.
+  `bounded_preview_seconds` is the bound; a cap is worth testing directly.
 - `costs.py` converts owner-recorded expenses into THB against an owner-editable, timestamped rate
   snapshot. **A paid charge locks its actual THB** so a later rate cannot rewrite it, and a missing
   rate stays a visible gap rather than a guess.
@@ -86,6 +90,10 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
 - **The worker's idle poll backs off from 2s to `MAX_IDLE_SLEEP_SECONDS` (10s) and resets on any job.**
   A flat 2s is 43,200 queries a day whether or not anyone is using the app. Keep the ceiling below
   `REAP_EVERY_SECONDS` or abandoned jobs slip a whole reap cycle.
+- **The worker's loop outlives one bad poll.** `reap_stale`/`run_one` raise on a transient drop;
+  bare, that ended the process with the job still `running` and launchd turned it into a 30-second
+  crash-loop. The loop catches, logs, backs off, retries. Recording the failure stays inside
+  `run_one` — if `fail` cannot reach the database, the reap is the recovery.
 
 **The core**
 
@@ -153,8 +161,15 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   one. An allowlist that permits keys the handler rejects is worse than none.
 - Provider retries are **three attempts, four seconds apart, and only for 429 and 5xx**. A 400 or 404
   is the endpoint saying "not this"; repeating it spends the budget to be refused identically.
-- Trip ownership is checked in **`dispatch` only**, because 108 methods take a `trip_id` and a check
-  written 108 times will be missing from the 109th.
+- Trip ownership is checked in **`dispatch` for everything trip-scoped**, and in `api/rpc.py`'s
+  `handle()` for the two paths that bypass it — `job_status` and the deferred enqueues. A check
+  written 108 times will be missing from the 109th; the 109th and 110th were a full plan result
+  answering any job id, and discovery enqueued against a stranger's trip.
+- Anything whose effect is deployment-wide answers to **`OWNER_ONLY_ACTIONS` and the admin key**:
+  `set_paid_cap` is the only member. `dispatch` compares `X-Planner-Admin` against
+  `TOURIST_ADMIN_KEY`; `api/rpc.py` refuses outright when the variable is unset — hosted is
+  fail-closed, a local single-user run without the variable stays open. The browser keeps the key
+  beside the owner token and prompts once. Unlike the owner token, this one is offered as a secret.
 
 **The interface**
 

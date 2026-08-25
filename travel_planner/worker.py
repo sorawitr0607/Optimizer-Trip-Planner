@@ -146,15 +146,32 @@ def main(argv: list[str] | None = None) -> int:
     last_reap = 0.0
     idle_sleep = IDLE_SLEEP_SECONDS
     while not stopping:
-        now = time.monotonic()
-        if now - last_reap > REAP_EVERY_SECONDS:
-            recovered = queue.reap_stale()
-            if recovered:
-                print(f"returned {recovered} abandoned job(s) to the queue", flush=True)
-            last_reap = now
+        # One transient drop — a pooled connection closed under us, a failover —
+        # used to raise straight out of this loop and end the process with the
+        # job still marked `running`. launchd restarts it, so the visible symptom
+        # was a 30-second crash-loop and the job stranded `running` until a reap
+        # up to STALE_AFTER_SECONDS later. The loop survives instead: the failure
+        # is named in the log, the job stays where it is, and the next iteration
+        # retries after the idle backoff. Recording the failure stays inside
+        # `run_one`; if `fail` itself cannot reach the database there is nowhere
+        # to record it, and the reap is the honest recovery.
+        try:
+            now = time.monotonic()
+            if now - last_reap > REAP_EVERY_SECONDS:
+                recovered = queue.reap_stale()
+                if recovered:
+                    print(f"returned {recovered} abandoned job(s) to the queue", flush=True)
+                last_reap = now
 
-        started = time.monotonic()
-        job = run_one(queue, actions, worker_id)
+            started = time.monotonic()
+            job = run_one(queue, actions, worker_id)
+        except Exception as error:  # noqa: BLE001 - the queue outlives one bad poll
+            print(f"worker loop error: {type(error).__name__}: {error}", flush=True)
+            if arguments.once:
+                return 1
+            time.sleep(idle_sleep)
+            idle_sleep = next_idle_sleep(idle_sleep)
+            continue
         if job is None:
             if arguments.once:
                 print("nothing queued", flush=True)

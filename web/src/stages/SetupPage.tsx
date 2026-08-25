@@ -11,6 +11,7 @@ import {
   type Trip,
 } from "../api/client";
 import { copy, copyFormat, copyFrom } from "../i18n/copy";
+import { Loading } from "../shared/Loading";
 import { tagIcon } from "../shared/tagIcons";
 import { Minus, Plus } from "lucide-react";
 
@@ -232,7 +233,7 @@ export function SetupPage() {
     }
   });
 
-  if (stored.isPending || vocabulary.isPending) return <p>{copy("loading", language)}</p>;
+  if (stored.isPending || vocabulary.isPending) return <Loading language={language} />;
   if (stored.isError) return <p className="field-error">⚠ {stored.error.message}</p>;
   if (vocabulary.isError) return <p className="field-error">⚠ {vocabulary.error.message}</p>;
 

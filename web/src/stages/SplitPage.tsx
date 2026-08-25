@@ -11,6 +11,7 @@ import {
   type SplitSummary,
 } from "../api/client";
 import { copy, copyFormat } from "../i18n/copy";
+import { Loading } from "../shared/Loading";
 import { costIcon } from "../shared/tagIcons";
 import { useLanguage } from "../i18n/LanguageProvider";
 import { categoryName, Donut, Meters, money, Note, Required, Tag, Tile, travellerNames, type CostCategory } from "./money";
@@ -148,7 +149,7 @@ export function SplitPage() {
     onSuccess: refresh,
   });
 
-  if (summary.isPending || rows.isPending) return <p>{copy("loading", language)}</p>;
+  if (summary.isPending || rows.isPending) return <Loading language={language} />;
   if (summary.isError) return <p className="field-error">⚠ {summary.error.message}</p>;
   if (rows.isError) return <p className="field-error">⚠ {rows.error.message}</p>;
 

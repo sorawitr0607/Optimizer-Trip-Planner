@@ -13,7 +13,7 @@ from unittest.mock import patch
 import zipfile
 
 from localserver import ACTIONS, REFUSAL_STATUS, PlannerHTTPServer, dispatch, jsonable
-from travel_planner.actions import PlannerActions
+from travel_planner.actions import PlannerActions, bounded_preview_seconds
 from travel_planner.core import (
     CandidateChoice,
     ChecklistItem,
@@ -127,8 +127,9 @@ class DispatchContractTest(unittest.TestCase):
         self.assertNotIn("record_paid_call", ACTIONS)
         self.assertIn("check_paid_call", ACTIONS)
         self.assertIn("build_export_snapshot", ACTIONS)
-        # 39 since `not_your_trip`, which is 403 rather than the default 409.
-        self.assertEqual(40, len(REFUSAL_STATUS))
+        # 40 since `not_your_trip`, which is 403 rather than the default 409;
+        # 41 since `not_admin`, same status, for the cap's owner-only gate.
+        self.assertEqual(41, len(REFUSAL_STATUS))
 
     def test_the_split_ledger_is_reachable_but_deletion_is_not(self) -> None:
         for name in (
@@ -492,6 +493,17 @@ class SocketGuardTest(unittest.TestCase):
         status, _, calendar = self.request("GET", f"/api/export/{trip_id}/checklist.ics")
         self.assertEqual(200, status)
         self.assertTrue(calendar.startswith(b"BEGIN:VCALENDAR"))
+
+    def test_the_preview_time_limit_is_bounded(self) -> None:
+        # The optimizer spends one limit per variant, so an unbounded client value
+        # held the single worker for as long as the caller liked -- past the reap
+        # window, where the still-running job would be handed to a second worker.
+        # A cap is worth testing directly rather than through a render.
+        self.assertEqual(30, bounded_preview_seconds(30))
+        self.assertEqual(1, bounded_preview_seconds(0.01))
+        self.assertEqual(60, bounded_preview_seconds(10**6))
+        self.assertEqual(60, bounded_preview_seconds(60.4))
+        self.assertEqual(1, bounded_preview_seconds(-5))
 
 
 if __name__ == "__main__":

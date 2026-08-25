@@ -12,6 +12,7 @@ import {
   type SetupDraft,
 } from "../api/client";
 import { copy, copyFormat } from "../i18n/copy";
+import { Loading } from "../shared/Loading";
 import { costIcon } from "../shared/tagIcons";
 import { spanDays } from "../shared/dates";
 import { useLanguage } from "../i18n/LanguageProvider";
@@ -222,7 +223,7 @@ export function CostsPage() {
     onError: (error) => setFlash(error instanceof ApiError ? error.code : String(error)),
   });
 
-  if (totals.isPending || items.isPending) return <p>{copy("loading", language)}</p>;
+  if (totals.isPending || items.isPending) return <Loading language={language} />;
   if (totals.isError) return <p className="field-error">⚠ {totals.error.message}</p>;
   if (items.isError) return <p className="field-error">⚠ {items.error.message}</p>;
 
