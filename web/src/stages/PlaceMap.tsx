@@ -251,6 +251,11 @@ export interface PlaceMapProps {
   basemap?: Basemap | null;
   /** Drawn large and filled; everything else is context. Omit to weight them equally. */
   focusId?: string;
+  /** Draws the focused pin as a ★ rather than its number, in the accent colour. The
+   *  card's map: one place is being looked at, and a star says "this one" without
+   *  competing with the shortlist's numbering. Off on the itinerary, where the number
+   *  is the timeline order and must not be replaced. */
+  focusStar?: boolean;
   /** The numbered list under the map. Off in the card, where one name is enough. */
   withKey?: boolean;
   /** Changing this replays the day's trace. The day's date, on the itinerary. */
@@ -284,6 +289,7 @@ export function PlaceMap({
   basemap = null,
   focusId,
   withKey = true,
+  focusStar = false,
   autoTraceKey,
   tripId,
   route = false,
@@ -1036,8 +1042,13 @@ export function PlaceMap({
               tabIndex={selectable ? 0 : undefined}
             >
               <circle cx={point.x} cy={point.y} r={(isFocus ? 10 : 8) / view.zoom} />
-              <text textAnchor="middle" x={point.x} y={point.y + 3 / view.zoom}>
-                {point.label}
+              <text
+                className={isFocus && focusStar ? "plan-map-pin-star" : undefined}
+                textAnchor="middle"
+                x={point.x}
+                y={point.y + 3 / view.zoom}
+              >
+                {isFocus && focusStar ? "★" : point.label}
               </text>
             </g>
           );

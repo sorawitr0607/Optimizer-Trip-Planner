@@ -73,6 +73,12 @@ REPORTS_PROGRESS: frozenset[str] = frozenset(
 
 QUEUED, RUNNING, DONE, FAILED = "queued", "running", "done", "failed"
 
+
+def _claim_guard(worker_id: str | None) -> str:
+    """The SQL that narrows a terminal write to the attempt still holding it."""
+
+    return " AND claimed_by = ?" if worker_id else ""
+
 #: A job still `running` after this long is assumed to belong to a worker that
 #: died. Comfortably longer than the slowest real operation (~210s measured), or
 #: reaping would kill work that is merely slow.
@@ -244,19 +250,34 @@ class JobQueue:
                 "UPDATE jobs SET progress = ? WHERE id = ?", (reached, job_id)
             )
 
-    def complete(self, job_id: str, result: Any) -> None:
+    def complete(
+        self, job_id: str, result: Any, *, worker_id: str | None = None
+    ) -> None:
+        # Fenced on the claim. A job that ran past STALE_AFTER_SECONDS was reaped
+        # and re-claimed while its first worker was still going; that worker's
+        # eventual result must not overwrite the newer attempt -- or, via a late
+        # `fail`, flip a `done` job back to queued. The claim is (job, worker):
+        # status alone cannot tell a zombie from the legitimate runner, because
+        # the row reads `running` for both. A stale write is dropped.
         with self.store.connect() as connection:
             connection.execute(
                 "UPDATE jobs SET status = ?, result_json = ?, finished_at = ?,"
-                " error = NULL WHERE id = ?",
-                (DONE, json.dumps(result, default=str), _now(), job_id),
+                " error = NULL WHERE id = ? AND status = ?" + _claim_guard(worker_id),
+                [DONE, json.dumps(result, default=str), _now(), job_id, RUNNING]
+                + ([worker_id] if worker_id else []),
             )
 
-    def fail(self, job_id: str, error: str) -> str:
+    def fail(
+        self, job_id: str, error: str, *, worker_id: str | None = None
+    ) -> str:
         """Back to the queue while attempts remain, otherwise finished and failed.
 
         The message is kept either way. A job that vanishes on its last failure
         leaves the caller polling something that will never change.
+
+        Fenced on the claim, for the same reason `complete` is. The returned
+        status is the outcome this failure *wanted*; a row reaped mid-failure,
+        or held by a newer attempt, keeps its own.
         """
         with self.store.connect() as connection:
             row = connection.execute(
@@ -271,8 +292,10 @@ class JobQueue:
             # attempt has not done yet.
             connection.execute(
                 "UPDATE jobs SET status = ?, error = ?, claimed_by = NULL,"
-                " progress = NULL, finished_at = ? WHERE id = ?",
-                (status, error[:2000], None if retry else _now(), job_id),
+                " progress = NULL, finished_at = ? WHERE id = ? AND status = ?"
+                + _claim_guard(worker_id),
+                [status, error[:2000], None if retry else _now(), job_id, RUNNING]
+                + ([worker_id] if worker_id else []),
             )
             return status
 
@@ -281,17 +304,28 @@ class JobQueue:
 
         Without this a process killed mid-job leaves the row `running` for ever
         and the caller polls a job nobody is working on.
+
+        `max_attempts` is consulted here because a crash is the one failure that
+        never reaches `fail`: a payload that kills its worker on every attempt
+        would otherwise cycle claim -> die -> reap for ever, each cycle buying
+        the same work. Attempts are counted on claim, so the count survives the
+        crash that made reaping necessary.
         """
         cutoff = (datetime.now(timezone.utc) - timedelta(seconds=STALE_AFTER_SECONDS)).isoformat()
         with self.store.connect() as connection:
             rows = connection.execute(
-                "SELECT id FROM jobs WHERE status = ? AND claimed_at < ?", (RUNNING, cutoff)
+                "SELECT id, attempts, max_attempts FROM jobs"
+                " WHERE status = ? AND claimed_at < ?",
+                (RUNNING, cutoff),
             ).fetchall()
             for row in rows:
+                exhausted = row["attempts"] >= row["max_attempts"]
                 connection.execute(
                     "UPDATE jobs SET status = ?, claimed_by = NULL, progress = NULL,"
-                    " error = 'worker did not finish' WHERE id = ?",
-                    (QUEUED, row["id"]),
+                    " error = 'worker did not finish', finished_at = ? WHERE id = ?",
+                    (FAILED if exhausted else QUEUED,
+                     _now() if exhausted else None,
+                     row["id"]),
                 )
             return len(rows)
 
@@ -328,7 +362,7 @@ def run_one(queue: JobQueue, actions: Any, worker_id: str) -> dict | None:
         # for `.candidates.data` on that said "Cannot read properties of undefined
         # (reading 'data')". The work had succeeded every time; only its shape was
         # wrong, which is why the worker logged `done in 33.6s` and the page broke.
-        queue.complete(job["id"], jsonable(result))
+        queue.complete(job["id"], jsonable(result), worker_id=worker_id)
     except Exception as error:  # noqa: BLE001 - the message is the product here
-        queue.fail(job["id"], f"{type(error).__name__}: {error}")
+        queue.fail(job["id"], f"{type(error).__name__}: {error}", worker_id=worker_id)
     return queue.get(job["id"])

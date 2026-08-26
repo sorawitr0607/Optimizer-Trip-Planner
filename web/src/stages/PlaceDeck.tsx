@@ -157,6 +157,10 @@ export interface PlaceDeckProps {
   onWantPhotos?: (placeId: string) => void;
   /** Prevents a second paid press while the first gallery is still arriving. */
   photosLoading?: boolean;
+  /** Why the photographs did not come, when the ask itself failed — scoped to the
+   *  card it was asked for by the caller, and answered inside the photo area rather
+   *  than in a banner above the deck, where it read as the deck being broken. */
+  photoError?: string | null;
   /** What that costs, so the price is on the button rather than a screen away. */
   paidPhotoUsd?: number | null;
   /** Fetches the free description and photographs for one place. */
@@ -193,6 +197,7 @@ export function PlaceDeck({
   onPendingChange,
   onWantPhotos,
   photosLoading = false,
+  photoError = null,
   paidPhotoUsd,
   onWantSummary,
   summaryLoading = false,
@@ -203,8 +208,10 @@ export function PlaceDeck({
   lane,
   onCardChange,
 }: PlaceDeckProps) {
-  const [cursor, setCursor] = useState(0);
   const [photo, setPhoto] = useState(0);
+  /** Places flicked past this sitting, in the order they were skipped. Lives at
+   *  the top because the queue below filters on it. */
+  const [skippedIds, setSkippedIds] = useState<string[]>([]);
   // *Every* photograph that has painted, not just the most recent one. Holding a
   // single url meant the pulsing placeholder came back on every tap through the
   // gallery -- including for pictures already decoded and sitting in the browser
@@ -260,12 +267,21 @@ export function PlaceDeck({
   );
   // `main_queue` already excludes decided places, but a decision made in this session
   // has not been refetched yet — and the other lanes do not exclude them at all — so
-  // filtering here is what makes any lane dealable.
+  // filtering here is what makes any lane dealable. Skips leave the queue the same
+  // way, on the session list alone: a skip records nothing server-side, so without
+  // this a skipped card sat in the deck for ever — and skipping the *last* card
+  // clamped the cursor there, with no way to ever reach the end-of-lane panel where
+  // the reconsider lists live.
   const queue = entries.filter(
     (entry) =>
-      !decided.has(entry.place_id) && !decidedNames.has(nameKey(nameOf(entry.place_id))),
+      !decided.has(entry.place_id) &&
+      !decidedNames.has(nameKey(nameOf(entry.place_id))) &&
+      !skippedIds.includes(entry.place_id),
   );
-  const entry = queue[Math.min(cursor, Math.max(0, queue.length - 1))];
+  // The card in front is the first of those left: decided cards leave on the
+  // refetch, skipped ones leave through the session list the moment the skip
+  // lands, so there is no cursor to move and none to forget.
+  const entry = queue[0];
   const card = entry ? ranking.cards[entry.place_id] : undefined;
   const currentId = entry?.place_id;
   const [shownCard, setShownCard] = useState<string | undefined>(currentId);
@@ -289,7 +305,7 @@ export function PlaceDeck({
   // first byte costs two round trips. Warming the next photo and the next card's
   // first photo while this one is being read is the whole fix for "images load very
   // slowly": by the time the card turns over, the bytes are in the browser cache.
-  const nextEntry = queue[Math.min(cursor + 1, queue.length - 1)];
+  const nextEntry = queue[1];
   const nextUrl = nextEntry
     ? insights[nextEntry.place_id]?.photo_gallery?.[0]?.uri
       ?? summaries[nextEntry.place_id]?.image_url
@@ -309,7 +325,8 @@ export function PlaceDeck({
 
   // The gallery index belongs to the card, so it resets with the card.
   //
-  // It was reset in `decide()` and `advance()` only — the two ways *this* deck advances —
+  // It was reset in `decide()` and the skip path of `act()` only — the two ways *this*
+  // deck moves on — and not when the card in front changed for any other reason. Changing lane is the
   // and not when the card in front changed for any other reason. Changing lane is the
   // common one, which is why the owner's repro was "after deciding twenty from City
   // Icons and switching category": tap twice through a gallery, switch lane, and the new
@@ -409,6 +426,9 @@ export function PlaceDeck({
   if (!entry || !card) {
     const rejectedChoices = choices.filter((c) => c.action === "not_for_trip");
     const shortlistedChoices = choices.filter((c) => c.action === "interested" || c.action === "must_do");
+    // A skip that has since been decided is not a skip any more; the choices
+    // are the truth, so the session list is read through them.
+    const skippedHere = skippedIds.filter((id) => !choices.some((c) => c.place_id === id));
     return (
       <div className="place-deck-exhausted">
         <div className="deck-finished-card">
@@ -452,6 +472,43 @@ export function PlaceDeck({
                     </button>
                   ))}
               </div>
+            </div>
+          ) : null}
+          {skippedHere.length > 0 ? (
+            <div className="deck-reconsider">
+              <h4 className="money-eyebrow">{copy("deck_skipped", language)}</h4>
+              {/* The same rows as the reconsider list, because they are the same
+                  question wearing a different past: these were never decided, so
+                  "add to list" is the whole action. Deciding one removes it from
+                  here on the next render, which is why the list filters against
+                  the choices rather than mutating its own. */}
+              <ul className="deck-reconsider-list">
+                {skippedHere.map((placeId) => (
+                  <li className="deck-reconsider-row" key={placeId}>
+                    <div className="deck-reconsider-detail">
+                      <span className="deck-reconsider-name">{nameOf(placeId)}</span>
+                      <button
+                        className="deck-reconsider-view"
+                        onClick={() => {
+                          setOpenRow(placeId);
+                          onCardChange?.(placeId);
+                        }}
+                        title={copy("deck_view_details_hint", language)}
+                        type="button"
+                      >
+                        {copy("deck_view_details", language)}
+                      </button>
+                    </div>
+                    <button
+                      className="deck-reconsider-btn"
+                      onClick={() => onDecide(placeId, "interested", null)}
+                      type="button"
+                    >
+                      + {copy("deck_add_back", language)}
+                    </button>
+                  </li>
+                ))}
+              </ul>
             </div>
           ) : null}
           {rejectedChoices.length > 0 ? (
@@ -532,11 +589,6 @@ export function PlaceDeck({
     // the same index is already the next card. Advancing too would skip one.
   }
 
-  function advance(step: number) {
-    setPhoto(0);
-    setCursor((current) => Math.min(Math.max(0, current + step), queue.length - 1));
-  }
-
   /** Commit whatever the gesture, an arrow key or a button asked for. */
   function act(action: Intent) {
     // Nothing lands on a card that has not finished arriving, whatever asked. The
@@ -545,8 +597,18 @@ export function PlaceDeck({
     // reaches this function directly — and a decision recorded against a place the owner
     // never saw is the one outcome none of those guards may miss.
     if (cardPending) return;
-    if (action === "skip") advance(1);
-    else if (action === "must_do") decide("must_do");
+    if (action === "skip") {
+      // A skip records nowhere else — and it leaves the queue through the session
+      // list alone, exactly like a decided card leaves through the refetch: no
+      // cursor move at all, because the same index is already the next card.
+      // Advancing too would deal past one. The record is what makes the skip
+      // reachable again at the end of the lane, which is where "wait, what was
+      // the one I flicked past?" used to dead-end.
+      if (entry) {
+        setSkippedIds((ids) => (ids.includes(entry.place_id) ? ids : [...ids, entry.place_id]));
+      }
+      setPhoto(0);
+    } else if (action === "must_do") decide("must_do");
     else if (action === "interested") decide("interested");
     else if (action === "maybe") decide("maybe");
     else if (action === "not_for_trip") decide("not_for_trip", null);
@@ -656,9 +718,12 @@ export function PlaceDeck({
       >
         <header className="place-deck-head">
           <p className="setup-hint">
+            {/* The card in front is always the first of those left — decided and
+                skipped cards leave the queue, so the counter counts the deal:
+                one past the number already gone, out of where the lane started. */}
             {copy("deck_position", language)
-              .replace("{current}", String(Math.min(cursor + 1, queue.length)))
-              .replace("{total}", String(queue.length))}
+              .replace("{current}", String(entries.length - queue.length + 1))
+              .replace("{total}", String(entries.length))}
           </p>
           {/* "76% match", not "71.5/100". The number is the same one -- the formula is
               already out of 100, so this is a relabel and not a rescale -- but a score
@@ -782,15 +847,26 @@ export function PlaceDeck({
             })()}
             {/* The glyph is decoration and says so; this sentence is the actual answer to
                 "why is there no picture", and a reader who cannot see the glyph still
-                needs it. */}
-            <p className="setup-hint">{copy("photo_none_kind", language)}</p>
+                needs it. A failed photograph ask answers here too — inside the card,
+                where the question was asked — and it belongs to this card alone: the
+                caller scopes it, so the next card never inherits the last one's
+                refusal. */}
+            <p className="setup-hint">
+              {photoError ?? copy("photo_none_kind", language)}
+            </p>
           </div>
         ) : (
           <div className="place-deck-photo place-deck-photo-empty">
-            <p className="setup-hint">{copy("photos_load_themselves", language)}</p>
-            <button onClick={() => onWantSummary(entry.place_id)} type="button">
-              {copy("load_descriptions", language)}
-            </button>
+            {photoError ? (
+              <p className="setup-hint">{photoError}</p>
+            ) : (
+              <>
+                <p className="setup-hint">{copy("photos_load_themselves", language)}</p>
+                <button onClick={() => onWantSummary(entry.place_id)} type="button">
+                  {copy("load_descriptions", language)}
+                </button>
+              </>
+            )}
           </div>
         )}
 
@@ -963,7 +1039,7 @@ export function PlaceDeck({
         <button
           className="choice-skip"
           disabled={cardPending}
-          onClick={() => advance(1)}
+          onClick={() => act("skip")}
           type="button"
         >
           {copy("deck_skip", language)}

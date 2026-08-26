@@ -27,7 +27,7 @@ import { useLanguage } from "../i18n/LanguageProvider";
 import { mergeNames, placeAltName, placeName } from "../shared/names";
 import { distinguishingCons, evaluatedFeasibility } from "../shared/cards";
 import { PHOTO_THIN_AT, galleryFor } from "../shared/photos";
-import { mapPlaces } from "../shared/map";
+import { mapPlaces, shortlistNumber } from "../shared/map";
 import { loadBasemap } from "../shared/basemap";
 import { PlaceMap } from "./PlaceMap";
 
@@ -47,7 +47,12 @@ const PHOTO_LIMIT = 5;
 /** How far ahead of the deck to fetch free descriptions. Wikidata and Wikipedia are
  *  free and uncapped, but each place is several requests, so this stays a window
  *  that slides rather than a sweep of all 832 candidates. */
-const PREFETCH_AHEAD = 6;
+// Warm this many cards past the one in front. Six left the seventh card cold on
+// a phone network: a swipe every few seconds outran the fetches, and the "some
+// cards load forever" report was the deck catching up. Ten covers a deal of the
+// 20-card page; the fetches are free (Wikidata/Wikipedia) and sequential per
+// batch, so the cost is a slightly longer tail of background requests.
+const PREFETCH_AHEAD = 10;
 /** How much of a lane the deck offers before asking whether you want more.
  *
  *  Twenty is about a sitting: enough that the strongest of a lane are all in reach, few
@@ -55,6 +60,11 @@ const PREFETCH_AHEAD = 6;
  *  ordered, so the first twenty of City Icons are its twenty best — on the owner's Hong
  *  Kong catalogue that lane holds **431**, which is a catalogue, not a shortlist. */
 const LANE_PAGE = 20;
+
+/** How long the undo offer stays up after a card decision. Long enough to read
+ *  the name and reach the button; short enough that it never outlives the
+ *  screen state it describes. */
+const UNDO_OFFER_MS = 6_000;
 /** How many audit rows to build at a time. The Taipei catalogue is 849 places, and
  *  the table listing them sits inside a `<details>` that is closed on arrival —
  *  which hides it without costing any less: React builds every row, the browser
@@ -170,6 +180,18 @@ export function PlacesPage() {
   // Decided in this session but not yet confirmed by a refetch. Emptied naturally: once
   // the stored choices carry the same ids, the union below is unchanged by it.
   const [justDecided, setJustDecided] = useState<Set<string>>(() => new Set());
+  // The last card decision, for the one undo the deck never had. A swipe flew the
+  // card away and committed instantly, so a thumb that slipped — or a card read a
+  // beat too late — could only be repaired by hunting the shortlist drawer for a
+  // row the reporter had not connected to the card that had gone. `previous` is
+  // what the place was before this decision, or null when it had none, so undoing
+  // restores exactly what was there rather than a guessed default.
+  const [lastDecision, setLastDecision] = useState<{
+    placeId: string;
+    name: string;
+    action: string;
+    previous: string | null;
+  } | null>(null);
   // The coverage report is collapsed on arrival and holds the audit table and the
   // raw provider JSON. `<details>` hides its contents; it does not avoid building
   // them, so both were mounted on every visit to this screen. Rendering them on
@@ -515,6 +537,38 @@ export function PlacesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [upcoming.join(","), summaries.data, fetchSummary.isPending]);
 
+  // The same name the deck card shows — catalog merged with the Wikidata label,
+  // which arrives only once descriptions have loaded, so the toast gains the
+  // proper name then rather than never.
+  function nameOf(placeId: string): string {
+    const found = catalog.find((item) => item.place_id === placeId);
+    if (!found) return placeId;
+    return placeName(
+      mergeNames(found, summaries.data?.[placeId]?.names),
+      language,
+      found.name,
+    );
+  }
+
+  // The undo offer lives a few seconds, long enough to read the name and press,
+  // short enough to be gone before it is stale about what it would reverse.
+  useEffect(() => {
+    if (!lastDecision) return;
+    const timer = window.setTimeout(() => setLastDecision(null), UNDO_OFFER_MS);
+    return () => window.clearTimeout(timer);
+  }, [lastDecision]);
+
+  function undoLastDecision() {
+    if (!lastDecision) return;
+    const { placeId, previous } = lastDecision;
+    if (previous) {
+      saveChoice.mutate({ action: previous, reason: null, placeId });
+    } else {
+      clearChoice.mutate(placeId);
+    }
+    setLastDecision(null);
+  }
+
   if (setup.isPending || discovery.isPending || choices.isPending) {
     return <Loading language={language} />;
   }
@@ -639,7 +693,13 @@ export function PlacesPage() {
   // read, and the button looked like it had done nothing. It renders beside the card
   // instead, which is the same rule the comfort accept follows: a message about a
   // thing belongs next to the thing.
-  const cardError = enrich.error;
+  //
+  // Scoped to the card it was asked for, and it renders *inside* the deck card: a
+  // refusal that stayed after the card was gone answered a question nobody was
+  // asking any more, and a warning floating above the deck read as the deck being
+  // broken rather than one place having no photograph.
+  const cardError =
+    enrich.error && enrich.variables === cardId ? errorText(enrich.error, language) : null;
 
   /* Discovery is two Overpass blocks and runs 30-90s; paced at the low end so the
      lines are not still arriving after the places are. Named rather than inlined
@@ -965,11 +1025,6 @@ export function PlacesPage() {
               and owns no decision buttons — the deck is where deciding happens, and two
               sets of them under one card was the duplication reported earlier. */}
           <div className={mode === "deck" ? "places-workspace" : undefined} hidden={busy}>
-          {cardError ? (
-            <p className="field-error places-card-error" aria-live="polite">
-              ⚠ {errorText(cardError, language)}
-            </p>
-          ) : null}
           {mode === "deck" ? (
             <>
               {/* The tab counts the whole lane and the deck deals a page of it, so
@@ -999,28 +1054,25 @@ export function PlacesPage() {
                     language,
                   );
                 }}
-                nameOf={(placeId) => {
-                  // `catalog` is already the normalized candidate list on this page.
-                  // Merged with the Wikidata label, which is the only English name most
-                  // of this catalogue has -- and which arrives only once descriptions
-                  // have been loaded, so the heading gains it then rather than never.
-                  const found = catalog.find((item) => item.place_id === placeId);
-                  if (!found) return placeId;
-                  return placeName(
-                    mergeNames(found, summaries.data?.[placeId]?.names),
-                    language,
-                    found.name,
-                  );
-                }}
+                nameOf={nameOf}
                 onDecide={(placeId, action, reason) => {
                   // Counted here rather than derived from `choices`, because a decision
                   // made on the list view or on an earlier page is not a card taken out
                   // of *this* one.
+                  const previous =
+                    choices.data?.find((item) => item.place_id === placeId)?.action ?? null;
+                  setLastDecision({
+                    placeId,
+                    action,
+                    previous,
+                    name: nameOf(placeId),
+                  });
                   saveChoice.mutate({ action, reason, placeId });
                 }}
                 onCardChange={setCardId}
                 onWantPhotos={(placeId) => enrich.mutate(placeId)}
                 photosLoading={enrich.isPending}
+                photoError={cardError}
                 onWantSummary={(placeId) => fetchCard.mutate(placeId)}
                 paidPhotoUsd={paidAllowed ? paidEstimate : null}
                 summaryLoading={summaryPendingForCard}
@@ -1132,6 +1184,7 @@ export function PlacesPage() {
               <PlaceMap
                 basemap={basemap.data ?? null}
                 focusId={selectedId}
+                focusStar
                 headingLevel={4}
                 outline={outline.data ?? null}
                 tripId={tripId}
@@ -1275,9 +1328,13 @@ export function PlacesPage() {
                   <ul>
                     {kept.map((item) => {
                       const found = catalog.find((value) => value.place_id === item.place_id);
+                      // The pin's number, on the row: the map draws "3" beside a place,
+                      // so the list that names the same place wears the same figure.
+                      const pin = shortlistNumber(item.place_id, selectedChoices, catalog);
                       return (
                         <li key={item.place_id}>
                           <span>
+                            {pin ? <span className="shortlist-pin">{pin}</span> : null}
                             {found
                               ? placeName(
                                   mergeNames(found, summaries.data?.[item.place_id]?.names),
@@ -1375,6 +1432,18 @@ export function PlacesPage() {
         </p>
       ) : null}
       {!selectedChoices.length ? <p className="setup-hint">{copyFrom("OPTIMIZER_CODE_TEXT", "no_places_chosen", language)}</p> : null}
+      {lastDecision ? (
+        <div aria-live="polite" className="deck-toast" role="status">
+          <span>
+            {lastDecision.action === "not_for_trip"
+              ? copyFormat("deck_toast_passed", language, { name: lastDecision.name })
+              : copyFormat("deck_toast_kept", language, { name: lastDecision.name })}
+          </span>
+          <button onClick={undoLastDecision} type="button">
+            {copy("deck_undo", language)}
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }

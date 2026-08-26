@@ -22,7 +22,9 @@ export interface MapPlace {
  * Here rather than beside the component because two screens build the same list and a
  * lint rule rightly keeps component files to components — but the real reason is that
  * the numbering *is* the contract: the map's label and the list's label have to be the
- * same string or neither picture can be read against the other.
+ * same string or neither picture can be read against the other. The shortlist rows
+ * read the same numbers through `shortlistNumber`, which is why this lives in a
+ * module both can import.
  *
  * A place with no coordinates yields no point. It stays on the shortlist; it simply
  * cannot be drawn, which is a gap rather than a reason to drop it.
@@ -45,6 +47,22 @@ export function mapPlaces(
       };
     })
     .filter((point): point is MapPlace => point !== null);
+}
+
+/** The number a shortlisted place wears on the map, for the list rows that name the
+ *  same place. One-based over the whole kept order — the same figure the pin draws —
+ *  and undefined for a place that cannot be drawn, which is exactly the case where
+ *  the list must not pretend a pin exists. */
+export function shortlistNumber(
+  placeId: string,
+  order: { place_id: string }[],
+  catalog: DiscoveryCandidate[],
+): number | undefined {
+  const index = order.findIndex((item) => item.place_id === placeId);
+  if (index < 0) return undefined;
+  const found = catalog.find((value) => value.place_id === placeId);
+  if (!found || found.latitude === null || found.longitude === null) return undefined;
+  return index + 1;
 }
 
 /**

@@ -60,12 +60,17 @@ interface Tab {
 export function StageTabs({
   journey,
   language,
+  navOpen = false,
   onMore,
   stage,
   tripId,
 }: {
   journey: Journey | undefined;
   language: Language;
+  /** Whether the More sheet this bar opens is currently showing. The button
+   *  stays mounted underneath the sheet so the dialog has a focused element to
+   *  return to on close; these attributes keep that invisible button honest. */
+  navOpen?: boolean;
   onMore: () => void;
   /** The route segment currently open, so a tab can own a screen it does not link to. */
   stage: string;
@@ -145,7 +150,14 @@ export function StageTabs({
           </Link>
         );
       })}
-      <button className="stage-tab" onClick={onMore} type="button">
+      <button
+        aria-controls="stage-nav"
+        aria-expanded={navOpen}
+        aria-haspopup="dialog"
+        className="stage-tab"
+        onClick={onMore}
+        type="button"
+      >
         <MoreHorizontal aria-hidden="true" size={19} />
         <span className="stage-tab-label">{copy("tab_more", language)}</span>
       </button>

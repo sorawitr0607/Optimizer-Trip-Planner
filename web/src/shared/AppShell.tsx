@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Check, Compass, Languages, Lock, Plus, SunMoon, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate, useParams } from "react-router";
 
 import { rpc, type Journey, type Trip } from "../api/client";
@@ -51,8 +51,19 @@ export function AppShell() {
   const navigate = useNavigate();
   const location = useLocation();
   const [navOpen, setNavOpen] = useState(false);
+  const sheetDialog = useRef<HTMLDialogElement>(null);
   // Which navigation surface exists at all -- see `useMediaQuery`.
   const phone = useMediaQuery(PHONE);
+
+  // The sheet is a native dialog, so the browser owns the hard parts: focus moves
+  // into it on open and back to the More button on close, and Escape fires
+  // `cancel`, which the dialog element handles below. React only states intent.
+  useEffect(() => {
+    const node = sheetDialog.current;
+    if (!node) return;
+    if (navOpen && !node.open) node.showModal();
+    if (!navOpen && node.open) node.close();
+  }, [navOpen]);
 
   // Every route change starts at the top.
   //
@@ -131,35 +142,11 @@ export function AppShell() {
     );
   }
 
-  return (
-    <div className="app-shell">
-      {/* Context, in the top zone where a phone expects to find it — which trip is
-          open and where it goes. It replaced a hamburger that carried the trip name:
-          the name was the only thing that button said, while what it actually did was
-          navigate, so it answered "which trip" in the place a reader looks for "where
-          am I" and hid all ten destinations behind itself. Navigation now lives in
-          `<StageTabs>` at the bottom, and this states the trip and nothing else.
-          derives-from: element 17 .sidebar-title as .trip-bar */}
-      {phone ? (
-        <header className="trip-bar">
-          <Compass aria-hidden="true" size={17} />
-          <span className="trip-bar-name">{trip?.name || copy("app_name", language)}</span>
-          {trip ? <span className="trip-bar-where">{trip.destination}</span> : null}
-        </header>
-      ) : null}
-      {/* On a phone the sidebar *is* the More sheet, rendered only while it is open —
-          so the tab bar and the full stage list are never in the document together and
-          exactly one of them can claim to be the current page. */}
-      {/* derives-from: element 17 .sidebar as .sidebar. The citation used to sit on the
-          phone hamburger, which this change deleted — taking the sidebar's parity pair
-          with it. It belongs on the sidebar itself. */}
-      {!phone || navOpen ? (
-      <aside className={`sidebar${navOpen ? " open" : ""}${phone ? " sheet" : ""}`} id="stage-nav">
-        {phone ? (
-          <button className="sheet-close" onClick={() => setNavOpen(false)} type="button">
-            <X aria-hidden="true" size={18} /> {copy("nav_close", language)}
-          </button>
-        ) : null}
+  // The one navigation body, drawn twice: as the desktop sidebar and as the
+  // phone sheet. Extracted so the two surfaces cannot drift — they are the
+  // same stages, the same states, the same controls by construction.
+  const sidebarBody = (
+    <>
         {/* `end`, or `/trips` matches every `/trips/:id/*` descendant and both of these
             links claim `aria-current="page"` on every stage screen. Three elements
             claiming to be the current page is three contradictory answers to a screen
@@ -295,15 +282,69 @@ export function AppShell() {
             {copy(theme === "dark" ? "theme_to_light" : "theme_to_dark", language)}
           </button>
         </div>
-      </aside>
+    </>
+  );
+
+  return (
+    <div className="app-shell">
+      {/* Context, in the top zone where a phone expects to find it — which trip is
+          open and where it goes. It replaced a hamburger that carried the trip name:
+          the name was the only thing that button said, while what it actually did was
+          navigate, so it answered "which trip" in the place a reader looks for "where
+          am I" and hid all ten destinations behind itself. Navigation now lives in
+          `<StageTabs>` at the bottom, and this states the trip and nothing else.
+          derives-from: element 17 .sidebar-title as .trip-bar */}
+      {phone ? (
+        <header className="trip-bar">
+          <Compass aria-hidden="true" size={17} />
+          <span className="trip-bar-name">{trip?.name || copy("app_name", language)}</span>
+          {trip ? <span className="trip-bar-where">{trip.destination}</span> : null}
+        </header>
+      ) : null}
+      {/* On a phone the sidebar *is* the More sheet, opened as a native `<dialog>` —
+          so the tab bar and the full stage list are never both claiming the page, and
+          the sheet gets for free what the hand-rolled fixed panel never had: focus
+          moved in on open, returned to the More button on close, and Escape. */}
+      {/* derives-from: element 17 .sidebar as .sidebar. The citation used to sit on the
+          phone hamburger, which this change deleted — taking the sidebar's parity pair
+          with it. It belongs on the sidebar itself. */}
+      {phone ? null : (
+        <aside className="sidebar" id="stage-nav">
+          {sidebarBody}
+        </aside>
+      )}
+      {phone ? (
+        <dialog
+          aria-label={copy("tab_more", language)}
+          className="sidebar sheet-dialog"
+          id="stage-nav"
+          onCancel={(event) => {
+            // Chrome closes on Escape before React sees a usable transition, so
+            // the same state-led path serves Escape, the close button and a
+            // stage link.
+            event.preventDefault();
+            setNavOpen(false);
+          }}
+          onClose={() => setNavOpen(false)}
+          ref={sheetDialog}
+        >
+          <button className="sheet-close" onClick={() => setNavOpen(false)} type="button">
+            <X aria-hidden="true" size={18} /> {copy("nav_close", language)}
+          </button>
+          {sidebarBody}
+        </dialog>
       ) : null}
       <main className="stage-main">
         <Outlet />
       </main>
-      {phone && !navOpen ? (
+      {/* Mounted while the sheet is open too: the More button keeps its DOM
+          identity, which is what the dialog returns focus to on close. The
+          sheet covers it, so nothing double-taps through the backdrop. */}
+      {phone ? (
         <StageTabs
           journey={journey.data}
           language={language}
+          navOpen={navOpen}
           onMore={() => setNavOpen(true)}
           stage={stage}
           tripId={tripId}

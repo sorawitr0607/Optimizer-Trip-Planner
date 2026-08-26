@@ -7,6 +7,8 @@ import { ComfortTradeoffs } from "./ComfortTradeoffs";
 import { BuildStages } from "./BuildStages";
 import { BUILD_STAGES, PREVIEW_STAGES } from "../shared/buildStages";
 import { StayPlanner } from "./StayPlanner";
+import { addDays } from "../shared/dates";
+import { wholeDraftWithDates } from "../shared/setupDraft";
 
 import {
   ApiError,
@@ -19,6 +21,7 @@ import {
   type PlanVersionRecord,
   type Trip,
   type ComfortTradeoffReport,
+  type SetupDraft,
 } from "../api/client";
 import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
 import { Loading } from "../shared/Loading";
@@ -170,6 +173,12 @@ export function OptimizePage() {
   const choices = useQuery({
     queryKey: ["candidate_choices", tripId],
     queryFn: () => rpc<CandidateChoice[]>("list_candidate_choices", { trip_id: tripId }),
+  });
+  // The stored setup draft, read for "add a day and rebuild": lengthening the trip
+  // here is a date write plus the usual build, not a round trip through the wizard.
+  const stored = useQuery({
+    queryKey: ["setup", tripId],
+    queryFn: () => rpc<SetupDraft | null>("get_setup", { trip_id: tripId }),
   });
   const preview = useQuery({
     queryKey: ["plan_preview", tripId],
@@ -388,10 +397,55 @@ export function OptimizePage() {
     onError: (error) => setRefusal(error instanceof ApiError ? error.code : String(error)),
   });
 
+  // "The trip has no remaining time capacity" has two ways out that do not involve
+  // leaving this screen, and both end in the same rebuild the big button runs:
+  //
+  // - **Add a day.** The dates are the owner's, so the optimizer cannot invent one —
+  //   but extending the range here is a date write plus that same rebuild, not a
+  //   round trip through the setup wizard that threw away everything on screen.
+  //   `wholeDraftWithDates` rebuilds the whole payload by hand because `save_setup`
+  //   defaults what it is not sent; see its own docstring.
+  // - **Cut the places that do not fit.** The same `not_for_trip` write the deck
+  //   makes, for every place the refusal listed, then the same rebuild. This is the
+  //   "variant that cuts some" the owner asked for: the plan that fits, without the
+  //   places that could not.
+  const addDayAndRebuild = useMutation({
+    mutationFn: async () => {
+      const basics = stored.data?.snapshot.data.trip_basics;
+      const start = basics?.start_date;
+      const end = basics?.end_date;
+      if (!start || !end) throw new ApiError("setup_missing", {});
+      await rpc<SetupDraft>("save_setup", {
+        trip_id: tripId,
+        ...wholeDraftWithDates(stored.data ?? null, start, addDays(end, 1)),
+      });
+      await queryClient.invalidateQueries({ queryKey: ["setup", tripId] });
+      await autoResolveAndGenerate.mutateAsync();
+    },
+    onError: (error) => setRefusal(error instanceof ApiError ? error.code : String(error)),
+  });
+  const cutUnfitAndRebuild = useMutation({
+    mutationFn: async (placeIds: string[]) => {
+      for (const placeId of placeIds) {
+        await rpc("save_candidate_choice", {
+          trip_id: tripId,
+          place_id: placeId,
+          action: "not_for_trip",
+          reason: null,
+        });
+      }
+      await queryClient.invalidateQueries({ queryKey: ["candidate_choices", tripId] });
+      await autoResolveAndGenerate.mutateAsync();
+    },
+    onError: (error) => setRefusal(error instanceof ApiError ? error.code : String(error)),
+  });
+
   const building =
     generate.isPending ||
     autoResolveAndGenerate.isPending ||
     buyThenGenerate.isPending ||
+    addDayAndRebuild.isPending ||
+    cutUnfitAndRebuild.isPending ||
     acceptRoutes.isPending ||
     acceptAll.isPending ||
     dropAndRebuild.isPending;
@@ -717,6 +771,7 @@ export function OptimizePage() {
           that refuses. Renders nothing when no budget is exceeded or agreed. */}
       <ComfortTradeoffs language={language} tripId={tripId} />
 
+        <div hidden={building}>
       {variant ? (
         <>
           <label className="optimize-variant">
@@ -764,10 +819,19 @@ export function OptimizePage() {
           {/* derives-from: element 14 .stat-card as .money-tile, three per
               row rather than five. */}
           <div className="optimize-metrics">
+            {/* Seven of the eight are sums of `duration_minutes` in
+                `_schedule_metrics`; only `scheduled_visits` is a count, so it
+                alone carries no unit -- the same shape the itinerary dayhead
+                already renders. */}
             {METRICS.map((metric) => (
               <div className="money-tile" key={metric}>
                 <span className="money-tile-label">{copy(metric, language)}</span>
-                <strong className="money-tile-value">{variant.metrics[metric] ?? 0}</strong>
+                <strong className="money-tile-value">
+                  {variant.metrics[metric] ?? 0}
+                  {metric === "scheduled_visits" ? null : (
+                    <small> {copy("minutes", language)}</small>
+                  )}
+                </strong>
               </div>
             ))}
           </div>
@@ -863,15 +927,40 @@ export function OptimizePage() {
                 <h2 className="money-eyebrow">{copy("unfit_title", language)}</h2>
                 <p className="setup-hint">{copy("unfit_help", language)}</p>
                 {needsDays.length ? (
-                  <p className="setup-hint">
-                    {copyFormat("unfit_needs_days", language, {
-                      count: needsDays.length,
-                      days: variant.days.length,
-                    })}{" "}
-                    <Link className="primary-link" to={`/trips/${tripId}/setup`}>
-                      {copy("unfit_change_dates", language)}
-                    </Link>
-                  </p>
+                  <>
+                    <p className="setup-hint">
+                      {copyFormat("unfit_needs_days", language, {
+                        count: needsDays.length,
+                        days: variant.days.length,
+                      })}
+                    </p>
+                    {/* Both ways out run the same rebuild as the big button, so both
+                        hide the old draft while it runs. The wizard link is gone on
+                        purpose: it threw away this screen — the refusal, the reasons,
+                        the plan so far — to change one date, and coming back meant
+                        building again from the top. */}
+                    <div className="optimize-actions">
+                      <button
+                        className="setup-primary"
+                        disabled={addDayAndRebuild.isPending || cutUnfitAndRebuild.isPending}
+                        onClick={() => addDayAndRebuild.mutate()}
+                        type="button"
+                      >
+                        {copy("unfit_add_day", language)}
+                      </button>
+                      <button
+                        disabled={addDayAndRebuild.isPending || cutUnfitAndRebuild.isPending}
+                        onClick={() =>
+                          cutUnfitAndRebuild.mutate(needsDays.map((item) => item.place_id ?? ""))
+                        }
+                        type="button"
+                      >
+                        {copyFormat("unfit_cut_places", language, {
+                          count: needsDays.length,
+                        })}
+                      </button>
+                    </div>
+                  </>
                 ) : null}
                 {/* The other way past a route nothing will measure. "Fix routes" asks
                     the routers again, which is right when they were merely busy and
@@ -1059,6 +1148,7 @@ export function OptimizePage() {
           </div>
         </>
       ) : null}
+        </div>
     </section>
   );
 }

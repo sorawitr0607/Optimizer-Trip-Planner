@@ -945,6 +945,24 @@ export function SetupPage() {
           <dd>{trip ? copy(trip.planning_mode, language) : "—"}</dd>
           <dt>{copy("status", language)}</dt>
           <dd>{copy(confirmed ? "confirmed" : "draft", language)}</dd>
+          <dt>{copy("start_date", language)}</dt>
+          <dd>{values.start_date || copy("no_dates", language)}</dd>
+          <dt>{copy("end_date", language)}</dt>
+          <dd>{values.end_date || copy("no_dates", language)}</dd>
+          <dt>{copy("arrival_time", language)}</dt>
+          <dd>{values.arrival_time || "—"}</dd>
+          <dt>{copy("departure_time", language)}</dt>
+          <dd>{values.departure_time || "—"}</dd>
+          <dt>{copy("active_hours", language)}</dt>
+          <dd>
+            {values.active_start && values.active_end
+              ? `${values.active_start}–${values.active_end}`
+              : "—"}
+          </dd>
+          <dt>{copy("accommodation", language)}</dt>
+          <dd>{copyFrom("ACCOMMODATION_TEXT", values.accommodation_status, language)}</dd>
+          <dt>{copy("owner_age", language)}</dt>
+          <dd>{values.owner_age || "—"}</dd>
           <dt>{copy("main_style", language)}</dt>
           <dd>
             {values.main_style.length
@@ -957,12 +975,29 @@ export function SetupPage() {
           <dd>{values.avoid.map((code) => copyFrom("TAG_TEXT", code, language)).join(" · ") || "—"}</dd>
           <dt>{copy("comfort", language)}</dt>
           <dd>{values.comfort.map((code) => copyFrom("TAG_TEXT", code, language)).join(" · ") || "—"}</dd>
-          <dt>{copy("start_date", language)}</dt>
-          <dd>{values.start_date || copy("no_dates", language)}</dd>
-          <dt>{copy("accommodation", language)}</dt>
-          <dd>{copyFrom("ACCOMMODATION_TEXT", values.accommodation_status, language)}</dd>
           <dt>{copy("people", language)}</dt>
           <dd>{1 + values.travellers.length}</dd>
+          {/* One row per traveller, in the order step 4 edits them: confirm
+              writes `confirmed: true` over everything shown here, so an age or
+              a need the wizard validated must be visible at the step that
+              asks "does this look right?". Age 0 is the field's own "not set".
+              */}
+          {values.travellers.map((member, index) => (
+            <div className="setup-review-member" key={member.traveller_id}>
+              <dt>{copy("member", language)} {index + 2}</dt>
+              <dd>
+                {[
+                  member.label.trim() || null,
+                  member.age ? String(member.age) : null,
+                  ...member.tags.map((code) => copyFrom("TAG_TEXT", code, language)),
+                  ...(member.description ? [member.description] : []),
+                  ...(member.must_respect.filter(Boolean)),
+                ]
+                  .filter(Boolean)
+                  .join(" · ") || "—"}
+              </dd>
+            </div>
+          ))}
           <dt>{copy("owner_must", language)}</dt>
           <dd>{values.owner_must_respect.trim() || "—"}</dd>
         </dl>

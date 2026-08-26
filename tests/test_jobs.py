@@ -82,6 +82,61 @@ class JobQueueTest(unittest.TestCase):
         self.queue.claim("w")
         self.assertEqual(self.queue.reap_stale(), 0)
 
+    def _stale(self, job: str) -> None:
+        with self.store.connect() as connection:
+            connection.execute(
+                "UPDATE jobs SET claimed_at = ? WHERE id = ?",
+                ("2000-01-01T00:00:00+00:00", job),
+            )
+
+    def test_a_zombie_runner_cannot_complete_the_job_a_new_attempt_holds(self) -> None:
+        # The reap window exists because a worker can outlive its claim. When the
+        # slow original finally answers, a newer attempt owns the row -- status is
+        # `running` for both, so the fence must be the claim, not the status.
+        job = self.queue.enqueue("discover_places", "T1")
+        self.queue.claim("worker-slow")
+        self._stale(job)
+        self.queue.reap_stale()
+        reclaimed = self.queue.claim("worker-fast")
+        assert reclaimed is not None
+        self.queue.complete(job, {"late": True}, worker_id="worker-slow")
+        row = self.queue.get(job)
+        self.assertEqual(row["status"], RUNNING)
+        self.assertIsNone(row["result_json"])
+        self.assertEqual(row["claimed_by"], "worker-fast")
+
+    def test_the_legitimate_runner_still_completes_through_the_fence(self) -> None:
+        job = self.queue.enqueue("discover_places", "T1")
+        self.queue.claim("w")
+        self.queue.complete(job, {"ok": True}, worker_id="w")
+        row = self.queue.get(job)
+        self.assertEqual(row["status"], DONE)
+        self.assertEqual(json.loads(row["result_json"]), {"ok": True})
+
+    def test_a_late_fail_cannot_flip_a_done_job_back_to_the_queue(self) -> None:
+        # The worse half of the zombie: `fail` requeues while attempts remain, so
+        # an unfenced late failure would resurrect work another worker finished.
+        job = self.queue.enqueue("discover_places", "T1", max_attempts=3)
+        self.queue.claim("worker-a")
+        self.queue.complete(job, {"ok": True}, worker_id="worker-a")
+        self.queue.fail(job, "boom", worker_id="worker-a")
+        self.assertEqual(self.queue.get(job)["status"], DONE)
+
+    def test_reap_finishes_a_job_that_has_run_out_of_attempts(self) -> None:
+        # A payload that kills its worker never reaches `fail`, so the retry
+        # count there is never consulted. The reap is where the cycle would run
+        # forever; it is where the count has to bite.
+        job = self.queue.enqueue("discover_places", "T1", max_attempts=2)
+        self.queue.claim("w1")  # attempts = 1
+        self._stale(job)
+        self.assertEqual(self.queue.reap_stale(), 1)  # still has one to give
+        self.queue.claim("w2")  # attempts = 2
+        self._stale(job)
+        self.assertEqual(self.queue.reap_stale(), 1)
+        row = self.queue.get(job)
+        self.assertEqual(row["status"], FAILED)
+        self.assertIsNotNone(row["finished_at"])
+
     def test_an_empty_queue_returns_nothing_rather_than_blocking(self) -> None:
         self.assertIsNone(self.queue.claim("w"))
 

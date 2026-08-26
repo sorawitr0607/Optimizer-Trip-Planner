@@ -4637,3 +4637,66 @@ Two `scripts/check.py` runs in parallel fail in a way that looks like drift: the
 run's baseline stage read "approved: 2" while the first held the directory. One gate at
 a time. And the stray `FAILED: 1 screen(s) drifted` inside the unit-test stage is
 `test_screen_baseline_gate.py` exercising the failure path — its stdout, not a result.
+## Eight from the phone, 2026-08-26
+
+Owner feedback from testing on the deployment, answered as one batch.
+
+### The refusal that led away
+
+"The trip has no remaining time capacity" offered one remedy: *Change the dates*, a
+link to the setup wizard. Following it threw away the screen — the refusal, the reasons,
+the plan so far — to change one field, and coming back meant starting over. The screen
+now keeps you and offers the two things that actually fix it, both ending in the same
+rebuild the big button runs:
+
+- **Add a day and rebuild** — a date write plus the build. It reads the stored draft and
+  sends it back through `wholeDraftWithDates`, which moved to `shared/setupDraft.ts` so
+  two screens share one list of the fields `save_setup` would otherwise reset.
+- **Drop these N places and rebuild** — the same `not_for_trip` write the deck makes,
+  for every place the refusal listed. The "variant that cuts some" the owner asked for.
+
+And the old draft genuinely hides while any rebuild runs. The `hidden={building}`
+wrapper's comment claimed it covered "the variants, unfit list and reasons" — the div
+actually closed three sections earlier, and everything from the variant picker to the
+confirm button stayed on screen through the build. The wrapper now reaches the end of
+the draft region.
+
+### The warning that outlived its card
+
+A place whose photograph ask failed put a `⚠` banner above the deck — and react-query
+keeps a mutation's error until the next run, so the banner stayed while you moved on,
+answering a question nobody was asking and reading as the deck being broken. The error
+is scoped to the card it was asked for and renders inside the photo area now, beside
+the glyph that already explains a free-source absence.
+
+### Smaller, verified live where the browser could reach
+
+- **Rank areas to stay** had a bare rotating line for a job that runs a minute or
+  more. It gets the counted `Thinking` like every other long wait.
+- **The shortlist's numbers** existed only on the map pins, though `mapPlaces`' own
+  docstring says the map's label and the list's label have to match. The rows wear
+  the same figure now (`shortlistNumber` in `shared/map.ts`).
+- **The detail card's pin** read "1" — its number in a list of one. It draws a ★ in
+  the accent colour on the card's map (`focusStar`), and only there: the itinerary's
+  pin numbers are the timeline order and keep them.
+- **Deck prefetch** deepened from six cards to ten; swiping at phone speed outran the
+  free summary fetches and the seventh card arrived cold.
+
+### The timeout that was really a queue
+
+"Rebuild and got timed out sometime": the worker log shows one preview at 128.7s and
+seven consecutive route sweeps at 119–136s. A preview enqueued behind that depth sits
+unclaimed past the five-minute silence deadline — the client is correct to report it,
+and the fix is not patience. The sweep bound and the preview clamp already shrink the
+queue; the crash guard keeps a DNS flap (five in this log alone) from turning it into
+a crash-loop. What to watch is the queue's `waited` column, as the last entry said.
+
+### The capture that taught one more CSS rule
+
+Approving the baselines for this batch failed 44 phone screens at up to 67% drift:
+the new More-sheet `<dialog>` painted open on every one of them. Cause: the element
+keeps `.sidebar` for its palette, and that class's `display: flex` — an author style —
+overrides the UA's `dialog:not([open]) { display: none }`. A closed dialog rendered
+like an open one. `.tour-backdrop` already carried the guard rule; the sheet has it
+now too, and the diff image that caught it is exactly what the approve-then-look rule
+is for.

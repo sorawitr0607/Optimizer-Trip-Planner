@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ApiError, rpc, type StayAreaReport } from "../api/client";
 import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
 import { placeAltName, placeName } from "../shared/names";
+import { Thinking } from "../shared/Thinking";
 
 /**
  * Where to stay, for an owner who has not booked. `WF-040`.
@@ -83,10 +84,15 @@ export function StayAreas({ tripId, language, onOutcome, onChosen, onRanking }: 
         {recommend.isPending ? copy("loading", language) : copy("rank_areas", language)}
       </button>
       {recommend.isPending ? (
-        <p aria-live="polite" aria-busy="true" className="thinking">
-          <span className="thinking-dot" />
-          <span>{copy("ranking_areas", language)}</span>
-        </p>
+        // The counted wait, not a bare dot: this is a queued job that scores every
+        // neighbourhood against the transit map and runs a minute or more, and a
+        // rotating line with no elapsed figure is the exact "it looks like it hung"
+        // the counter was added to answer.
+        <Thinking
+          expectSeconds={75}
+          language={language}
+          lines={[copy("ranking_areas", language)]}
+        />
       ) : null}
       {/* Choosing an area geocodes it before it can be stored, so the tick is a network
           round trip and not a local toggle. It disabled itself and said nothing, which
