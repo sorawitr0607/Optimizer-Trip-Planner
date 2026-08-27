@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import uuid
+import zlib
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
@@ -77,6 +78,33 @@ QUEUED, RUNNING, DONE, FAILED = "queued", "running", "done", "failed"
 #: of integers, and `pgstore._SCHEMA_LOCK_KEY` already occupies the single-key form; the
 #: two-key form used here cannot collide with it whatever the second key hashes to.
 _ENQUEUE_LOCK_NAMESPACE = 0x6A6F6273  # "jobs"
+
+
+def _enqueue_lock_key(trip_id: str, kind: str, payload_json: str) -> int:
+    """One int4 identifying the operation being de-duplicated.
+
+    **Hashed here rather than by Postgres `hashtext`, and that is the bug fix.** The
+    first version passed the joined key as text for `hashtext` to hash, separated by
+    `\x00` so no combination of parts could be mistaken for another. Postgres text
+    cannot contain a NUL byte: every `enqueue` on the hosted deployment raised
+    `DataError`, which is all four queued operations, and "find places" was reported as
+    an internal error within the hour.
+
+    Nothing caught it. `is_postgres` is false on SQLite, so the whole statement is
+    unreachable in the suite, and the probe that was run against the real database
+    checked the *function overload* with a harmless string rather than the key the code
+    actually builds — it proved the wrong half.
+
+    So the value crossing the wire is a plain integer now, which has no encoding rules to
+    violate, and the separator can be anything. `crc32` because it is stdlib and
+    deterministic across processes, which `hash()` is not — `PYTHONHASHSEED` differs per
+    interpreter and two workers must derive the same lock for the same operation. Masked
+    to 31 bits so it is always a positive int4, which is what the two-key form takes;
+    one bit of a lock partition is worth nothing.
+    """
+
+    joined = f"{trip_id}\x1f{kind}\x1f{payload_json}"
+    return zlib.crc32(joined.encode("utf-8")) & 0x7FFFFFFF
 
 
 def _claim_guard(worker_id: str | None) -> str:
@@ -196,8 +224,11 @@ class JobQueue:
         with self.store.connect() as connection:
             if self.is_postgres:
                 connection.execute(
-                    "SELECT pg_advisory_xact_lock(?, hashtext(?))",
-                    (_ENQUEUE_LOCK_NAMESPACE, f"{trip_id}\x00{kind}\x00{payload_json}"),
+                    "SELECT pg_advisory_xact_lock(?, ?)",
+                    (
+                        _ENQUEUE_LOCK_NAMESPACE,
+                        _enqueue_lock_key(trip_id, kind, payload_json),
+                    ),
                 )
             existing = connection.execute(
                 "SELECT id FROM jobs WHERE trip_id = ? AND kind = ? AND payload_json = ?"

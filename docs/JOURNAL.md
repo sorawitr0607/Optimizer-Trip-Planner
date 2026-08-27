@@ -4876,3 +4876,52 @@ rebuild costs money the recorded total does not show". Not any more: the failed 
 its own US$0.070005 and took the cumulative from US$0.799241 to US$0.869246, while the
 successful retry added nothing. The ledger now over-attributes to failures rather than
 under-reporting them — read it rather than reasoning about it.
+
+## The lock key Postgres would not accept, 2026-08-27
+
+Shipped the previous entry's work, and the owner pressed "find places" on a new Tokyo
+trip and got `internal error`. Mine, within the hour.
+
+`enqueue`'s new advisory lock handed Postgres the joined identity as **text** for
+`hashtext` to hash, separated by `\x00` so no combination of trip, kind and payload could
+be mistaken for another:
+
+```python
+"SELECT pg_advisory_xact_lock(?, hashtext(?))",
+(_ENQUEUE_LOCK_NAMESPACE, f"{trip_id}\x00{kind}\x00{payload_json}")
+```
+
+**Postgres text cannot contain a NUL byte.** Every `enqueue` raised `DataError` before
+inserting anything — so all four queued operations were dead on the deployment, not only
+discovery, and the queue holds no row for any of the owner's attempts, which is exactly
+what a pre-insert failure looks like.
+
+Two failures of verification, and the second is the one worth keeping.
+
+The suite could not catch it: `is_postgres` is false on SQLite, so that statement is
+unreachable from every one of the 681 tests that were green when it shipped. Fair enough.
+
+But it **was** verified against the real database, and the verification was worthless. The
+probe asked whether `pg_advisory_xact_lock(%s, hashtext(%s))` resolved to a real function
+overload — a question I had genuinely been unsure about, since psycopg sends a Python int
+as `bigint` and there is no `(bigint, integer)` form. It passed, and the passing probe read
+as "the lock works". It had proved the overload and said nothing about the argument, because
+the string it sent was `"probe"`. **Exercise the value the code actually constructs**; a
+live probe with a stand-in input is a live probe of the wrong thing.
+
+`_enqueue_lock_key` hashes in Python with `zlib.crc32` now, masked to 31 bits so it is
+always a positive int4. What crosses the wire is an integer, which has no encoding rules
+to violate, and the separator stops mattering. `crc32` rather than `hash()` because the
+latter varies with `PYTHONHASHSEED` and two workers must derive the same lock for the same
+operation.
+
+The guard is `PostgresEnqueueTest`, which fakes a store whose class is *named*
+`PostgresStore` — that is all `JobQueue` checks — and records the statements and parameters
+the Postgres branch sends. Restoring the bug fails it on all five real operations, naming
+the NUL bytes in the message. The branch has coverage now, which it never had.
+
+One thing the incident confirmed working: the 08-26 job rows had vanished from the queue,
+which looked alarming until the trips table explained it — the owner deleted that trip, and
+`delete_trip` discarded its jobs, which is the fix from the previous entry doing its job.
+The queue still holds rows for several trips that no longer exist; those are the historical
+orphans from before it, and clearing them is a separate decision.

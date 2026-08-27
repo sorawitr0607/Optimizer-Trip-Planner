@@ -216,6 +216,18 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   de-duplication the method exists for. The lock is transaction-scoped and keyed on
   (trip, kind, payload), so only presses that could actually collide wait. Chosen over a
   partial unique index because that is a schema migration against a hosted database.
+- **Postgres text cannot contain a NUL byte, and the Postgres branch of `enqueue` has no
+  test coverage — those two facts together broke the deployment.** The lock key was first
+  passed as text for `hashtext` to hash, joined on `\x00`; every `enqueue` raised
+  `DataError`, which is all four queued operations, and "find places" answered
+  `internal error`. `is_postgres` is false on SQLite so the suite could not reach the
+  statement, and the probe run against the real database checked the *function overload*
+  with a harmless literal rather than the key the code builds — it proved the wrong half.
+  `_enqueue_lock_key` hashes with `zlib.crc32` in Python now, so what crosses the wire is
+  an integer with no encoding rules to violate, and `tests/test_jobs.py`'s
+  `PostgresEnqueueTest` fakes a store named `PostgresStore` to assert the parameters of
+  every Postgres-only statement. **When verifying against a live database, exercise the
+  value the code actually constructs.**
 - **Deleting a trip must clear its jobs, and `store.delete_trip` cannot.** The queue is
   deliberately outside `SCHEMA_VERSION` with no foreign key to `trips`, so the ordered
   table list — and the test that enumerates every table with a foreign key — can never

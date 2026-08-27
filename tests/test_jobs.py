@@ -9,6 +9,7 @@ against a real Postgres.
 from __future__ import annotations
 
 import hashlib
+from contextlib import contextmanager
 import json
 import tempfile
 import unittest
@@ -303,6 +304,128 @@ class PayloadAllowlistTest(unittest.TestCase):
 
         for kind in HANDLERS:
             self.assertIn(kind, PAYLOAD_KEYS)
+
+
+class RecordingCursor:
+    def __init__(self, rows: list) -> None:
+        self._rows = rows
+        self.rowcount = len(rows)
+
+    def fetchone(self):
+        return self._rows[0] if self._rows else None
+
+    def fetchall(self):
+        return self._rows
+
+
+class RecordingConnection:
+    """Answers the two reads `JobQueue` makes and records everything it is sent."""
+
+    def __init__(self, log: list) -> None:
+        self.log = log
+
+    def execute(self, sql: str, parameters=()):  # noqa: ANN001 - mirrors the real shape
+        self.log.append((" ".join(sql.split()), tuple(parameters)))
+        if "information_schema.columns" in sql:
+            return RecordingCursor([{"ready": 1}])
+        if sql.lstrip().upper().startswith("SELECT ID FROM JOBS"):
+            return RecordingCursor([])
+        return RecordingCursor([])
+
+    def rollback(self) -> None:
+        pass
+
+    def commit(self) -> None:
+        pass
+
+
+class PostgresStore:
+    """Named for what `JobQueue` checks: `type(store).__name__`.
+
+    A fake rather than a real database, because the point is to see the *parameters*
+    the Postgres branch sends. No SQLite store can stand in — `is_postgres` is false
+    there, so that branch is unreachable in the suite, which is the whole reason the
+    bug below reached the deployment.
+    """
+
+    def __init__(self) -> None:
+        self.log: list = []
+
+    @contextmanager
+    def connect(self):
+        yield RecordingConnection(self.log)
+
+
+class PostgresEnqueueTest(unittest.TestCase):
+    """The Postgres-only statements in `enqueue`, which nothing else in here reaches.
+
+    **This is the test that was missing.** The advisory lock's first version handed
+    Postgres the joined key as *text* for `hashtext` to hash, separated by `\\x00` so no
+    combination of parts could be confused with another. Postgres text cannot contain a
+    NUL byte, so every `enqueue` on the deployment raised `DataError` — all four queued
+    operations — and "find places" was reported as an internal error.
+
+    The suite could not catch it: `is_postgres` is false on SQLite. The probe run against
+    the real database could have, and did not, because it checked the function overload
+    with a harmless literal instead of the key the code builds. So the guard is here, on
+    the parameters, where a text encoding rule cannot apply to an integer.
+    """
+
+    def setUp(self) -> None:
+        self.store = PostgresStore()
+        self.queue = JobQueue(self.store)
+        self.assertTrue(self.queue.is_postgres, "the fake must select the Postgres branch")
+        self.store.log.clear()
+
+    def _lock_call(self) -> tuple:
+        locks = [entry for entry in self.store.log if "pg_advisory_xact_lock" in entry[0]]
+        self.assertEqual(1, len(locks), "expected exactly one advisory lock per enqueue")
+        return locks[0]
+
+    def test_the_lock_is_taken_before_the_look_and_the_insert(self) -> None:
+        self.queue.enqueue("discover_places", "T1", {})
+
+        kinds = [entry[0] for entry in self.store.log]
+        lock = next(i for i, sql in enumerate(kinds) if "pg_advisory_xact_lock" in sql)
+        look = next(i for i, sql in enumerate(kinds) if sql.startswith("SELECT id FROM jobs"))
+        insert = next(i for i, sql in enumerate(kinds) if sql.startswith("INSERT INTO jobs"))
+        self.assertLess(lock, look)
+        self.assertLess(look, insert)
+
+    def test_every_lock_parameter_is_an_integer_postgres_will_accept(self) -> None:
+        for kind, payload in (
+            ("discover_places", {}),
+            ("discover_places", {"force_refresh": True}),
+            ("refresh_routes", {"max_passes": 12}),
+            ("generate_plan_preview", {"time_limit_seconds": 20}),
+            ("recommend_areas", {}),
+        ):
+            self.store.log.clear()
+            self.queue.enqueue(kind, "trip_641cfab02de04f818cca6078c2c151ba", payload)
+            _, parameters = self._lock_call()
+            with self.subTest(kind=kind, payload=payload):
+                for value in parameters:
+                    # An int has no encoding rules to break. A str would reintroduce
+                    # exactly the class of failure this test exists for.
+                    self.assertIsInstance(value, int)
+                    self.assertNotIsInstance(value, bool)
+                    # `pg_advisory_xact_lock(int, int)` is the two-key form.
+                    self.assertGreaterEqual(value, -(2**31))
+                    self.assertLess(value, 2**31)
+
+    def test_the_lock_key_identifies_the_operation_and_nothing_coarser(self) -> None:
+        from travel_planner.jobs import _enqueue_lock_key
+
+        base = _enqueue_lock_key("T1", "discover_places", "{}")
+        self.assertEqual(base, _enqueue_lock_key("T1", "discover_places", "{}"))
+        self.assertNotEqual(base, _enqueue_lock_key("T2", "discover_places", "{}"))
+        self.assertNotEqual(base, _enqueue_lock_key("T1", "refresh_routes", "{}"))
+        self.assertNotEqual(base, _enqueue_lock_key("T1", "discover_places", '{"a": 1}'))
+        # Deterministic across interpreters, which `hash()` is not: two workers must
+        # derive the same lock for the same operation.
+        self.assertEqual(1955478708, _enqueue_lock_key(
+            "trip_641cfab02de04f818cca6078c2c151ba", "discover_places", "{}"
+        ))
 
 
 class HealthEndpointTest(unittest.TestCase):
