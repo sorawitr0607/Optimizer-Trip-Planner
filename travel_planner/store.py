@@ -1259,6 +1259,28 @@ class SQLiteStore:
             )
         return route
 
+    def list_route_pair_keys(self, trip_id: str) -> list[dict[str, Any]]:
+        """Which pairs are held, and until when — without the routes themselves.
+
+        `list_route_snapshots` is `SELECT *`, and a route carries its drawn geometry:
+        five hundred of them is most of a megabyte. Two callers only want to know
+        *whether* a pair is already measured, and reading the paths to answer that is
+        the same mistake `get_latest_discovery_report` was split out to stop — egress is
+        billed, and this trip has already passed Supabase's free 5.5 GB once.
+
+        No hash to verify, because nothing here comes out of a snapshot: these four
+        columns are the row's own, and anything wanting the route itself must go through
+        `list_route_snapshots` and its verification.
+        """
+
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT origin_id, destination_id, mode, expires_at"
+                " FROM route_snapshots WHERE trip_id = ?",
+                (trip_id,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
     def list_route_snapshots(self, trip_id: str) -> list[dict[str, Any]]:
         with self.connect() as connection:
             rows = connection.execute(

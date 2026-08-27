@@ -10,6 +10,7 @@ from unittest.mock import patch
 from travel_planner.actions import MAX_ROUTE_REQUESTS, PlannerActions
 from travel_planner.providers import (
     GoogleTimeZoneProvider,
+    OpenRouteServiceMatrixProvider,
     OpenRouteServiceProvider,
     ProviderBudgetExceeded,
     ProviderUnavailable,
@@ -47,6 +48,47 @@ class FakeRouteProvider:
             "status": "verified",
             "provider": "openrouteservice",
         }
+
+
+class FakeMatrixProvider:
+    """Every pair at once, the way OpenRouteService's matrix endpoint answers."""
+
+    name = "openrouteservice_matrix"
+    operation = "openrouteservice:matrix"
+    cache_ttl_days = 14
+    mode = "walk"
+    MAX_LOCATIONS = 50
+
+    def __init__(self, *, unavailable: bool = False) -> None:
+        self.calls = 0
+        self.unavailable = unavailable
+
+    def covers(self, points: list[dict]) -> bool:
+        return 2 <= len(points) <= self.MAX_LOCATIONS
+
+    def matrix(self, points: list[dict]) -> list[dict]:
+        self.calls += 1
+        if self.unavailable:
+            raise ProviderUnavailable("OpenRouteService is unreachable: URLError")
+        return [
+            {
+                "origin_id": origin["place_id"],
+                "destination_id": destination["place_id"],
+                "mode": "walk",
+                "duration_minutes": 9,
+                "walking_minutes": 9,
+                "distance_m": 700,
+                "geometry": [],
+                "transfers": 0,
+                "boarding_buffer_minutes": 0,
+                "experience_evidence": [],
+                "status": "verified",
+                "provider": self.name,
+            }
+            for origin in points
+            for destination in points
+            if origin["place_id"] != destination["place_id"]
+        ]
 
 
 class FakePlaceProvider:
@@ -120,6 +162,88 @@ class NormalizationTest(unittest.TestCase):
         with patch.dict(os.environ, {"OPENROUTESERVICE_API_KEY": ""}):
             with self.assertRaisesRegex(ProviderUnavailable, "not configured"):
                 self.provider.route(self.origin, self.destination)
+
+
+class MatrixNormalizationTest(unittest.TestCase):
+    """What the matrix endpoint really returns, and what must never be invented from it.
+
+    Checked against the live endpoint while this was written: 23 points, 506 pairs, one
+    request, 1.59 seconds. These pin the awkward shapes that probe cannot produce on
+    demand.
+    """
+
+    def setUp(self) -> None:
+        self.provider = OpenRouteServiceMatrixProvider()
+        self.points = [
+            {"place_id": name, "latitude": 25.0, "longitude": 121.5}
+            for name in ("a", "b", "c")
+        ]
+
+    def test_a_null_cell_is_skipped_rather_than_defaulted(self) -> None:
+        """`null` is the router saying it could not walk that pair — an island, a point
+        it could not snap to a path. A fabricated duration is exactly what
+        `ROUTE_UNVERIFIED` exists to stop the optimizer scheduling against."""
+
+        routes = self.provider.normalize(
+            {"durations": [[0, 60, None], [60, 0, 60], [None, 60, 0]]},
+            points=self.points,
+        )
+
+        self.assertEqual(4, len(routes))
+        self.assertNotIn(("a", "c"), [(r["origin_id"], r["destination_id"]) for r in routes])
+
+    def test_a_missing_distance_costs_the_metres_and_not_the_route(self) -> None:
+        routes = self.provider.normalize(
+            {"durations": [[0, 60, 60], [60, 0, 60], [60, 60, 0]]}, points=self.points
+        )
+
+        self.assertEqual(6, len(routes))
+        self.assertEqual({0}, {route["distance_m"] for route in routes})
+
+    def test_a_sub_minute_pair_never_rounds_to_zero(self) -> None:
+        """The same floor the directions path applies: a zero-minute leg reads as
+        teleportation to the scheduler."""
+
+        routes = self.provider.normalize(
+            {"durations": [[0, 20], [20, 0]]}, points=self.points[:2]
+        )
+
+        self.assertEqual({1}, {route["duration_minutes"] for route in routes})
+
+    def test_a_matrix_carries_no_path_and_says_so(self) -> None:
+        routes = self.provider.normalize(
+            {"durations": [[0, 60], [60, 0]]}, points=self.points[:2]
+        )
+
+        for route in routes:
+            self.assertEqual([], route["geometry"])
+            # Still `verified` — the router measured this walk, it just did not draw it.
+            self.assertEqual("verified", route["status"])
+            self.assertEqual("openrouteservice_matrix", route["provider"])
+
+    def test_an_unusable_payload_is_refused_rather_than_defaulted(self) -> None:
+        for payload in ({}, {"durations": [[0, 1]]}, {"durations": "no"}):
+            with self.assertRaises(ProviderUnavailable):
+                self.provider.normalize(payload, points=self.points)
+        # A matrix where nothing at all could be measured is a refusal too, not an
+        # empty success -- the caller would read zero stored as "already covered".
+        with self.assertRaises(ProviderUnavailable):
+            self.provider.normalize(
+                {"durations": [[0, None], [None, 0]]}, points=self.points[:2]
+            )
+
+    def test_a_trip_too_large_for_one_request_is_declined_before_it_is_sent(self) -> None:
+        """`covers` is what keeps the seed from becoming its own failure mode: past the
+        endpoint's ceiling the directions sweep simply does the work as it always did."""
+
+        many = [
+            {"place_id": f"p{index}", "latitude": 25.0, "longitude": 121.5}
+            for index in range(self.provider.MAX_LOCATIONS + 1)
+        ]
+
+        self.assertTrue(self.provider.covers(self.points))
+        self.assertFalse(self.provider.covers(many))
+        self.assertFalse(self.provider.covers(self.points[:1]))
 
 
 class RouteRefreshTest(unittest.TestCase):
@@ -347,6 +471,152 @@ class RouteRefreshTest(unittest.TestCase):
         # first two by identifier.
         self.assertEqual(2, len(fetched))
         self.assertLessEqual(max(fetched), sorted(every_pair)[1])
+
+    def test_one_pass_reaches_every_place_before_it_refines_any(self) -> None:
+        """Coverage is what the cap must buy first, and it must buy it in one pass.
+
+        `served` was read once from the stored routes, so on a trip's first sweep the
+        flag was `False` for every pair and the order collapsed to pure nearest-first.
+        Four places in one district and one on the edge of the city therefore spend the
+        whole cap downtown, and the outlier waits for a *later* sweep to be seen as
+        starved. Measured on the owner's Tokyo trip, that cost one extra sweep of ~128
+        seconds: burst one reached 22 of 23 places, burst two the last. The other eight
+        sweeps of that twenty-minute build were the loop's stop condition, not this.
+
+        The cap here is eight requests against twenty ordered pairs: exactly enough to
+        reach all five places both ways -- four promotions of two directions each --
+        and nowhere near enough to measure them all.
+        """
+
+        cluster = [
+            {"place_id": f"near_{index}", "latitude": 25.03 + index / 10_000,
+             "longitude": 121.56 + index / 10_000}
+            for index in range(4)
+        ]
+        outlier = {"place_id": "far", "latitude": 25.21, "longitude": 121.72}
+        points = cluster + [outlier]
+
+        with patch.object(self.actions, "_route_points", return_value=points), \
+                patch("travel_planner.actions.MAX_ROUTE_REQUESTS", 8):
+            report = self.actions.refresh_routes(self.trip.trip_id)
+
+        reached = {place_id for call in self.provider.calls for place_id in call}
+        self.assertEqual({point["place_id"] for point in points}, reached)
+        # The far place is measured in *both* directions, because `_best_route` reads a
+        # stored leg one way only — arriving somewhere the plan cannot leave is still a
+        # broken segment.
+        self.assertIn("far", [origin for origin, _ in self.provider.calls])
+        self.assertIn("far", [destination for _, destination in self.provider.calls])
+        # And the sweep says the plan is unblocked while plenty of pairs remain, which is
+        # the pair of facts `collectRouteEvidence` stops on.
+        self.assertEqual(0, report["places_unserved"])
+        self.assertGreater(report["skipped_over_cap"], 0)
+
+    def test_one_matrix_request_measures_every_pair_and_unblocks_the_plan(self) -> None:
+        """The twenty-minute build, answered in one request.
+
+        The directions endpoint takes one call per ordered pair at ~2.1s each, so the
+        owner's Tokyo trip spent nine queued jobs and 1200 seconds on 554 of its 506
+        pairs. The matrix endpoint measures them all at once, and coverage is what the
+        browser's loop stops on -- so the plan is buildable before the drawn lines are.
+        """
+
+        matrix = FakeMatrixProvider()
+        self.actions.matrix_provider = matrix
+        count = len(self.places)
+
+        report = self.actions.refresh_routes(self.trip.trip_id)
+
+        self.assertEqual(1, matrix.calls)
+        self.assertEqual(count * (count - 1), report["seeded_from_matrix"])
+        # Nobody is left ROUTE_UNVERIFIED, which is the fact `collectRouteEvidence` stops
+        # on, and it cost one request rather than one per pair.
+        self.assertEqual(0, report["places_unserved"])
+        self.assertEqual(count * (count - 1), len(self.actions.list_routes(self.trip.trip_id)))
+
+    def test_the_directions_sweep_upgrades_a_matrix_row_to_a_drawn_line(self) -> None:
+        """A matrix row is a time with no path, so it is fresh and still upgradeable.
+
+        Treating it as cached would seed every pair once and leave the map drawing
+        straight lines for ever; treating a *drawn* route that way is correct, and
+        `test_a_second_refresh_reads_the_cache_and_makes_no_call` pins that half.
+        """
+
+        matrix = FakeMatrixProvider()
+        self.actions.matrix_provider = matrix
+        # Two requests a pass against six pairs, so the upgrade takes three sweeps and
+        # can be watched happening rather than completing inside the seeding call.
+        with patch("travel_planner.actions.MAX_ROUTE_REQUESTS", 2):
+            first = self.actions.refresh_routes(self.trip.trip_id)
+            self.assertEqual(6, first["seeded_from_matrix"])
+            self.assertEqual(2, len(self.provider.calls))
+
+            second = self.actions.refresh_routes(self.trip.trip_id)
+            # Nothing left to seed; every later sweep is the directions endpoint
+            # replacing matrix rows with real paths, two at a time.
+            self.assertEqual(1, matrix.calls)
+            self.assertEqual(0, second["seeded_from_matrix"])
+            self.assertEqual(4, len(self.provider.calls))
+
+            self.actions.refresh_routes(self.trip.trip_id)
+            self.assertEqual(6, len(self.provider.calls))
+            # And once every pair carries a drawn line they are genuinely cached.
+            self.actions.refresh_routes(self.trip.trip_id)
+            self.assertEqual(6, len(self.provider.calls))
+
+    def test_an_unreachable_matrix_leaves_the_directions_sweep_doing_the_work(self) -> None:
+        """Degrade, never refuse: the worst case is the behaviour that came before."""
+
+        matrix = FakeMatrixProvider(unavailable=True)
+        self.actions.matrix_provider = matrix
+
+        report = self.actions.refresh_routes(self.trip.trip_id)
+
+        self.assertEqual(1, matrix.calls)
+        self.assertEqual(0, report["seeded_from_matrix"])
+        self.assertEqual(report["pairs_needed"], report["fetched"])
+        self.assertEqual(0, report["places_unserved"])
+
+    def test_the_sweep_clock_stops_a_pass_and_not_only_a_new_pass(self) -> None:
+        """`ROUTE_SWEEP_SECONDS` bounded the wrong thing and therefore bounded nothing.
+
+        It was read only where a *new pass* would start, and one pass of sixty at the
+        provider's measured ~2.1s a route is about 128 seconds — so the sixty-second
+        budget was always already spent by the first check, every job was exactly one
+        pass, and the multi-pass sweep it was added to bound never ran a second pass in
+        production. Read inside the request loop it does what its docstring says.
+
+        The clock here is a fake that jumps past the deadline after two routes.
+        """
+
+        # First call sets the deadline at 0 + 60. The next two are the loop's checks at
+        # index 1 and 2, so route 1 and route 2 go out and route 3 finds the clock spent.
+        ticks = iter([0.0, 0.0, 0.0])
+        with patch("travel_planner.actions.monotonic", lambda: next(ticks, 1e6)):
+            report = self.actions.refresh_routes(self.trip.trip_id)
+
+        self.assertEqual(3, len(self.provider.calls))
+
+        # It stopped early, and it did not lie about what is left: the pairs it never
+        # asked for come back as outstanding rather than vanishing from the count.
+        self.assertLess(len(self.provider.calls), report["pairs_needed"])
+        self.assertEqual(
+            report["pairs_needed"] - report["fetched"], report["skipped_over_cap"]
+        )
+        self.assertTrue(report["more_pairs"])
+
+    def test_the_first_request_of_a_pass_always_goes_out(self) -> None:
+        """Otherwise a spent clock means a job that claims the worker and does nothing,
+        and the caller's loop turns into a spin."""
+
+        # The deadline is set from the first tick and every later read is past it, so
+        # only the index-0 request — the one the guard deliberately exempts — goes out.
+        ticks = iter([0.0])
+        with patch("travel_planner.actions.monotonic", lambda: next(ticks, 1e6)):
+            report = self.actions.refresh_routes(self.trip.trip_id)
+
+        self.assertEqual(1, len(self.provider.calls))
+        self.assertEqual(1, report["fetched"])
 
     def test_routing_needs_two_located_places(self) -> None:
         empty = PlannerActions(

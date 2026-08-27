@@ -51,6 +51,7 @@ from .providers import (
     RevisionInterpretationUnavailable,
     OpenMeteoTimeZoneProvider,
     GtfsTransitProvider,
+    OpenRouteServiceMatrixProvider,
     OpenRouteServiceProvider,
     OsmAreaAmenitiesProvider,
     OsmMetroProvider,
@@ -137,15 +138,19 @@ def bounded_preview_seconds(value: float) -> int:
 #: waiting 482 seconds to be claimed, and the browser reported `job_timeout` on a build
 #: that had not started. Discovery waited 885.
 #:
-#: It bounds when a *new* pass may start, not when the job must end, so one job is this
-#: budget plus whatever pass is already running — about 110 seconds against a provider
-#: pacing at 1.8s a route. That is the number to compare with the client's five-minute
-#: patience, and it leaves room for a short job to sit behind one and still be claimed.
+#: It bounds when a new **request** may start, not only when a new pass may. Checked
+#: only between passes it never fired once: one pass of `MAX_ROUTE_REQUESTS` at the
+#: provider's measured ~2.1s a route is about 128 seconds, so the budget was always
+#: already spent by the first check, every job was exactly one pass, and the multi-pass
+#: sweep this constant was added to bound has never run a second pass in production.
+#: Read from inside the loop it does the job it describes: one job is this budget plus
+#: the single request in flight, whatever the provider's pacing turns out to be.
 #:
-#: The effect is per-pass on a slow provider and several passes on a fast or cached one,
-#: which is the right shape either way: the same work as before the sweep existed when
-#: routes are expensive, and the round-trips saved when they are not. Nothing is lost
-#: when it stops early — `more_pairs` says so and the caller comes straight back.
+#: That is the number to compare with the client's five-minute patience, and it leaves
+#: room for a short job to sit behind one and still be claimed. Nothing is lost when it
+#: stops early — the unasked pairs are reported as `skipped_over_cap`, `more_pairs` says
+#: so, and the caller comes back. Since the matrix seed the caller usually has no reason
+#: to: every pair already has a time, and these requests buy the drawn line.
 ROUTE_SWEEP_SECONDS = 60.0
 
 #: How many capped passes one `refresh_routes` sweep may make. Forty-one places need
@@ -172,6 +177,7 @@ class PlannerActions:
         *,
         place_provider: Any = None,
         route_provider: Any = None,
+        matrix_provider: Any = None,
         transit_provider: Any = None,
         area_amenities_provider: Any = None,
         opening_window_provider: Any = None,
@@ -191,6 +197,10 @@ class PlannerActions:
         ensure_owner_column(self.store)
         self.place_provider = place_provider
         self.route_provider = route_provider
+        # The whole-trip walking matrix. Separate from `route_provider` because it answers
+        # a different question -- every pair's time at once, with no path -- and a test
+        # wanting one of them rarely wants the other.
+        self.matrix_provider = matrix_provider
         # Injected the same way every other provider is, so a test can hand over a
         # small feed instead of reaching for a city-sized one.
         self.transit_provider = transit_provider
@@ -204,6 +214,7 @@ class PlannerActions:
         self.hours_provider = hours_provider
         self.card_provider = card_provider
         self.interpreter = interpreter
+        self._job_queue: Any = None
 
     def create_trip(
         self,
@@ -440,9 +451,29 @@ class PlannerActions:
             "choice_count": len(choices),
         }
 
+    def _jobs(self) -> Any:
+        """The job queue over this store, built once and only when something needs it.
+
+        Imported here rather than at module scope: `actions` is the coordinator and the
+        queue is an interface concern, so a local run that never queues anything never
+        pays for the table. `JobQueue`'s DDL is idempotent, so building it late is safe.
+        """
+
+        if self._job_queue is None:
+            from .jobs import JobQueue
+
+            self._job_queue = JobQueue(self.store)
+        return self._job_queue
+
     def delete_trip(self, trip_id: str) -> None:
         if self.store.get_trip(trip_id) is None:
             raise PlannerRefusal("unknown_trip", trip_id=trip_id)
+        # The queue sits outside `SCHEMA_VERSION` with no foreign key to `trips`, so
+        # `store.delete_trip`'s table list cannot reach it and never did: a deleted trip
+        # left its queued jobs for a worker to claim and fail on, `max_attempts` times
+        # each. Cleared *first*, so a failure here leaves a trip that still exists rather
+        # than jobs pointing at one that does not.
+        self._jobs().discard_trip(trip_id)
         self.store.delete_trip(trip_id)
 
     def save_setup(
@@ -3181,7 +3212,21 @@ class PlannerActions:
         by propagating. Only the waiting is gone.
 
         `max_passes` defaults to 1, so every existing caller is unchanged.
+
+        **Seeded from the matrix first.** One request measures every pair, so the plan
+        stops waiting on a sweep to become buildable; the passes below then upgrade those
+        pairs to drawn routes, nearest first. See `_seed_routes_from_matrix`.
         """
+
+        # Read once and handed to both. `_route_points` walks every candidate choice,
+        # and the seed running before the sweep would otherwise pay for it twice on
+        # every press.
+        points = self._route_points(trip_id)
+        seeded = 0 if force else self._seed_routes_from_matrix(trip_id, points)
+        if seeded and progress is not None:
+            # The seed is real stored work and the screen's routes stage counts stored
+            # routes, so it says so rather than appearing to sit still for a second.
+            progress(seeded)
 
         provider = self.route_provider or OpenRouteServiceProvider()
         # `force` refetches pairs the cache already holds, so the pass list never
@@ -3189,7 +3234,9 @@ class PlannerActions:
         # is the only safe reading of "force" here.
         passes = 1 if force else max(1, min(int(max_passes), MAX_ROUTE_PASSES))
 
-        base = 0
+        # The seed is already stored, so the running count starts there rather than at
+        # zero -- a routes stage that reported 506 and then 10 would be counting down.
+        base = seeded
 
         def relay(within_pass: int) -> None:
             if progress is not None:
@@ -3197,9 +3244,10 @@ class PlannerActions:
 
         deadline = monotonic() + ROUTE_SWEEP_SECONDS
         result = self._refresh_routes_with(
-            provider, trip_id, force=force, on_stored=relay
+            provider, trip_id, force=force, on_stored=relay, deadline=deadline,
+            points=points,
         )
-        stored = int(result["fetched"])
+        stored = seeded + int(result["fetched"])
         if progress is not None:
             progress(stored)
         run = 1
@@ -3216,7 +3264,8 @@ class PlannerActions:
                 break
             base = stored
             result = self._refresh_routes_with(
-                provider, trip_id, force=force, on_stored=relay
+                provider, trip_id, force=force, on_stored=relay, deadline=deadline,
+                points=points,
             )
             stored += int(result["fetched"])
             if progress is not None:
@@ -3226,6 +3275,7 @@ class PlannerActions:
         # The last pass's view of the trip, with the totals that describe the whole
         # sweep rather than only its final leg -- `fetched` is what the caller counts.
         result["fetched"] = stored
+        result["seeded_from_matrix"] = seeded
         result["passes_run"] = run
         # Whether asking again would do anything. The last pass left pairs over its cap
         # and was still finding them, so the sweep stopped early rather than finished.
@@ -3233,6 +3283,84 @@ class PlannerActions:
             result["skipped_over_cap"] and result["fetched"]
         )
         return result
+
+    def _seed_routes_from_matrix(
+        self, trip_id: str, points: list[dict[str, Any]]
+    ) -> int:
+        """Measure every pair in one request, and return how many were stored.
+
+        This is the answer to the twenty-minute build. `_refresh_routes_with` asks the
+        directions endpoint once per ordered pair at ~2.1 seconds each, so coverage of a
+        real trip is a sequence of two-minute jobs the browser waits through — nine of
+        them and 1200 seconds on the owner's Tokyo trip, still unfinished. One matrix
+        request measures the same 506 pairs at once.
+
+        **Degrades, never refuses.** Every failure here leaves the trip exactly as it was
+        and the directions sweep below does the work as it always did: no key, a trip too
+        large for one request, an unreachable service, a matrix with nothing measurable
+        in it. That is what makes seeding safe to try first — the worst case is the old
+        behaviour, and the reply says `seeded_from_matrix: 0`.
+
+        Only pairs with **no unexpired route at all** are written. A leg the directions
+        sweep has already drawn holds a real path, and overwriting it with a matrix row
+        would trade a line on the map for nothing.
+        """
+
+        provider = self.matrix_provider or OpenRouteServiceMatrixProvider()
+        if not provider.covers(points):
+            return 0
+
+        now = datetime.now(timezone.utc)
+        fresh_at = now.isoformat()
+        # This provider's own mode only. The store keys a snapshot by (origin,
+        # destination, **mode**) and a trip carries transit legs beside its walking
+        # ones, so counting both against the walking pair total would call a trip
+        # complete while walking pairs were still missing — and the ceiling below is a
+        # count, so it would silently skip the seed rather than fail.
+        # Keys, not routes: this only needs to know *whether* a pair is held, and
+        # `list_route_snapshots` would fetch every drawn path to answer it.
+        held = {
+            (route["origin_id"], route["destination_id"])
+            for route in self.store.list_route_pair_keys(trip_id)
+            if route["expires_at"] > fresh_at and route["mode"] == provider.mode
+        }
+        # Nothing to seed: every pair this provider could answer for is already held.
+        if len(held) >= len(points) * (len(points) - 1):
+            return 0
+
+        try:
+            # Charged once for the request, not once per pair -- which is what the
+            # endpoint bills and `openrouteservice:matrix` has always been priced as.
+            # Before the call, like every other paid path: a refusal that is not
+            # recorded is a refusal that gets bought again.
+            self._spend(
+                operation=str(provider.operation),
+                count=1,
+                trip_id=trip_id,
+                detail={"places": len(points)},
+            )
+            routes = provider.matrix(points)
+        except ProviderBudgetExceeded:
+            raise
+        except ProviderUnavailable:
+            return 0
+
+        stored = 0
+        expires_at = (
+            now + timedelta(days=int(getattr(provider, "cache_ttl_days", 14)))
+        ).isoformat()
+        for route in routes:
+            if (route["origin_id"], route["destination_id"]) in held:
+                continue
+            self.store.upsert_route_snapshot(
+                trip_id=trip_id,
+                route=route,
+                provider=str(provider.name),
+                retrieved_at=fresh_at,
+                expires_at=expires_at,
+            )
+            stored += 1
+        return stored
 
     def refresh_transit_routes(
         self, trip_id: str, *, force: bool = False
@@ -3540,16 +3668,22 @@ class PlannerActions:
         now = datetime.now(timezone.utc)
         if cache and datetime.fromisoformat(cache.expires_at) > now:
             return dict(cache.snapshot.as_dict().get("counts") or {}), True
-        try:
-            counts = provider.counts(shortlist)
-        except ProviderUnavailable:
-            return {}, False
+        # Before the call, like every other paid path in this file. It was after, which
+        # meant the cap was consulted only once the request had already been made — the
+        # one operation that could cross a spent cap rather than be refused by it. This
+        # one is priced at US$0.00 so nothing was ever overspent, and that is exactly why
+        # it went unnoticed: the ordering is the invariant, not the amount, and the next
+        # operation written from this one as a template would not be free.
         self._spend(
             operation=str(provider.operation),
             count=1,
             trip_id=trip_id,
             detail={"areas": len(shortlist)},
         )
+        try:
+            counts = provider.counts(shortlist)
+        except ProviderUnavailable:
+            return {}, False
         self.store.put_provider_cache(
             ProviderCacheEntry(
                 provider=str(provider.name),
@@ -3576,11 +3710,17 @@ class PlannerActions:
         *,
         force: bool = False,
         on_stored: Callable[[int], None] | None = None,
+        deadline: float | None = None,
+        points: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         trip = self.store.get_trip(trip_id)
         if trip is None:
             raise PlannerRefusal("unknown_trip", trip_id=trip_id)
-        points = self._route_points(trip_id)
+        # The selected places do not change during a sweep, so `refresh_routes` reads
+        # them once and every pass shares that. The transit path passes nothing and
+        # reads its own.
+        if points is None:
+            points = self._route_points(trip_id)
         if len(points) < 2:
             raise PlannerRefusal("insufficient_geocoded_places", minimum=2)
 
@@ -3616,15 +3756,68 @@ class PlannerActions:
         # So served-ness outranks distance, and nearest-first still orders within each
         # group — the relevance win that sort was written for is untouched. It converges:
         # once a starved place has a route it joins the second group.
-        served = {place_id for key in existing for place_id in key[:2]}
+        #
+        # It converged too slowly, because `served` was decided **once, from the stored
+        # routes**, and never moved as the list was built. On a trip's first sweep nothing
+        # is stored, so the flag is `False` for every pair, the order collapses to pure
+        # nearest-first, and the sixty requests cluster downtown exactly as they did
+        # before this sort existed — the outliers wait for a *later sweep* to see them as
+        # unserved. Measured on the owner's Tokyo trip by grouping the stored routes by
+        # retrieval minute: burst one reached 22 of 23 places, burst two the twenty-third.
+        # One sweep of ~128 seconds spent on one place.
+        #
+        # This is the *smaller* half of the twenty-minute build — the loop asking until
+        # every pair was measured rather than until every place was reached is the other
+        # eight bursts. Keep the two apart; the first diagnosis blamed this for all of it.
+        #
+        # Promoting a pair the moment it would reach a place nothing ahead of it has
+        # reached converges in **one** pass: at most one promoted pair per place, so
+        # every place holds a route inside `len(points)` requests. That is what
+        # `_has_incident_usable_route` asks for, and therefore what decides whether the
+        # plan can schedule the place at all. Everything after it is refinement, which is
+        # worth having and is not worth waiting for.
+        served = {
+            place_id
+            for key, route in existing.items()
+            # An expired route is not evidence — `list_routes` drops it and the optimizer
+            # never sees it — so a place whose only route has lapsed is unserved here too,
+            # or it would be passed over for a refinement pair it does not need yet.
+            if route["expires_at"] > now.isoformat()
+            for place_id in key[:2]
+        }
         pairs.sort(
             key=lambda pair: (
-                pair[0]["place_id"] in served and pair[1]["place_id"] in served,
                 _distance_metres(pair[0], pair[1]),
                 pair[0]["place_id"],
                 pair[1]["place_id"],
             )
         )
+        promoted: set[tuple[str, str]] = set()
+        covered = set(served)
+        for pair in pairs:
+            left, right = pair[0]["place_id"], pair[1]["place_id"]
+            if left in covered and right in covered:
+                continue
+            covered.update((left, right))
+            # Both ways. `optimizer._best_route` matches origin-to-destination and does
+            # **not** read a stored leg backwards — only `_has_usable_route_between` is
+            # symmetric — so one direction buys the place out of `ROUTE_UNVERIFIED` and
+            # still leaves a segment the plan can arrive at and not depart from. Two
+            # requests per place reached is what makes the promotion actually schedulable.
+            promoted.add((left, right))
+            promoted.add((right, left))
+        # A stable partition of the distance-sorted list, so the nearest pair that reaches
+        # a starved place is the one promoted and the order stays deterministic. The
+        # reverse leg carries the same distance, so it sorts alongside its twin.
+        pairs = [
+            pair
+            for pair in pairs
+            if (pair[0]["place_id"], pair[1]["place_id"]) in promoted
+        ] + [
+            pair
+            for pair in pairs
+            if (pair[0]["place_id"], pair[1]["place_id"]) not in promoted
+        ]
         # Already-cached pairs are removed *before* the cap, so `MAX_ROUTE_REQUESTS`
         # limits what one run fetches rather than what a trip can ever know. It
         # read as a total ceiling because the cache check lived inside the loop:
@@ -3642,15 +3835,38 @@ class PlannerActions:
                 if not (
                     (key := (pair[0]["place_id"], pair[1]["place_id"], provider.mode)) in existing
                     and existing[key]["expires_at"] > fresh_now
+                    # A matrix row is a time with no path, so it is fresh evidence and
+                    # still worth *upgrading*: this endpoint returns the walked line the
+                    # matrix cannot. Treating it as cached would seed every pair once and
+                    # then leave the map drawing straight lines for ever. Anything the
+                    # directions endpoint already answered is genuinely done.
+                    and existing[key].get("provider") != OpenRouteServiceMatrixProvider.name
                 )
             ]
         attempted, skipped = pairs[:MAX_ROUTE_REQUESTS], pairs[MAX_ROUTE_REQUESTS:]
 
         fetched = cached = failed = 0
         errors: list[str] = []
-        for origin, destination in attempted:
+        for index, (origin, destination) in enumerate(attempted):
+            # The sweep's clock, read **inside** the pass rather than only between passes.
+            # Between passes it never fired: one pass of sixty at the provider's measured
+            # ~2.1s a route is about 128 seconds, so the sixty-second deadline was always
+            # already spent by the first check and no sweep ever ran a second pass. The
+            # bound the docstring describes -- one job the queue can schedule around --
+            # only exists if a *request* can be the thing that does not start.
+            if deadline is not None and index and monotonic() >= deadline:
+                skipped = attempted[index:] + skipped
+                break
             key = (origin["place_id"], destination["place_id"], provider.mode)
-            if not force and key in existing and existing[key]["expires_at"] > now.isoformat():
+            # The same upgrade rule the pair filter above applies, and it has to be said
+            # twice because this check is what the *slice* is measured against: a pair
+            # dropped here is still counted inside `MAX_ROUTE_REQUESTS`.
+            if (
+                not force
+                and key in existing
+                and existing[key]["expires_at"] > now.isoformat()
+                and existing[key].get("provider") != OpenRouteServiceMatrixProvider.name
+            ):
                 cached += 1
                 continue
             try:
@@ -3682,6 +3898,17 @@ class PlannerActions:
             if on_stored is not None and fetched % self.ROUTE_PROGRESS_EVERY == 0:
                 on_stored(fetched)
 
+        # One read, two answers. `list_route_snapshots` is `SELECT *` and a route carries
+        # its drawn geometry, so asking twice on a metered connection is the egress
+        # mistake `get_latest_discovery` already taught.
+        stored_now = self.store.list_route_snapshots(trip_id)
+        fresh_at = datetime.now(timezone.utc).isoformat()
+        reached = {
+            place_id
+            for route in stored_now
+            if route["expires_at"] > fresh_at
+            for place_id in (route["origin_id"], route["destination_id"])
+        }
         return {
             "places": len(points),
             "pairs_needed": len(pairs),
@@ -3691,7 +3918,15 @@ class PlannerActions:
             "skipped_over_cap": len(skipped),
             "request_cap": MAX_ROUTE_REQUESTS,
             "provider_errors": errors,
-            "routes_available": len(self.store.list_route_snapshots(trip_id)),
+            # How many places still have no route at all, in any mode — the count that
+            # decides whether asking again is worth a caller's time. `skipped_over_cap`
+            # says pairs remain; this says whether any of them are load-bearing. A place
+            # with no route is dropped `ROUTE_UNVERIFIED`; a pair missing between two
+            # places that each have one is refinement the plan can already work without.
+            "places_unserved": sum(
+                1 for point in points if point["place_id"] not in reached
+            ),
+            "routes_available": len(stored_now),
         }
 
     def list_routes(self, trip_id: str) -> list[dict[str, Any]]:

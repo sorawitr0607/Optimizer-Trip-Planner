@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from contextlib import redirect_stderr, redirect_stdout
+from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import time
@@ -98,9 +100,17 @@ class UncomparedScreenTest(unittest.TestCase):
                 Image.new("RGB", (8, 8), "white").save(baselines / name)
             for name in capture_names:
                 Image.new("RGB", (8, 8), "white").save(current / name)
+            # The gate reports to stdout, and this exercises its **failure** path, so
+            # an uncaptured `FAILED: 1 screen(s) drifted` landed in the middle of the
+            # unit-test stage every run -- looking exactly like a real gate failure
+            # inside a suite that was passing, which is a trap the handoffs have had to
+            # carry as a written warning. The gate's exit code is what this asserts;
+            # its prose belongs to the stage that runs it for real.
             with patch.object(gate, "BASELINES", baselines), patch.object(
                 gate, "CURRENT", current
-            ), patch.object(gate, "stale_sources", return_value=[]):
+            ), patch.object(gate, "stale_sources", return_value=[]), redirect_stdout(
+                StringIO()
+            ), redirect_stderr(StringIO()):
                 return gate.main()
 
     def test_a_screen_that_was_not_captured_fails_the_gate(self) -> None:
@@ -155,7 +165,7 @@ class CaptureOwnerSessionTest(unittest.TestCase):
                 "--trip", "trip_test",
                 "--owner", "owner-token-1",
             ],
-        ):
+        ), redirect_stdout(StringIO()):
             self.assertEqual(0, capture.main())
         return profiles, urls, budgets
 
@@ -192,7 +202,7 @@ class CaptureOwnerSessionTest(unittest.TestCase):
         # recovery screen.
         with patch(
             "sys.argv", ["capture_screen_baselines.py", "--trip", "trip_test"]
-        ), self.assertRaises(SystemExit):
+        ), redirect_stderr(StringIO()), self.assertRaises(SystemExit):
             capture.main()
 
 if __name__ == "__main__":

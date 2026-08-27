@@ -197,6 +197,75 @@ class OptimizerCoreTest(unittest.TestCase):
         for item in skipped:
             self.assertEqual("NO_TIME_CAPACITY", item["reason"])
 
+    def _squeezed(self) -> dict:
+        """The fixture with one two-hour day, which is not enough room for its places."""
+
+        snapshot = json.loads(
+            json.dumps(fixture("ix-jp-shibuya-hours-view-walk")["planner_input"])
+        )
+        snapshot.setdefault("thresholds", {})["plain_walking_minutes_per_day"] = 10_000
+        snapshot["trip"]["usable_windows"] = [
+            {**snapshot["trip"]["usable_windows"][0], "start": "09:00", "end": "11:00"}
+        ]
+        return snapshot
+
+    def test_the_two_ways_out_of_no_time_capacity_actually_lead_out(self) -> None:
+        """`/optimize` offers "Add a day" and "Drop these N". Both must change the answer.
+
+        Shipped unverified: no live trip had produced a `NO_TIME_CAPACITY` refusal to
+        press them on, so the controls were typecheck-covered and nothing had shown that
+        the remedies remedy. They are the two things the optimizer can be given more of
+        — room, or fewer places — and this asserts each one clears what it claims to.
+
+        A refusal with a control beside it that does nothing is worse than the dead end
+        it replaced, which is the report that produced these buttons in the first place.
+        """
+
+        squeezed = self._squeezed()
+        before = optimize_trip(squeezed)["variants"][0]
+        unfit = [
+            item
+            for item in before["reconciliation"]
+            if item["status"] == "cannot_currently_fit"
+        ]
+        self.assertTrue(unfit, "the fixture must refuse something for this to test")
+        self.assertEqual({"NO_TIME_CAPACITY"}, {item["reason"] for item in unfit})
+
+        # "Add a day" — `addDayAndRebuild` moves `end_date` one day out, which reaches
+        # the optimizer as another usable window.
+        longer = self._squeezed()
+        first = longer["trip"]["usable_windows"][0]
+        longer["trip"]["usable_windows"] = [first, {**first, "date": "2030-01-03"}]
+        # `local_dates` and the windows must agree; `_validate_input` says so, and
+        # `save_setup` keeps them in step for the real path.
+        longer["trip"]["local_dates"] = ["2030-01-02", "2030-01-03"]
+        after_day = optimize_trip(longer)["variants"][0]
+        self.assertGreater(
+            sum(1 for item in after_day["reconciliation"] if item["status"] == "fits"),
+            sum(1 for item in before["reconciliation"] if item["status"] == "fits"),
+            "a second day bought no additional place, so the button is a dead end",
+        )
+
+        # "Drop these N" — `cutUnfitAndRebuild` marks each refused place `not_for_trip`,
+        # which reaches the optimizer as a shorter candidate list.
+        refused = {item["place_id"] for item in unfit}
+        fewer = self._squeezed()
+        fewer["candidates"] = [
+            candidate
+            for candidate in fewer["candidates"]
+            if candidate.get("id", candidate.get("place_id")) not in refused
+        ]
+        after_cut = optimize_trip(fewer)["variants"][0]
+        self.assertEqual(
+            [],
+            [
+                item
+                for item in after_cut["reconciliation"]
+                if item["status"] == "cannot_currently_fit"
+            ],
+            "dropping every refused place left a refusal, so the count on the button lies",
+        )
+
     def test_safe_route_and_weather_fallback_are_selected(self) -> None:
         odaiba = optimize_trip(
             fixture("jp-teamlab-odaiba-long-walk")["planner_input"]

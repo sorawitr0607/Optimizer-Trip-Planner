@@ -73,6 +73,11 @@ REPORTS_PROGRESS: frozenset[str] = frozenset(
 
 QUEUED, RUNNING, DONE, FAILED = "queued", "running", "done", "failed"
 
+#: Namespace for `enqueue`'s advisory lock. Postgres advisory locks are one flat space
+#: of integers, and `pgstore._SCHEMA_LOCK_KEY` already occupies the single-key form; the
+#: two-key form used here cannot collide with it whatever the second key hashes to.
+_ENQUEUE_LOCK_NAMESPACE = 0x6A6F6273  # "jobs"
+
 
 def _claim_guard(worker_id: str | None) -> str:
     """The SQL that narrows a terminal write to the attempt still holding it."""
@@ -165,6 +170,20 @@ class JobQueue:
         rule is that `Find places` is a one-press control for exactly that reason.
         An identical operation already queued or running for the same trip is
         returned rather than duplicated.
+
+        **The look and the insert are one transaction, and on Postgres they hold a
+        lock.** They were two `connect()` blocks, which is two transactions with a gap
+        between them: two presses landing inside that gap both read "nothing queued" and
+        both inserted, which is the duplicate this method exists to prevent. `claim`
+        would then hand the same operation to the worker twice — the queue's own
+        de-duplication defeated by the race it was written against.
+
+        The lock is transaction-scoped and keyed on the identity being de-duplicated,
+        so it serialises only the presses that could actually collide; two different
+        trips never wait on each other. SQLite needs none of it — it serialises writers
+        and the local app is one process — so there the single transaction is the whole
+        fix. Chosen over a partial unique index because that is a schema migration
+        against a hosted database, and this needs none.
         """
         if kind not in HANDLERS:
             raise ValueError(f"{kind} is not an enqueueable operation")
@@ -173,24 +192,47 @@ class JobQueue:
         if unexpected:
             raise ValueError(f"{kind} does not take {sorted(unexpected)}")
 
+        payload_json = json.dumps(payload)
         with self.store.connect() as connection:
+            if self.is_postgres:
+                connection.execute(
+                    "SELECT pg_advisory_xact_lock(?, hashtext(?))",
+                    (_ENQUEUE_LOCK_NAMESPACE, f"{trip_id}\x00{kind}\x00{payload_json}"),
+                )
             existing = connection.execute(
                 "SELECT id FROM jobs WHERE trip_id = ? AND kind = ? AND payload_json = ?"
                 " AND status IN (?, ?) ORDER BY created_at LIMIT 1",
-                (trip_id, kind, json.dumps(payload), QUEUED, RUNNING),
+                (trip_id, kind, payload_json, QUEUED, RUNNING),
             ).fetchone()
             if existing is not None:
                 return existing["id"]
 
-        job_id = "job_" + uuid.uuid4().hex
-        with self.store.connect() as connection:
+            job_id = "job_" + uuid.uuid4().hex
             connection.execute(
                 "INSERT INTO jobs (id, kind, trip_id, payload_json, status, attempts,"
                 " max_attempts, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (job_id, kind, trip_id, json.dumps(payload), QUEUED, 0,
+                (job_id, kind, trip_id, payload_json, QUEUED, 0,
                  max_attempts, _now()),
             )
         return job_id
+
+    def discard_trip(self, trip_id: str) -> int:
+        """Forget every job for a trip, and say how many. Part of deleting it.
+
+        `store.delete_trip` clears the trip-scoped planning tables, but the queue is
+        deliberately outside `SCHEMA_VERSION` and carries no foreign key to `trips`, so
+        nothing there was ever removed: a deleted trip left its queued jobs behind for a
+        worker to claim, load, and fail on a trip that no longer exists — retried to
+        `max_attempts` apiece. A running job is dropped too; its `complete` is fenced on
+        the claim and simply writes nothing.
+        """
+
+        with self.store.connect() as connection:
+            return int(
+                connection.execute(
+                    "DELETE FROM jobs WHERE trip_id = ?", (trip_id,)
+                ).rowcount
+            )
 
     def claim(self, worker_id: str) -> dict | None:
         """Take one queued job, or return None.

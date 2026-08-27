@@ -3,10 +3,15 @@ from __future__ import annotations
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 
 from travel_planner import areas
 from travel_planner.actions import PlannerActions, PlannerRefusal
-from travel_planner.providers import OsmAreaAmenitiesProvider, ProviderUnavailable
+from travel_planner.providers import (
+    OsmAreaAmenitiesProvider,
+    ProviderBudgetExceeded,
+    ProviderUnavailable,
+)
 from travel_planner.transit import Edge, Stop, TransitGraph
 from tests.test_routes import FakePlaceProvider
 
@@ -295,6 +300,29 @@ class AreaRecommendationTest(unittest.TestCase):
         self.assertTrue(report["areas"])
         self.assertGreater(report["areas"][0]["factors"]["travel_time"]["score"], 0)
         self.assertEqual(0, report["areas"][0]["counts"]["food_count"])
+
+    def test_the_cap_is_consulted_before_the_request_not_after_it(self) -> None:
+        """`_spend` runs before the provider call on every paid path, and did not here.
+
+        The check happened once the request had already been made, so this was the one
+        operation that could cross a spent cap rather than be refused by it. It is priced
+        at US$0.00, which is why nothing was ever overspent and why it went unnoticed —
+        the ordering is the invariant, not the amount, and the next operation written
+        from this one as a template would not be free.
+        """
+
+        provider = self.actions.area_amenities_provider
+        # The cap itself cannot demonstrate this: the operation is priced at US$0.00, so
+        # a spend of zero never crosses any cap and `check_paid_call` always allows it.
+        # That is precisely why the wrong ordering survived. So the ledger step is made
+        # to refuse, and the question is only whether the request had already gone out.
+        with patch.object(
+            self.actions, "_spend", side_effect=ProviderBudgetExceeded("cap reached")
+        ):
+            with self.assertRaises(ProviderBudgetExceeded):
+                self.actions._area_amenity_counts(self.trip.trip_id, [area("ximen")])
+
+        self.assertEqual(0, provider.calls, "the endpoint was asked before the cap was")
 
     def test_no_chosen_places_refuses_rather_than_ranking_nothing(self) -> None:
         actions = PlannerActions(

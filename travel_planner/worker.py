@@ -62,6 +62,24 @@ def next_idle_sleep(current: float) -> float:
     return min(MAX_IDLE_SLEEP_SECONDS, current * 2)
 
 
+def initial_state(store_name: str) -> dict:
+    """What the health endpoint is allowed to publish about this machine.
+
+    A separate function because it is a security boundary rather than a detail of
+    start-up, and a boundary worth testing directly.
+
+    It carried `worker_id` — `hostname:pid:random` — and `serve_health` answers any GET
+    on an unauthenticated `0.0.0.0:$PORT`, so the machine's name and a live process id
+    went to anyone who asked. The id is unchanged everywhere it is actually needed: the
+    log line, and `claimed_by`, both read by the owner rather than by the internet.
+
+    `last` carries the kind of the last job and never its trip id — a health endpoint is
+    not a place to learn what somebody is planning.
+    """
+
+    return {"store": store_name, "jobs_run": 0, "last": None, "status": "starting"}
+
+
 def serve_health(port: int, state: dict) -> None:
     """Answer any GET with the worker's state, from a daemon thread.
 
@@ -134,8 +152,7 @@ def main(argv: list[str] | None = None) -> int:
     signal.signal(signal.SIGINT, request_stop)
     signal.signal(signal.SIGTERM, request_stop)
 
-    state = {"worker": worker_id, "store": type(actions.store).__name__,
-             "jobs_run": 0, "last": None, "status": "starting"}
+    state = initial_state(type(actions.store).__name__)
     if arguments.health_port:
         threading.Thread(target=serve_health, args=(arguments.health_port, state),
                          daemon=True).start()

@@ -8,6 +8,9 @@ interface RouteRefreshReply {
   /** The sweep stopped on its own clock with pairs still outstanding, so asking
    *  again continues rather than repeats. Absent on an older server. */
   more_pairs?: boolean;
+  /** Places still holding no route at all, in any mode. Zero means every place can be
+   *  scheduled and whatever pairs remain are refinement. Absent on an older server. */
+  places_unserved?: number;
 }
 
 /** A ceiling on passes, not on the trip — and it lives on the server now, as
@@ -63,6 +66,15 @@ export async function collectRouteEvidence(
       // Nothing came back, or nothing is outstanding. Either way asking again is a
       // request that buys nothing.
       if (!reply.fetched || !reply.more_pairs) break;
+      // Enough, rather than everything. `more_pairs` is true until all N*(N-1) pairs are
+      // measured — 1640 of them on a 41-place trip — and each request is a queued job of
+      // roughly two minutes, so looping on it spent **twelve hundred seconds** on the
+      // owner's Tokyo trip and still did not finish. A place with no route is dropped
+      // `ROUTE_UNVERIFIED`; a missing pair between two places that each have one is a
+      // leg the optimizer routes around. So the loop's goal is coverage, and the server
+      // now reports it directly. The rest is still collectable — `/evidence`'s own
+      // refresh button asks for exactly this and is not bound by this stop.
+      if (reply.places_unserved === 0) break;
     }
   } catch {
     /* whatever earlier passes stored still stands */

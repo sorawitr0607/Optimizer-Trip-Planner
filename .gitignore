@@ -42,3 +42,4 @@ data/gtfs/*.zip
 id_rsa*
 id_ed25519*
 !*.key.pub
+.check.lock

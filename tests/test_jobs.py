@@ -30,6 +30,48 @@ class JobQueueTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.queue.enqueue("os.system", "T1", {})
 
+    def test_deleting_a_trip_forgets_its_jobs_and_leaves_the_others(self) -> None:
+        """The queue has no foreign key to `trips`, so nothing else can clear it.
+
+        `store.delete_trip` walks the trip-scoped planning tables, and the queue is
+        deliberately outside `SCHEMA_VERSION` and absent from that list — so a deleted
+        trip left its queued work for a worker to claim, load, and fail on a trip that
+        was gone, `max_attempts` times over.
+        """
+
+        doomed = self.queue.enqueue("discover_places", "T1")
+        running = self.queue.enqueue("refresh_routes", "T1")
+        self.queue.claim("worker-a")
+        survivor = self.queue.enqueue("discover_places", "T2")
+
+        self.assertEqual(2, self.queue.discard_trip("T1"))
+
+        self.assertIsNone(self.queue.get(doomed))
+        self.assertIsNone(self.queue.get(running))
+        self.assertIsNotNone(self.queue.get(survivor))
+        # And a trip with nothing queued is not an error.
+        self.assertEqual(0, self.queue.discard_trip("T3"))
+
+    def test_an_identical_operation_is_de_duplicated_within_one_transaction(self) -> None:
+        """The look and the insert must not be two transactions.
+
+        They were, and the gap between them is the race: two presses landing inside it
+        both read "nothing queued" and both inserted, so `claim` handed the same
+        operation to the worker twice. SQLite serialises writers, so this checks the
+        de-duplication itself; the Postgres path additionally takes an advisory lock
+        keyed on (trip, kind, payload), which is what closes the gap there.
+        """
+
+        first = self.queue.enqueue("refresh_routes", "T1", {"max_passes": 4})
+        again = self.queue.enqueue("refresh_routes", "T1", {"max_passes": 4})
+        self.assertEqual(first, again)
+
+        # A different payload is a different operation and gets its own job.
+        other = self.queue.enqueue("refresh_routes", "T1", {"max_passes": 12})
+        self.assertNotEqual(first, other)
+        # So does the same operation on another trip.
+        self.assertNotEqual(first, self.queue.enqueue("refresh_routes", "T2", {"max_passes": 4}))
+
     def test_a_claimed_job_cannot_be_claimed_again(self) -> None:
         self.queue.enqueue("discover_places", "T1")
         first = self.queue.claim("worker-a")
@@ -261,6 +303,30 @@ class PayloadAllowlistTest(unittest.TestCase):
 
         for kind in HANDLERS:
             self.assertIn(kind, PAYLOAD_KEYS)
+
+
+class HealthEndpointTest(unittest.TestCase):
+    """What an unauthenticated `0.0.0.0:$PORT` is allowed to say about this machine.
+
+    The endpoint exists so a host whose free tier only runs *web services* has something
+    listening; it is not a place to publish the machine's name or a live process id. It
+    served `worker_id` — `hostname:pid:random` — to anyone who asked. The id is still how
+    the owner identifies the worker in the log and in `claimed_by`, which are read by the
+    owner rather than by the internet.
+    """
+
+    def test_the_published_state_names_no_host_and_no_process(self) -> None:
+        import os
+
+        from travel_planner.worker import initial_state
+
+        published = json.dumps(initial_state("PostgresStore"))
+
+        self.assertEqual(
+            {"store", "jobs_run", "last", "status"}, set(initial_state("X"))
+        )
+        self.assertNotIn(os.uname().nodename, published)
+        self.assertNotIn(str(os.getpid()), published)
 
 
 class IdlePollBackoffTest(unittest.TestCase):

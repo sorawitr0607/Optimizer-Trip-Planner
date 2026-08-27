@@ -36,6 +36,59 @@ describe("collectRouteEvidence", () => {
     expect(rpc).toHaveBeenLastCalledWith("refresh_transit_routes", { trip_id: "trip_1" });
   });
 
+  it("stops once every place has a route, however many pairs are left", async () => {
+    // The twenty-minute build. `more_pairs` stays true until all N*(N-1) pairs are
+    // measured -- 1640 on a 41-place trip -- and each request is a queued job of about
+    // two minutes, so looping on it spent 1200 seconds on the owner's Tokyo trip and
+    // still did not finish. A place with no route is dropped `ROUTE_UNVERIFIED`; a
+    // missing pair between two places that each have one is a leg the optimizer routes
+    // around. Coverage is the goal, so coverage is the stop.
+    const rpc = vi.spyOn(client, "rpc").mockImplementation((async (method: string) => {
+      if (method === "refresh_transit_routes") return { pairs_needed: 0, fetched: 0 };
+      return {
+        pairs_needed: 1640,
+        fetched: 60,
+        more_pairs: true,
+        places_unserved: 0,
+      };
+    }) as unknown as typeof client.rpc);
+
+    await collectRouteEvidence("trip_1");
+
+    expect(rpc.mock.calls.filter((c) => c[0] === "refresh_routes")).toHaveLength(1);
+  });
+
+  it("keeps asking while a place still has no route at all", async () => {
+    const rpc = vi.spyOn(client, "rpc").mockImplementation((async (method: string) => {
+      if (method === "refresh_transit_routes") return { pairs_needed: 0, fetched: 0 };
+      const call = rpc.mock.calls.filter((c) => c[0] === "refresh_routes").length;
+      return {
+        pairs_needed: 1640,
+        fetched: 60,
+        more_pairs: true,
+        places_unserved: call < 3 ? 4 : 0,
+      };
+    }) as unknown as typeof client.rpc);
+
+    await collectRouteEvidence("trip_1");
+
+    expect(rpc.mock.calls.filter((c) => c[0] === "refresh_routes")).toHaveLength(3);
+  });
+
+  it("keeps the old stop against a server that does not report coverage", async () => {
+    // `places_unserved` is absent on an older server, and `undefined === 0` is false, so
+    // the loop falls through to `more_pairs` exactly as it did before.
+    const rpc = vi.spyOn(client, "rpc").mockImplementation((async (method: string) => {
+      if (method === "refresh_transit_routes") return { pairs_needed: 0, fetched: 0 };
+      const call = rpc.mock.calls.filter((c) => c[0] === "refresh_routes").length;
+      return { pairs_needed: 200, fetched: 60, more_pairs: call < 2 };
+    }) as unknown as typeof client.rpc);
+
+    await collectRouteEvidence("trip_1");
+
+    expect(rpc.mock.calls.filter((c) => c[0] === "refresh_routes")).toHaveLength(2);
+  });
+
   it("comes back when the sweep stopped on its own clock, and totals across the calls", async () => {
     // `ROUTE_SWEEP_SECONDS` bounds one job so it cannot starve the single worker, so a
     // big trip takes several. Each job counts its own routes from zero; the number the

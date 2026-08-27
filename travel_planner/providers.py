@@ -1614,6 +1614,170 @@ class OpenRouteServiceProvider:
         }
 
 
+class OpenRouteServiceMatrixProvider:
+    """Every pair's walking time in **one** request, with no line to draw.
+
+    The directions endpoint answers one ordered pair per call. At the ~2.1 seconds a
+    call the deployment measures, a 23-place trip's 506 pairs is eighteen minutes and a
+    41-place trip's 1640 is nearly an hour — and it was spent in the browser's face,
+    because `collectRouteEvidence` waited on every one of them. Measured on the owner's
+    Tokyo trip: nine queued jobs, 554 routes, **1200 seconds**, still unfinished.
+
+    The matrix endpoint answers the whole set at once. Same service, same free tier, same
+    US$0.00, and `openrouteservice:matrix` has been priced in `usage.py` since before
+    anything called it.
+
+    **It returns times, not paths.** There is no geometry in a matrix response, so a route
+    from here carries `geometry: []` and the map has no line to draw for it. That is the
+    whole trade and it is the right way round: a duration is what the optimizer needs to
+    schedule a leg at all, and a drawn line is what a *scheduled* leg wants afterwards.
+    `refresh_routes` seeds from here and lets the directions sweep upgrade pairs behind
+    it, nearest first — so the plan is buildable in seconds and the map fills in after.
+
+    `status` stays `verified`: this is the router measuring the walk, not an estimate.
+    """
+
+    name = "openrouteservice_matrix"
+    operation = "openrouteservice:matrix"
+    cache_ttl_days = 14
+    mode = "walk"
+    ATTEMPTS = 3
+    RETRY_PAUSE_SECONDS = 4
+
+    #: ponytail: one request, no chunking, and a trip past the ceiling simply keeps the
+    #: directions sweep it had. ORS bounds a matrix by locations-squared and 50 is the
+    #: conservative reading of its free tier; the owner's largest real trip is 41 places
+    #: (1681 elements) and fits. Chunk by `sources` blocks if a trip ever outgrows it.
+    MAX_LOCATIONS = 50
+
+    def __init__(self) -> None:
+        self.matrix_url = os.environ.get(
+            "TOURIST_ORS_MATRIX_URL",
+            "https://api.openrouteservice.org/v2/matrix/foot-walking",
+        )
+        self.user_agent = os.environ.get(
+            "TOURIST_USER_AGENT", "TouristPlannerPersonalPOC/0.2 (local personal use)"
+        )
+
+    def covers(self, points: list[dict[str, Any]]) -> bool:
+        """Whether one request can hold this trip."""
+
+        return 2 <= len(points) <= self.MAX_LOCATIONS
+
+    def matrix(self, points: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """One normalized route record per ordered pair the router could measure."""
+
+        key = os.environ.get("OPENROUTESERVICE_API_KEY", "").strip()
+        if not key:
+            raise ProviderUnavailable("OPENROUTESERVICE_API_KEY is not configured")
+        if not self.covers(points):
+            raise ProviderUnavailable(
+                f"a matrix of {len(points)} places is outside this endpoint's bounds"
+            )
+        body = json.dumps(
+            {
+                # GeoJSON order, as the directions endpoint also takes it.
+                "locations": [
+                    [float(point["longitude"]), float(point["latitude"])]
+                    for point in points
+                ],
+                "metrics": ["duration", "distance"],
+                "units": "m",
+            }
+        ).encode("utf-8")
+        request = Request(
+            self.matrix_url,
+            data=body,
+            headers={
+                "Authorization": key,
+                "Content-Type": "application/json",
+                "User-Agent": self.user_agent,
+            },
+        )
+        # The same three-and-four the directions side retries on, and for the same reason:
+        # a busy router is a technical failure, not a finding about the walk.
+        payload = None
+        for attempt in range(self.ATTEMPTS):
+            try:
+                with urlopen(request, timeout=60) as response:
+                    payload = json.load(response)
+                break
+            except HTTPError as error:
+                worth_retrying = error.code == 429 or 500 <= error.code < 600
+                if not worth_retrying or attempt == self.ATTEMPTS - 1:
+                    # Never let a URL or header carrying the key reach the message.
+                    raise ProviderUnavailable(
+                        f"OpenRouteService returned HTTP {error.code}"
+                    ) from None
+            except (URLError, TimeoutError) as error:
+                if attempt == self.ATTEMPTS - 1:
+                    raise ProviderUnavailable(
+                        f"OpenRouteService is unreachable: {type(error).__name__}"
+                    ) from None
+            except json.JSONDecodeError:
+                raise ProviderUnavailable("OpenRouteService returned invalid JSON") from None
+            sleep(self.RETRY_PAUSE_SECONDS)
+        return self.normalize(payload, points=points)
+
+    def normalize(
+        self, payload: dict[str, Any], *, points: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """Matrix payload to one record per measurable ordered pair.
+
+        A `null` cell is the router saying it could not walk that pair — an island, a
+        motorway junction, a point it could not snap to a path. It is skipped rather than
+        defaulted, because a fabricated duration is exactly what `ROUTE_UNVERIFIED` exists
+        to stop the optimizer scheduling against.
+        """
+
+        durations = (payload or {}).get("durations")
+        if not isinstance(durations, list) or len(durations) != len(points):
+            raise ProviderUnavailable("OpenRouteService returned no duration matrix")
+        distances = (payload or {}).get("distances") or []
+        routes: list[dict[str, Any]] = []
+        for row, origin in enumerate(points):
+            cells = durations[row] if isinstance(durations[row], list) else []
+            for column, destination in enumerate(points):
+                if row == column or column >= len(cells):
+                    continue
+                seconds = cells[column]
+                if seconds is None:
+                    continue
+                try:
+                    minutes = max(1, int(ceil(float(seconds) / 60)))
+                except (TypeError, ValueError):
+                    continue
+                metres = 0
+                if row < len(distances) and isinstance(distances[row], list):
+                    raw = distances[row][column] if column < len(distances[row]) else None
+                    if raw is not None:
+                        try:
+                            metres = int(round(float(raw)))
+                        except (TypeError, ValueError):
+                            metres = 0
+                routes.append(
+                    {
+                        "origin_id": str(origin["place_id"]),
+                        "destination_id": str(destination["place_id"]),
+                        "mode": self.mode,
+                        "duration_minutes": minutes,
+                        "walking_minutes": minutes,
+                        "distance_m": metres,
+                        # No path in a matrix response. The directions sweep upgrades the
+                        # pairs a plan actually walks; see the class docstring.
+                        "geometry": [],
+                        "transfers": 0,
+                        "boarding_buffer_minutes": 0,
+                        "experience_evidence": [],
+                        "status": "verified",
+                        "provider": self.name,
+                    }
+                )
+        if not routes:
+            raise ProviderUnavailable("OpenRouteService measured no pair in the matrix")
+        return routes
+
+
 class OpenMeteoForecastProvider:
     """The actual weather for the actual dates, where the dates are close enough to know.
 

@@ -4700,3 +4700,157 @@ overrides the UA's `dialog:not([open]) { display: none }`. A closed dialog rende
 like an open one. `.tour-backdrop` already carried the guard rule; the sheet has it
 now too, and the diff image that caught it is exactly what the approve-then-look rule
 is for.
+
+## The twenty minutes were never a timeout, 2026-08-27
+
+The owner set `TOURIST_ADMIN_KEY` on the deployment and reported the build still
+unfixed: *"it loading for 1200 second"*. Three rounds have now been spent on this and
+the first two both moved the number in the wrong direction, so this one started by
+reading the queue rather than the code.
+
+### What the queue said
+
+Ten `refresh_routes` rows for the Tokyo trip, eight of them consecutive between
+`14:00:14` and `14:15:34`, each running 119–136 seconds and each reporting **`progress
+60`**. That last column is the whole diagnosis: sixty is `MAX_ROUTE_REQUESTS`, so every
+job was doing exactly one pass and no job had ever done two.
+
+Which means `ROUTE_SWEEP_SECONDS` — added the previous session precisely to bound a
+sweep — had never fired once. It was read only where a *new pass* would start, and one
+pass at the provider's measured ~2.1s a route is about 128 seconds, so the sixty-second
+budget was always already spent by the first check. Its docstring claimed "about 110
+seconds against a provider pacing at 1.8s a route"; the queue said 128 at 2.1. **A
+bound checked between passes is not a bound**, and a constant that states a measurement
+is worth re-measuring.
+
+So the previous fix had turned one 843-second job into nine 128-second jobs. The queue
+stopped starving, which was its stated aim and which it achieved. But
+`collectRouteEvidence` loops until `more_pairs` is false, so the browser made all nine
+of them in series — and because any rise in reported progress resets the client's
+five-minute deadline, it waited out every one instead of failing. 843 seconds became
+1200 — ten sweeps, 554 rows stored, and the browser waiting through all of it.
+
+**Bounding a job does not shorten the work. It moves it into the caller's loop.**
+
+### Eight of the ten sweeps bought nothing anyone was waiting for
+
+The first guess was that coverage converged slowly. **It did not, and the stored routes
+say so** — grouped by the minute they were retrieved, the Tokyo trip's 554 rows fall
+into ten bursts of sixty:
+
+    burst  1  14:00  +60 routes   places reached: 22
+    burst  2  14:02  +60 routes   places reached: 23
+    burst  3  14:04  +60 routes   places reached: 23
+    ...
+    burst 10  15:07  +48 routes   places reached: 23
+
+Every place had a route after **burst two**. The remaining eight sweeps — a thousand
+seconds of the twelve hundred — measured pairs between places that already had one.
+
+So the dominant fault was the loop's *goal*, not its ordering. `more_pairs` stays true
+until all N·(N−1) pairs are measured — 1640 on a 41-place trip — and the plan needs
+none of that: a place with no route at all is dropped `ROUTE_UNVERIFIED`, while a
+missing pair between two places that each have one is a leg the optimizer routes
+around. `_refresh_routes_with` reports `places_unserved` and `collectRouteEvidence`
+stops on it. Ten bursts become two. `/evidence`'s own refresh button is unchanged and
+still collects the rest for the map.
+
+### And then two become one
+
+The ordering was worth fixing as well, but it is the smaller half and the simulation
+that sized it said so before the change went in. `served` was computed **once, from the
+stored routes**, before the list was built — so on a first sweep the flag is `False` for
+every pair, the sort collapses to pure nearest-first, and burst one left one place of
+twenty-three unreached. Promoting a pair the moment it would reach a place nothing ahead
+of it has reached gets all twenty-three in the first sixty requests.
+
+Both directions, because `optimizer._best_route` matches origin-to-destination and does
+not read a stored leg backwards — only `_has_usable_route_between` is symmetric, so one
+direction buys the place out of `ROUTE_UNVERIFIED` and still leaves a segment the plan
+can arrive at and cannot depart from.
+
+### One request instead of sixteen hundred
+
+`openrouteservice:matrix` has been priced at US$0.00 in `usage.py` since before anything
+called it. The matrix endpoint measures every pair in a single request — the same
+service, the same free tier — so `OpenRouteServiceMatrixProvider` now seeds the whole
+set and the directions sweep upgrades pairs behind it, nearest first.
+
+**The trade is the drawn line.** A matrix response carries no geometry, so its routes
+store `geometry: []` and the map draws them as straight lines. That turned out to be a
+state the interface already had: `ItineraryPage` marks a leg with no shape `exact:
+false` and `PlaceMap` styles it `.straight`, added earlier so a day with one routed leg
+and one unrouted one could not show a single line and hide the gap.
+
+Two things that took a debugging round each. A matrix row is fresh evidence *and* still
+upgradeable, and `_refresh_routes_with` has **two** cache checks — the pair filter and a
+second one inside the fetch loop — so exempting only the first left the directions
+endpoint never called. And the seed must degrade to zero on every failure rather than
+refuse, because the worst case has to be the behaviour that came before it.
+
+Measured against the live endpoint at the Tokyo trip's size, 23 places: **506 pairs in
+one request, 1.59 seconds**. A single directions call from the same machine took 0.87s,
+so the same coverage pair-by-pair is 7.4 minutes here and about 17.7 at the ~2.1s the
+deployment measured. Two hundred and seventy-eight times, on the step that was the wait.
+
+Shape now: one job seeds every pair, spends its sixty-second budget drawing the nearest
+legs, reports `places_unserved: 0`, and the browser asks once.
+
+### Closed alongside it
+
+The open audit items from 2026-08-26, and the traps three handoffs had been carrying as
+written warnings rather than as mechanisms.
+
+- **`enqueue` was two transactions.** The look and the insert sat in separate
+  `connect()` blocks, so two presses landing in the gap both read "nothing queued" and
+  both inserted — the queue's own de-duplication defeated by the race it exists for. One
+  transaction now, plus a transaction-scoped advisory lock on Postgres keyed on (trip,
+  kind, payload). The owner chose that over a partial unique index, which would have
+  been a schema migration against a hosted database for the same guarantee.
+- **A deleted trip kept its jobs.** The queue is deliberately outside `SCHEMA_VERSION`
+  with no foreign key to `trips`, so `store.delete_trip`'s ordered table list cannot
+  reach it — and neither can the test that enumerates every table with a foreign key,
+  which is why the gap was invisible to the guard written for exactly this. Cleared
+  first, so a failure leaves a trip that still exists rather than jobs pointing at one
+  that does not.
+- **The health endpoint published `hostname:pid`** on an unauthenticated `0.0.0.0:$PORT`.
+  `worker.initial_state` is now the whole of what it may say, and a function rather than
+  a literal because a security boundary is worth testing directly.
+- **`_area_amenity_counts` spent after the call.** Every other paid path spends before.
+  It is priced at US$0.00, so nothing was ever overspent — which is exactly why it
+  survived, and exactly why it mattered: the ordering is the invariant, not the amount.
+  A free operation also cannot be refused *by* the cap, so the test drives the ordering
+  directly rather than through a cap that can never fire.
+- **`TripNow` carries *two* countdowns, and freezing one is not a fix.** "Departs in N
+  days" was the one the handoff named, and after freezing it the recaptured itinerary
+  image still read "Next · 19:00 · **in 43 days**" two lines below. Both are
+  `data-volatile="countdown"` now. The second one was found by opening the changed
+  capture before trusting it — the rule this repo already had, doing exactly the job it
+  was written for, against reasoning that had declared the problem solved.
+- **`check.py` takes `.check.lock` and refuses a second run.** Two interleaved runs share
+  `screen-current` and produced `approved: 2 · compared: 1` — a stage failing exactly
+  like real drift, on unchanged code. It refuses rather than queues: a second run is
+  nearly always a mistake, and a silent ninety-second wait looks like a hang.
+- **The stray `FAILED: 1 screen(s)` inside the unit-test stage** was
+  `test_screen_baseline_gate.py` proving the gate fails when it should. Its output is
+  captured now. It had been read as a real failure often enough to be written into three
+  handoffs as a thing to ignore, which is the worst state for a gate to be in.
+- **`tests/test_dialog_display_guard.py`** requires any `<dialog>` class given a
+  `display` to restate `:not([open]) { display: none }`. An author rule outranks the user
+  agent's closed-dialog hiding, and the closed sheet then paints over every phone screen.
+  Three dialogs have the guard; this is for the fourth.
+
+Also measured while the images were open: five non-itinerary baselines moved by
+0.001-0.002% in the *same* bounding box on every one of them. That is one shared
+element, not five screens — sub-visual antialiasing on the trip selector, absorbed by
+the approve. Worth checking rather than assuming: five screens changing at once is the
+shape a real regression makes too.
+
+### FB4 and FB5, verified where it counts
+
+Both remedies shipped unpressed — no live trip had produced a `NO_TIME_CAPACITY`
+refusal. The question worth answering was never whether the buttons render but whether
+they lead anywhere, so the check is at the optimizer: squeeze the Shibuya fixture to one
+two-hour day, confirm the refusal, then add a day and assert more places fit, and drop
+the refused places and assert the refusal clears. A refusal with a control beside it
+that does nothing is worse than the dead end it replaced.

@@ -120,11 +120,24 @@ export function TripNow({
             {copy(after ? "trip_complete" : "trip_not_started", language)}
           </span>
           <strong className="trip-now-name">
-            {after
-              ? nameOf(last)
-              : copyFormat("trip_departs", language, {
+            {after ? (
+              nameOf(last)
+            ) : (
+              // "Departs in N days" counts down against the wall clock, so an unchanged
+              // app photographs differently every day and the itinerary baselines needed
+              // re-approving on a schedule -- a gate that fails without a code change
+              // teaches everyone to ignore it. Frozen under capture only, exactly as the
+              // export stamp and the paid ledger are; the real interface still counts.
+              // The whole phrase rather than the number, because `copyFormat` returns one
+              // interpolated string and splitting a sentence in two languages to freeze
+              // three characters of it is worse than losing the line's width from the
+              // diff -- everything around it is still compared.
+              <span data-volatile="countdown">
+                {copyFormat("trip_departs", language, {
                   gap: gapText(+first.startAt - +moment, language),
                 })}
+              </span>
+            )}
           </strong>
         </>
       ) : live ? (
@@ -162,7 +175,15 @@ export function TripNow({
         <p className="trip-now-next">
           <span className="trip-now-next-when">
             {copy("next_tag", language)} · {upcoming.start} ·{" "}
-            {gapText(+upcoming.startAt - +moment, language)}
+            {/* The second countdown on this card, and it drifts for the same reason the
+                first one does — freezing only the departure line left the itinerary
+                baselines still ageing daily, which the capture diff showed and the
+                reasoning had not. Just the gap here: the tag and the clock time beside
+                it are stable, so unlike the departure line there is nothing to gain by
+                collapsing the whole phrase. */}
+            <span data-volatile="countdown">
+              {gapText(+upcoming.startAt - +moment, language)}
+            </span>
           </span>
           <span className="trip-now-next-name">{nameOf(upcoming)}</span>
         </p>

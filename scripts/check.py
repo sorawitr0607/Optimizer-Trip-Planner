@@ -14,12 +14,64 @@ import os as _os
 
 _os.environ.pop("TOURIST_DB_URL", None)
 
+import errno
+import os
 import subprocess
 import sys
+from contextlib import contextmanager
 from time import monotonic
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+#: One run at a time, because two of them corrupt each other's answer.
+#:
+#: The stages are not independent of the working tree: the screen-baseline stage compares
+#: `screen-current` against the approved set, and the capture that fills `screen-current`
+#: is shared state on disk. Two runs interleaving there produced `approved: 2 · compared:
+#: 1` and a stage that failed exactly like real drift — on unchanged code, which is the
+#: one failure mode this suite cannot afford, since a gate that cries wolf is a gate
+#: everyone learns to re-run rather than read.
+#:
+#: The tool that runs these commands issues parallel Bash calls in one shell, so this is
+#: reachable by accident rather than by anyone deciding to do it. Refuse rather than
+#: queue: a second run is nearly always a mistake, and waiting silently for ninety
+#: seconds looks exactly like a hang.
+LOCK = ROOT / ".check.lock"
+
+
+@contextmanager
+def only_one_run():
+    """Hold `LOCK`, or explain who has it and refuse.
+
+    `O_EXCL` rather than a check-then-create, which has the same race it is guarding
+    against. A stale lock after a crash is removed by hand and says so — automatic
+    staleness detection needs a liveness check this does not deserve.
+    """
+
+    try:
+        handle = os.open(LOCK, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except OSError as error:
+        if error.errno != errno.EEXIST:
+            raise
+        held = ""
+        try:
+            held = LOCK.read_text().strip()
+        except OSError:
+            pass
+        print(
+            f"FAILED: another check.py is running{f' (pid {held})' if held else ''}."
+            f" Wait for it, or remove {LOCK.name} if it crashed.",
+            file=sys.stderr,
+        )
+        yield False
+        return
+    try:
+        os.write(handle, str(os.getpid()).encode())
+        os.close(handle)
+        yield True
+    finally:
+        LOCK.unlink(missing_ok=True)
 
 
 def main() -> int:
@@ -82,4 +134,5 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    with only_one_run() as held:
+        raise SystemExit(main() if held else 1)

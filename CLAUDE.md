@@ -56,7 +56,12 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
 - `supabase/schema.sql` is **generated from `store.SCHEMA`**, never hand-edited. A second schema is a
   second source of truth.
 - Every paid provider call routes through `actions._spend()`. An unpriced operation raises rather than
-  being assumed free, and the ledger is append-only by trigger.
+  being assumed free, and the ledger is append-only by trigger. **`_spend` goes before the request,
+  on every path.** `_area_amenity_counts` had it after, so the cap was consulted only once the call
+  had gone out — the one operation that could cross a spent cap rather than be refused by it. It is
+  priced at US$0.00, which is exactly why nothing was overspent and why it went unnoticed for so long:
+  the ordering is the invariant, not the amount, and the next operation copied from it will not be
+  free. A US$0.00 operation also cannot be refused *by* the cap, so test the ordering directly.
 - **A client-supplied bound is a server-side clamp.** `generate_plan_preview`'s `time_limit_seconds`
   is spent once per variant, so an unbounded value held the single worker for as long as the caller
   liked — past `STALE_AFTER_SECONDS`, where the still-running job is handed to a second worker.
@@ -72,7 +77,9 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   `query_boundary` and three of them ran on every `/itinerary` view. Use
   `actions._discovery_boundary()` / `store.get_latest_discovery_report()` for anything that is not the
   candidate list itself, and scope a ledger read to its month (`list_paid_usage(month=...)`) rather
-  than filtering in Python. Supabase's free tier allows 5.5 GB and this trip passed it. The roughly
+  than filtering in Python. **`list_route_snapshots` is the same shape** — `SELECT *`, and a route
+  carries its drawn geometry, so five hundred of them is most of a megabyte. Anything that only needs
+  to know *whether* a pair is measured takes `store.list_route_pair_keys()`. Supabase's free tier allows 5.5 GB and this trip passed it. The roughly
   217 KB basemap is immutable until its evidence expiry, so `shared/basemap.ts` also keeps it in
   browser storage until the server-provided `expires_at`; do not replace that with a cache for mutable
   plan or route snapshots without measuring another egress problem first.
@@ -148,6 +155,50 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   zero and a stage that restarts at every request is worse than no count.
   Do not "fix" a long job by widening the client's patience — that hides the starvation
   from the one place that can see it.
+- **A bound checked between passes is not a bound.** `ROUTE_SWEEP_SECONDS` was read only
+  where a *new pass* would start, and one pass of `MAX_ROUTE_REQUESTS` at the provider's
+  measured ~2.1s a route is about 128 seconds — so the sixty-second budget was already
+  spent by the first check, every job was exactly one pass, and the multi-pass sweep it
+  was written to bound never ran a second pass in production. It is read inside the
+  request loop now. **Read a deadline where the work actually is**, and when a constant
+  claims a number, check the measurement still produces it: the docstring said 110s and
+  the queue said 128.
+- **Bounding a job does not shorten the work — it moves it into the caller's loop.**
+  Bounding the sweep turned one 843s job into *nine* 128s jobs, so the queue stopped
+  starving and the owner's build went from 843 to **1200 seconds**, spinning the whole
+  time because progress resets the client's deadline. Read the queue before believing a
+  fix landed: nine consecutive `refresh_routes` rows each reporting `progress 60` is what
+  that looks like, and `ran` alone will not show it.
+- **Fetch for coverage, not for completeness — that, not the ordering, was the twenty
+  minutes.** Route evidence is quadratic (41 places are 1640 ordered pairs) and the plan
+  needs almost none of it: a place with no route at all is dropped `ROUTE_UNVERIFIED`,
+  while a missing pair between two places that each have one is a leg the optimizer
+  routes around. Grouping the Tokyo trip's stored rows by retrieval minute shows ten
+  bursts of sixty and **every place reached by burst two** — the other eight bought
+  refinement nobody was waiting for. `_refresh_routes_with` reports `places_unserved`
+  and `collectRouteEvidence` stops on it rather than on `more_pairs`.
+  Secondary, and worth keeping straight because the first guess blamed it for the whole
+  thing: the old `served` set was read once from stored routes, so on a first sweep every
+  pair looked unserved and the order collapsed to pure nearest-first, leaving one place
+  of twenty-three unreached after burst one. Promoting the nearest pair that reaches a
+  starved place fixes that — **both directions**, since `optimizer._best_route` matches
+  origin-to-destination and does not read a leg backwards. Two bursts become one. Size a
+  claim like this against the stored data before writing it down; the first version of
+  this bullet said nine.
+- **One matrix request replaces sixteen hundred directions requests, and the trade is the
+  drawn line.** `OpenRouteServiceMatrixProvider` measures every pair at once — same
+  service, same free tier, `openrouteservice:matrix` priced at US$0.00 since before
+  anything called it. Measured against the live endpoint at 23 places: **506 pairs in
+  1.59s**, against 0.87s for one directions call from the same machine — 7.4 minutes of
+  pair-by-pair here, ~17.7 at the deployment's 2.1s. It returns **no geometry**, so its
+  routes carry `geometry: []`
+  and the map draws them as `exact: false` straight lines, which `ItineraryPage` already
+  did for an unrouted leg. `refresh_routes` seeds from it and the directions sweep
+  upgrades pairs behind it, nearest first. Two consequences: a matrix row is fresh
+  evidence *and* still upgradeable, so **both** cache checks in `_refresh_routes_with`
+  exempt it (the pair filter and the one inside the fetch loop — the second is what the
+  per-pass cap is measured against), and the seed degrades to zero on any failure rather
+  than refusing, because the worst case must be the behaviour that came before.
 - **A queued operation is expensive to ask for, so do not loop on one from the browser.**
   Every RPC for slow work is a job: enqueue, poll at 1.5s, wait for the worker to claim
   it, poll again — four to twelve seconds of latency before the work starts.
@@ -159,6 +210,24 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   would buy the same sixty routes until the ceiling.
 - Job payload allowlist keys must match their handler's signature — `tests/test_jobs.py` checks every
   one. An allowlist that permits keys the handler rejects is worse than none.
+- **`enqueue`'s look and insert are one transaction, and on Postgres they hold an advisory
+  lock.** They were two `connect()` blocks, which is two transactions with a gap: two
+  presses landing inside it both read "nothing queued" and both inserted, defeating the
+  de-duplication the method exists for. The lock is transaction-scoped and keyed on
+  (trip, kind, payload), so only presses that could actually collide wait. Chosen over a
+  partial unique index because that is a schema migration against a hosted database.
+- **Deleting a trip must clear its jobs, and `store.delete_trip` cannot.** The queue is
+  deliberately outside `SCHEMA_VERSION` with no foreign key to `trips`, so the ordered
+  table list — and the test that enumerates every table with a foreign key — can never
+  reach it. A deleted trip left queued work for a worker to claim and fail on,
+  `max_attempts` times each. `actions.delete_trip` calls `JobQueue.discard_trip` first,
+  so a failure leaves a trip that still exists rather than jobs pointing at one that does
+  not.
+- **The worker's health endpoint answers any GET on an unauthenticated `0.0.0.0:$PORT`.**
+  It published `worker_id` — `hostname:pid:random`. `worker.initial_state` is now the
+  whole of what it may say, and it is a function rather than a literal because it is a
+  security boundary worth testing directly. The id is unchanged in the log and in
+  `claimed_by`, which the owner reads and the internet does not.
 - Provider retries are **three attempts, four seconds apart, and only for 429 and 5xx**. A 400 or 404
   is the endpoint saying "not this"; repeating it spends the budget to be refused identically.
 - Trip ownership is checked in **`dispatch` for everything trip-scoped**, and in `api/rpc.py`'s
@@ -202,6 +271,14 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   confirmed the 861/860 boundary is exact, that no route overflows horizontally, and that
   everything past the right edge on `/costs` and `/itinerary` is inside a legitimate
   `overflow-x: auto` scroller (`.money-table`, `.day-tabs`) or an SVG map viewBox.
+- **An author `display:` on a `<dialog>` beats the user agent's closed-dialog hiding.**
+  The UA hides a closed dialog with `dialog:not([open]) { display: none }`, and a class
+  selector outranks it — so any dialog class given a `display` needs its own
+  `:not([open]) { display: none }` or the closed sheet paints over every phone screen.
+  `.tour-backdrop`, `.sidebar.sheet-dialog` and `.day-stop-lightbox` all have it, and
+  `tests/test_dialog_display_guard.py` now requires it of the fourth, which will be
+  written by someone who has not read this. It was caught once by opening the capture
+  diffs before approving, which is not a mechanism.
 - **`--virtual-time-budget` is 15000 and both directions of that number were measured.**
   `/places` is the only screen whose content arrives asynchronously. At 5000 the deck is
   still showing "Looking it up on the map…", and a loading placeholder is *stable*, so
@@ -501,6 +578,27 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
 - **The visible build stamp is volatile capture data.** It remains visible in the real
   interface, but `data-volatile="build"` freezes it under `baseline_theme`; otherwise every
   rebuild changes unchanged `t900-` screens by about 0.117% and forces unrelated approvals.
+  **`TripNow` carries two wall-clock countdowns and both are `data-volatile="countdown"`** —
+  "Departs in N days" and the "Next · 19:00 · in N days" line below it. They drifted the
+  itinerary baselines a little every day and forced re-approval on a schedule nobody chose.
+  Freezing only the first left them still drifting, which the recaptured image showed and
+  the reasoning had not: **open the changed capture before believing a freeze worked.** On
+  the departure line the whole phrase is frozen rather than the number, because `copyFormat`
+  returns one interpolated string and splitting a sentence in two languages to hold three
+  characters costs more than that line's width in the diff; the next-action line freezes
+  just the gap, since the tag and clock time beside it are stable.
+- **One `check.py` at a time — it takes `.check.lock` and refuses a second.** The stages are
+  not independent of the working tree: the baseline stage compares `screen-current`, which is
+  shared state on disk, so two interleaved runs produced `approved: 2 · compared: 1` and a
+  stage that failed exactly like real drift on unchanged code. The tool that runs these
+  commands issues parallel Bash calls in one shell, so this was reachable by accident. It
+  refuses rather than queues, because a second run is nearly always a mistake and a silent
+  ninety-second wait looks like a hang. Remove the lock by hand after a crash.
+- **A test that exercises a gate's failure path must capture its output.** The
+  `FAILED: 1 screen(s) drifted` line inside the *unit-test* stage was
+  `tests/test_screen_baseline_gate.py` proving the gate fails when it should, and it read as
+  a real failure inside a passing suite for long enough to be written into three handoffs as
+  a trap. Assert the exit code; let the stage that runs it for real own the prose.
 - **The phone capture's viewport is ~745px tall, not the 844 in its filename.** Headless Chrome sizes
   the *window*, and its chrome eats the difference, so a 500x844 image carries about 99px of dead white
   below the page — visible in a dark-theme shot, where the band stays white. A `position: fixed` bottom
