@@ -5005,3 +5005,36 @@ One fixture note: re-linking the baseline trip's stale discovery through the bro
 changed its state, so the recaptured `/places` baselines no longer show the stale-setup
 warning. That is a better baseline than a trip stuck in a refused state, but it is a change
 made by browsing rather than by editing, and worth knowing before reading the diff.
+
+### The paid error path, attempted live and not reached, 2026-08-27
+
+The owner authorised spending to prove the failed-photo-ask behaviour on the deployment.
+It did not reproduce, and what the attempt found is worth more than the assertion would
+have been.
+
+**Two paid asks, US$0.15, both succeeded.** The targets were chosen against the actual
+rejection rule rather than guessed: `_best_nearby_match` needs distance ≤1500 m, name
+similarity ≥0.46 against the OSM name *or any of its `names` values*, and a
+category-to-`primaryType` match — so a Japanese-only or misspelled name should fail it.
+"Antinous as Vertumnus" (an `artwork`) and "Dr. Joze Rizal" (a statue whose OSM name is
+misspelled) both matched anyway. Consistent with the wider evidence: this database holds
+**zero** `provider_no_match` rows across every ask ever made. Google Places indexes this
+catalogue well, so the failure is genuinely rare rather than merely elusive.
+
+**The free deterministic route turned out to be closed, and that is the useful finding.**
+Lowering the cap below current spend makes `_spend` refuse before any provider call, which
+should surface as `paid_cap_reached`. It never reaches the deck: `paidPhotoUsd` comes from
+a `paid_check` query, and when the cap is spent that is null, so **the button is not
+rendered at all**. The app already withdraws the offer for the whole cap class one layer
+earlier than the change made here. The cap and its table were restored to exactly what
+they were — the table was empty, using the code default of US$10.
+
+So the change covers what remains: `place_not_in_provider` (rare here) and
+`provider_unavailable` (a Google outage or HTTP error, which no amount of money can
+summon on demand). Its rendering is pinned by `deck.test.tsx`, negative-tested by
+restoring the bug and watching the assertion fail. The adjacent path was confirmed twice
+live and for real money: after a successful purchase the button withdraws and the gallery
+appears.
+
+The honest summary is that this one is test-verified, not field-verified, and the two
+purchases bought a sharper understanding of why rather than a green tick.

@@ -495,6 +495,18 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   one. An audit that drives the API will declare the app broken and be wrong.
 - **A screenshot is evidence about what someone sees; a measurement is evidence about what was
   measured.** When they disagree, the screenshot is describing the product.
+- **Reproduce a reported symptom before deciding which bug it is.** "A dead air screen when
+  I click build the plan" was read from the source as `StayPlanner` returning `null` on an
+  empty pace list — a real blank page, found and fixed, and *not the report*. Driving the
+  app at 390px answered it in one click: the button said "Build the plan" and opened "Where
+  to stay", a populated form where nothing builds. Two real bugs, one reported, and reading
+  found the wrong one first. Source reading generates candidates; only the running app says
+  which candidate the owner met.
+- **"Verified" means the thing that broke was exercised.** Two claims this month were
+  reported as verified and were not: an advisory-lock probe that checked the function
+  overload with a stand-in string while the real key carried a NUL byte Postgres refuses,
+  and a route-coverage story asserted from the code that the stored rows then contradicted.
+  Both were live checks of the wrong half. Name what was exercised and what was not.
 - **Never print a placeholder as if it were a finding.** Four of the swipe card's fact rows originally
   could not vary: `ranking.py` fixes `feasibility.state` before the optimizer runs, formerly fixed
   `reward_effort = 10.0` against a weight of 20, seeds every card's `cons` with three pipeline-state
@@ -528,6 +540,24 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   because the control lived inside the branch that draws a map where a photograph should
   be. A single Commons shot of the car park next door is as short of a picture of the
   place as nothing at all. Two literals for one threshold is how they drifted.
+- **The deck's buy button has three separate withdrawals, and they sit at different
+  layers.** It renders only when `paidPhotoUsd != null` **and** the card is thinly
+  pictured **and** the place has no session insight **and** this card's ask has not
+  failed. The first is the cap: `paidPhotoUsd` comes from a `paid_check` query, so when
+  the month is spent the control is never rendered at all — which means a
+  `paid_cap_reached` refusal can never reach the card's own error surface, and the whole
+  cap class is handled a layer earlier than the failed-ask handling. The third is a
+  purchase already made; the fourth is `photoError`, session-scoped because a busy
+  provider is not a finding about the place, unlike the stored `provider_no_match`.
+- **A failed paid photo ask is hard to summon, and the rejection rule is where to aim.**
+  `providers._best_nearby_match` demands distance ≤1500 m, name similarity ≥0.46 against
+  the OSM name *or any of its `names` values*, and a category-to-`primaryType` match; a
+  miss raises `ProviderUnavailable`, and an empty result raises `ProviderNoMatch`, which
+  `enqueue`-style re-raises after recording the refusal. Both reach the browser as errors.
+  Two live attempts on the deployment — an `artwork` with a Japanese-only name and a statue
+  whose OSM name is misspelled — **both matched Google anyway**, at US$0.075 each, and this
+  database holds **zero** `provider_no_match` rows across every ask ever made. Treat this
+  path as test-verified: the money buys a coin-flip, not a confirmation.
 - **A touch gesture cannot be verified from here — put its arithmetic in a module.**
   A dispatched `PointerEvent` does not drive this map, and that was checked against the
   deployment on code predating the pinch rather than assumed; cmux says the same, raw
