@@ -374,6 +374,18 @@ resolving tickets are throwaway artifacts, not the build.
   stable row per category. Redundant progress prose was removed while safety, provisional
   and paid-action boundaries remain.
 
+- [Decide how much route evidence a plan must collect before it builds](tickets/051-decide-how-much-route-evidence-a-plan-must-collect.md) —
+  the third round on a build that loaded for twenty minutes, and the first to ask how much
+  route evidence a plan actually needs. Coverage, not completeness: a place with no route is
+  unschedulable, a missing pair between two served places is a leg the optimizer routes
+  around, so the browser's loop stops on `places_unserved` rather than on every one of a
+  trip's N·(N−1) pairs. Selection reaches every place inside one pass, both directions. A
+  walking matrix measures the whole trip in one free request and trades drawn geometry for
+  it, with the directions sweep upgrading pairs behind the seed and every failure degrading
+  to the previous behaviour. Alongside: the sweep's clock is read before each request rather
+  than each pass, enqueueing de-duplicates inside one locked transaction, deleting a trip
+  discards its jobs, and the worker's health endpoint names neither host nor process.
+
 ## Not yet specified
 
 <!-- In-scope fog: suspected questions not yet sharp enough to ticket. Graduates as the frontier advances. -->

@@ -4854,3 +4854,25 @@ they lead anywhere, so the check is at the optimizer: squeeze the Shibuya fixtur
 two-hour day, confirm the refusal, then add a day and assert more places fit, and drop
 the refused places and assert the refusal clears. A refusal with a control beside it
 that does nothing is worse than the dead end it replaced.
+
+### The ticket, and what the graph cost
+
+`WF-051` — *Decide how much route evidence a plan must collect before it builds* — is the
+first `.wayfinder` ticket for any of the last four sessions' work, which had been deferred
+each time because adding one breaks `check.py`'s stage 4 until a paid graph rebuild. It
+duly did: `Extraction produced no node for WF-051`.
+
+The rebuild took two attempts, and the failure was the documented one — clustering lost 20
+valid extracted endpoint pairs. Worth recording *which*: only
+`actions_delete_trip -> jobqueue_discard_trip` came from this session's code, and the other
+nineteen were pre-existing `recommend_areas` and `travel_month_guide` edges that nothing
+here touched. That is the signature of clustering variance rather than a name collision, so
+the right move was the documented one: **retry before diagnosing.** The retry was 91 hit / 0
+miss on the warm cache, cost nothing, and passed at **3252 nodes, 7551 directed edges, 248
+communities**.
+
+One correction to `CLAUDE.md` fell out of it. It has said since 2026-08-08 that "a failed
+rebuild costs money the recorded total does not show". Not any more: the failed run recorded
+its own US$0.070005 and took the cumulative from US$0.799241 to US$0.869246, while the
+successful retry added nothing. The ledger now over-attributes to failures rather than
+under-reporting them — read it rather than reasoning about it.

@@ -1231,6 +1231,20 @@ must stay directed. Rebuild only through `python3 scripts/build_project_graph.py
 failure), and only when explicitly asked or after a topology-changing milestone. After any graph
 change, `--check` must pass before committing. See `AGENTS.md`.
 
+**Rebuilt on 2026-08-27 for `WF-051` and `--check` passes**: **3252 nodes, 7551 directed
+edges, 248 communities**, up from 3188/7392. It took **two attempts and US$0.070005**, and
+the failure was the documented clustering-variance one: the first run lost **20** valid
+extracted endpoint pairs, only one of which (`actions_delete_trip -> jobqueue_discard_trip`)
+belonged to the new code — the other nineteen were pre-existing edges from
+`recommend_areas` and `travel_month_guide` that nothing in this session touched. **Retry
+before diagnosing**: the second run was 91 hit / 0 miss on the warm semantic cache, cost
+**nothing**, and passed.
+
+**A failed rebuild *is* recorded now, and the note below saying otherwise is stale.** The
+US$0.070005 above is the *failed* run; the successful retry added zero, and `cost.json`'s
+cumulative went 0.799241 → 0.869246 on the failure alone. Read the ledger rather than
+assuming a failure was free or that a success was paid for.
+
 **Rebuilt on 2026-08-24 for `WF-050` and `--check` passes**: **3091 nodes, 7245
 directed edges, 223 communities**. The first extraction cost US$0.064237 and failed after
 clustering lost 140 valid endpoint pairs. It also exposed a failure-path bug: `cluster_raw_graph()`
@@ -1332,9 +1346,11 @@ country-outline and route-shape providers.
 produced a node and 048 produced none. Nothing was wrong with the ticket: **the immediate retry produced
 one and the build passed**, for US$0.0059 on a warm cache. So treat a single `Extraction produced no node
 for …` as a coin-flip before treating it as a defect: retry first, and only then go looking at the ticket.
-The failed run's US$0.0262 is **not** in `cost.json` — the ledger records a run when it completes, so a
-failed rebuild costs money the recorded total does not show. The under-report is small and in the honest
-direction, but it is there.
+The failed run's US$0.0262 was **not** in `cost.json` at the time — the ledger recorded a run only when it
+completed. **That is no longer true as of 2026-08-27**: the `WF-051` rebuild's failed first attempt
+recorded its own US$0.070005 and the successful retry added nothing, so the ledger now attributes a
+warm-cache retry's success to the failure that preceded it. Either way the rule is the same — read
+`cost.json` rather than reasoning about which attempt paid.
 
 The earlier `WF-048` rebuild on 2026-08-07 gave 2043 nodes, 5032 edges and 167 communities at
 US$0.420408 cumulative; the `WF-047` one before it gave 2026 nodes, 5002 edges and 165 communities.
