@@ -69,6 +69,21 @@ const LOADING_LINES = [
 /** How long each loading line holds before the next one. */
 const LOADING_LINE_MS = 1400;
 
+/** How long a card may be withheld waiting for its first photograph.
+ *
+ * The card is deliberately held until its picture can be painted — the swipe decision is
+ * made on the photograph, so releasing the text first invites deciding on half the
+ * evidence. That is right, and it was unbounded: a Wikimedia thumbnail on a slow link, or
+ * a summary request answered at leisure, kept the card behind a skeleton for as long as
+ * it took, which the owner reported as cards that load "so long".
+ *
+ * A deadline keeps the intent and removes the trap. Four rotations of the loading line —
+ * long enough that a normal photograph wins the race and the hold is invisible, short
+ * enough that nobody sits looking at a skeleton wondering whether the app is alive. The
+ * picture is not abandoned: its own placeholder stays inside the photo box and it appears
+ * when it arrives. Only the *blocking* stops. */
+const CARD_WAIT_MS = LOADING_LINE_MS * 4;
+
 /** Idle time before the card nudges, and how long the nudge itself runs. */
 const NUDGE_AFTER_MS = 5000;
 const NUDGE_MS = 700;
@@ -218,6 +233,8 @@ export function PlaceDeck({
   // cache -- so tapping quickly through a card read as the page blinking. A set
   // answers the question actually being asked: has *this* one arrived before.
   const [painted, setPainted] = useState<ReadonlySet<string>>(() => new Set());
+  /** The card whose wait ran out, so it is shown with the picture still coming. */
+  const [overdue, setOverdue] = useState<string | null>(null);
   const markLoaded = (url: string) =>
     setPainted((current) => (current.has(url) ? current : new Set(current).add(url)));
   const [drag, setDrag] = useState<Drag | null>(null);
@@ -319,8 +336,12 @@ export function PlaceDeck({
   // one thing the owner cannot un-see: the swipe decision is made on the photograph, so
   // showing the text first invites a decision on half the evidence. Only the first
   // photo gates the card — tapping through the gallery must not blank it again.
-  const cardPending = summaryLoading
+  const stillWaiting = summaryLoading
     || (Boolean(currentPhoto) && !painted.has(currentPhoto!) && photoIndex === 0);
+  // Released on the deadline as well as on arrival. Keyed by card id rather than a
+  // boolean, so moving to the next card starts its own wait rather than inheriting a
+  // deadline the previous one had already spent.
+  const cardPending = stillWaiting && overdue !== currentId;
   // Report the card in front, so the panel beside the deck tracks it.
 
   // The gallery index belongs to the card, so it resets with the card.
@@ -397,6 +418,13 @@ export function PlaceDeck({
     );
     return () => window.clearInterval(timer);
   }, [cardPending]);
+
+  // The bound on that wait. Cleared when the card changes, so each card gets its own.
+  useEffect(() => {
+    if (!stillWaiting || !currentId) return;
+    const timer = window.setTimeout(() => setOverdue(currentId), CARD_WAIT_MS);
+    return () => window.clearTimeout(timer);
+  }, [stillWaiting, currentId]);
 
   // The **whole** gallery of the card in front, plus the next card's lead image.
   //
@@ -894,7 +922,15 @@ export function PlaceDeck({
           // answer — the failure the remembered `provider_no_match` closes on the other
           // side, where the answer was nothing at all. One photograph back is still
           // thin, and still not a reason to pay twice.
-          && !insights[entry.place_id] ? (
+          && !insights[entry.place_id]
+          // Asked and failed. Leaving the button up invites paying again for the answer
+          // that just did not arrive, and the card is already saying no photograph was
+          // found — a control beside that sentence contradicts it. Scoped to this card by
+          // the caller, so the next card is offered the purchase as normal, and a reload
+          // offers this one again: a provider that was merely busy is not a finding about
+          // the place, which is why this is session state and not a stored refusal like
+          // `provider_no_match`.
+          && !photoError ? (
           <button
             className="place-deck-buy-photo"
             disabled={photosLoading}

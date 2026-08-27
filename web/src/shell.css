@@ -8415,9 +8415,15 @@
 }
 
 /* A context pin on the card map: present for scale, quiet enough that the focused one
-   is obviously the answer to "where is this one". */
+   is obviously the answer to "where is this one".
+   Quiet, not absent. At the 40% tint step (0.251) the other places were too faint to
+   read as places at all, so the map answered "where is this one" and lost "and what is
+   near it" — reported by the owner as the surrounding pins being too transparent.
+   `--opacity-dim-strong` (0.4) is the existing dim step and the right family for this:
+   a context pin is a dimmed thing, not a tint of the ground. The focused pin is still
+   obviously the focus — it is larger, differently filled and carries the star. */
 .places-map .plan-map-point.context circle {
-  opacity: var(--opacity-tint-40);
+  opacity: var(--opacity-dim-strong);
 }
 
 .places-map-focus {

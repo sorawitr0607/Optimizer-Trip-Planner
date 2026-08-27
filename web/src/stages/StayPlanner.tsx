@@ -13,6 +13,7 @@ import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
 import { addDays, daysInMonth, spanDays } from "../shared/dates";
 import { wholeDraftWithDates } from "../shared/setupDraft";
 import { PLAN_STAGES } from "../shared/buildStages";
+import { collectRouteEvidence } from "../shared/routeEvidence";
 import { Thinking } from "../shared/Thinking";
 import { BuildStages } from "./BuildStages";
 
@@ -70,6 +71,8 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
   /** How many of the three calls below have returned. Advanced on each `await`,
    *  never on a timer — see `PLAN_STAGES` and the rule in `CLAUDE.md`. */
   const [built, setBuilt] = useState(0);
+  /** Routes stored so far, so the routes stage counts rather than merely spins. */
+  const [routesMeasured, setRoutesMeasured] = useState<number | undefined>(undefined);
 
   const chosen = options.find((item) => item.id === pace) ?? options[0];
 
@@ -184,6 +187,7 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
   const save = useMutation({
     mutationFn: async () => {
       setBuilt(0);
+      setRoutesMeasured(undefined);
       const draft = await rpc<SetupDraft>("save_setup", {
         trip_id: tripId,
         ...wholeDraftWithDates(stored.data ?? null, start, end),
@@ -191,13 +195,22 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
       setBuilt(1);
       await rpc("discover_places", { trip_id: tripId, force_refresh: false });
       setBuilt(2);
+      // Measure the legs before asking for a timetable. Without this every place came
+      // back `ROUTE_UNVERIFIED` and the plan reported "the route and travel time are not
+      // verified" — the owner's report, twice. `/optimize`'s own build has always
+      // collected routes first; this path promised the same plan and quietly did less
+      // work. `collectRouteEvidence` never throws: whatever it manages to store is
+      // strictly better than the nothing that was here, and a router that refuses
+      // outright still leaves the transit fallback it asks for last.
+      await collectRouteEvidence(tripId, setRoutesMeasured);
+      setBuilt(3);
       // And build a plan against them, which is the only thing that takes this screen
       // off the screen. Writing the dates alone left the stored preview as the dateless
       // `stay_recommendation` it already was, so `/optimize` re-rendered this very date
       // picker — pressing the button appeared to do nothing, and a manual reload did not
       // help either, because the preview it re-read was the same stale one.
       await rpc("generate_plan_preview", { trip_id: tripId });
-      setBuilt(3);
+      setBuilt(4);
       return draft;
     },
     onSuccess: async () => {
@@ -212,7 +225,14 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
     },
   });
 
-  if (!options.length) return null;
+  // **Never nothing.** `/optimize` renders this component for every dateless trip, so
+  // returning null put a blank page behind "Build the plan" whenever the optimizer
+  // offered no paces — the dead-air screen the owner reported. Every `chosen`-derived
+  // value below is already guarded (`chosen?.`), and `allowedDays` of 0 disables the
+  // span cap rather than failing it, so the custom range is a working answer on its own:
+  // the owner types two dates and the plan builds. A screen that cannot recommend must
+  // still let the decision be made.
+  const noPaces = !options.length;
 
   return (
     // derives-from: element 36 .currency-info-box as .stay-planner
@@ -224,6 +244,10 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
           under a screen of controls. `hidden` rather than unmounting, so the picker comes
           back exactly as it was if the build fails. */}
       <div hidden={save.isPending}>
+      {/* A heading over an empty group is worse than no heading. When the optimizer
+          offered no paces there is nothing to choose between, and the date range below
+          is the whole screen. */}
+      <div hidden={noPaces}>
       <h2 className="money-eyebrow">{copy("stay_pace_title", language)}</h2>
       <p className="setup-hint">{copy("stay_pace_help", language)}</p>
 
@@ -245,6 +269,7 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
             </small>
           </button>
         ))}
+      </div>
       </div>
 
       <h3 className="money-eyebrow">{copy("pick_month", language)}</h3>
@@ -337,8 +362,8 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
           {/* Pick your own. A card in the same row rather than a link somewhere else,
               because it is the fifth answer to the same question. */}
           <button
-            aria-expanded={custom}
-            className={`stay-window-card${custom ? " active" : ""}`}
+            aria-expanded={custom || noPaces}
+            className={`stay-window-card${custom || noPaces ? " active" : ""}`}
             onClick={() => {
               setCustom((open) => !open);
               setSaved(false);
@@ -352,7 +377,7 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
             </div>
           </button>
         </div>
-        {custom ? (
+        {custom || noPaces ? (
           <div className="stay-custom">
             <label>
               {copy("dates_custom_start", language)}
@@ -443,7 +468,12 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
               `Thinking` stays *inside* the last stage, where the long
               `generate_plan_preview` genuinely has no milestones and an elapsed
               counter is the honest thing to show. */}
-          <BuildStages language={language} reached={built} stages={PLAN_STAGES}>
+          <BuildStages
+            language={language}
+            reached={built}
+            routesMeasured={routesMeasured}
+            stages={PLAN_STAGES}
+          >
             <Thinking
               expectSeconds={90}
               language={language}

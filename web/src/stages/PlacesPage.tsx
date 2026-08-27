@@ -61,10 +61,6 @@ const PREFETCH_AHEAD = 10;
  *  Kong catalogue that lane holds **431**, which is a catalogue, not a shortlist. */
 const LANE_PAGE = 20;
 
-/** How long the undo offer stays up after a card decision. Long enough to read
- *  the name and reach the button; short enough that it never outlives the
- *  screen state it describes. */
-const UNDO_OFFER_MS = 6_000;
 /** How many audit rows to build at a time. The Taipei catalogue is 849 places, and
  *  the table listing them sits inside a `<details>` that is closed on arrival —
  *  which hides it without costing any less: React builds every row, the browser
@@ -180,18 +176,6 @@ export function PlacesPage() {
   // Decided in this session but not yet confirmed by a refetch. Emptied naturally: once
   // the stored choices carry the same ids, the union below is unchanged by it.
   const [justDecided, setJustDecided] = useState<Set<string>>(() => new Set());
-  // The last card decision, for the one undo the deck never had. A swipe flew the
-  // card away and committed instantly, so a thumb that slipped — or a card read a
-  // beat too late — could only be repaired by hunting the shortlist drawer for a
-  // row the reporter had not connected to the card that had gone. `previous` is
-  // what the place was before this decision, or null when it had none, so undoing
-  // restores exactly what was there rather than a guessed default.
-  const [lastDecision, setLastDecision] = useState<{
-    placeId: string;
-    name: string;
-    action: string;
-    previous: string | null;
-  } | null>(null);
   // The coverage report is collapsed on arrival and holds the audit table and the
   // raw provider JSON. `<details>` hides its contents; it does not avoid building
   // them, so both were mounted on every visit to this screen. Rendering them on
@@ -371,11 +355,20 @@ export function PlacesPage() {
       await refreshReads();
     },
   });
-  // "Build the plan" is the only moment the app is told the choosing is over, so it is
-  // what unlocks Check trip facts and Build the plan in the sidebar. Recorded server-side
-  // rather than in `localStorage`: a journey stage that relocks on another machine is not
-  // a journey stage. Navigation happens either way — a trip that cannot record the mark
-  // must not be trapped on this screen by it.
+  // The moment the app is told the choosing is over, which is what unlocks Check trip
+  // facts and Build the plan in the sidebar. Recorded server-side rather than in
+  // `localStorage`: a journey stage that relocks on another machine is not a journey
+  // stage. Navigation happens either way — a trip that cannot record the mark must not be
+  // trapped on this screen by it.
+  //
+  // **It is labelled for where it goes, not for what it unlocks.** It said "Build the
+  // plan" and landed on "Where to stay" — a form with an address field and a "Rank areas"
+  // button, building nothing. Driven through a real browser to confirm it: press the
+  // button, arrive at a populated page where no work is happening. That is the dead-air
+  // screen the owner reported, and it is a promise the button could not keep. Going to
+  // `/stay` is correct and deliberate — the journey is places → stay → build, and jumping
+  // to `/optimize` skips the stage the app had just been taught to require — so the label
+  // is the half that had to change.
   const finishChoosing = useMutation({
     mutationFn: () => rpc<unknown>("confirm_places_selection", { trip_id: tripId }),
     onSettled: async () => {
@@ -550,25 +543,6 @@ export function PlacesPage() {
     );
   }
 
-  // The undo offer lives a few seconds, long enough to read the name and press,
-  // short enough to be gone before it is stale about what it would reverse.
-  useEffect(() => {
-    if (!lastDecision) return;
-    const timer = window.setTimeout(() => setLastDecision(null), UNDO_OFFER_MS);
-    return () => window.clearTimeout(timer);
-  }, [lastDecision]);
-
-  function undoLastDecision() {
-    if (!lastDecision) return;
-    const { placeId, previous } = lastDecision;
-    if (previous) {
-      saveChoice.mutate({ action: previous, reason: null, placeId });
-    } else {
-      clearChoice.mutate(placeId);
-    }
-    setLastDecision(null);
-  }
-
   if (setup.isPending || discovery.isPending || choices.isPending) {
     return <Loading language={language} />;
   }
@@ -698,8 +672,15 @@ export function PlacesPage() {
   // refusal that stayed after the card was gone answered a question nobody was
   // asking any more, and a warning floating above the deck read as the deck being
   // broken rather than one place having no photograph.
+  //
+  // One sentence, not the provider's. A failed ask surfaced as `⚠ provider_error` — the
+  // literal code, because `provider_error` is not in `OPTIMIZER_CODE_TEXT` and an unknown
+  // code is deliberately rendered raw rather than prettified. That is right for a code
+  // that should have copy and wrong as an answer to "why is there no picture here": the
+  // owner reported reading it on the card. What they need to know is that asking did not
+  // find one, which is the same thing however the provider failed.
   const cardError =
-    enrich.error && enrich.variables === cardId ? errorText(enrich.error, language) : null;
+    enrich.error && enrich.variables === cardId ? copy("photo_ask_failed", language) : null;
 
   /* Discovery is two Overpass blocks and runs 30-90s; paced at the low end so the
      lines are not still arriving after the places are. Named rather than inlined
@@ -1056,17 +1037,6 @@ export function PlacesPage() {
                 }}
                 nameOf={nameOf}
                 onDecide={(placeId, action, reason) => {
-                  // Counted here rather than derived from `choices`, because a decision
-                  // made on the list view or on an earlier page is not a card taken out
-                  // of *this* one.
-                  const previous =
-                    choices.data?.find((item) => item.place_id === placeId)?.action ?? null;
-                  setLastDecision({
-                    placeId,
-                    action,
-                    previous,
-                    name: nameOf(placeId),
-                  });
                   saveChoice.mutate({ action, reason, placeId });
                 }}
                 onCardChange={setCardId}
@@ -1295,7 +1265,7 @@ export function PlacesPage() {
               onClick={() => finishChoosing.mutate()}
               type="button"
             >
-              {copy("stage_optimize", language)} →
+              {copy("stage_stay", language)} →
             </button>
             {finishChoosing.isPending ? (
         <p aria-live="polite" aria-busy="true" className="thinking">
@@ -1421,7 +1391,7 @@ export function PlacesPage() {
       </section>
 
       <div className="optimize-actions">
-        <button className="setup-primary" disabled={!selectedChoices.length || finishChoosing.isPending} onClick={() => finishChoosing.mutate()} type="button">{copy("stage_optimize", language)}</button>
+        <button className="setup-primary" disabled={!selectedChoices.length || finishChoosing.isPending} onClick={() => finishChoosing.mutate()} type="button">{copy("stage_stay", language)} →</button>
       </div>
       {/* The press writes the selection, refreshes the journey and then navigates. That
           is a real wait, and a disabled button is the same picture as a broken one. */}
@@ -1432,18 +1402,6 @@ export function PlacesPage() {
         </p>
       ) : null}
       {!selectedChoices.length ? <p className="setup-hint">{copyFrom("OPTIMIZER_CODE_TEXT", "no_places_chosen", language)}</p> : null}
-      {lastDecision ? (
-        <div aria-live="polite" className="deck-toast" role="status">
-          <span>
-            {lastDecision.action === "not_for_trip"
-              ? copyFormat("deck_toast_passed", language, { name: lastDecision.name })
-              : copyFormat("deck_toast_kept", language, { name: lastDecision.name })}
-          </span>
-          <button onClick={undoLastDecision} type="button">
-            {copy("deck_undo", language)}
-          </button>
-        </div>
-      ) : null}
     </section>
   );
 }

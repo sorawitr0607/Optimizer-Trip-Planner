@@ -460,6 +460,29 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   `stages.ts` says. Anything deriving "the first unfinished stage" from `state !== "complete"` will
   therefore stick on `stay` forever; `StageTabs.buildTarget` reads `journey.next` instead, which is the
   same answer `/` redirects to.
+- **There are two build paths and they must do the same work.** `/optimize`'s
+  `autoResolveAndGenerate` collects route evidence before asking for a timetable;
+  `StayPlanner`'s "use these dates" did not, so a first build measured no leg, every place
+  came back `ROUTE_UNVERIFIED`, and the screen said "the route and travel time are not
+  verified" — reported twice, once against a credential-less worker and once against this.
+  Diagnose it from the queue's *ordering*: a `generate_plan_preview` row earlier than the
+  trip's first `route_snapshots.retrieved_at` means something built a plan before any route
+  existed. `PLAN_STAGES` carries `routes` because the call is there; adding one without the
+  other is the fiction `BuildStages` exists to refuse.
+- **Any rebuild that writes setup must re-run `discover_places` first.** Discovery stores
+  the setup hash it ran against, so moving a date stales the found places and the rebuild
+  refuses `discovery_stale` before doing any work — which is what "Add a day and rebuild"
+  did. It is free: the provider cache is keyed on the destination alone, so the run
+  rebuilds from disk with no network call. `StayPlanner` has done this since 2026-08-08;
+  `addDayAndRebuild` is the second site and there will be a third.
+- **A label is a promise, and "Build the plan" on `/places` went to "Where to stay".** The
+  destination is right — the journey is places → stay → build and skipping `/stay` skips a
+  required stage — but the button named the stage it *unlocks* rather than the one it
+  opens, and arriving at a form where nothing builds was reported as a "dead air screen".
+  It reads `stage_stay` now. Reading the source for that report found a *different* real
+  blank page (`StayPlanner` returned null on an empty recommendation list) and fixing it
+  did not answer the complaint: **when a symptom is described from the outside, reproduce
+  it in a browser before deciding which bug it is.**
 - **Before adding a control to `/optimize`, grep for `autoResolveAndGenerate.mutate()` and count the
   call sites.** That control has been wrong three times, each time a second button running the same
   mutation under a different label.

@@ -31,19 +31,29 @@ export const BUILD_STAGES = [
 ] as const;
 
 /**
- * The three calls `StayPlanner`'s "use these dates" awaits, in order.
+ * The four calls `StayPlanner`'s "use these dates" awaits, in order.
  *
  * Same idea as `BUILD_STAGES` and the same rule: a stage is marked done when its
  * call returns, never on a timer. This path is the longest wait in the app — it
- * writes the dates, rebuilds discovery against the new setup hash, and then runs
- * a full three-variant proposal at roughly 52s — and it was showing only
+ * writes the dates, rebuilds discovery against the new setup hash, collects route
+ * evidence, and then runs a full three-variant proposal — and it was showing only
  * `Thinking`: one rotating line and an elapsed counter, which cannot say which of
- * the three it is on. A wait that reports nothing is the same silence that had
+ * them it is on. A wait that reports nothing is the same silence that had
  * `/optimize` reported as broken before `BUILD_STAGES` existed.
+ *
+ * **`routes` was missing, and so was the call.** This path went dates → discovery →
+ * proposal, with nothing measuring a single leg, so every place came back
+ * `ROUTE_UNVERIFIED` and the plan said "the route and travel time are not verified" —
+ * reported by the owner twice, once against a worker with no credentials and once
+ * against this. `/optimize`'s own build has always collected routes first; the two
+ * build paths simply did different work under the same promise. The stage is added
+ * because the *call* is added: a stage no `await` corresponds to would be the exact
+ * fiction `BuildStages` exists to refuse.
  */
 export const PLAN_STAGES = [
   { key: "dates", icon: CalendarCheck },
   { key: "discovery", icon: MapPinned },
+  { key: "routes", icon: Footprints },
   { key: "plan", icon: Sparkles },
 ] as const;
 

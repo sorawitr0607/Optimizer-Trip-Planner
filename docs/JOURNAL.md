@@ -4925,3 +4925,83 @@ which looked alarming until the trips table explained it — the owner deleted t
 `delete_trip` discarded its jobs, which is the fix from the previous entry doing its job.
 The queue still holds rows for several trips that no longer exist; those are the historical
 orphans from before it, and clearing them is a separate decision.
+
+## Seven from the phone, and one of them was the label, 2026-08-27
+
+Owner feedback after the route work shipped. **The route fix itself is confirmed working
+from the queue**: one `refresh_routes` job of 97.9s where there had been eight of ~128s,
+251 matrix rows, and all 272 pairs of a 17-place trip covered. What follows is what was
+still wrong.
+
+### The two that broke a plan
+
+**`discovery_stale` after "Add a day and rebuild".** Writing the new end date moves the
+setup hash, and discovery stores the hash it ran against — so the found places go stale
+the instant the day is added and the rebuild refuses before doing any work. The remedy
+built to answer a dead end had become a second dead end. `StayPlanner` has re-run
+`discover_places` after writing dates since 2026-08-08 for exactly this reason; this path
+never did. It costs nothing: the provider cache is keyed on the destination alone, so the
+run rebuilds from disk with no network call.
+
+**"The route and travel time are not verified" came back, and this time it was not the
+worker.** The queue's own ordering gave it away — previews at 09:01 and 09:03, and the
+trip's first walking route at 09:08. Something had built a plan before any route existed.
+That something is `StayPlanner`, whose build ran `save_setup → discover_places →
+generate_plan_preview` and **never measured a leg**. `/optimize`'s build has always
+collected routes first. Two build paths, one promise, different work. `collectRouteEvidence`
+is in it now, and `PLAN_STAGES` gains `routes` — the count went from three to four because
+the *call* went in, which is the only reason it ever may.
+
+### The one the owner had to send me back for
+
+Reported as "a dead air screen when click 'build the plan' in place pages". Reading the
+source found a genuine blank page — `/optimize` renders `StayPlanner` for every dateless
+trip, and it did `if (!options.length) return null`, so a trip the optimizer could not
+pace rendered *nothing*. That was fixed: an empty recommendation list now falls back to
+the custom date range, since every `chosen`-derived value was already guarded and an
+`allowedDays` of 0 disables the span cap rather than failing it.
+
+**It was not the reported bug.** Driven through a real browser at 390px, the answer took
+one click: the button labelled **"Build the plan"** navigates to **"Where to stay"** — a
+populated form with an address field and a "Rank areas" button, where nothing builds. No
+blank screen, no missing progress surface. A promise the button could not keep.
+
+Going to `/stay` is deliberate and correct — the journey is places → stay → build, and
+jumping to `/optimize` skips the stage the app had just been taught to require — so the
+label was the half that had to change. It reads "Where to stay →" now, which is what the
+sidebar calls the destination.
+
+The general lesson, which cost a round-trip: **a symptom described from the outside can
+match a bug that is not the one being described.** Both were real. Only one was reported,
+and reading source found the wrong one first. The owner's "check it by yourself using
+cmux-browser" was the right instruction.
+
+### The rest
+
+- **The undo offer is gone**, at the owner's asking — state, timer, handler, toast, the
+  `UNDO_OFFER_MS` constant and the three copy keys it orphaned. Verified absent from the
+  built bundle rather than from the source.
+- **A card is no longer withheld indefinitely.** It is held until its first photograph can
+  be *painted*, which is right — the swipe decision is made on the picture — and was
+  unbounded, so a slow thumbnail kept the card behind a skeleton for as long as it took.
+  `CARD_WAIT_MS` is four rotations of the loading line. The picture still arrives; only
+  the blocking stops.
+- **A failed photo ask withdraws the paid button.** It showed `⚠ provider_error` — the
+  literal code, since an unknown code is deliberately rendered raw — and left the button
+  up, inviting a second charge for the answer that had just failed to arrive. One sentence
+  now, and no control beside it. Session-scoped: a busy provider is not a finding about
+  the place, which is the line between this and the stored `provider_no_match`.
+- **Context pins on the card map went from 0.251 to 0.4**, through the existing
+  `--opacity-dim-strong` rather than a new token. Measured in the browser afterwards: ten
+  context pins, computed opacity `0.4`.
+
+Verified live on a throwaway one-day Taipei trip: the build refused five places with
+`NO_TIME_CAPACITY`, "Add a day and rebuild" completed with **no** `discovery_stale`, and
+the end date moved 2030-03-01 → 2030-03-02. Deleting the trip afterwards left zero rows in
+all seven trip-scoped tables including `jobs`, which is the previous entry's fix doing its
+job.
+
+One fixture note: re-linking the baseline trip's stale discovery through the browser
+changed its state, so the recaptured `/places` baselines no longer show the stale-setup
+warning. That is a better baseline than a trip stuck in a refused state, but it is a change
+made by browsing rather than by editing, and worth knowing before reading the diff.

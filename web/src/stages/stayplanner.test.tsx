@@ -25,13 +25,13 @@ const PROPOSAL = {
   ],
 } satisfies PlanProposal;
 
-function render(today: Date): string {
+function render(today: Date, proposal: PlanProposal = PROPOSAL): string {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   client.setQueryData(["setup", "trip_1"], null);
   return renderToStaticMarkup(
     <QueryClientProvider client={client}>
       <LanguageProvider initial="en">
-        <StayPlanner language="en" proposal={PROPOSAL} today={today} tripId="trip_1" />
+        <StayPlanner language="en" proposal={proposal} today={today} tripId="trip_1" />
       </LanguageProvider>
     </QueryClientProvider>,
   );
@@ -48,6 +48,33 @@ describe("StayPlanner", () => {
     expect(html).toContain("about 7 h of visiting a day");
     // Balanced is preselected: the middle option is the one to argue with.
     expect(html).toMatch(/class="stay-pace active"[^>]*>?[\s\S]{0,80}Balanced/);
+  });
+
+  it("still offers a date range when the optimizer recommended no pace", () => {
+    /**
+     * **`/optimize` renders this component for every dateless trip**, and it used to
+     * `return null` on an empty recommendation list — so a trip the optimizer could not
+     * pace put a *blank page* behind "Build the plan". That is the dead-air screen the
+     * owner reported, and returning nothing is never the answer: a screen that cannot
+     * recommend must still let the decision be made.
+     *
+     * Every `chosen`-derived value is guarded, and an `allowedDays` of 0 disables the
+     * span cap rather than failing it, so the custom range is a complete answer on its
+     * own — the owner types two dates and the plan builds.
+     */
+    const html = render(new Date("2026-08-07T00:00:00"), {
+      mode: "stay_recommendation",
+      stay_recommendations: [],
+    } satisfies PlanProposal);
+
+    expect(html).not.toBe("");
+    // The date inputs are present and usable...
+    expect(html).toContain('type="date"');
+    // ...the custom range is open, since there is nothing to pick instead...
+    expect(html).toContain("stay-window-card active");
+    // ...and the pace heading is not left standing over an empty group.
+    expect(html).toContain('hidden=""');
+    expect(html).not.toContain("⚠");
   });
 
   it("derives an end date from the chosen pace, inclusive of the first day", () => {
@@ -143,30 +170,38 @@ describe("date arithmetic", () => {
 });
 
 /**
- * The build reports which of its three calls it is on.
+ * The build reports which of its four calls it is on.
  *
  * It used to show one rotating line for a press that writes the dates, rebuilds
- * discovery and runs a full three-variant proposal — so a slow discovery and a slow
- * proposal looked identical, and both looked like a hang. Same rule as `/optimize`:
- * a stage is ticked when its call returns, never on a timer.
+ * discovery, collects route evidence and runs a full three-variant proposal — so a slow
+ * discovery and a slow proposal looked identical, and both looked like a hang. Same rule
+ * as `/optimize`: a stage is ticked when its call returns, never on a timer.
  */
 describe("StayPlanner build progress", () => {
-  it("names the three calls the press actually makes", () => {
+  it("names the four calls the press actually makes", () => {
     const html = render(new Date("2026-08-07T00:00:00"));
 
     // Not visible until the build runs, but the stage vocabulary must resolve —
     // a missing key renders as a visible ⚠ CODE rather than as copy.
     expect(copy("stage_dates", "en")).toBe("Your dates");
     expect(copy("stage_discovery", "en")).toBe("Places for those dates");
+    expect(copy("stage_routes", "en")).not.toContain("⚠");
     expect(copy("stage_plan", "en")).toBe("Three plan options");
     expect(html).not.toContain("⚠");
   });
 
   it("has one stage per awaited call, and no more", () => {
-    // Three `await`s in the mutation: save_setup, discover_places,
-    // generate_plan_preview. A fourth stage would be a claim about work that is
-    // not happening — which is the defect this whole pattern exists to avoid.
-    expect(PLAN_STAGES).toHaveLength(3);
+    // Four `await`s in the mutation: save_setup, discover_places,
+    // collectRouteEvidence, generate_plan_preview. A fifth stage would be a claim about
+    // work that is not happening — which is the defect this whole pattern exists to
+    // avoid. It was three, and the missing one was `routes`: this path built a plan
+    // without measuring a single leg, so every place came back `ROUTE_UNVERIFIED` and
+    // the owner was told "the route and travel time are not verified". The count went up
+    // because the *call* went in, which is the only reason it ever may.
+    expect(PLAN_STAGES).toHaveLength(4);
+    expect(PLAN_STAGES.map((stage) => stage.key)).toEqual([
+      "dates", "discovery", "routes", "plan",
+    ]);
     for (const stage of PLAN_STAGES) {
       expect(copy(`stage_${stage.key}`, "en")).not.toContain("⚠");
       expect(copy(`stage_${stage.key}_detail`, "en")).not.toContain("⚠");

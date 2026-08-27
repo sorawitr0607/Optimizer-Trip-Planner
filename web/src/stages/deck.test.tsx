@@ -87,6 +87,7 @@ function render(
   summaryLoading = false,
   ranking: Ranking = RANKING,
   insights: Record<string, PlaceInsight> = {},
+  photoError: string | null = null,
 ) {
   return renderToStaticMarkup(
     <PlaceDeck
@@ -104,12 +105,48 @@ function render(
       onWantPhotos={() => {}}
       onWantSummary={() => {}}
       paidPhotoUsd={0.075}
+      photoError={photoError}
       ranking={ranking}
       summaryLoading={summaryLoading}
       summaries={summaries}
     />,
   );
 }
+
+describe("PlaceDeck paid photo control", () => {
+  /**
+   * A failed ask must withdraw the offer, not repeat it.
+   *
+   * The card said no photograph could be found and kept a button beside it inviting the
+   * owner to pay for one again — a control that contradicts the sentence above it, and
+   * the owner reported reading both. This is the same shape as the buy button withdrawing
+   * once a purchase has *succeeded*: asking again buys the answer already in hand.
+   *
+   * Scoped to the card, and session-only: a provider that was merely busy is not a
+   * finding about the place, so a reload offers the purchase again. That is the line
+   * between this and the stored `provider_no_match` refusal, which is a finding.
+   */
+  /** No free photograph at all, which is the state the paid offer exists for.
+   *  `SUMMARY.first` carries two and is correctly never offered a purchase. */
+  const BLANK = { first: { ...SUMMARY.first, image_url: null, image_urls: [] } };
+
+  it("offers the purchase on a card with no free photograph", () => {
+    const html = render(BLANK, [], RANKING.lanes.main_queue, [], false, RANKING, {});
+
+    expect(html).toContain("Get photographs from Google");
+  });
+
+  it("withdraws the purchase once the ask has failed for that card", () => {
+    const html = render(
+      BLANK, [], RANKING.lanes.main_queue, [], false, RANKING, {},
+      "No photograph could be found for this place",
+    );
+
+    expect(html).not.toContain("Get photographs from Google");
+    // And the reason is on the card, where the question was asked.
+    expect(html).toContain("No photograph could be found for this place");
+  });
+});
 
 describe("PlaceDeck", () => {
   it("shows the facts WF-005 requires that can actually differ between places", () => {

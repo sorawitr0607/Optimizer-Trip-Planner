@@ -419,7 +419,24 @@ export function OptimizePage() {
         trip_id: tripId,
         ...wholeDraftWithDates(stored.data ?? null, start, addDays(end, 1)),
       });
-      await queryClient.invalidateQueries({ queryKey: ["setup", tripId] });
+      // Writing the dates moves the setup hash, and discovery stores the hash it ran
+      // against — so the found places go stale the instant the day is added, and the
+      // rebuild below refused with `discovery_stale`. Reported by the owner as the error
+      // that follows pressing "Add a day and rebuild", and it refused *before* doing any
+      // of the work, so the remedy looked like a second dead end.
+      //
+      // Nothing needs re-searching. `discover_places` keys the provider cache on the
+      // destination alone, so with a fresh entry this rebuilds the run from disk with no
+      // network call at all — measured at 0.05s on a 715-place catalogue — and `place_id`
+      // is a hash of name, coordinates and category, so every existing choice still
+      // points at the same place. `StayPlanner` has always done this after writing dates;
+      // this path was the one that did not. **Never `force_refresh` here** — that goes
+      // back to Overpass and undoes the point.
+      await rpc("discover_places", { trip_id: tripId, force_refresh: false });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["setup", tripId] }),
+        queryClient.invalidateQueries({ queryKey: ["discovery", tripId] }),
+      ]);
       await autoResolveAndGenerate.mutateAsync();
     },
     onError: (error) => setRefusal(error instanceof ApiError ? error.code : String(error)),
