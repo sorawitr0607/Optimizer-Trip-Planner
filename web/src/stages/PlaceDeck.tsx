@@ -69,20 +69,13 @@ const LOADING_LINES = [
 /** How long each loading line holds before the next one. */
 const LOADING_LINE_MS = 1400;
 
-/** How long a card may be withheld waiting for its first photograph.
+/** How many cards ahead of the one in front get their lead photograph warmed.
  *
- * The card is deliberately held until its picture can be painted — the swipe decision is
- * made on the photograph, so releasing the text first invites deciding on half the
- * evidence. That is right, and it was unbounded: a Wikimedia thumbnail on a slow link, or
- * a summary request answered at leisure, kept the card behind a skeleton for as long as
- * it took, which the owner reported as cards that load "so long".
- *
- * A deadline keeps the intent and removes the trap. Four rotations of the loading line —
- * long enough that a normal photograph wins the race and the hold is invisible, short
- * enough that nobody sits looking at a skeleton wondering whether the app is alive. The
- * picture is not abandoned: its own placeholder stays inside the photo box and it appears
- * when it arrives. Only the *blocking* stops. */
-const CARD_WAIT_MS = LOADING_LINE_MS * 4;
+ * Four, because `PlacesPage` already fetches summaries ten ahead, so their image URLs are
+ * known long before they are needed, and four is enough runway for fast decisions without
+ * making the burst that earns a Wikimedia 429. The card in front still warms its whole
+ * gallery; these are one image each. */
+const WARM_AHEAD = 4;
 
 /** Idle time before the card nudges, and how long the nudge itself runs. */
 const NUDGE_AFTER_MS = 5000;
@@ -233,8 +226,6 @@ export function PlaceDeck({
   // cache -- so tapping quickly through a card read as the page blinking. A set
   // answers the question actually being asked: has *this* one arrived before.
   const [painted, setPainted] = useState<ReadonlySet<string>>(() => new Set());
-  /** The card whose wait ran out, so it is shown with the picture still coming. */
-  const [overdue, setOverdue] = useState<string | null>(null);
   const markLoaded = (url: string) =>
     setPainted((current) => (current.has(url) ? current : new Set(current).add(url)));
   const [drag, setDrag] = useState<Drag | null>(null);
@@ -322,11 +313,23 @@ export function PlaceDeck({
   // first byte costs two round trips. Warming the next photo and the next card's
   // first photo while this one is being read is the whole fix for "images load very
   // slowly": by the time the card turns over, the bytes are in the browser cache.
-  const nextEntry = queue[1];
-  const nextUrl = nextEntry
-    ? insights[nextEntry.place_id]?.photo_gallery?.[0]?.uri
-      ?? summaries[nextEntry.place_id]?.image_url
-    : null;
+  // The lead photograph of the next several cards, not just the next one.
+  //
+  // One ahead is only enough if every card is read slowly. A card decided in a second
+  // arrives at a picture that has had a second to load, over a `Special:FilePath`
+  // redirect that costs a round trip before the first byte — which is the whole of "the
+  // card takes so long". Warming the run means the picture is usually already decoded by
+  // the time its card reaches the front, and the gate below never has anything to wait
+  // for. Lead images only: the full gallery is warmed for the card actually in front,
+  // and warming six deep for four upcoming cards is the burst Wikimedia answers 429 to.
+  const nextUrls = queue
+    .slice(1, 1 + WARM_AHEAD)
+    .map((item) =>
+      insights[item.place_id]?.photo_gallery?.[0]?.uri
+        ?? summaries[item.place_id]?.image_url
+        ?? null,
+    )
+    .filter((url): url is string => Boolean(url));
   // Which photo is on screen, and which one has finished arriving. Held as the URL
   // rather than a boolean so that tapping through a gallery shows the placeholder again
   // for each new picture, and a cached one never flashes it at all.
@@ -336,12 +339,15 @@ export function PlaceDeck({
   // one thing the owner cannot un-see: the swipe decision is made on the photograph, so
   // showing the text first invites a decision on half the evidence. Only the first
   // photo gates the card — tapping through the gallery must not blank it again.
-  const stillWaiting = summaryLoading
+  // **A card is shown only when it is finished.** There is no deadline releasing it
+  // early: one was tried, at four rotations of the loading line, and the owner reported
+  // the result immediately — a card on screen with `Loading` still sitting in its picture
+  // frame. That is the swipe decision offered on half the evidence, which is the thing
+  // this gate exists to prevent, so releasing early cannot be the answer to a slow card.
+  // Making it *not slow* is: see the warming below, which now covers several cards ahead
+  // rather than one. A broken image still releases the card, through `onError`.
+  const cardPending = summaryLoading
     || (Boolean(currentPhoto) && !painted.has(currentPhoto!) && photoIndex === 0);
-  // Released on the deadline as well as on arrival. Keyed by card id rather than a
-  // boolean, so moving to the next card starts its own wait rather than inheriting a
-  // deadline the previous one had already spent.
-  const cardPending = stillWaiting && overdue !== currentId;
   // Report the card in front, so the panel beside the deck tracks it.
 
   // The gallery index belongs to the card, so it resets with the card.
@@ -419,13 +425,6 @@ export function PlaceDeck({
     return () => window.clearInterval(timer);
   }, [cardPending]);
 
-  // The bound on that wait. Cleared when the card changes, so each card gets its own.
-  useEffect(() => {
-    if (!stillWaiting || !currentId) return;
-    const timer = window.setTimeout(() => setOverdue(currentId), CARD_WAIT_MS);
-    return () => window.clearTimeout(timer);
-  }, [stillWaiting, currentId]);
-
   // The **whole** gallery of the card in front, plus the next card's lead image.
   //
   // Only one photo ahead was warmed, so a second tap outran the prefetch and a third and
@@ -440,16 +439,17 @@ export function PlaceDeck({
   // built: Wikimedia refuses widths outside its own listed set, measured as HTTP 400 for
   // the 640 this app asks for. Warming them early is the way to pay that cost off screen.
   const galleryKey = gallery.join("|");
+  const aheadKey = nextUrls.join("|");
   useEffect(() => {
-    for (const url of [...gallery, nextUrl]) {
+    for (const url of [...gallery, ...nextUrls]) {
       if (!url) continue;
       const image = new Image();
       image.decoding = "async";
       image.src = url;
     }
-    // `gallery` is rebuilt each render; its contents are what matter.
+    // `gallery` and `nextUrls` are rebuilt each render; their contents are what matter.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [galleryKey, nextUrl]);
+  }, [galleryKey, aheadKey]);
 
   if (!entry || !card) {
     const rejectedChoices = choices.filter((c) => c.action === "not_for_trip");

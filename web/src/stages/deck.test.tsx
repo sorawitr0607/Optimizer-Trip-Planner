@@ -279,6 +279,35 @@ describe("PlaceDeck", () => {
     expect(html.indexOf("place-deck-pending")).toBeLessThan(html.indexOf("place-deck-drag"));
   });
 
+  it("keeps the card gated until its photograph has actually painted", () => {
+    /**
+     * **No deadline releases a card early.** One was tried — four rotations of the
+     * loading line — and the owner reported the result the same day: a card on screen
+     * with `Loading` still in its picture frame. That is the swipe decision offered on
+     * half the evidence, which is the thing this gate exists to prevent, so a slow card
+     * is answered by making it *not slow* (the deck warms `WARM_AHEAD` lead images ahead
+     * of the one in front) and never by showing it unfinished.
+     *
+     * A photograph is unpainted in a static render, so this is the pending state: the
+     * placeholder is up and every decision is refused. `act()` guards the same condition
+     * for the keyboard and for a gesture already in flight.
+     */
+    const html = render(SUMMARY);
+
+    expect(html).toContain("place-deck-pending");
+    // Not one disabled control among many: every decision on the card is refused.
+    const decisions = ["Must do", "Interested", "Maybe", "Not for trip"];
+    for (const label of decisions) {
+      const at = html.indexOf(`>${label}<`);
+      expect(at, `${label} should render`).toBeGreaterThan(-1);
+      // The button opens before its label, and carries `disabled` when the card is not
+      // ready. Search the tag rather than the whole document.
+      const tag = html.lastIndexOf("<button", at);
+      expect(html.slice(tag, at), `${label} must be disabled while the card loads`)
+        .toContain("disabled");
+    }
+  });
+
   it("locks every decision while the selected card summary is loading", () => {
     const html = render({}, [], RANKING.lanes.main_queue, [], true);
 

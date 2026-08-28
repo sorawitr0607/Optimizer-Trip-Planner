@@ -5091,3 +5091,37 @@ This is intentionally a **structure-only** backup. It contains no table rows, ow
 statements, or credentials and is safe for the public repository. It can recreate an
 empty service if Supabase is unavailable; it cannot recover trips or cached evidence. A
 private data backup is a different artifact with a different security decision.
+
+## The card wait, reversed by the owner the next morning, 2026-08-28
+
+Yesterday's batch bounded how long a swipe card may be withheld waiting for its first
+photograph, at four rotations of the loading line. It was measured working on the
+deployment — waits of 2497 ms, 5620 ms and 5589 ms against a 5600 ms bound, two of them
+released by the deadline rather than by the picture arriving.
+
+The owner saw the result and rejected it: *"the swipe card is shown before its image got
+finish loaded (it still show 'loading' in pic frame)."*
+
+**They are right, and the measurement was of the wrong thing.** The bound did exactly what
+it was built to do, and what it does is put a card on screen with `Loading` in its picture
+frame — which is the swipe decision offered on half the evidence, the precise failure the
+gate was written to prevent. `PlaceDeck` has carried that reasoning in a comment since the
+gate went in. I read it, quoted it while writing the bound, and bounded it anyway.
+
+The report it was answering — *"some swipe card still loading so long"* — was real. The
+error was treating "shown sooner" as the only way to answer "slow". The other way is to
+make the wait unnecessary, and there was obvious room: the deck warmed the whole gallery
+of the card in front **and exactly one lead image ahead of it**. One ahead only helps a
+card read slowly; a decision taken in a second arrives at a picture that has had a second
+to load, over a `Special:FilePath` redirect that costs a round trip before the first byte.
+
+So the deadline is gone and `WARM_AHEAD` is 4. `PlacesPage` already fetches summaries ten
+ahead, so the image URLs of the next four are known long before they are needed; lead
+images only, because warming six-deep galleries for four upcoming cards is the burst
+Wikimedia answers 429 to. A broken image still releases the card through `onError`.
+
+Two things worth keeping from the round trip. **A bound is not a fix for slowness, it is a
+decision about what to show while slow** — and here the honest answer was "nothing yet".
+And **the measurement said the mechanism worked, not that the behaviour was wanted**;
+those are different claims, and reporting the first as though it settled the second is
+what sent this back.

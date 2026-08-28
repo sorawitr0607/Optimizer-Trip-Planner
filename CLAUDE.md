@@ -511,6 +511,11 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   to stay", a populated form where nothing builds. Two real bugs, one reported, and reading
   found the wrong one first. Source reading generates candidates; only the running app says
   which candidate the owner met.
+- **A measurement that a mechanism works is not evidence that the behaviour is wanted.**
+  The card-wait bound was measured firing correctly on the deployment — three waits, two
+  released at the ceiling — and reported as verified. It was: the mechanism worked. The
+  owner rejected the behaviour the next morning. Separate the two claims when reporting,
+  because only the second is what was asked for.
 - **"Verified" means the thing that broke was exercised.** Two claims this month were
   reported as verified and were not: an advisory-lock probe that checked the function
   overload with a stand-in string while the real key carried a NUL byte Postgres refuses,
@@ -549,6 +554,17 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   because the control lived inside the branch that draws a map where a photograph should
   be. A single Commons shot of the car park next door is as short of a picture of the
   place as nothing at all. Two literals for one threshold is how they drifted.
+- **A swipe card is shown only when its first photograph has painted, and no deadline
+  releases it early.** The swipe decision is made on the picture, so a card whose frame
+  still says `Loading` is a decision offered on half the evidence. A bound was tried —
+  four rotations of the loading line — and measured working on the deployment, and the
+  owner rejected it the next morning for doing exactly what it was built to do. **A bound
+  is not a fix for slowness; it is a decision about what to show while slow**, and here
+  the honest answer is "nothing yet". Answer a slow card by making it not slow: the deck
+  warms the whole gallery of the card in front plus the lead image of the next
+  `WARM_AHEAD` (4), and `PlacesPage` already has their URLs because it fetches summaries
+  ten ahead. Lead images only — six-deep galleries for four upcoming cards is the burst
+  Wikimedia answers 429 to. A broken image still releases the card, through `onError`.
 - **The deck's buy button has three separate withdrawals, and they sit at different
   layers.** It renders only when `paidPhotoUsd != null` **and** the card is thinly
   pictured **and** the place has no session insight **and** this card's ask has not
