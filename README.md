@@ -133,6 +133,9 @@ Zoom out far enough and the destination country's own outline appears, so a plac
 
 - **Local SQLite Database**: Stored in `data/tourist.sqlite3`.
 - **Database Migrations & Safety**: The database is at schema 14. Schema upgrades automatically create a timestamped backup before migrating.
+- **Hosted structure recovery**: The live Supabase `public` schema is archived under
+  `supabase/backups/`, including hosted-only queue and ownership structures. It contains
+  no row data; see the recovery README before restoring.
 - **Snapshot Exporters**:
   - **Excel Workbook (`.xlsx`)**: 6-sheet formatted trip workbook (Timetable, Costs, To-Do List, Things to Bring, Transport, etc.).
   - **Calendar Feed (`.ics`)**: Standard iCalendar feed for import into Apple Calendar, Google Calendar, or Outlook.
@@ -150,6 +153,8 @@ Zoom out far enough and the destination country's own outline appears, so a plac
 - `deploy/macos/` — the launchd agent that keeps that worker alive across crash, sleep
   and reboot, and the `status` / `logs` / `restart` control surface for it.
 - `supabase/schema.sql` — generated from `store.SCHEMA`, never hand-edited.
+- `supabase/backups/` — schema-only snapshot of the live Supabase structure, checksum,
+  refresh command, and empty-database recovery procedure.
 - `web/` — React, TypeScript, Tailwind, route shell, and stage gates.
 - `i18n/copy.json` and `tokens.css` — copy and design truth shared across renderers.
 - `travel_planner/` — planner domain logic, storage, providers, ranking, and optimization.

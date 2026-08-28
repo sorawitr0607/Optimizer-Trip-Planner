@@ -5073,3 +5073,21 @@ hosted egress is a release blocker, not a dashboard to inspect after deployment.
 This code prevents new traffic from repeating the mechanism. It cannot remove egress
 already counted by Supabase; restoring availability in the current over-quota billing
 period remains an account action (upgrade/support or the provider's billing reset).
+
+### The live structure now has an offline recovery copy, 2026-08-28
+
+The generated `supabase/schema.sql` was already enough to create the application tables
+known to `store.SCHEMA`, but not enough to claim that the deployed structure was backed
+up. `jobs` and `trips.owner_token` are deliberately additive, hosted structures outside
+`SCHEMA_VERSION`; copying the generated file would omit both.
+
+`scripts/backup_supabase_schema.py` now runs the real PostgreSQL `pg_dump` against
+`POSTGRES_URL_NON_POOLING`, passing credentials only through process environment. The
+committed 2026-08-28 snapshot is the live `public` schema from PostgreSQL 17.6: 24 tables,
+3 indexes, 8 triggers, and 2 trigger functions. Its checksum is committed beside it, and
+the recovery README documents the destructive empty-database precondition explicitly.
+
+This is intentionally a **structure-only** backup. It contains no table rows, owner/grant
+statements, or credentials and is safe for the public repository. It can recreate an
+empty service if Supabase is unavailable; it cannot recover trips or cached evidence. A
+private data backup is a different artifact with a different security decision.

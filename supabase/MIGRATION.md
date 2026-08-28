@@ -21,6 +21,18 @@ Neon in `us-east-1` and was moved for one measured reason, recorded below.
   reasoned about: UPDATE and DELETE on the ledger are refused with the original
   message, and a guarded delete succeeds once a `trip_deletions` marker exists.
 
+## Live recovery snapshot
+
+The exact deployed `public` structure is backed up at
+`backups/supabase-public-schema-2026-08-28.sql`, with its checksum and recovery procedure
+in `backups/README.md`. Unlike generated `schema.sql`, this snapshot also contains the
+runtime `jobs` queue, `trips.owner_token`, and their indexes. It is schema-only and safe
+to commit: it contains no rows, credentials, owners, or grants.
+
+This discharges **structure recovery only**. It does not preserve trips, cached provider
+responses, or any other row data; a private data dump remains a separate decision and
+must never be committed to this public repository.
+
 ### Region is a performance decision, not a default
 
 Measured from the owner's machine, same code, same pool, only the region differs:
@@ -54,7 +66,10 @@ to the same continent as its users was worth more than any code change here.
 3. **`RAISE(ABORT, …)`** becomes a PL/pgSQL function per rule, raising the same
    message.
 
-## Not done — and none of this is small
+## Historical pre-deployment gaps — retained for the implementation record
+
+The bullets below describe the state before the hosted port landed. They are history,
+not the current release status above.
 
 - **`store.py` still speaks SQLite only.** 65 statements and 179 `?` placeholders
   (Postgres wants `%s`). The good news is the seam is real: `sqlite3` is imported

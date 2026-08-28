@@ -55,6 +55,10 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   the owner decides what it is.
 - `supabase/schema.sql` is **generated from `store.SCHEMA`**, never hand-edited. A second schema is a
   second source of truth.
+- `supabase/backups/` is the **live structure recovery artifact**, not a second schema
+  source. Refresh it with `scripts/backup_supabase_schema.py` after hosted structural
+  changes. It deliberately contains no rows, so it does not satisfy the private data
+  backup required before a destructive migration.
 - Every paid provider call routes through `actions._spend()`. An unpriced operation raises rather than
   being assumed free, and the ledger is append-only by trigger. **`_spend` goes before the request,
   on every path.** `_area_amenity_counts` had it after, so the cap was consulted only once the call
