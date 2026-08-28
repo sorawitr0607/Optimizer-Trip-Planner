@@ -5195,3 +5195,90 @@ that is the owner's trade to make, not a bug to fix quietly.
 
 No baseline moved: none of these render on a captured screen. The recapture was only to
 clear the staleness flag, and it confirmed the change is invisible where the gate looks.
+
+## The timeline shows the card's photograph, 2026-08-28
+
+Asked for: the picture on a swipe card should also appear against that place in the
+itinerary timeline.
+
+It nearly did already. `DayStops` has shown a thumbnail and a lightbox for a while — but
+built from `osmPhotoUrl(item.photo_reference)`, the OpenStreetMap tag alone. That is one of
+the three sources `shared/photos.ts` assembles and the narrowest of them, so a place
+pictured from Wikidata's `P18`, a Wikipedia article, or a Commons geosearch had a
+photograph on `/places` and nothing here. `galleryFor` already existed as the single
+assembly point; the timeline simply was not calling it.
+
+`ItineraryPage` reads `list_place_summaries` once per trip and passes a `photoOf`
+callback, the same shape as the `nameOf` and `coordsOf` it already passes, so `DayStops`
+stays presentational and the read stays owned by the screen that does the reading.
+`staleTime: Infinity` because a summary changes only when something re-fetches it and this
+screen never does — one round trip per trip per session, on a database whose egress is
+billed.
+
+**The paid overlay is deliberately not reachable here.** `enrich_place_card` is
+session-only state in `PlacesPage`, never persisted, so there is nothing on this screen to
+read and no way for it to spend. The free store, and only the free store.
+
+### Two things the implementation had to decide
+
+**A geosearch photograph gets no row thumbnail.** The disclosure that a picture was found
+by coordinates rather than of the place lives in the expanded detail, beside the full-size
+image — and the row is always on screen with no space for a caption. A thumbnail on the
+stop's own row with nothing beside it is the quiet claim `photos_are_nearby` exists to
+prevent, so those photographs appear on expand and not before. Confident ones get both.
+The test asserts the pair, so it reads as the disclosure rule rather than a missing
+feature.
+
+**`.day-stop-thumb` and `.day-stop-photo img` joined the capture freeze list.** They had
+never needed to be there: the only pictures that screen could show came from an
+OpenStreetMap tag the fixture trip's stops do not carry, so the itinerary baselines
+happened to contain no third-party pixels. With the summary store behind them that stops
+being true, and a Wikimedia re-encode would drift every itinerary baseline on every
+capture — the failure that whole rule exists for, which was found at peak 28 with nothing
+in the repo changed.
+
+### What the live check found, which is worth more than the feature
+
+Driven locally against the fixture trip: nine stop rows on day one, **zero thumbnails**.
+Not a bug — none of the scheduled places has a stored summary at all. The free store only
+holds what something fetched, and the deck fetches for the window it deals; a place chosen
+from the list view rather than dealt as a card may never have had one. Which is also why
+those places had no swipe-card photograph to mirror in the first place.
+
+So the honest scope of this change: wherever the card had a picture, the timeline now has
+the same one. Where the card never had one, nothing appears, and making that better is a
+different job — fetching summaries from the itinerary, which is free but is a write from a
+screen that currently only reads.
+
+### The Porto trip's "duplicate" days 7 and 8, 2026-08-28
+
+Reported as two duplicate day plans. They are neither duplicated nor wrong.
+
+The trip runs 2026-09-24 to 10-01 — eight days — and chose **22 places, of which all 22
+were scheduled**, zero unscheduled. They fill through 09-29. So 09-30 and 10-01 have
+nothing left to place, and `include_operational_timeline` still emits the full shape of a
+day for each: breakfast, free time, lunch, free time, dinner. Two consecutive days of the
+same handful of rows with no stops between them is what a duplicate looks like from the
+outside.
+
+```
+09-29   Shopping Center Brasília, Chapel of Souls        12 items
+09-30   breakfast / free / lunch / free / dinner          8 items, no visits
+10-01   the same, plus pack, checkout, airport            9 items, no visits
+```
+
+The rows are correct and stay — 10-01's checkout and airport run are real, and a free day
+genuinely has meals in it. What was missing is the sentence saying why the day looks like
+that, so `day_has_no_places` now says it: every place chosen fits in the other days, and
+what follows is the shape of a free day.
+
+**Keyed on the day having no visit, with the prep evening excluded.** The first pass keyed
+on "no visits" alone, which also caught "The evening before you go" — a block that never
+carries places by design, is named rather than numbered, and would have been told that the
+owner's places fit in the other days. The exclusion reuses `prepFirst && dayIndex === 0`,
+the same test the label already makes, so the two cannot disagree about which block this
+is. Both guards were checked by removing each and watching the assertion fail.
+
+The general lesson for the next report of this shape: **count chosen against scheduled
+before looking at the optimizer.** Twenty-two of twenty-two said immediately that the
+plan was complete and the question was presentational.

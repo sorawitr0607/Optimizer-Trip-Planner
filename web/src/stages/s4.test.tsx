@@ -433,6 +433,134 @@ describe("the elapsed counter on a wait", () => {
 });
 
 describe("ItineraryPage", () => {
+  it("says why a day carries no places instead of looking like a copy", () => {
+    /**
+     * Reported as "2 duplicate day plans, day 7 and day 8". They were not duplicates and
+     * the plan was not wrong: the owner's Porto trip chose 22 places, all 22 were
+     * scheduled, and the trip ran two days longer than they fill. The operational
+     * timeline is still emitted for such a day — breakfast, free time, lunch, free time,
+     * dinner — so two consecutive days rendered the same rows with no stops between them.
+     *
+     * The rows are right. The sentence saying why the day looks like that was missing.
+     */
+    // A second day carrying only a meal and a buffer, which is what the operational
+    // timeline emits once every chosen place is already scheduled elsewhere.
+    const freeDay = {
+      date: "2030-01-02",
+      start: "08:00",
+      end: "13:30",
+      items: [
+        { order: 1, item_id: "e#01", type: "meal", subject_id: "breakfast", date: "2030-01-02", start: "08:00", end: "08:45", duration_minutes: 45, status: "confirmed", display_name: "Breakfast near the base or first stop" },
+        { order: 2, item_id: "e#02", type: "buffer", subject_id: "free", date: "2030-01-02", start: "08:45", end: "17:30", duration_minutes: 525, status: "confirmed", reason: "free_time_or_rest" },
+      ],
+      stops: [],
+      fallbacks: [],
+      totals: { scheduled_visits: 0, visit_minutes: 0, travel_minutes: 0, walking_minutes: 0, rewarding_walking_minutes: 0, plain_walking_minutes: 0, buffer_minutes: 525, meal_minutes: 45, preparation_minutes: 0, logistics_minutes: 0 },
+      highest_risk: null,
+    };
+    const seedTwoDays = (client: QueryClient) => {
+      client.setQueryData(["export_snapshot", TRIP, "en"], {
+        ...SNAPSHOT,
+        data: { ...SNAPSHOT.data, days: [...SNAPSHOT.data.days, freeDay] },
+      });
+    };
+
+    const html = render(<ItineraryPage />, "en", seedTwoDays, "?view=timeline&date=2030-01-02");
+    expect(html).toContain("No places are scheduled on this day");
+    // The rows themselves are right and stay: this is a sentence, not a suppression.
+    expect(html).toContain("Breakfast near the base or first stop");
+
+    // And the day that does have places says nothing of the kind.
+    const busy = render(<ItineraryPage />, "en", seedTwoDays, "?view=timeline&date=2030-01-01");
+    expect(busy).toContain("Longshan Temple");
+    expect(busy).not.toContain("No places are scheduled on this day");
+
+    // Nor does the prep evening, which never carries places by design and is already
+    // named rather than numbered — "The evening before you go" explains itself, and
+    // telling the owner their places fit in the other days would describe it wrongly.
+    const prepOnly = {
+      ...freeDay,
+      date: "2029-12-31",
+      items: [
+        { order: 1, item_id: "p#01", type: "preparation", subject_id: "pack", date: "2029-12-31", start: "19:00", end: "19:30", duration_minutes: 30, status: "recheck", display_name: "Pack the day bag" },
+      ],
+    };
+    const withPrepEvening = render(<ItineraryPage />, "en", (client: QueryClient) => {
+      client.setQueryData(["export_snapshot", TRIP, "en"], {
+        ...SNAPSHOT,
+        data: { ...SNAPSHOT.data, days: [prepOnly, ...SNAPSHOT.data.days] },
+      });
+    }, "?view=timeline&date=2029-12-31");
+    expect(withPrepEvening).toContain("The evening before you go");
+    expect(withPrepEvening).not.toContain("No places are scheduled on this day");
+  });
+
+  it("shows a stop the same photograph its swipe card showed", () => {
+    /**
+     * `DayStops` built its own URL from `osmPhotoUrl(item.photo_reference)` — the
+     * OpenStreetMap tag alone, one of the three sources `shared/photos.ts` assembles and
+     * the narrowest of them. A place pictured from Wikidata or a Commons geosearch had a
+     * photograph on `/places` and none here, which is what the owner asked to close.
+     *
+     * The paid overlay is deliberately unreachable from this screen: `enrich_place_card`
+     * is session-only state held in `PlacesPage` and never persisted, so there is nothing
+     * here to read and nothing to spend. This is the free store.
+     */
+    const html = render(<ItineraryPage />, "en", (client) => {
+      client.setQueryData(["place_summaries", TRIP], {
+        longshan: {
+          place_id: "longshan",
+          qid: "Q706976",
+          image_url: "https://commons.example/longshan.jpg",
+          image_urls: ["https://commons.example/longshan.jpg"],
+          licence: "CC BY-SA",
+          source_urls: {},
+        },
+      });
+    }, "?view=timeline");
+
+    expect(html).toContain("day-stop-thumb");
+    expect(html).toContain("commons.example/longshan.jpg");
+  });
+
+  it("says a photograph found by location is not of the place", () => {
+    // `photos_are_nearby` is the geosearch disclosure. It was stored and rendered
+    // nowhere once already, and a flag nothing prints is not a disclosure — so every
+    // surface that shows one of these has to carry the sentence.
+    const html = render(<ItineraryPage />, "en", (client) => {
+      client.setQueryData(["place_summaries", TRIP], {
+        longshan: {
+          place_id: "longshan",
+          qid: null,
+          image_url: "https://commons.example/somewhere-near.jpg",
+          image_urls: ["https://commons.example/somewhere-near.jpg"],
+          photos_are_nearby: true,
+          licence: "CC BY-SA",
+          source_urls: {},
+        },
+      });
+    }, "?view=timeline");
+
+    // No thumbnail on the row: it is always on screen, a row has no space for a
+    // caption, and an undisclosed picture of somewhere *near* the stop is the quiet
+    // claim this app does not make. The picture is still offered inside the expanded
+    // detail, where the disclosure sits beside it.
+    expect(html).not.toContain("day-stop-thumb");
+    // And a confident photograph in the same position does get one, so this is the
+    // disclosure rule at work and not simply a missing feature.
+    const confident = render(<ItineraryPage />, "en", (client) => {
+      client.setQueryData(["place_summaries", TRIP], {
+        longshan: {
+          place_id: "longshan", qid: "Q706976",
+          image_url: "https://commons.example/longshan.jpg",
+          image_urls: ["https://commons.example/longshan.jpg"],
+          licence: "CC BY-SA", source_urls: {},
+        },
+      });
+    }, "?view=timeline");
+    expect(confident).toContain("day-stop-thumb");
+  });
+
   it("renders all six row types, the half-day fallback, and both available exports", () => {
     // `?view=timeline` because the map is what opens by default now. The tab is in the
     // URL precisely so this stays assertable rather than becoming unreachable state.
@@ -446,6 +574,9 @@ describe("ItineraryPage", () => {
     expect(html).toContain("Fallback for this half-day");
     expect(html.indexOf("Fallback for this half-day")).toBeGreaterThan(html.indexOf("Longshan Temple"));
     expect(html).toContain('<dialog class="day-stop-lightbox"');
+    // No summary seeded and the fixture's stops carry no OpenStreetMap tag, so there is
+    // no photograph to show — the state the timeline was permanently stuck in.
+    expect(html).not.toContain("day-stop-thumb");
     expect(html).toContain(`/api/export?trip=${TRIP}&amp;kind=workbook.xlsx`);
     expect(html).toContain(`/api/export?trip=${TRIP}&amp;kind=checklist.ics`);
     const mapHtml = render(<ItineraryPage />, "en", undefined, "?view=map");

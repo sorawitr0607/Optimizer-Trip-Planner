@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
 import { mapsLink } from "../shared/map";
-import { osmPhotoUrl } from "../shared/photos";
+
 import { durationText, type TimedItem } from "../shared/tripClock";
 
 /**
@@ -62,6 +62,20 @@ export interface DayStopsProps {
   /** Coordinates by `subject_id`, from the day's stops. A visit without one gets no
    *  maps link rather than a name search, which lands on the wrong Din Tai Fung. */
   coordsOf: (subjectId: string) => { latitude: number; longitude: number } | null;
+  /**
+   * The photograph for one stop, or null.
+   *
+   * A callback, like `nameOf` and `coordsOf`, so this stays a presentational component
+   * and `ItineraryPage` owns the read. It used to build its own from
+   * `osmPhotoUrl(item.photo_reference)` — the OpenStreetMap tag alone, which is one of
+   * the three sources `shared/photos.ts` assembles and the narrowest of them. So a place
+   * whose picture the swipe card had shown from Wikidata or Commons had no picture here,
+   * which is the gap the owner asked to close.
+   *
+   * `nearby` carries the geosearch disclosure through: a photograph found by coordinates
+   * is of somewhere *near* the place, and every surface that shows one has to say so.
+   */
+  photoOf: (item: TimedItem) => { src: string; nearby: boolean } | null;
   /** Empty means the day itself is empty; a search with no hits says so differently. */
   emptyText: string;
 }
@@ -76,6 +90,7 @@ export function DayStops({
   onToggle,
   nameOf,
   coordsOf,
+  photoOf,
   emptyText,
 }: DayStopsProps) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
@@ -99,7 +114,8 @@ export function DayStops({
           const done = isDone(item.key);
           const isNow = moment >= item.startAt && moment < item.endAt;
           const isPinned = pinned !== null && +pinned === +item.startAt;
-          const photo = osmPhotoUrl(item.photo_reference);
+          const picture = photoOf(item);
+          const photo = picture?.src ?? null;
           const details = [
             item.address ? ["stop_address", item.address] : null,
             item.notes ? ["stop_notes", item.notes] : null,
@@ -197,7 +213,14 @@ export function DayStops({
                       ) : null}
                     </span>
                   </span>
-                  {photo ? (
+                  {/* The row's thumbnail is always on screen and a row has no space for
+                      a caption, so it carries only photographs that are *of* the place.
+                      A Commons geosearch picture is of somewhere near it, and a
+                      thumbnail on the stop's own row with nothing beside it is exactly
+                      the quiet claim the disclosure exists to prevent. Those are still
+                      reachable — the expanded detail below shows them full size with
+                      the sentence that says where they came from. */}
+                  {photo && !picture?.nearby ? (
                     <img alt="" className="day-stop-thumb" loading="lazy" src={photo} />
                   ) : null}
                   {details.length || photo ? <span className="day-stop-chev">›</span> : null}
@@ -225,6 +248,19 @@ export function DayStops({
                     >
                       <img alt={copyFormat("stop_photo", language, { name })} src={photo} />
                     </button>
+                  ) : null}
+                  {/* Where the picture came from, on the same rule the deck follows: a
+                      Commons geosearch photograph is of somewhere *near* the place, not
+                      of it, and a surface that shows one without saying so is making the
+                      quiet claim this app does not make. `photos_are_nearby` had been
+                      stored and rendered nowhere for a while once already — a flag
+                      nothing prints is not a disclosure. */}
+                  {photo ? (
+                    <p className="setup-hint">
+                      {picture?.nearby
+                        ? copy("photo_is_nearby", language)
+                        : copy("wikipedia_credit", language)}
+                    </p>
                   ) : null}
                   {(() => {
                     const point = coordsOf(item.subject_id);

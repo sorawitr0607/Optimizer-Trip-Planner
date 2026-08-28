@@ -582,6 +582,41 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   work the new attempt has not done. Report a stage when its call **stops running**, not
   when it succeeds — a failed Overpass block has still been passed, and `incomplete_blocks`
   is what names it.
+- **A day with no places is explained, not suppressed — and the prep evening is not one.**
+  Reported as "2 duplicate day plans, day 7 and day 8". They were not duplicates and the
+  plan was not wrong: the owner's Porto trip chose 22 places, **all 22 were scheduled**,
+  and the trip ran two days longer than they fill. `include_operational_timeline` still
+  emits breakfast, free time, lunch, free time and dinner for such a day, so two
+  consecutive days rendered the same rows with no stops between them and read as a copy.
+  The rows are right and stay — 10-01 carries the real checkout and airport run — so what
+  was missing is `day_has_no_places` saying why the day looks like that. Keyed on the day
+  having no `visit` item, and **excluding the prep evening** via the same
+  `prepFirst && dayIndex === 0` test the label uses: that block never carries places by
+  design, is named rather than numbered, and telling the owner their places fit elsewhere
+  would describe it wrongly. Diagnose a "duplicate day" report by counting chosen against
+  scheduled before looking at the optimizer.
+- **`/itinerary` shows the same photograph the swipe card showed, from the free store
+  only.** `DayStops` built its own URL from `osmPhotoUrl(item.photo_reference)` — the
+  OpenStreetMap tag alone, the narrowest of the three sources `galleryFor` assembles — so
+  a place pictured from Wikidata or Commons had a picture on `/places` and none here.
+  `ItineraryPage` reads `list_place_summaries` once per trip (`staleTime: Infinity`) and
+  passes a `photoOf` callback, the same shape as `nameOf` and `coordsOf`, so `DayStops`
+  stays presentational. **The paid overlay is deliberately unreachable from this screen**:
+  `enrich_place_card` is session state in `PlacesPage`, never persisted, so there is
+  nothing here to read and nothing to spend.
+  Two consequences worth knowing. A stop can only show what the free store already holds,
+  and the store only holds what something fetched — a place chosen from the list rather
+  than dealt by the deck may have no summary at all, which is also why it had no
+  swipe-card picture to mirror. And **a geosearch photograph gets no row thumbnail**: the
+  row is always on screen and has no space for a caption, so an undisclosed picture of
+  somewhere *near* the stop would be exactly the quiet claim `photos_are_nearby` exists to
+  prevent. Those still appear full size inside the expanded detail, with the sentence.
+- **Any new remote image needs adding to the capture freeze list in `web/src/main.tsx`.**
+  It blanks `.place-deck-photo img`, `.place-about-photo`, `.place-insight img` and now
+  `.day-stop-thumb`, `.day-stop-photo img`. Third-party pixels re-encode — a Wikimedia
+  thumbnail failed this gate at peak 28 with nothing in the repo changed. The day-stop
+  selectors were absent for as long as the only pictures there came from an OpenStreetMap
+  tag the fixture trip did not carry; the omission cost nothing until the pictures arrived.
 - **`PHOTO_THIN_AT` is "one or none", written once in `shared/photos.ts`.** The detail
   panel's `thinlyPictured` always meant one; the deck offered its buy button only at zero,
   because the control lived inside the branch that draws a map where a photograph should

@@ -54,7 +54,15 @@ if (theme === "dark" || theme === "light") {
     // at peak 28 with nothing in this repo changed. `opacity: 0` blanks the pixels and
     // keeps the element laid out at its real size, so a layout change still fails —
     // which is the part of a photograph this gate can meaningfully own.
-    ".place-deck-photo img,.place-about-photo,.place-insight img{opacity:0!important}";
+    // `.day-stop-*` joined this list when `/itinerary` started showing the same
+    // photographs as the swipe card. Before that the only pictures on that screen came
+    // from an OpenStreetMap tag, which the fixture trip's stops did not carry, so the
+    // baselines happened to contain no third-party pixels and the omission cost nothing.
+    // With the free summary store behind them most stops now have one, and a Wikimedia
+    // re-encode would drift every itinerary baseline on every capture — the failure this
+    // whole rule exists for.
+    ".place-deck-photo img,.place-about-photo,.place-insight img,"
+    + ".day-stop-thumb,.day-stop-photo img{opacity:0!important}";
   document.head.append(frozen);
   // The one state the capture flag *hides*, asked for back on one screen. The tour
   // is first-visit-only and a fresh Chrome profile is always a first visit, so it

@@ -16,11 +16,13 @@ import {
   type PlanDrift,
   type RouteShapes,
   type TripForecast,
+  type PlaceSummary,
 } from "../api/client";
 import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
 import { loadBasemap } from "../shared/basemap";
 import { mapsLink, type MapPlace } from "../shared/map";
+import { galleryFor } from "../shared/photos";
 import { DayStops } from "./DayStops";
 import { PlanReady } from "./PlanReady";
 import { TripNow } from "./TripNow";
@@ -375,6 +377,29 @@ export function ItineraryPage() {
   });
   // The walking paths, so the day's line follows the streets rather than cutting across
   // the river. Free: the shape arrived in the routing response the trip already paid for.
+  /**
+   * The free photograph store, so a stop can show the picture its swipe card showed.
+   *
+   * `DayStops` built its own from `osmPhotoUrl(item.photo_reference)` — the
+   * OpenStreetMap tag alone, one of the three sources `shared/photos.ts` assembles and
+   * the narrowest. A place pictured from Wikidata or a Commons geosearch therefore had a
+   * photograph on `/places` and none here, which is the gap the owner asked to close.
+   *
+   * The **paid** overlay is deliberately not reachable from this screen and must not be:
+   * `enrich_place_card` is a session-only overlay held in `PlacesPage` state, never
+   * persisted, so there is nothing here to read and nothing to spend. This is the free
+   * store and only the free store.
+   *
+   * `staleTime: Infinity` because a summary changes only when something re-fetches it,
+   * and this screen never does — the read is one round trip per trip per session rather
+   * than one per render, which is the rule egress on this database is billed by.
+   */
+  const summaries = useQuery({
+    queryKey: ["place_summaries", tripId],
+    queryFn: () => rpc<Record<string, PlaceSummary>>("list_place_summaries", { trip_id: tripId }),
+    enabled: Boolean(tripId),
+    staleTime: Infinity,
+  });
   const shapes = useQuery({
     queryKey: ["route_shapes", tripId],
     queryFn: () => rpc<RouteShapes>("route_shapes", { trip_id: tripId }),
@@ -807,6 +832,27 @@ export function ItineraryPage() {
       </div>
       <div className="itinerary-panels">
         <div className="itinerary-panel timeline" data-active={visibleTab === "timeline"}>
+          {/* A day with no places, said out loud.
+              Reported as "2 duplicate day plans, day 7 and day 8". They are not
+              duplicates and nothing is wrong with the plan: the owner's Porto trip chose
+              22 places, all 22 were scheduled, and the trip is two days longer than they
+              fill. The operational timeline is still emitted for those days — breakfast,
+              free time, lunch, free time, dinner — so two consecutive days rendered the
+              same handful of rows with no stops between them and read as a copy.
+              The rows are right and stay; what was missing is the sentence saying why the
+              day looks like that. Keyed on the day having no visit rather than on the
+              trip's length, so it is true of any such day including the departure one. */}
+          {!needle
+            && dayItems.length
+            && !dayItems.some((item) => item.type === "visit")
+            // Not the prep evening. That block never carries places by design and is
+            // already named rather than numbered — "The evening before you go" explains
+            // itself, and telling someone their chosen places fit in the other days would
+            // describe it wrongly. `prepFirst && dayIndex === 0` is the same test the
+            // label uses, so the two cannot disagree about which block this is.
+            && !(prepFirst && dayIndex === 0) ? (
+            <p className="setup-hint">{copy("day_has_no_places", language)}</p>
+          ) : null}
           <DayStops
             coordsOf={(subjectId) => {
               const stop = day.stops.find((entry) => entry.subject_id === subjectId);
@@ -822,6 +868,15 @@ export function ItineraryPage() {
             nameOf={nameOf}
             onPin={pinTo}
             onToggle={ticks.toggle}
+            photoOf={(item) => {
+              const summary = summaries.data?.[item.subject_id];
+              const gallery = galleryFor(summary, {
+                photo_reference: item.photo_reference ?? null,
+              });
+              if (!gallery.length) return null;
+              // Best first, which is the same picture the deck leads with.
+              return { src: gallery[0], nearby: Boolean(summary?.photos_are_nearby) };
+            }}
             pinned={pinned}
           />
           {/* What to drop when the day runs late is wanted while it is running late. */}
