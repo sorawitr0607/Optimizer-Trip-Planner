@@ -5125,3 +5125,73 @@ decision about what to show while slow** — and here the honest answer was "not
 And **the measurement said the mechanism worked, not that the behaviour was wanted**;
 those are different claims, and reporting the first as though it settled the second is
 what sent this back.
+
+## Three from the phone, and the third was not where it looked, 2026-08-28
+
+### "Show 20 more from here" did nothing
+
+```js
+const dealMore = () => { setShown(LANE_PAGE); };
+```
+
+It assigned the value `shown` already held, so the window recomputed identically and the
+deck did not move. I had seen this myself two days earlier while hunting for a card to
+test a paid failure on — pressed it, watched "Showing the 20 strongest of 121" not change,
+and moved on to another approach instead of reading the handler. The catalogue's own pager
+three hundred lines below has always used `shown => shown + CATALOG_PAGE`.
+
+Verified through the button: "Showing the 20 strongest of 315" → "Showing the 40 strongest
+of 315", and the deck deals again.
+
+### The comfort refusal with no button, which was a stale query
+
+The screen said the plan schedules every place and is blocked only by a comfort budget,
+told the owner to agree to the figure in the panel above, and offered nothing to press.
+
+The first fix was wrong, or rather too shallow: the note rendered on `comfortOnly` (the
+stored variant's violations) while the button additionally required `overBudget` (the live
+tradeoff report), so I gated them together and offered a rebuild where there was nothing
+to agree to. Then I built a trip that actually reaches the state — eleven places, the
+`low_walking` ladder's 35-minute budget, measured 180 — and **the button still did not
+appear.** The report over HTTP returned both overages; the browser had neither.
+
+`comfort_tradeoffs` is derived from the plan, and **only `acceptAll` invalidated it.**
+Every build path refreshed `plan_preview` and left the report holding what it said before
+a plan existed: nothing exceeding. Two things vanish together on that stale answer —
+`ComfortTradeoffs` filters to zero rules and renders nothing, so "the panel above" is not
+there, and `overBudget` is empty, so the accept control has no data. The owner's report
+described the state exactly.
+
+`invalidatePlan()` now invalidates the pair from one place, so a new build path cannot
+refresh one and forget the other. The copy stopped pointing "above" and points just below,
+where the button is. Verified end to end: panel back with both rules, button reading
+"Accept 180, 180 minutes and rebuild", pressed, block cleared, "Use this itinerary"
+offered.
+
+**The lesson is about where to look.** A control that is *missing* rather than disabled is
+a data question before it is a rendering question. Gating the message and button together
+was right and would have shipped a rebuild button that rebuilt into the same refusal.
+
+### The photo sentence, split three ways rather than two
+
+The owner asked for different text before and after pressing the paid button, so the
+second one can say it really cannot find a picture. The pre-press line already says "No
+free source has a photograph of this place"; the post-press one now names Google.
+
+But one sentence for every failure would have been a lie in the common case. A 404 means
+Google has none either; a 503 means Google was never reached, and printing "there is none"
+would assert a fact about the place out of a network error — the placeholder-as-finding
+mistake in another costume. Three keys, three claims.
+
+### And the Swiss pictures, which are not a defect
+
+Reported alongside: many cards without pictures on the Switzerland trip. Measured rather
+than assumed — Zurich 75% of summaries carry an image, Interlaken 43%, and of Interlaken's
+16 imageless places **14 have no Wikidata entry at all**. Every summary is already at the
+current `cache_version`, so refetching changes nothing. The Commons geosearch that could
+rescue them is filtered by name on purpose; loosening it is what once offered a photograph
+of a bus as a photograph of a hill. Raising the number means accepting wrong pictures, and
+that is the owner's trade to make, not a bug to fix quietly.
+
+No baseline moved: none of these render on a captured screen. The recapture was only to
+clear the staleness flag, and it confirmed the change is invisible where the gate looks.

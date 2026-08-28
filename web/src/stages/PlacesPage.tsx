@@ -291,8 +291,14 @@ export function PlacesPage() {
   const inWindow = new Set(windowNow);
   const entries = allEntries.filter((entry) => inWindow.has(entry.place_id));
   const laneRemaining = allEntries.length - entries.length;
+  // **Extend the page, do not re-set it.** This read `setShown(LANE_PAGE)` — assigning
+  // the value `shown` already held — so "Show 20 more from here" recomputed an identical
+  // window and the deck did not move. Reported by the owner as the button not working,
+  // and reproducible in one click: the panel keeps saying "Showing the 20 strongest of
+  // N" however many times it is pressed. The catalogue's own pager three hundred lines
+  // below has always used the updater form; this one was written as a plain assignment.
   const dealMore = () => {
-    setShown(LANE_PAGE);
+    setShown((current) => current + LANE_PAGE);
   };
   // A card id counts if the deck is dealing it **or** the catalogue holds it. The second
   // half is what lets "Reconsider skipped places" open a real detail panel: a passed-over
@@ -673,14 +679,25 @@ export function PlacesPage() {
   // asking any more, and a warning floating above the deck read as the deck being
   // broken rather than one place having no photograph.
   //
-  // One sentence, not the provider's. A failed ask surfaced as `⚠ provider_error` — the
-  // literal code, because `provider_error` is not in `OPTIMIZER_CODE_TEXT` and an unknown
-  // code is deliberately rendered raw rather than prettified. That is right for a code
-  // that should have copy and wrong as an answer to "why is there no picture here": the
-  // owner reported reading it on the card. What they need to know is that asking did not
-  // find one, which is the same thing however the provider failed.
+  // The card's own sentence, not the provider's code. A failed ask surfaced as
+  // `⚠ provider_error` — the literal code, because it is not in `OPTIMIZER_CODE_TEXT` and
+  // an unknown code is deliberately rendered raw rather than prettified. That is right for
+  // a code that should have copy, and wrong as the answer to "why is there no picture".
+  //
+  // **Three sentences, not one, because the causes are not the same claim.** The free
+  // sources having nothing is what the card already said before the button was pressed;
+  // what the owner asked for is a *different* line afterwards, saying the paid provider
+  // was asked too. But "Google has none either" is only true of a 404 — for a 503 Google
+  // was never reached, and printing "there is none" would be asserting a finding out of
+  // an outage, which is the placeholder-as-finding mistake in another costume.
+  const photoFailure = (error: Error): string => {
+    const code = error instanceof ApiError ? error.code : "";
+    if (code === "place_not_in_provider") return copy("photo_ask_none", language);
+    if (code === "provider_unavailable") return copy("photo_ask_unavailable", language);
+    return copy("photo_ask_failed", language);
+  };
   const cardError =
-    enrich.error && enrich.variables === cardId ? copy("photo_ask_failed", language) : null;
+    enrich.error && enrich.variables === cardId ? photoFailure(enrich.error) : null;
 
   /* Discovery is two Overpass blocks and runs 30-90s; paced at the low end so the
      lines are not still arriving after the places are. Named rather than inlined

@@ -492,6 +492,39 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   blank page (`StayPlanner` returned null on an empty recommendation list) and fixing it
   did not answer the complaint: **when a symptom is described from the outside, reproduce
   it in a browser before deciding which bug it is.**
+- **A query derived from the plan must be invalidated wherever the plan is.**
+  `comfort_tradeoffs` is computed from the stored variant, and only `acceptAll` refreshed
+  it — every build path invalidated `plan_preview` and left the report holding whatever it
+  said *before* a plan existed, which is "nothing exceeds". Two things then vanish
+  together: `ComfortTradeoffs` filters to zero rules and renders nothing, and
+  `overBudget` is empty so the accept control never appears. The screen becomes a refusal
+  naming a comfort budget, a panel that has disappeared, and no button — reported by the
+  owner as "I don't know what to do next, cause it no button anywhere". `invalidatePlan()`
+  invalidates the pair together so a new build path cannot refresh one and forget the
+  other. **Grep for `plan_preview` before adding a build path**, and treat a control that
+  is missing rather than disabled as a data-staleness question first.
+- **A message and the control that resolves it must render on one condition.** The comfort
+  note needed `comfortOnly` (from the stored variant) and its button additionally needed
+  `overBudget` (from a live query) — two sources that diverge, so the note could appear
+  alone. Gate them together, and where there is genuinely nothing to agree to, offer the
+  rebuild that clears a variant lagging behind an agreement.
+- **Extending a page needs the updater form.** `dealMore` read `setShown(LANE_PAGE)` —
+  assigning the value it already held — so "Show 20 more from here" recomputed an
+  identical window and the deck did not move. A pager that appears to do nothing is
+  almost always an assignment where an increment belongs; the catalogue's own pager in the
+  same file has always been `shown => shown + CATALOG_PAGE`.
+- **Do not turn an outage into a finding.** A failed paid photo ask has three causes and
+  they are three different claims: `place_not_in_provider` means Google has none either,
+  `provider_unavailable` means Google was never reached, and anything else is neither. One
+  blanket "no photograph could be found" asserts a fact about the place out of a network
+  error. `photo_ask_none` / `photo_ask_unavailable` / `photo_ask_failed` keep them apart,
+  and the pre-press line stays `photo_none_kind`, which is about *free* sources only.
+- **Thin photo coverage is usually the data, not a defect.** Measured 2026-08-28: Zurich
+  75% of summaries carry an image, Interlaken 43% — and 14 of Interlaken's 16 imageless
+  places **have no Wikidata entry at all**, so there is nothing to fetch. Check
+  `cache_version` before suspecting staleness (all were current), and do not loosen
+  `providers.photo_depicts_place` to raise the number: that filter is why a photograph of
+  a bus stopped being offered as a photograph of a hill.
 - **Before adding a control to `/optimize`, grep for `autoResolveAndGenerate.mutate()` and count the
   call sites.** That control has been wrong three times, each time a second button running the same
   mutation under a different label.

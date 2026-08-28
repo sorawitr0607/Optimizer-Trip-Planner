@@ -209,6 +209,27 @@ export function OptimizePage() {
     queryKey: ["comfort_tradeoffs", tripId],
     queryFn: () => rpc<ComfortTradeoffReport>("comfort_tradeoffs", { trip_id: tripId }),
   });
+
+  /**
+   * The plan changed, so everything derived from the plan is stale.
+   *
+   * **`comfort_tradeoffs` is derived from the plan and only `acceptAll` was refreshing
+   * it.** Every build path invalidated `plan_preview` and left the report alone, so after
+   * a build the cache still held whatever it said *before* the plan existed — usually
+   * nothing exceeding. Two things vanish together when that happens: `ComfortTradeoffs`
+   * filters to zero rules and renders nothing, and `overBudget` is empty so the accept
+   * control never appears. The screen is then a refusal saying a comfort budget is the
+   * only problem, a panel that has disappeared, and no button — which is exactly what the
+   * owner reported and could not act on.
+   *
+   * Invalidated together from here so a new build path cannot refresh one and forget the
+   * other; that asymmetry is the whole bug.
+   */
+  const invalidatePlan = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["plan_preview", tripId] }),
+      queryClient.invalidateQueries({ queryKey: ["comfort_tradeoffs", tripId] }),
+    ]);
   const acceptRoutes = useMutation({
     mutationFn: async () => {
       setPreviewStage(undefined);
@@ -223,7 +244,7 @@ export function OptimizePage() {
     },
     onSuccess: async () => {
       setRefusal(null);
-      await queryClient.invalidateQueries({ queryKey: ["plan_preview", tripId] });
+      await invalidatePlan();
     },
     onError: (error) => setRefusal(error instanceof ApiError ? error.code : String(error)),
   });
@@ -275,7 +296,7 @@ export function OptimizePage() {
     },
     onSuccess: async () => {
       setRefusal(null);
-      await queryClient.invalidateQueries({ queryKey: ["plan_preview", tripId] });
+      await invalidatePlan();
     },
     onError: (error) => setRefusal(error instanceof ApiError ? error.code : String(error)),
     onSettled: () => {
@@ -294,7 +315,7 @@ export function OptimizePage() {
     },
     onSuccess: async () => {
       setRefusal(null);
-      await queryClient.invalidateQueries({ queryKey: ["plan_preview", tripId] });
+      await invalidatePlan();
     },
     onError: (error) =>
       setRefusal(error instanceof ApiError ? error.code : String(error)),
@@ -357,7 +378,7 @@ export function OptimizePage() {
     onSuccess: async () => {
       setRefusal(null);
       setBuildStage(BUILD_STAGES.length);
-      await queryClient.invalidateQueries({ queryKey: ["plan_preview", tripId] });
+      await invalidatePlan();
       await queryClient.invalidateQueries({ queryKey: ["opening_options", tripId] });
       await queryClient.invalidateQueries({ queryKey: ["journey", tripId] });
     },
@@ -389,7 +410,7 @@ export function OptimizePage() {
     onSuccess: async () => {
       setRefusal(null);
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["plan_preview", tripId] }),
+        invalidatePlan(),
         queryClient.invalidateQueries({ queryKey: ["candidate_choices", tripId] }),
         queryClient.invalidateQueries({ queryKey: ["journey", tripId] }),
       ]);
@@ -473,7 +494,7 @@ export function OptimizePage() {
     onSuccess: async () => {
       setRefusal(null);
       await queryClient.invalidateQueries({ queryKey: ["journey", tripId] });
-      await queryClient.invalidateQueries({ queryKey: ["plan_preview", tripId] });
+      await invalidatePlan();
       navigate(`/trips/${tripId}/itinerary`);
     },
     // A stale input hash or an unready variant refuses with a stable code. It
@@ -907,20 +928,43 @@ export function OptimizePage() {
               belongs beside the refusal. It agrees to the **measured** value, never the
               rule in general: `_accepts` requires `measured <= accepted_value`, so a
               later replan that walks further is refused again rather than blessed. */}
-          {!activationAllowed && comfortOnly.length && overBudget.length ? (
+          {/* **The message and a control render on the same condition.** They did not:
+              the note above needed `comfortOnly`, the button needed `comfortOnly` *and*
+              `overBudget`, and the two come from different places — `comfortOnly` from
+              the stored variant's violations, `overBudget` from the live tradeoff report.
+              They diverge whenever the report has no unaccepted figure to offer: the
+              figure was already agreed and the plan not yet rebuilt, or the report is
+              still arriving. The owner met the gap exactly as it reads — "I don't know
+              what to do next, cause it no button anywhere".
+
+              So when there is a figure to agree to, agreeing is the way out; when there
+              is not, the stored variant is simply behind the agreement and rebuilding is.
+              One of the two always renders. */}
+          {!activationAllowed && comfortOnly.length ? (
             <div className="optimize-actions">
-              <button
-                className="setup-primary"
-                disabled={acceptAll.isPending}
-                onClick={() => acceptAll.mutate(overBudget)}
-                type="button"
-              >
-                {acceptAll.isPending
-                  ? copy("loading", language)
-                  : copyFormat("accept_measured_and_continue", language, {
-                      measured: overBudget.map((rule) => String(rule.measured)).join(", "),
-                    })}
-              </button>
+              {overBudget.length ? (
+                <button
+                  className="setup-primary"
+                  disabled={acceptAll.isPending}
+                  onClick={() => acceptAll.mutate(overBudget)}
+                  type="button"
+                >
+                  {acceptAll.isPending
+                    ? copy("loading", language)
+                    : copyFormat("accept_measured_and_continue", language, {
+                        measured: overBudget.map((rule) => String(rule.measured)).join(", "),
+                      })}
+                </button>
+              ) : (
+                <button
+                  className="setup-primary"
+                  disabled={building}
+                  onClick={() => autoResolveAndGenerate.mutate()}
+                  type="button"
+                >
+                  {building ? copy("loading", language) : copy("build_again", language)}
+                </button>
+              )}
             </div>
           ) : null}
 
