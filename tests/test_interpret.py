@@ -326,7 +326,7 @@ class InterpretFlowTest(unittest.TestCase):
     def test_a_failed_attempt_is_still_recorded_in_the_ledger(self) -> None:
         with self.assertRaises(RevisionInterpretationUnavailable):
             self._run(error=RevisionInterpretationUnavailable("down", cause="offline"))
-        entries = self.actions.store.list_paid_usage()
+        entries = self.actions.store.list_paid_usage(limit=100)
         self.assertEqual(["error"], [item["outcome"] for item in entries])
 
     def test_a_model_naming_an_unknown_place_is_reported_not_applied(self) -> None:

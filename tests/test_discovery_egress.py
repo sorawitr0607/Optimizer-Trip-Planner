@@ -132,6 +132,36 @@ class DiscoveryReportReadTest(unittest.TestCase):
         self.assertEqual(4, len(boundary))
         self.assertEqual([], reads, "the full run was read to find four floats")
 
+    def test_journey_never_reads_the_candidate_catalogue(self) -> None:
+        """Navigation needs stage state, not the multi-megabyte discovery payload."""
+
+        full = self.store.get_latest_discovery(self.trip.trip_id)
+        candidate = full.candidates.as_dict()["candidates"][0]
+        self.actions.save_candidate_choice(
+            trip_id=self.trip.trip_id,
+            place_id=candidate["place_id"],
+            action="interested",
+        )
+        statements: list[str] = []
+        original = SQLiteStore.connect
+
+        import contextlib
+
+        @contextlib.contextmanager
+        def traced(store_self):
+            with original(store_self) as connection:
+                connection.set_trace_callback(statements.append)
+                yield connection
+
+        with unittest.mock.patch.object(SQLiteStore, "connect", traced):
+            self.actions.journey(self.trip.trip_id)
+
+        selects = [text for text in statements if "discovery_runs" in text]
+        self.assertTrue(selects, "journey did not check whether discovery exists")
+        for text in selects:
+            self.assertNotIn("SELECT *", text.upper())
+            self.assertNotIn("candidates_json", text)
+
     def test_basemap_read_carries_the_server_expiry_for_browser_reuse(self) -> None:
         self.store.upsert_trip_evidence(
             trip_id=self.trip.trip_id,
@@ -147,13 +177,7 @@ class DiscoveryReportReadTest(unittest.TestCase):
 
 
 class PaidUsageLedgerReadTest(unittest.TestCase):
-    """The other unbounded read on a page load.
-
-    `paid_usage_status` sums one calendar month, but read the entire ledger to do it and
-    filtered in Python. The table only grows -- 7,084 rows and 1.6 MB on a trip that has
-    been worked on for a while -- so the whole history crossed the wire every time the
-    cap banner was rendered.
-    """
+    """Spend status is aggregate-only; diagnostic ledger reads stay bounded."""
 
     def setUp(self) -> None:
         self.temporary_directory = TemporaryDirectory()
@@ -167,7 +191,14 @@ class PaidUsageLedgerReadTest(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary_directory.cleanup()
 
-    def _record(self, created_at: str) -> None:
+    def _record(
+        self,
+        created_at: str,
+        *,
+        operation: str = "openstreetmap:basemap",
+        requests: int = 1,
+        estimated_usd: float = 0.0,
+    ) -> None:
         """A ledger row at a chosen time.
 
         Inserted rather than written through `_spend` and backdated: the table is
@@ -181,37 +212,94 @@ class PaidUsageLedgerReadTest(unittest.TestCase):
                 INSERT INTO paid_usage
                 (id, trip_id, operation, provider, request_count, estimated_usd,
                  outcome, detail_json, created_at)
-                VALUES (?, ?, 'openstreetmap:basemap', 'openstreetmap', 1, 0.0,
-                        'success', '{}', ?)
+                VALUES (?, ?, ?, 'test', ?, ?, 'success', '{}', ?)
                 """,
-                (f"usage_{created_at}", self.trip.trip_id, created_at),
+                (
+                    f"usage_{created_at}_{operation}",
+                    self.trip.trip_id,
+                    operation,
+                    requests,
+                    estimated_usd,
+                    created_at,
+                ),
             )
 
-    def test_a_month_scoped_read_leaves_other_months_in_the_database(self) -> None:
+    def test_a_bounded_month_read_leaves_other_months_in_the_database(self) -> None:
         self._record("2026-06-04T09:00:00+00:00")
         self._record("2026-07-04T09:00:00+00:00")
         self._record("2026-08-04T09:00:00+00:00")
 
-        self.assertEqual(3, len(self.store.list_paid_usage()))
-        august = self.store.list_paid_usage(month="2026-08")
+        self.assertEqual(3, len(self.store.list_paid_usage(limit=100)))
+        august = self.store.list_paid_usage(month="2026-08", limit=100)
         self.assertEqual(1, len(august))
         self.assertTrue(august[0]["created_at"].startswith("2026-08"))
 
-    def test_the_scoped_read_agrees_with_filtering_in_python(self) -> None:
-        """The change is only safe if it is the same filter, so both are compared."""
+    def test_spend_summary_is_computed_in_sql_and_matches_the_ledger(self) -> None:
+        self._record("2026-07-31T23:59:59+00:00", requests=99)
+        self._record(
+            "2026-08-01T00:00:00+00:00",
+            operation="google_places:details",
+            requests=2,
+            estimated_usd=0.034,
+        )
+        self._record(
+            "2026-08-02T00:00:00+00:00",
+            operation="google_places:details",
+            requests=3,
+            estimated_usd=0.051,
+        )
+        self._record("2026-08-03T00:00:00+00:00", requests=4)
+        statements: list[str] = []
+        original = SQLiteStore.connect
 
-        for stamp in ("2026-06-30T23:59:59+00:00", "2026-07-01T00:00:00+00:00",
-                      "2026-07-31T23:59:59+00:00", "2026-08-01T00:00:00+00:00"):
-            self._record(stamp)
+        import contextlib
 
-        for month in ("2026-06", "2026-07", "2026-08"):
-            with self.subTest(month=month):
-                in_sql = self.store.list_paid_usage(month=month)
-                in_python = [
-                    row for row in self.store.list_paid_usage()
-                    if row["created_at"][:7] == month
-                ]
-                self.assertEqual(in_python, in_sql)
+        @contextlib.contextmanager
+        def traced(store_self):
+            with original(store_self) as connection:
+                connection.set_trace_callback(statements.append)
+                yield connection
+
+        with unittest.mock.patch.object(SQLiteStore, "connect", traced):
+            summary = self.store.summarize_paid_usage(month="2026-08")
+
+        self.assertEqual(9, summary["requests"])
+        self.assertEqual(0.085, summary["estimated_usd"])
+        self.assertEqual(3, summary["entries"])
+        self.assertEqual(
+            {"requests": 5, "estimated_usd": 0.085},
+            summary["by_operation"]["google_places:details"],
+        )
+        selects = [text for text in statements if "paid_usage" in text]
+        self.assertEqual(1, len(selects))
+        self.assertIn("GROUP BY operation", selects[0])
+        self.assertNotIn("SELECT *", selects[0].upper())
+
+    def test_raw_ledger_reads_are_explicitly_bounded_and_do_not_select_details(self) -> None:
+        for day in range(1, 4):
+            self._record(f"2026-08-0{day}T00:00:00+00:00")
+        statements: list[str] = []
+        original = SQLiteStore.connect
+
+        import contextlib
+
+        @contextlib.contextmanager
+        def traced(store_self):
+            with original(store_self) as connection:
+                connection.set_trace_callback(statements.append)
+                yield connection
+
+        with unittest.mock.patch.object(SQLiteStore, "connect", traced):
+            rows = self.store.list_paid_usage(limit=2)
+
+        self.assertEqual(2, len(rows))
+        selects = [text for text in statements if "paid_usage" in text]
+        self.assertEqual(1, len(selects))
+        self.assertIn("LIMIT 2", selects[0])
+        self.assertNotIn("SELECT *", selects[0].upper())
+        self.assertNotIn("detail_json", selects[0])
+        with self.assertRaises(ValueError):
+            self.store.list_paid_usage(limit=1_001)
 
 
 if __name__ == "__main__":

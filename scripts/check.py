@@ -77,6 +77,12 @@ def only_one_run():
 def main() -> int:
     python = sys.executable
     stages = [
+        # First on purpose. Hosted egress can disable the entire deployment, and these
+        # focused tests finish in under a second: fail before spending time elsewhere.
+        (
+            "Hosted egress boundaries",
+            [python, "-m", "unittest", "tests.test_discovery_egress"],
+        ),
         ("Python unit tests", [python, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py"]),
         ("Historic optimizer regressions", [python, "scripts/run_optimizer_regressions.py"]),
         ("Regression fixture structure", [python, "scripts/validate_regression_fixtures.py"]),

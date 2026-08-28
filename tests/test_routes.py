@@ -768,7 +768,7 @@ class TransitRouteTest(unittest.TestCase):
         self.actions.refresh_transit_routes(self.trip.trip_id)
         rows = [
             row
-            for row in self.actions.store.list_paid_usage()
+            for row in self.actions.store.list_paid_usage(limit=1_000)
             if row["operation"] == "gtfs:transit"
         ]
         self.assertTrue(rows)
@@ -1248,7 +1248,7 @@ class PlaceSummaryTest(unittest.TestCase):
         self.actions.refresh_place_summaries(self.trip.trip_id)
         rows = [
             row
-            for row in self.actions.store.list_paid_usage()
+            for row in self.actions.store.list_paid_usage(limit=1_000)
             if row["operation"] == "wikidata:summary"
         ]
         self.assertTrue(rows)
@@ -1619,4 +1619,3 @@ class TimeZoneTest(unittest.TestCase):
         with self.assertRaises(ProviderBudgetExceeded):
             self.actions.refresh_timezone(self.trip.trip_id)
         self.assertEqual([], self.provider.calls)
-

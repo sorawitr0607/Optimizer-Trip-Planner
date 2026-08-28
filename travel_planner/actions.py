@@ -366,7 +366,9 @@ class PlannerActions:
             return True
         return bool(self.store.get_trip_evidence(trip_id, "accommodation_base"))
 
-    def _places_confirmed(self, trip_id: str) -> bool:
+    def _places_confirmed(
+        self, trip_id: str, *, has_active_plan: bool | None = None
+    ) -> bool:
         """Has the owner pressed "Build the plan", or already moved past needing to?
 
         A trip that already holds a draft or an activated plan is confirmed by
@@ -376,10 +378,91 @@ class PlannerActions:
 
         if self.store.get_trip_evidence(trip_id, self.PLACES_CONFIRMED_KIND):
             return True
-        return bool(
-            self.store.get_active_plan(trip_id)
-            or self.store.get_optimization_preview(trip_id)
+        if has_active_plan is None:
+            has_active_plan = self.store.get_active_plan(trip_id) is not None
+        return bool(has_active_plan or self.store.get_optimization_preview(trip_id))
+
+    def _journey_capability_gaps(
+        self, trip_id: str, setup: SetupDraft, choices: list[CandidateChoice]
+    ) -> list[str]:
+        """Derive navigation gaps from selected places, without the discovery catalogue."""
+
+        payload = setup.snapshot.as_dict()
+        basics = payload["trip_basics"]
+        selected = [choice.candidate.as_dict() for choice in choices]
+        start_date, end_date = basics.get("start_date"), basics.get("end_date")
+        local_dates = date_range(start_date, end_date) if start_date and end_date else []
+        intervals = self.opening_intervals(trip_id)
+        opening_missing = bool(local_dates) and any(
+            not (intervals.get(choice.place_id) or {}).get("interval")
+            and not (
+                (candidate.get("operational_evidence") or {})
+                .get("opening_hours", {})
+                .get("state")
+                in {"official_confirmed", "current_provider"}
+                and _simple_interval(
+                    (candidate.get("operational_evidence") or {})
+                    .get("opening_hours", {})
+                    .get("value")
+                )
+            )
+            for choice, candidate in zip(choices, selected, strict=True)
         )
+
+        accommodation = self.get_accommodation_base(trip_id)
+        base_implausible = bool(accommodation and accommodation.get("implausible"))
+        accommodation_confirmed = bool(
+            accommodation and not base_implausible
+        ) or basics.get("accommodation_status") == "booked"
+        active_base_id = (
+            "booked_accommodation_base"
+            if accommodation and not base_implausible
+            else None
+        )
+        if (
+            active_base_id is None
+            and payload["planning_mode"] == "explore_first"
+            and basics.get("accommodation_status") != "booked"
+            and any(
+                item.get("latitude") is not None and item.get("longitude") is not None
+                for item in selected
+            )
+        ):
+            active_base_id = "provisional_accommodation_base"
+        usable_statuses = (
+            {"verified", "estimated"}
+            if payload["planning_mode"] == "explore_first"
+            else {"verified"}
+        )
+        accommodation_ids = {
+            "booked_accommodation_base",
+            "provisional_accommodation_base",
+        }
+        has_routes = any(
+            route.get("status") in usable_statuses
+            and all(
+                endpoint not in accommodation_ids or endpoint == active_base_id
+                for endpoint in (route.get("origin_id"), route.get("destination_id"))
+            )
+            for route in self.list_routes(trip_id)
+        )
+        zone = self.get_timezone_evidence(trip_id)
+        gaps = []
+        if not (zone and zone.get("status") == "verified"):
+            gaps.append("DESTINATION_TIMEZONE_UNVERIFIED")
+        if not has_routes:
+            gaps.append("ROUTE_SNAPSHOT_MISSING")
+        if not accommodation_confirmed:
+            gaps.append("ACCOMMODATION_BASE_UNCONFIRMED")
+        if base_implausible:
+            gaps.append("ACCOMMODATION_BASE_IMPLAUSIBLE")
+        if opening_missing:
+            gaps.append("OPENING_EVIDENCE_MISSING")
+        if payload.get("owner", {}).get("must_respect") or any(
+            member.get("must_respect") for member in payload.get("travellers", [])
+        ):
+            gaps.append("FREE_TEXT_HARD_CONSTRAINT_NEEDS_STRUCTURED_CONFIRMATION")
+        return gaps
 
     def journey(self, trip_id: str) -> dict[str, Any]:
         """Return the server-owned stage gates and attention stage for one trip."""
@@ -388,7 +471,7 @@ class PlannerActions:
         if trip is None:
             raise PlannerRefusal("unknown_trip", trip_id=trip_id)
         setup = self.store.get_setup(trip_id)
-        discovery = self.store.get_latest_discovery(trip_id)
+        discovery = self.store.get_latest_discovery_header(trip_id)
         choices = [
             choice
             for choice in self.store.list_candidate_choices(trip_id)
@@ -396,13 +479,22 @@ class PlannerActions:
         ]
         active = self.store.get_active_plan(trip_id)
         # "I have finished choosing", pressed on `/places`. Both later stages wait for it.
-        chosen = bool(choices) and self._places_confirmed(trip_id)
+        chosen = bool(choices) and self._places_confirmed(
+            trip_id, has_active_plan=active is not None
+        )
         gaps: list[str] = []
         if setup is not None and setup.confirmed and discovery is not None and choices:
-            try:
-                gaps = list(self._optimizer_input(trip_id)["trip"]["capability_gaps"])
-            except PlannerRefusal:
+            if discovery["setup_sha256"] != setup.snapshot.sha256:
                 gaps = ["INPUT_NOT_READY"]
+            elif active is not None:
+                gaps = list(
+                    active.snapshot.as_dict()
+                    .get("optimizer_input", {})
+                    .get("trip", {})
+                    .get("capability_gaps", [])
+                )
+            else:
+                gaps = self._journey_capability_gaps(trip_id, setup, choices)
         stages = [
             {"key": "setup", "done": bool(setup and setup.confirmed), "blocked_by": None},
             {
@@ -4000,10 +4092,7 @@ class PlannerActions:
 
         now = datetime.now(timezone.utc).isoformat()
         window = month or usage.month_of(now)
-        # Scoped in SQL. `usage.totals` filters to the month anyway, so reading the
-        # whole ledger only moved rows across the wire to be discarded.
-        entries = self.store.list_paid_usage(month=window)
-        summary = usage.totals(entries, month=window)
+        summary = self.store.summarize_paid_usage(month=window)
         cap = self.store.get_paid_cap() or usage.CAP_USD
         return {
             **summary,
@@ -4056,9 +4145,10 @@ class PlannerActions:
     ) -> None:
         """Refuse a call that would cross the cap, then record what it cost."""
 
-        decision = self.check_paid_call(operation=operation, count=count)
-        if not decision["allowed"]:
-            raise ProviderBudgetExceeded(decision["reason"])
+        if usage.price_for(operation, count) != 0.0:
+            decision = self.check_paid_call(operation=operation, count=count)
+            if not decision["allowed"]:
+                raise ProviderBudgetExceeded(decision["reason"])
         self.record_paid_call(
             operation=operation, count=count, trip_id=trip_id, detail=detail
         )

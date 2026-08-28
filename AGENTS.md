@@ -1,5 +1,16 @@
 # Project agent notes
 
+## First priority: hosted egress is a release blocker
+
+- `scripts/check.py` runs `tests.test_discovery_egress` first. Do not move it behind the
+  long suite or weaken it to a warning.
+- Hot-path totals must be aggregated in SQL. Never fetch an append-only table to sum it
+  in Python; `paid_usage_status()` uses `summarize_paid_usage()` for this reason.
+- Raw `paid_usage` access is diagnostic-only and requires an explicit limit of at most
+  1,000 rows. Free operations never read spend before they are recorded.
+- Navigation must not fetch `discovery_runs.candidates_json`. Use the lightweight header
+  or report methods unless the caller actually renders or ranks the candidate catalogue.
+
 ## Graphify cadence
 
 - Use direct source files and tests for routine implementation work.

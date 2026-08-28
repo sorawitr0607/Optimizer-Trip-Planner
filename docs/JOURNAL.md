@@ -5038,3 +5038,38 @@ appears.
 
 The honest summary is that this one is test-verified, not field-verified, and the two
 purchases bought a sharper understanding of why rather than a green tick.
+
+### Supabase egress incident: the ledger became its own amplifier, 2026-08-28
+
+Supabase warned that Shared Pooler egress had reached **15.93 GB against the account's
+5.5 GB allowance**, with restriction scheduled for 2026-08-30. The earlier fix had only
+moved the monthly filter into SQL. That reduced old-month reads, but it still returned
+every row in the current month and summed them in Python.
+
+The hosted database made the root cause measurable. `pg_stat_statements` recorded
+**29,917,607 rows** returned by the month-scoped `paid_usage` query and another
+**16,060,869 rows** returned by the unscoped diagnostic query: 45,978,476 ledger rows
+over 4,896 calls. Most ledger entries were free provider operations. `_spend()` checked
+the paid cap before those zero-cost calls, so every free request first downloaded the
+growing month ledger and then appended another row. The cost check amplified its own
+future egress.
+
+The shared boundary now stops that loop:
+
+- `paid_usage_status()` calls `summarize_paid_usage()`, one SQL `GROUP BY operation`
+  returning only the small summary the UI needs.
+- zero-price operations validate their price and record the call without reading spend;
+  paid operations still check the cap before the provider request.
+- diagnostic ledger reads require an explicit limit capped at 1,000 and omit
+  `detail_json`; no production path uses them.
+- `journey()` uses a three-column discovery header instead of `SELECT *`. The old query
+  ran 4,960 times and carried candidate payloads averaging about 970 KB, so it was the
+  other material egress path.
+
+`tests.test_discovery_egress` inspects the SQL itself for `GROUP BY`, `LIMIT`, explicit
+columns, and absence of `candidates_json`. It is the first stage in `scripts/check.py`:
+hosted egress is a release blocker, not a dashboard to inspect after deployment.
+
+This code prevents new traffic from repeating the mechanism. It cannot remove egress
+already counted by Supabase; restoring availability in the current over-quota billing
+period remains an account action (upgrade/support or the provider's billing reset).

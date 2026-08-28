@@ -72,12 +72,17 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
 - **Anything that calls a provider must load credentials, and log how many it loaded.** The worker did
   not, so every route job raised "not configured" and the failure only surfaced as an empty plan three
   minutes later.
-- **Egress is billed, so a read that wants four floats must not fetch 390 KB.** `get_latest_discovery`
+- **Hosted egress is the first release criterion: exhausting it disables the app.**
+  `scripts/check.py` therefore runs `tests.test_discovery_egress` before every other gate.
+  `paid_usage_status()` must aggregate with `summarize_paid_usage()` in SQL; raw ledger
+  reads require an explicit limit of at most 1,000 rows; and a zero-price `_spend()` must
+  never read the ledger before recording the call. Do not replace any of those with a
+  Python-side total. **A read that wants four floats must not fetch 390 KB.** `get_latest_discovery`
   is `SELECT *` and `candidates_json` is ~390 KB on a real city; four callers wanted only
   `query_boundary` and three of them ran on every `/itinerary` view. Use
   `actions._discovery_boundary()` / `store.get_latest_discovery_report()` for anything that is not the
-  candidate list itself, and scope a ledger read to its month (`list_paid_usage(month=...)`) rather
-  than filtering in Python. **`list_route_snapshots` is the same shape** — `SELECT *`, and a route
+  candidate list itself; navigation uses `get_latest_discovery_header()`.
+  **`list_route_snapshots` is the same shape** — `SELECT *`, and a route
   carries its drawn geometry, so five hundred of them is most of a megabyte. Anything that only needs
   to know *whether* a pair is measured takes `store.list_route_pair_keys()`. Supabase's free tier allows 5.5 GB and this trip passed it. The roughly
   217 KB basemap is immutable until its evidence expiry, so `shared/basemap.ts` also keeps it in

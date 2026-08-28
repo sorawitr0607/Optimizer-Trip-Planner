@@ -180,7 +180,7 @@ class FoundationTest(unittest.TestCase):
         self.assertIsNone(self.actions.get_trip(victim.trip_id))
         self.assertEqual([keeper], self.actions.list_trips())
         self.assertEqual(
-            victim.trip_id, self.actions.store.list_paid_usage()[0]["trip_id"]
+            victim.trip_id, self.actions.store.list_paid_usage(limit=100)[0]["trip_id"]
         )
         connection = sqlite3.connect(self.database_path)
         try:

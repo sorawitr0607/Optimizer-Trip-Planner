@@ -689,6 +689,21 @@ class SQLiteStore:
             row["report_json"], row["report_sha256"], f"discovery report {row['id']}"
         ).as_dict()
 
+    def get_latest_discovery_header(self, trip_id: str) -> dict[str, Any] | None:
+        """Return only the run state needed by navigation."""
+
+        with self.connect() as connection:
+            row = connection.execute(
+                """
+                SELECT id, setup_sha256, status FROM discovery_runs
+                WHERE trip_id = ?
+                ORDER BY created_at DESC, id DESC
+                LIMIT 1
+                """,
+                (trip_id,),
+            ).fetchone()
+        return dict(row) if row else None
+
     def list_discovery_runs(self, trip_id: str) -> list[DiscoveryRun]:
         with self.connect() as connection:
             rows = connection.execute(
@@ -1323,31 +1338,66 @@ class SQLiteStore:
             )
         return {**entry, "usage_id": row_id}
 
-    def list_paid_usage(self, *, month: str | None = None) -> list[dict[str, Any]]:
-        """The ledger, optionally narrowed to one `YYYY-MM` in SQL rather than in Python.
+    def summarize_paid_usage(self, *, month: str) -> dict[str, Any]:
+        """Aggregate one month in the database; never transfer the append-only ledger."""
 
-        The cap is a monthly figure, but this read was unfiltered and `usage.totals` threw
-        away everything outside the month after it had already crossed the wire. The table
-        only grows -- a few thousand rows and over a megabyte on a trip that has been
-        worked on for a while -- and the status banner asks for it on page loads, so the
-        whole history was being read to sum the current month. `month_of` is
-        `created_at[:7]`, so a prefix comparison is exactly the same filter.
-        """
+        with self.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT operation,
+                       COALESCE(SUM(request_count), 0) AS requests,
+                       COALESCE(SUM(estimated_usd), 0) AS estimated_usd,
+                       COUNT(*) AS entries
+                FROM paid_usage
+                WHERE SUBSTR(created_at, 1, 7) = ?
+                GROUP BY operation
+                ORDER BY operation
+                """,
+                (month,),
+            ).fetchall()
+        by_operation = {
+            str(row["operation"]): {
+                "requests": int(row["requests"] or 0),
+                "estimated_usd": round(float(row["estimated_usd"] or 0.0), 6),
+            }
+            for row in rows
+        }
+        return {
+            "month": month,
+            "requests": sum(int(row["requests"] or 0) for row in rows),
+            "estimated_usd": round(
+                sum(float(row["estimated_usd"] or 0.0) for row in rows), 6
+            ),
+            "by_operation": by_operation,
+            "entries": sum(int(row["entries"] or 0) for row in rows),
+        }
 
+    def list_paid_usage(
+        self, *, limit: int, month: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Return at most 1,000 recent ledger rows for diagnostics."""
+
+        if not 1 <= int(limit) <= 1_000:
+            raise ValueError("paid usage limit must be between 1 and 1000")
+        columns = (
+            "id, trip_id, operation, provider, request_count, estimated_usd,"
+            " outcome, created_at"
+        )
         with self.connect() as connection:
             if month is None:
                 rows = connection.execute(
-                    "SELECT * FROM paid_usage ORDER BY created_at, id"
+                    f"SELECT {columns} FROM paid_usage"
+                    " ORDER BY created_at DESC, id DESC LIMIT ?",
+                    (int(limit),),
                 ).fetchall()
             else:
                 rows = connection.execute(
-                    """
-                    SELECT * FROM paid_usage
-                    WHERE SUBSTR(created_at, 1, 7) = ?
-                    ORDER BY created_at, id
-                    """,
-                    (month,),
+                    f"SELECT {columns} FROM paid_usage"
+                    " WHERE SUBSTR(created_at, 1, 7) = ?"
+                    " ORDER BY created_at DESC, id DESC LIMIT ?",
+                    (month, int(limit)),
                 ).fetchall()
+        rows = list(reversed(rows))
         return [
             {
                 "usage_id": row["id"],

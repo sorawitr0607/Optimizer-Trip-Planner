@@ -164,6 +164,22 @@ class LedgerPersistenceTest(unittest.TestCase):
         status = self.actions.paid_usage_status()
         self.assertEqual(5, status["by_operation"]["openrouteservice:directions"]["requests"])
 
+    def test_a_free_call_does_not_read_the_spend_ledger(self) -> None:
+        with patch.object(
+            self.actions,
+            "paid_usage_status",
+            side_effect=AssertionError("free calls must not read monthly spend"),
+        ):
+            self.actions._spend(
+                operation="openrouteservice:directions",
+                count=1,
+                trip_id=self.trip.trip_id,
+                detail={},
+            )
+        rows = self.actions.store.list_paid_usage(limit=10)
+        self.assertEqual(1, len(rows))
+        self.assertEqual("openrouteservice:directions", rows[0]["operation"])
+
     def test_a_negative_cap_is_refused(self) -> None:
         with self.assertRaises(ValueError) as raised:
             self.actions.set_paid_cap(-1)
