@@ -5282,3 +5282,31 @@ is. Both guards were checked by removing each and watching the assertion fail.
 The general lesson for the next report of this shape: **count chosen against scheduled
 before looking at the optimizer.** Twenty-two of twenty-two said immediately that the
 plan was complete and the question was presentational.
+
+## The gate failed on a tree nobody had touched, 2026-08-31
+
+Picked the work back up after the weekend, ran `scripts/check.py` on a clean tree at
+`088ccba` — the commit that had passed the same gate 13/13 on Friday — and got
+`FAILED: Web typecheck`.
+
+Nothing had changed. `NODE_OPTIONS` carried
+`--require=/var/folders/.../T/cmux-claude-node-options/restore-node-options.cjs`, macOS
+had emptied that temp directory over the weekend, and Node therefore aborted with
+`Cannot find module` **before running anything at all**. The directory had even been
+recreated at 03:35 that morning, empty, which makes it look present until you list it.
+
+It is the same shape of hazard as the `TOURIST_DB_URL` guard already sitting at the top of
+that file: an inherited environment variable that breaks a stage in a way that reads as
+the code failing. So it is fixed in the same place rather than worked around — `check.py`
+drops `--require`/`-r` entries whose file does not exist, keeps everything else in the
+variable (`--max-old-space-size` is real and wanted), and prints a note saying what it
+removed. Silently editing the environment the stages run in would be its own small lie.
+
+Verified across five shapes: a dead `--require=` beside a real flag, a live `--require=`
+left untouched, the two-token `-r <path>` form, a variable containing nothing but a dead
+preload (unset entirely), and no variable at all. Then the real one — `check.py` run with
+the still-broken `NODE_OPTIONS` in place, no `env -u` in front of it: 13/13.
+
+The general form is worth keeping: **a stage that fails before it runs is an environment
+question, not a code one.** The error text names a module, not a type error, and no commit
+sat between the pass and the failure.

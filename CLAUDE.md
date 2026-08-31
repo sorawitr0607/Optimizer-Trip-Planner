@@ -745,6 +745,17 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   returns one interpolated string and splitting a sentence in two languages to hold three
   characters costs more than that line's width in the diff; the next-action line freezes
   just the gap, since the tag and clock time beside it are stable.
+- **`check.py` drops a `NODE_OPTIONS` preload whose file has been deleted.** Agent
+  tooling injects `--require=<temp>/restore-node-options.cjs`; macOS empties its temp
+  directory after a few days, and from then on every `node` and `npm` invocation aborts
+  with `Cannot find module` **before running anything** — which the gate reports as
+  `FAILED: Web typecheck` on a tree where nothing is wrong. It cost a false failure three
+  days after the commit that last passed the same gate, and `env -u NODE_OPTIONS` is the
+  manual workaround it replaces. Same shape of hazard as `TOURIST_DB_URL` above and
+  guarded in the same place: only *unresolvable* `--require`/`-r` entries are removed,
+  only from this process, and the note says so — `--max-old-space-size` in the same
+  variable is real and is kept. **A stage that fails before it runs is an environment
+  question, not a code one.**
 - **One `check.py` at a time — it takes `.check.lock` and refuses a second.** The stages are
   not independent of the working tree: the baseline stage compares `screen-current`, which is
   shared state on disk, so two interleaved runs produced `approved: 2 · compared: 1` and a

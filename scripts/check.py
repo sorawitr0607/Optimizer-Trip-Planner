@@ -14,6 +14,59 @@ import os as _os
 
 _os.environ.pop("TOURIST_DB_URL", None)
 
+
+def _drop_dead_node_preloads() -> str | None:
+    """Remove a `--require` from `NODE_OPTIONS` whose file no longer exists.
+
+    Same shape of hazard as `TOURIST_DB_URL` above: an inherited environment variable
+    that breaks a stage in a way that looks like the code failing. Agent tooling injects
+    `--require=<temp>/restore-node-options.cjs` into `NODE_OPTIONS`, the operating system
+    cleans its temp directory after a few days, and from then on **every** `node` and
+    `npm` invocation aborts before running anything:
+
+        Error: Cannot find module '.../restore-node-options.cjs'
+
+    Which `check.py` reports as `FAILED: Web typecheck`, on a tree where nothing is wrong.
+    That cost a false failure on an unchanged working tree, three days after the commit
+    that had last passed the same gate.
+
+    Only unresolvable preloads are dropped, and only from this process's copy of the
+    variable. Anything else in `NODE_OPTIONS` is left exactly as it was — the same value
+    also carries `--max-old-space-size`, which is real and wanted.
+    """
+
+    raw = _os.environ.get("NODE_OPTIONS")
+    if not raw:
+        return None
+    kept, dropped = [], []
+    tokens = raw.split()
+    index = 0
+    while index < len(tokens):
+        token = tokens[index]
+        # `--require=<path>` and the two-token `--require <path>` / `-r <path>`.
+        target = None
+        if token.startswith("--require="):
+            target = token.split("=", 1)[1]
+        elif token in ("--require", "-r") and index + 1 < len(tokens):
+            target = tokens[index + 1]
+        if target is not None and not Path(target).is_file():
+            dropped.append(target)
+            index += 1 if token.startswith("--require=") else 2
+            continue
+        kept.append(token)
+        index += 1
+    if not dropped:
+        return None
+    remaining = " ".join(kept)
+    if remaining:
+        _os.environ["NODE_OPTIONS"] = remaining
+    else:
+        _os.environ.pop("NODE_OPTIONS", None)
+    return ", ".join(dropped)
+
+
+_DROPPED_PRELOADS = _drop_dead_node_preloads()
+
 import errno
 import os
 import subprocess
@@ -107,6 +160,13 @@ def main() -> int:
                 ("Web lint", "lint"),
                 ("Web unit tests", "test"),
             )
+        )
+
+    if _DROPPED_PRELOADS:
+        print(
+            f"NOTE: dropped a missing NODE_OPTIONS preload ({_DROPPED_PRELOADS}); it"
+            " would have failed every node stage before it ran",
+            flush=True,
         )
 
     started = monotonic()
