@@ -13,7 +13,9 @@ import { ThemeProvider } from "./shared/ThemeProvider";
 
 const router = createBrowserRouter(routes);
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
+  defaultOptions: {
+    queries: { retry: false, refetchOnWindowFocus: false, staleTime: 30_000 },
+  },
 });
 
 /**
@@ -47,6 +49,10 @@ if (theme === "dark" || theme === "light") {
   // affected, and every other pixel on both screens is still diffed.
   frozen.textContent =
     "*,*::before,*::after{transition:none!important;animation:none!important}" +
+    // Setup focuses its async-derived step heading for assistive technology. Headless
+    // Chrome inconsistently paints that programmatic focus as `:focus-visible`, so the
+    // same settled screen alternates between a purple ring and none. Production keeps it.
+    "[data-capture] .setup-step-title:focus{outline:none!important}" +
     "[data-volatile]{font-size:0!important}" +
     "[data-volatile]::after{content:'\\2014\\2014';font-size:1rem;font-family:var(--font-mono)}" +
     // A remote photograph is third-party pixels over a network: Wikimedia re-encodes a

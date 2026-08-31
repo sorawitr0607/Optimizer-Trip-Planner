@@ -16,6 +16,7 @@ import {
   type PaidCallCheck,
   type PlaceInsight,
   type PlaceSummary,
+  type RankedDiscovery,
   type Ranking,
   type RankingLaneEntry,
   rpc,
@@ -231,7 +232,11 @@ export function PlacesPage() {
   });
   const discovery = useQuery({
     queryKey: ["discovery", tripId],
-    queryFn: () => rpc<DiscoveryRun | null>("get_latest_discovery", { trip_id: tripId }),
+    queryFn: async () => {
+      const value = await rpc<RankedDiscovery>("get_ranked_discovery", { trip_id: tripId });
+      if (value.ranking) queryClient.setQueryData(["ranking", tripId], value.ranking);
+      return value.discovery;
+    },
   });
   const choices = useQuery({
     queryKey: ["candidate_choices", tripId],
@@ -243,6 +248,7 @@ export function PlacesPage() {
     queryKey: ["ranking", tripId],
     queryFn: () => rpc<Ranking>("rank_candidates", { trip_id: tripId }),
     enabled: catalog.length > 0,
+    staleTime: 30_000,
   });
   // An empty lane is not a choice. Keep City Icons as the preferred opening only when
   // discovery actually found one; otherwise start on the first lane with cards and do

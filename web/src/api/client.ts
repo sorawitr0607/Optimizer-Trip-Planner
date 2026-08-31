@@ -289,6 +289,11 @@ export interface Ranking {
   coverage: Record<string, number>;
 }
 
+export interface RankedDiscovery {
+  discovery: DiscoveryRun | null;
+  ranking: Ranking | null;
+}
+
 /** One candidate place to stay. `WF-040`. The unit is a transit station, because that
  *  is how accommodation is searched in a metro city and the only unit the app can
  *  measure travel time for exactly. */

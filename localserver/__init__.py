@@ -59,6 +59,7 @@ ACTIONS = (
     "setup_vocabulary",
     "discover_places",
     "get_latest_discovery",
+    "get_ranked_discovery",
     "save_candidate_choice",
     "clear_candidate_choice",
     "list_candidate_choices",

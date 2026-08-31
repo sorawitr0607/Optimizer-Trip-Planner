@@ -850,8 +850,12 @@ class PlannerActions:
     def list_candidate_choices(self, trip_id: str) -> list[CandidateChoice]:
         return self.store.list_candidate_choices(trip_id)
 
-    def rank_candidates(self, trip_id: str) -> dict[str, Any]:
-        setup, discovery, candidates = self._current_choice_inputs(trip_id)
+    def _rank_candidates(
+        self, trip_id: str, discovery: DiscoveryRun | None = None
+    ) -> dict[str, Any]:
+        setup, discovery, candidates = self._current_choice_inputs(
+            trip_id, discovery=discovery
+        )
         choices = [
             {
                 "place_id": choice.place_id,
@@ -867,6 +871,20 @@ class PlannerActions:
             choices=choices,
             discovery_status=discovery.status,
         )
+
+    def rank_candidates(self, trip_id: str) -> dict[str, Any]:
+        return self._rank_candidates(trip_id)
+
+    def get_ranked_discovery(self, trip_id: str) -> dict[str, Any]:
+        """The latest discovery and its ranking from one candidate-catalogue read."""
+
+        discovery = self.store.get_latest_discovery(trip_id)
+        if discovery is None:
+            return {"discovery": None, "ranking": None}
+        return {
+            "discovery": discovery,
+            "ranking": self._rank_candidates(trip_id, discovery),
+        }
 
     def enrich_place_card(
         self, trip_id: str, place_id: str, *, language: str = "en"
@@ -1542,10 +1560,10 @@ class PlannerActions:
         return len(preview["additions"])
 
     def _current_choice_inputs(
-        self, trip_id: str
+        self, trip_id: str, *, discovery: DiscoveryRun | None = None
     ) -> tuple[SetupDraft, DiscoveryRun, list[dict[str, Any]]]:
         setup = self.store.get_setup(trip_id)
-        discovery = self.store.get_latest_discovery(trip_id)
+        discovery = discovery or self.store.get_latest_discovery(trip_id)
         if setup is None or not setup.confirmed:
             raise PlannerRefusal("setup_not_confirmed")
         if discovery is None:
@@ -1569,7 +1587,7 @@ class PlannerActions:
         ]
         if not choices:
             raise PlannerRefusal("no_places_chosen", purpose="planning", minimum=1)
-        ranking = self.rank_candidates(trip_id)
+        ranking = self._rank_candidates(trip_id, discovery)
         cards = ranking["cards"]
         basics = setup_payload["trip_basics"]
         start_date, end_date = basics.get("start_date"), basics.get("end_date")

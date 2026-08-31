@@ -11,33 +11,37 @@ import { Loading } from "./shared/Loading";
 import { Recovery, RouteError } from "./shared/Recovery";
 import { StageGate } from "./shared/StageGate";
 import { STAGE_GATE, STAGE_ROUTES, type StageRoute } from "./shared/stages";
-import { TripsPage } from "./stages/TripsPage";
 
 function Landing() {
-  const landing = useQuery({
-    queryKey: ["landing"],
-    queryFn: async () => {
-      const trips = await rpc<Trip[]>("list_trips");
-      const recent = [...trips].sort((left, right) => right.created_at.localeCompare(left.created_at))[0];
-      if (!recent) return "/trips";
-      const journey = await rpc<Journey>("journey", { trip_id: recent.trip_id });
-      return `/trips/${recent.trip_id}/${journey.next}`;
-    },
+  const trips = useQuery({
+    queryKey: ["trips"],
+    queryFn: () => rpc<Trip[]>("list_trips"),
   });
-  if (landing.isPending) return <Loading />;
-  if (landing.isError) return <p className="field-error">⚠ {landing.error.message}</p>;
-  return <Navigate replace to={landing.data} />;
+  const recent = trips.data
+    ? [...trips.data].sort((left, right) => right.created_at.localeCompare(left.created_at))[0]
+    : undefined;
+  const journey = useQuery({
+    queryKey: ["journey", recent?.trip_id ?? ""],
+    queryFn: () => rpc<Journey>("journey", { trip_id: recent!.trip_id }),
+    enabled: Boolean(recent),
+  });
+  if (trips.isPending || (recent && journey.isPending)) return <Loading />;
+  if (trips.isError) return <p className="field-error">⚠ {trips.error.message}</p>;
+  if (!recent) return <Navigate replace to="/trips" />;
+  if (journey.isError) return <p className="field-error">⚠ {journey.error.message}</p>;
+  if (!journey.data) return <Loading />;
+  return <Navigate replace to={`/trips/${recent.trip_id}/${journey.data.next}`} />;
 }
 
 /**
- * The nine stage screens, each its own chunk.
+ * The ten stage screens and the new-trip landing, each its own chunk.
  *
  * They used to be nine static imports, so the build was one 636 KB module and
  * every route paid for all nine — the map, the optimizer screen, the split ledger
  * and the workbook views included — before the first one could paint. A stage is
  * a natural split point: the IA is a sequence and nobody is on two of them at
- * once. `TripsPage` stays eager because it is the landing screen, so lazy-loading
- * it would only add a round trip to the one route that has nothing to wait for.
+ * once. `TripsPage` is separate too: returning owners pass through `/` to a stage,
+ * so its large interactive landing should not sit in every stage's entry bundle.
  */
 /** Sessions that have already reloaded once, so a genuine failure cannot loop. */
 const RELOADED = "chunk-reload-attempted";
@@ -72,6 +76,8 @@ function lazyPage(load: () => Promise<{ default: () => React.ReactNode }>) {
     }),
   );
 }
+
+const TripsPage = lazyPage(() => import("./stages/TripsPage").then((m) => ({ default: m.TripsPage })));
 
 const PAGES: Record<StageRoute, React.LazyExoticComponent<() => React.ReactNode>> = {
   setup: lazyPage(() => import("./stages/SetupPage").then((m) => ({ default: m.SetupPage }))),
@@ -109,7 +115,11 @@ function Recovery404() {
 
 export const routes = [
   { path: "/", element: <Landing />, errorElement: <RouteError /> },
-  { path: "/trips", element: <TripsPage />, errorElement: <RouteError /> },
+  {
+    path: "/trips",
+    element: <Suspense fallback={<Loading />}><TripsPage /></Suspense>,
+    errorElement: <RouteError />,
+  },
   // A mistyped address or a stale bookmark used to reach React Router's own development
   // error page — "Unexpected Application Error!" with no branding and nothing to press.
   { path: "*", element: <Recovery404 /> },

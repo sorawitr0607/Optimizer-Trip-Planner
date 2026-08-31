@@ -162,6 +162,57 @@ class DiscoveryReportReadTest(unittest.TestCase):
             self.assertNotIn("SELECT *", text.upper())
             self.assertNotIn("candidates_json", text)
 
+    def test_ranked_discovery_reads_the_candidate_catalogue_once(self) -> None:
+        """The places page needs the run and its ranking, but not two blob reads."""
+
+        statements: list[str] = []
+        original = SQLiteStore.connect
+
+        import contextlib
+
+        @contextlib.contextmanager
+        def traced(store_self):
+            with original(store_self) as connection:
+                connection.set_trace_callback(statements.append)
+                yield connection
+
+        with unittest.mock.patch.object(SQLiteStore, "connect", traced):
+            result = self.actions.get_ranked_discovery(self.trip.trip_id)
+
+        selects = [text for text in statements if "FROM discovery_runs" in text]
+        self.assertEqual(1, len(selects), selects)
+        self.assertEqual(
+            len(result["discovery"].candidates.as_dict()["candidates"]),
+            len(result["ranking"]["lanes"]["browse_all"]),
+        )
+
+    def test_optimizer_input_reads_the_candidate_catalogue_once(self) -> None:
+        """Every plan calculation reuses the discovery it already loaded."""
+
+        discovery = self.store.get_latest_discovery(self.trip.trip_id)
+        candidate = discovery.candidates.as_dict()["candidates"][0]
+        self.actions.save_candidate_choice(
+            trip_id=self.trip.trip_id,
+            place_id=candidate["place_id"],
+            action="interested",
+        )
+        statements: list[str] = []
+        original = SQLiteStore.connect
+
+        import contextlib
+
+        @contextlib.contextmanager
+        def traced(store_self):
+            with original(store_self) as connection:
+                connection.set_trace_callback(statements.append)
+                yield connection
+
+        with unittest.mock.patch.object(SQLiteStore, "connect", traced):
+            self.actions._optimizer_input(self.trip.trip_id)
+
+        selects = [text for text in statements if "FROM discovery_runs" in text]
+        self.assertEqual(1, len(selects), selects)
+
     def test_basemap_read_carries_the_server_expiry_for_browser_reuse(self) -> None:
         self.store.upsert_trip_evidence(
             trip_id=self.trip.trip_id,

@@ -85,7 +85,9 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   is `SELECT *` and `candidates_json` is ~390 KB on a real city; four callers wanted only
   `query_boundary` and three of them ran on every `/itinerary` view. Use
   `actions._discovery_boundary()` / `store.get_latest_discovery_report()` for anything that is not the
-  candidate list itself; navigation uses `get_latest_discovery_header()`.
+  candidate list itself; navigation uses `get_latest_discovery_header()`. When a screen or calculation
+  really needs the catalogue twice, pass the loaded `DiscoveryRun` through: `/places` starts with
+  `get_ranked_discovery()`, and `_optimizer_input()` reuses its discovery while ranking.
   **`list_route_snapshots` is the same shape** — `SELECT *`, and a route
   carries its drawn geometry, so five hundred of them is most of a megabyte. Anything that only needs
   to know *whether* a pair is measured takes `store.list_route_pair_keys()`. Supabase's free tier allows 5.5 GB and this trip passed it. The roughly

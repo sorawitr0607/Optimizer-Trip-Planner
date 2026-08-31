@@ -1,6 +1,10 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { isValidElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
 
+import { LanguageProvider } from "./i18n/LanguageProvider";
 import { routes } from "./routes";
 import { StageGate } from "./shared/StageGate";
 
@@ -50,6 +54,32 @@ describe("entry point", () => {
     // Router's own "Unexpected Application Error!" development page.
     expect(routes.map((route) => route.path)).toEqual(["/", "/trips", "*", "/trips/:tripId"]);
     for (const route of routes) expect(isValidElement(route.element)).toBe(true);
+  });
+
+  it("reuses the shell query cache while resolving a returning owner's route", () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: 30_000 } },
+    });
+    client.setQueryData(["trips"], [{
+      trip_id: "trip-1",
+      name: "Trip",
+      destination: "Taipei, Taiwan",
+      planning_mode: "explore_first",
+      language: "en",
+      created_at: "2026-08-31",
+    }]);
+    client.setQueryData(["journey", "trip-1"], { next: "itinerary", stages: [] });
+    const landing = routes.find((route) => route.path === "/")?.element;
+
+    const html = renderToStaticMarkup(
+      <QueryClientProvider client={client}>
+        <LanguageProvider initial="en">
+          <MemoryRouter>{landing}</MemoryRouter>
+        </LanguageProvider>
+      </QueryClientProvider>,
+    );
+
+    expect(html).not.toContain('aria-busy="true"');
   });
 
   it("resolves every stage route in the decided order under one shell", () => {
