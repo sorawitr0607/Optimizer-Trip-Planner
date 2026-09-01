@@ -1,11 +1,11 @@
-# Approved screen baselines — 56 images
+# Approved screen baselines — 136 images
 
-`WF-025` §2b: 4 baselines per route (light/dark × en/th) across the 9 routes,
-approved once and then diffed on every change.
+`WF-025` §2b: 4 baselines per screen (light/dark × en/th), approved once and
+then diffed on every change. The current matrix is:
 
-**Plus a phone set of 20 as of 2026-08-10**, prefixed `m500-`: landing, setup,
-places, itinerary and the tour, in the same four variants. The desktop names are
-unchanged, so both sets live here and the gate picks them up by glob.
+- **44 desktop** at 1440×900: landing plus all ten stage routes
+- **48 phone** at 500×844, prefixed `m500-`: the same screens plus the tour
+- **44 middle-width** at 900×900, prefixed `t900-`: landing plus all stage routes
 
 Two things about that set. It is **500×844, not 390**: headless Chrome on macOS
 clamps the window and the layout viewport to a 500px minimum, so `--window-size`
@@ -29,9 +29,10 @@ meaningless. Parity with the donor is `check_element_parity.py`'s job.
 ## Reproducing
 
 ```bash
-uv run --locked python -m api                                    # serve on 8801
-uv run --locked python scripts/capture_screen_baselines.py --trip <id>
-uv run --locked python scripts/check_screen_baselines.py         # also check.py stage 8
+uv run --locked python -m localserver                            # serve on 8765
+uv run --locked python scripts/capture_screen_baselines.py \
+  --base http://127.0.0.1:8765 --trip <id> --owner <owner-token>
+uv run --locked python scripts/check_screen_baselines.py         # also check.py stage 9
 ```
 
 `--approve` writes straight into this directory instead of the comparison set.
@@ -82,7 +83,7 @@ Captured on one machine at a fixed 1440×900 viewport with
 `--force-device-scale-factor=1`. Cross-platform font rendering is what makes
 image gates flaky, so a capture from another machine is not comparable to these
 and re-approving is the correct response to changing machines — not widening
-the tolerance. Changing the viewport invalidates all 36.
+the tolerance. Changing a viewport invalidates every approved image at that width.
 
 Chrome needs two macOS workarounds, both in `capture()`: it writes the
 screenshot and then never exits, so the return code is not a usable signal and
@@ -130,7 +131,7 @@ swipe deck and `/optimize` grew a comfort-acceptance control (`WF-039`), and
 **neither appears in any baseline** — the deck card and the plan summary fill the
 viewport above them. The gate is not evidence about those sections in either
 direction. Recorded rather than worked around, because changing the viewport
-invalidates all 36 and is `WF-025`'s decision to revisit, not a capture setting.
+invalidates all 44 desktop images and is `WF-025`'s decision to revisit, not a capture setting.
 
 ## The gate now refuses a capture older than the code
 
@@ -142,7 +143,7 @@ one, because it is trusted.
 
 `check_screen_baselines.py` now lists every `.tsx`, `.ts` or `.css` file under `web/src`
 modified after the **oldest** capture, and fails naming them and the command that fixes
-it. Oldest rather than newest because the 36 images are written over about a minute; an
+it. Oldest rather than newest because the 136 images are written over several minutes; an
 edit landing mid-run would otherwise be judged only against the screens photographed after
 it.
 
@@ -156,6 +157,6 @@ Everything below the 1440×900 fold, and that is now most of what was built on 2
 - `/itinerary` — the drift banner (`WF-045`) renders **only when the plan has drifted**,
   which the pilot's has not, so no baseline will ever contain it
 
-Recorded rather than worked around: widening the viewport invalidates all 36 and is
+Recorded rather than worked around: widening the viewport invalidates all 44 desktop images and is
 `WF-025`'s decision to revisit. But the erosion is worth knowing — a passing screen gate
 now says less about this app than it did in August.

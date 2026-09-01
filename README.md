@@ -106,11 +106,11 @@ Never commit `secrets.local.json` or `.env`.
 Every trip flows through ten real, interactive screens:
 
 1. **Setup (`/trips/:id/setup`)**: 5-step wizard configuring destination country/city, travel dates, pacing constraints, and traveler preferences.
-2. **Places (`/trips/:id/places`)**: Candidate place discovery via free OpenStreetMap/Overpass data or custom place additions. Empty categories stay hidden, and an optional paid-photo request refreshes the card that was pressed without making the licensed images permanent trip data.
-3. **Stay (`/trips/:id/stay`)**: Where to base the trip, recommended by transit station rather than by hotel or district — the only unit whose travel time the app can measure exactly.
+2. **Places (`/trips/:id/places`)**: Candidate place discovery via free OpenStreetMap/Overpass data or custom place additions. Cards show catalogue-relative fit while preserving the raw optimizer score, avoid consecutive exact categories where alternatives exist, and remember a Google no-match so both paid-photo controls disappear without another paid request.
+3. **Stay (`/trips/:id/stay`)**: Where to base the trip, recommended by transit station rather than by hotel or district — the only unit whose travel time the app can measure exactly. Suggested trip lengths reserve time for arrival and departure logistics before estimating how many days the chosen places need.
 4. **Evidence (`/trips/:id/evidence`)**: Verify opening hours, exact coordinates, admission fees, and transit requirements.
-5. **Optimize (`/trips/:id/optimize`)**: Deterministic constraint-aware solver computing optimal daily visit orders and route pacing, with reported progress for route evidence and each plan variant.
-6. **Itinerary (`/trips/:id/itinerary`)**: Interactive day-by-day dashboard coordinating the map, timeline, live clock, search, photographs, and one-tap phone navigation. Wide screens show map and timeline together; phones use a compact view switch.
+5. **Optimize (`/trips/:id/optimize`)**: Deterministic constraint-aware solver computing daily visit orders and route pacing. Build choices render before their evidence read finishes; every real stage carries a realistic time range and overall progress; multiple comfort exceptions can be selected and accepted in one rebuild.
+6. **Itinerary (`/trips/:id/itinerary`)**: Interactive day-by-day dashboard coordinating the map, timeline, live clock, search, photographs, and one-tap phone navigation. Wide screens show map and timeline together; phones use a compact view switch. When no terminal was supplied, a cached nearby-airport assumption appears as an `A` pin and remains visibly marked `Recheck`.
 7. **Readiness (`/trips/:id/readiness`)**: Actionable pre-trip checklist proposals (reservations, packing, documents) with readiness scoring.
 8. **Costs (`/trips/:id/costs`)**: Planned-versus-actual tracking, currency conversion, and categorized expenses. Budget, Value, Standard, Premium, and Luxury provide editable THB starting estimates; nothing is written until Save.
 9. **Split (`/trips/:id/split`)**: Multi-currency group bill splitting ledger calculating exact settlement transactions.
@@ -119,7 +119,8 @@ Every trip flows through ten real, interactive screens:
 A long wait says where it has got to rather than only that it is running. Discovery and
 the draft build are queued jobs, so the worker reports the stages it has finished — the
 two Overpass blocks, each plan variant — and the screen draws them. A stage is marked
-when its call **returns**, never on a timer.
+when its call **returns**, never on a timer. The time ranges are estimates rather than an
+elapsed counter, and the progress bar is derived only from completed stages.
 
 ### The map
 
@@ -148,8 +149,9 @@ Zoom out far enough and the destination country's own outline appears, so a plac
 - `localserver/` — the same dispatch over a stdlib HTTP server for running locally. The
   two share `static_response` rather than implementing it twice.
 - `travel_planner/jobs.py` and `travel_planner/worker.py` — the job queue and the
-  long-lived process that drains it. Discovery is 30-90s and a full proposal ~52s, which
-  no serverless function will sit through.
+  long-lived process that drains it. Discovery is commonly 30–90s and plan generation
+  commonly 45–120s; the complete local date-to-plan journey measured about 95s on
+  2026-09-01. A serverless request must not sit through that work.
 - `deploy/macos/` — the launchd agent that keeps that worker alive across crash, sleep
   and reboot, and the `status` / `logs` / `restart` control surface for it.
 - `supabase/schema.sql` — generated from `store.SCHEMA`, never hand-edited.
@@ -173,7 +175,7 @@ Zoom out far enough and the destination country's own outline appears, so a plac
 
 ## Checks & verification
 
-Run the complete 12-stage validation suite:
+Run the complete 13-stage validation suite:
 
 ```bash
 uv run --locked python scripts/check.py

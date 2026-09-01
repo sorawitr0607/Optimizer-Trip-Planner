@@ -5310,3 +5310,103 @@ the still-broken `NODE_OPTIONS` in place, no `env -u` in front of it: 13/13.
 The general form is worth keeping: **a stage that fails before it runs is an environment
 question, not a code one.** The error text names a module, not a type error, and no commit
 sat between the pass and the failure.
+
+## The five-minute build was several boundaries, 2026-09-01
+
+Owner testing returned eight connected reports: the two Google photograph controls did
+not share their no-match state; the free/paid choice appeared after the Build button; a
+date-to-plan build took about five minutes with an elapsed counter but no estimate; comfort
+acceptance did not survive its rebuild; adding one day often needed another press; activating
+a plan left a frozen screen; the route omitted an airport; and swipe scores clustered around
+the middle while categories repeated.
+
+The fixes shipped together as `968fbb0`, because they meet at the same two boundaries:
+what the UI can claim from stored evidence, and what a build must finish before its result
+can be trusted.
+
+### The build choice stopped constructing the plan to price it
+
+`opening_evidence_options()` called `_optimizer_input()` only to count selected places with
+verified hours. That pulled the current discovery catalogue, rebuilt ranking, assembled routes,
+and derived the whole optimizer snapshot before the radio choice could render. It was both the
+wrong latency boundary and the wrong Supabase boundary: hundreds of kilobytes of mutable catalogue
+data to answer a small pricing question.
+
+The action now reads confirmed setup, selected choice snapshots and narrow opening evidence. The
+screen renders the `Before you build` shell immediately and keeps Build disabled until that small
+answer arrives. On the deployed Optimize screen the request completed in **585 ms**, transferring
+**804 bytes** (**486 decoded**). The page itself loaded in **1.33 s**. Those are one production
+smoke measurement, not a promise for every trip.
+
+The scratch journey exercised Taipei discovery, choices, provisional stay, dates, route evidence,
+three variants and activation. Within it, the date-to-plan step finished in **under about 95 seconds**,
+rather than the reported five minutes. It was measured locally against real free providers and
+scratch SQLite. A second hosted build was deliberately not run: it would add provider work and
+Supabase traffic after the deployed chunks and API reads were already verified. This is evidence of
+the local end-to-end improvement and the hosted read boundary, not a measured hosted build duration.
+
+Every loading list now carries a realistic range per real step and a native progress bar below the
+Ready row. The value is completed stages over total stages; no timer marks a stage done. The elapsed
+counter was deleted. A variant worker still has no internal milestone beyond the variant completion
+count, so the rotating line remains inside the active row without inventing finer progress.
+
+### One Google answer, one score meaning, one queue
+
+Google's `ProviderNoMatch` was already persisted for 90 days to avoid paying US$0.025 for the same
+refusal twice, but only the deck knew it immediately. `get_ranked_discovery()` now carries the tiny
+list of remembered ids on its existing response. Both `Get photographs from Google` and `Load live
+gallery, rating & reviews` withdraw from that same set, including after reload. A 503 or unknown
+failure does not set it; only `place_not_in_provider` is evidence that Google has no match.
+
+The scoring formula did not need a new blend. `total_score` remains the fixed raw heuristic the
+optimizer consumes. Cards now add `relative_match_percent`, the tied rank of that raw score inside
+the current catalogue, so the visible scale spans the found places instead of presenting a cluster
+of mid-range heuristics as exam marks. Queue spreading uses exact categories where current cards
+carry them, with the old broad family only as a legacy fallback. The next card therefore avoids an
+available same-category streak without changing optimization order or frozen regression inputs.
+
+### Consent, added days and activation became single actions
+
+`comfort_tradeoffs()` preferred the active plan even while the screen was asking about a new preview,
+so the reported measurement could lag the variant being rebuilt. It now accepts `variant_id`, prefers
+that preview, and falls back to active only without a preview. An acceptance remains a measured ceiling,
+not permanent permission: a later worse plan must be accepted again. When several rules exceed their
+caps, checked boxes submit the selected measurements and one rebuild follows.
+
+`Add a day and rebuild` now estimates the shortfall from every unfit place's ideal duration plus a
+30-minute movement allowance, divides by a 420-minute useful day, extends by that many days once, rebuilds
+the cached discovery run after the setup hash moves, and runs the normal build. Stay-length recommendations
+also reserve 315 minutes for arrival and departure operations before dividing place time by day capacity,
+so this escape should be rarer.
+
+Activation now re-runs `validate_variant()` against the frozen input rather than trusting a stored
+`validation.valid` flag. On success the browser navigates immediately to `/itinerary`; cache invalidation
+continues in the background, and the pressed button says `Opening your itinerary…` during the response.
+That removes the dead air without weakening the immutable-plan gate.
+
+### The assumed airport is visible and remains an assumption
+
+When the owner supplies no terminal, the build asks the existing free OpenStreetMap geocoder for an
+airport near the destination. The result must be within 200 km of the discovered centre, is cached for
+365 days, and stays `assumed`. Taipei resolved to Songshan in the live scratch check. Its coordinates and
+name reach both arrival and departure rows, exports, and one `A` pin on the itinerary with `Recheck` and
+an Open in Maps link. It is not added to the drawn stop route because no verified airport-to-hotel leg
+exists. A failed or implausible lookup produces no pin rather than a fabricated airport.
+
+### Release evidence and boundary
+
+The final tree passed all **13 of 13** stages: hosted-egress checks first, **697 Python tests**, the
+20 atomic and 7 interaction optimizer regressions across all three variants, graph integrity at
+**3252 nodes / 7551 directed edges**, typecheck, lint, **178 web tests**, and **136/136** approved and
+comparison screen captures. The complete browser journey also exercised the score, immediate card
+advance, build choices, progress/estimates, activation transition, route output and airport pin.
+
+GitHub `main` and local `HEAD` matched `968fbb063f1ea8f937f7b79d11cbab20f4669133`, the worktree was
+clean, and Vercel reported `Deployment has completed`. Production served the new `PlacesPage`,
+`OptimizePage`, `BuildStages` and `ItineraryPage` chunks with no console or browser errors.
+
+The Supabase claim stays narrow: this removes the full-catalogue read from the build-options query,
+piggy-backs Google no-match ids on an existing catalogue response, adds only one small cached terminal
+evidence row, and passed the SQL egress guard. It cannot erase the 15.93 GB already counted by Supabase,
+and the previously measured roughly 602 KB decoded `/places` catalogue response remains the next
+response-size target.

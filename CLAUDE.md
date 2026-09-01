@@ -88,6 +88,11 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   candidate list itself; navigation uses `get_latest_discovery_header()`. When a screen or calculation
   really needs the catalogue twice, pass the loaded `DiscoveryRun` through: `/places` starts with
   `get_ranked_discovery()`, and `_optimizer_input()` reuses its discovery while ranking.
+  `opening_evidence_options()` is deliberately narrower still: confirmed setup, selected
+  choice snapshots and opening evidence are enough to price the two build paths. Calling
+  `_optimizer_input()` there reloaded and rescored the full catalogue before the choice box
+  can appear. The deployed narrow response measured 804 transferred bytes / 486 decoded
+  bytes in 585 ms on 2026-09-01; that proves the boundary, not every future latency.
   **`list_route_snapshots` is the same shape** — `SELECT *`, and a route
   carries its drawn geometry, so five hundred of them is most of a megabyte. Anything that only needs
   to know *whether* a pair is measured takes `store.list_route_pair_keys()`. Supabase's free tier allows 5.5 GB and this trip passed it. The roughly
@@ -151,7 +156,10 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   expiring after `PROVIDER_NO_MATCH_DAYS` so a place Google later indexes becomes askable
   again. The same rule on the other side: the deck's buy button withdraws once a place has
   been enriched, because a purchase that returned one photograph will return one
-  photograph again. **Note the shape of `list_place_evidence`** — it returns the stored
+  photograph again. `get_ranked_discovery()` piggy-backs the durable no-match ids on the
+  catalogue response so the deck and detail buttons use the same state after reload, with
+  no extra catalogue read. Only `place_not_in_provider` sets it; a provider outage does not.
+  **Note the shape of `list_place_evidence`** — it returns the stored
   snapshot, not the row, so anything that needs `place_id` back must put it *inside* the
   value, which is why `list_venue_notices` does.
 - **One worker runs one job at a time, so a long job is a queue-wide outage.** Measured:
@@ -510,6 +518,12 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   `overBudget` (from a live query) — two sources that diverge, so the note could appear
   alone. Gate them together, and where there is genuinely nothing to agree to, offer the
   rebuild that clears a variant lagging behind an agreement.
+- **Comfort consent belongs to the preview being judged, not an older active plan.**
+  `comfort_tradeoffs(trip_id, variant_id)` prefers the matching preview variant and falls
+  back to the active plan only when there is no preview. Existing consent is covered only
+  while its accepted measurement still reaches the rebuilt variant. When several rules
+  exceed their caps, the screen renders checked boxes and submits the selected rules before
+  one rebuild; making the owner rebuild once per rule recreates the original bug.
 - **Extending a page needs the updater form.** `dealMore` read `setShown(LANE_PAGE)` —
   assigning the value it already held — so "Show 20 more from here" recomputed an
   identical window and the deck did not move. A pager that appears to do nothing is
@@ -571,8 +585,9 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   page already holds, and `BuildStages` marks a stage done on that and nothing else. Never
   advance it from a timer: a green check that means "probably by now" is the same defect as
   printing a placeholder as a finding. The long `generate_plan_preview` really has no
-  milestones, so `Thinking` stays inside that stage where a rotating line and an elapsed
-  counter are the honest thing to show.
+  milestones, so `Thinking` stays inside that stage with a rotating line. `BuildStages`
+  owns the realistic per-step range and native `<progress>` value below the Ready row;
+  elapsed seconds were removed because they described the wait without helping estimate it.
 - **A queued operation describes its own wait, or nothing can.** `jobs.REPORTS_PROGRESS`
   names the operations `run_one` hands a `progress` sink to; they write a **count** into
   `jobs.progress`, `job_status` carries it, and `rpc`'s `onProgress` gives it to the page.
@@ -873,7 +888,11 @@ Each stage is gated on the previous one having a matching hash (`_current_choice
    result but never a `verified` one. Inject a fake via `PlannerActions(path, place_provider=...)` —
    that is how every test avoids the network.
 3. **Ranking** — `ranking.build_ranking()` scores cards on the fixed 30/20/20/10/15/5 weights in
-   `FORMULA_WEIGHTS`, with protected exploration slots and per-card explanations. Deterministic.
+   `FORMULA_WEIGHTS`, with protected exploration slots and per-card explanations. `total_score`
+   remains the raw optimizer input; `relative_match_percent` is a catalogue-relative display rank
+   with ties sharing a value. Queue spreading uses the exact category when available, falling back
+   to the broad family only for legacy cards, so museum/historic alternatives do not form a streak.
+   Deterministic.
 4. **Optimization** — `optimizer.optimize_trip()` takes one complete snapshot and returns three
    variants (`best_balance`, `relaxed`, `more_highlights`), each independently rechecked by
    `optimizer.validate_variant()` — never trust solver construction. Same input + same
@@ -881,8 +900,10 @@ Each stage is gated on the previous one having a matching hash (`_current_choice
    trip dates it returns `mode: "stay_recommendation"` instead of a timetable. At the time limit it
    returns only a labelled valid incumbent, never a partial schedule.
 5. **Activation** — `activate_plan_preview()` refuses unless the preview's `input_sha256` still
-   matches current choices AND the variant is `status == "ready"` with `validation.valid`. It then
-   writes an immutable plan version and deletes the preview.
+   matches current choices, re-runs `validate_variant()` against the frozen input, and accepts only
+   a ready (or explicitly allowed provisional) valid result. It never trusts a stored preview-time
+   `validation.valid` flag as write authority. It then writes an immutable plan version and deletes
+   the preview; the browser navigates immediately and invalidates queries in the background.
 6. **Readiness** — `checklist.propose_items()` generates a city-independent board from setup, choices,
    and verified facts; `diff_proposal()` previews additions, removals, and deadline moves;
    `apply_checklist_proposal()` writes them, dismissing rather than deleting so nothing silently
@@ -939,6 +960,14 @@ snapshot's window and is meant to. `_skip_reason` is also not a measurement — 
 `_build_schedules`' own `hard_errors` when diagnosing. **No test set `include_operational_timeline`**
 before this; it is `True` for every trip `actions.py` builds and absent from all 27 fixtures, so arrival
 transfers, check-in, meals and the airport run were exercised only by the live pilot.
+
+**An omitted terminal becomes a visible airport assumption, not a booked fact.**
+`resolve_default_terminal()` asks the existing free OpenStreetMap geocoder for an airport near the
+destination, rejects a result more than 200 km from the discovered centre, and caches a successful
+answer for 365 days. The build starts that lookup beside work it already waits for. The value stays
+`status: "assumed"`; arrival and departure rows carry its coordinates, and `/itinerary` draws one
+`A` pin with `Recheck`. The airport is excluded from the drawn visit route because no verified
+airport-to-hotel leg was collected. No plausible lookup means no terminal, not an invented pin.
 
 **Every variant gets its own time budget as of 2026-08-06 (`WF-043`).** `optimize_trip` used to compute
 **one** absolute deadline and hand it to all three variants, so it was consumed in order and whichever ran
