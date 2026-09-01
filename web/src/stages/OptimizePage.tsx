@@ -103,28 +103,24 @@ const BUILD_LINES = [
  * other two build paths are a single `generate_plan_preview` (plus, on the paid one, a
  * purchase), so they have no milestones to report and keep the rotating lines alone.
  * `Thinking` sits inside whichever stage is active, because the long stage really does
- * have nothing to say beyond "still running, this many seconds so far".
+ * have nothing to say beyond "still running" and its realistic time range.
  */
 export function BuildProgress({
   language,
   stage,
   previewStage,
   routesMeasured,
-  startedAt,
 }: {
   language: Language;
   stage?: number;
   previewStage?: number;
   routesMeasured?: number;
-  startedAt?: number;
 }) {
   const thinking = (
     <Thinking
       expectSeconds={210}
       language={language}
       lines={BUILD_LINES}
-      /* Survives the remount when this moves inside a stage row. */
-      startedAt={startedAt}
     />
   );
   return (
@@ -168,6 +164,7 @@ export function OptimizePage() {
   // plan exists the question is no longer "how should this be paid for" but "will you
   // take this plan with the gaps it has", which is one button and not a choice.
   const [hoursChoice, setHoursChoice] = useState<"assume" | "verified">("assume");
+  const [excludedComfort, setExcludedComfort] = useState<Set<string>>(() => new Set());
 
   const trips = useQuery({ queryKey: ["trips"], queryFn: () => rpc<Trip[]>("list_trips") });
   const choices = useQuery({
@@ -206,8 +203,11 @@ export function OptimizePage() {
   // Same key the tradeoff panel uses, so TanStack serves both from one response and the
   // two cannot disagree about which budget is exceeded.
   const tradeoffs = useQuery({
-    queryKey: ["comfort_tradeoffs", tripId],
-    queryFn: () => rpc<ComfortTradeoffReport>("comfort_tradeoffs", { trip_id: tripId }),
+    queryKey: ["comfort_tradeoffs", tripId, variantId],
+    queryFn: () => rpc<ComfortTradeoffReport>("comfort_tradeoffs", {
+      trip_id: tripId,
+      variant_id: variantId,
+    }),
   });
 
   /**
@@ -230,6 +230,8 @@ export function OptimizePage() {
       queryClient.invalidateQueries({ queryKey: ["plan_preview", tripId] }),
       queryClient.invalidateQueries({ queryKey: ["comfort_tradeoffs", tripId] }),
     ]);
+  const resolveTerminal = () =>
+    rpc("resolve_default_terminal", { trip_id: tripId }).catch(() => null);
   const acceptRoutes = useMutation({
     mutationFn: async () => {
       setPreviewStage(undefined);
@@ -285,7 +287,10 @@ export function OptimizePage() {
       if (buildingRef.current) return null;
       buildingRef.current = true;
       setPreviewStage(undefined);
-      await rpc<unknown>("refresh_opening_hours", { trip_id: tripId });
+      await Promise.all([
+        rpc<unknown>("refresh_opening_hours", { trip_id: tripId }),
+        resolveTerminal(),
+      ]);
       await queryClient.invalidateQueries({ queryKey: ["opening_options", tripId] });
       await queryClient.invalidateQueries({ queryKey: ["paid_usage"] });
       return rpc<PlanPreview>(
@@ -305,8 +310,9 @@ export function OptimizePage() {
   });
 
   const generate = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       setPreviewStage(undefined);
+      await resolveTerminal();
       return rpc<PlanPreview>(
         "generate_plan_preview",
         { trip_id: tripId },
@@ -358,11 +364,10 @@ export function OptimizePage() {
       // the verdict panel above, priced, where choosing it is the point.
       // Free now: the zone comes from Open-Meteo rather than the paid Google lookup,
       // so there is no reason to leave the trip permanently unverified.
-      try {
-        await rpc("refresh_timezone", { trip_id: tripId });
-      } catch (err) {
-        void err;
-      }
+      await Promise.allSettled([
+        rpc("refresh_timezone", { trip_id: tripId }),
+        resolveTerminal(),
+      ]);
       // Marked done even when it threw: the stage is "we asked", and the catch above is
       // there because an unreachable clock is not a reason to abandon the build. Claiming
       // it succeeded would be the dishonest version.
@@ -431,14 +436,14 @@ export function OptimizePage() {
   //   "variant that cuts some" the owner asked for: the plan that fits, without the
   //   places that could not.
   const addDayAndRebuild = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (days: number) => {
       const basics = stored.data?.snapshot.data.trip_basics;
       const start = basics?.start_date;
       const end = basics?.end_date;
       if (!start || !end) throw new ApiError("setup_missing", {});
       await rpc<SetupDraft>("save_setup", {
         trip_id: tripId,
-        ...wholeDraftWithDates(stored.data ?? null, start, addDays(end, 1)),
+        ...wholeDraftWithDates(stored.data ?? null, start, addDays(end, days)),
       });
       // Writing the dates moves the setup hash, and discovery stores the hash it ran
       // against — so the found places go stale the instant the day is added, and the
@@ -493,9 +498,11 @@ export function OptimizePage() {
       rpc<unknown>("activate_plan_preview", { trip_id: tripId, variant_id: variant }),
     onSuccess: async () => {
       setRefusal(null);
-      await queryClient.invalidateQueries({ queryKey: ["journey", tripId] });
-      await invalidatePlan();
       navigate(`/trips/${tripId}/itinerary`);
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["journey", tripId] }),
+        invalidatePlan(),
+      ]);
     },
     // A stale input hash or an unready variant refuses with a stable code. It
     // has to be shown: activation is the one action that writes an immutable
@@ -530,8 +537,9 @@ export function OptimizePage() {
   // The measured figures behind those violations, from the one table the validator, the
   // soft count and the tradeoff screen already share.
   const overBudget = (tradeoffs.data?.rules ?? []).filter(
-    (rule) => rule.exceeds && rule.measured !== null && rule.accepted_value === null,
+    (rule) => rule.exceeds && rule.measured !== null && !rule.covered,
   );
+  const selectedComfort = overBudget.filter((rule) => !excludedComfort.has(rule.code));
 
   const area = optimizerInput?.candidates?.find(
     (candidate) => candidate.id === variant?.hotel_recommendation?.default_area_id,
@@ -658,6 +666,13 @@ export function OptimizePage() {
             </p>
           ) : null}
         </section>
+      ) : showBuildControls && considered.length && !building ? (
+        <section aria-busy={evidence.isPending} className="evidence-verdict">
+          <h2>{copy("before_you_build", language)}</h2>
+          <p className={evidence.isError ? "field-error" : "setup-hint"}>
+            {evidence.isError ? `⚠ ${evidence.error.message}` : copy("loading_build_options", language)}
+          </p>
+        </section>
       ) : null}
 
       {/* The one action on this screen, always present. It used to be hidden whenever the
@@ -676,9 +691,10 @@ export function OptimizePage() {
       <div className="optimize-actions" hidden={!showBuildControls || building}>
         <button
           className="setup-primary"
-          disabled={considered.length === 0 || building}
+          disabled={considered.length === 0 || building || !evidence.data}
           onClick={() => {
-            if (!evidence.data?.needing_hours) return generate.mutate();
+            if (!evidence.data) return;
+            if (!evidence.data.needing_hours) return generate.mutate();
             // The paid route only on a first build, where it was offered.
             if (!proposal && hoursChoice === "verified") return buyThenGenerate.mutate();
             return autoResolveAndGenerate.mutate();
@@ -710,15 +726,6 @@ export function OptimizePage() {
             routesMeasured={routesMeasured}
             stage={autoResolveAndGenerate.isPending ? buildStage : undefined}
             previewStage={previewStage}
-            startedAt={
-              (autoResolveAndGenerate.isPending && autoResolveAndGenerate.submittedAt) ||
-              (generate.isPending && generate.submittedAt) ||
-              (buyThenGenerate.isPending && buyThenGenerate.submittedAt) ||
-              (acceptRoutes.isPending && acceptRoutes.submittedAt) ||
-              (acceptAll.isPending && acceptAll.submittedAt) ||
-              (dropAndRebuild.isPending && dropAndRebuild.submittedAt) ||
-              undefined
-            }
           />
           <div className="skeleton-card">
             <span className="skeleton skeleton-line wide" />
@@ -941,20 +948,48 @@ export function OptimizePage() {
               is not, the stored variant is simply behind the agreement and rebuilding is.
               One of the two always renders. */}
           {!activationAllowed && comfortOnly.length ? (
-            <div className="optimize-actions">
+            <div className="optimize-actions comfort-acceptance">
               {overBudget.length ? (
-                <button
-                  className="setup-primary"
-                  disabled={acceptAll.isPending}
-                  onClick={() => acceptAll.mutate(overBudget)}
-                  type="button"
-                >
-                  {acceptAll.isPending
-                    ? copy("loading", language)
-                    : copyFormat("accept_measured_and_continue", language, {
-                        measured: overBudget.map((rule) => String(rule.measured)).join(", "),
-                      })}
-                </button>
+                <>
+                  {overBudget.length > 1 ? (
+                    <fieldset>
+                      <legend>{copy("accept_criteria_choose", language)}</legend>
+                      {overBudget.map((rule) => (
+                        <label key={rule.code}>
+                          <input
+                            checked={!excludedComfort.has(rule.code)}
+                            onChange={(event) => setExcludedComfort((current) => {
+                              const next = new Set(current);
+                              if (event.target.checked) next.delete(rule.code);
+                              else next.add(rule.code);
+                              return next;
+                            })}
+                            type="checkbox"
+                          />
+                          {copyFormat("accept_criterion", language, {
+                            criterion: copyFrom("OPTIMIZER_CODE_TEXT", rule.code, language),
+                            measured: rule.measured ?? "—",
+                            threshold: rule.threshold ?? "—",
+                          })}
+                        </label>
+                      ))}
+                    </fieldset>
+                  ) : null}
+                  <button
+                    className="setup-primary"
+                    disabled={acceptAll.isPending || selectedComfort.length === 0}
+                    onClick={() => acceptAll.mutate(selectedComfort)}
+                    type="button"
+                  >
+                    {acceptAll.isPending
+                      ? copy("loading", language)
+                      : overBudget.length > 1
+                        ? copy("accept_selected_and_continue", language)
+                        : copyFormat("accept_measured_and_continue", language, {
+                            measured: String(overBudget[0].measured),
+                          })}
+                  </button>
+                </>
               ) : (
                 <button
                   className="setup-primary"
@@ -983,6 +1018,11 @@ export function OptimizePage() {
             // so the only useful thing to say is how short the trip is and where to
             // lengthen it. Saying it without that link was the dead end reported.
             const needsDays = unfit.filter((item) => item.reason === "NO_TIME_CAPACITY");
+            const extraMinutes = needsDays.reduce((sum, item) => {
+              const candidate = optimizerInput?.candidates?.find((entry) => entry.id === item.place_id);
+              return sum + (candidate?.duration_bounds?.ideal_minutes ?? 90) + 30;
+            }, 0);
+            const extraDays = Math.max(1, Math.ceil(extraMinutes / 420));
             return (
               <section className="optimize-unfit">
                 <h2 className="money-eyebrow">{copy("unfit_title", language)}</h2>
@@ -1004,10 +1044,10 @@ export function OptimizePage() {
                       <button
                         className="setup-primary"
                         disabled={addDayAndRebuild.isPending || cutUnfitAndRebuild.isPending}
-                        onClick={() => addDayAndRebuild.mutate()}
+                        onClick={() => addDayAndRebuild.mutate(extraDays)}
                         type="button"
                       >
-                        {copy("unfit_add_day", language)}
+                        {copyFormat("unfit_add_days", language, { count: extraDays })}
                       </button>
                       <button
                         disabled={addDayAndRebuild.isPending || cutUnfitAndRebuild.isPending}
@@ -1201,7 +1241,9 @@ export function OptimizePage() {
               onClick={() => activate.mutate(variant.variant_id)}
               type="button"
             >
-              {copy(provisionalAllowed ? "use_provisional_plan" : "activate_plan", language)}
+              {activate.isPending
+                ? copy("opening_itinerary", language)
+                : copy(provisionalAllowed ? "use_provisional_plan" : "activate_plan", language)}
             </button>
             <Link className="primary-link" to={`/trips/${tripId}/places`}>
               {copy("stage_places", language)}

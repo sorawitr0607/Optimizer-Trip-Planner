@@ -99,6 +99,7 @@ ACTIONS = (
     "get_accommodation_base",
     "confirm_accommodation_base",
     "refresh_timezone",
+    "resolve_default_terminal",
     "get_timezone_evidence",
     "refresh_routes",
     # WF-038. A local file read, so it is free and works offline, but it is a

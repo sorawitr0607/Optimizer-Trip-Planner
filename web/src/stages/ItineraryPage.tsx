@@ -9,6 +9,7 @@ import {
   type Basemap,
   type CountryOutline,
   type ExportFallback,
+  type ExportPlanItem,
   type ExportSnapshot,
   type ChecklistItem,
   type ExportStop,
@@ -177,6 +178,7 @@ export function CoordinateMap({
   autoTraceKey,
   anchor,
   stops,
+  items = [],
   accommodationStatus,
   language,
   tripId,
@@ -187,6 +189,7 @@ export function CoordinateMap({
 }: {
   anchor: ExportSnapshot["accommodation"]["anchor"];
   stops: ExportStop[];
+  items?: ExportPlanItem[];
   accommodationStatus: string;
   language: Language;
   /** Enables the tiles and the zoomed-in detail. Omit and this is still a map, just the
@@ -235,6 +238,23 @@ export function CoordinateMap({
       });
     }
   }
+  const routePoints = [...points];
+  const terminal = items.find(
+    (item) =>
+      (item.kind === "airport_arrival" || item.kind === "airport_departure")
+      && item.latitude != null
+      && item.longitude != null,
+  );
+  if (terminal?.latitude != null && terminal.longitude != null) {
+    points.push({
+      place_id: "assumed-airport",
+      label: "A",
+      name: terminal.display_name ?? copy("assumed_airport", language),
+      latitude: terminal.latitude,
+      longitude: terminal.longitude,
+      status: "recheck",
+    });
+  }
   // Only the legs this day actually walks, in the order it walks them — the trip holds a
   // shape for every pair the router was asked about, most of which belong to other days.
   const walked: { points: [number, number][]; exact: boolean }[] = [];
@@ -243,8 +263,8 @@ export function CoordinateMap({
   // was missing from the line and from the trace — the day appeared to end wherever the
   // last museum was. Closing the ring only where there is an anchor to close it to: a
   // trip with no accommodation base has no home leg to draw.
-  const homeward = points.length > 1 && points[0].place_id === "hotel" ? [points[0]] : [];
-  const route = [...points, ...homeward];
+  const homeward = routePoints.length > 1 && routePoints[0].place_id === "hotel" ? [routePoints[0]] : [];
+  const route = [...routePoints, ...homeward];
   for (let at = 1; at < route.length; at += 1) {
     const from = route[at - 1];
     const to = route[at];
@@ -339,6 +359,15 @@ export function CoordinateMap({
             ) : null}
           </li>
         ))}
+        {terminal?.latitude != null && terminal.longitude != null ? (
+          <li>
+            <i className="recheck" /><b>A</b>
+            <span>{terminal.display_name ?? copy("assumed_airport", language)} · {stateText("recheck", language)}</span>
+            <a className="plan-stop-maps" href={mapsLink(terminal.latitude, terminal.longitude)}>
+              {copy("open_in_maps", language)} ↗
+            </a>
+          </li>
+        ) : null}
       </ul>
     </section>
   );
@@ -900,6 +929,7 @@ export function ItineraryPage() {
               anchor={plan.accommodation.anchor}
               basemap={basemap.data ?? null}
               language={language}
+              items={day.items}
               onSelectStop={(subjectId) => {
                 const item = dayItems.find((entry) => entry.subject_id === subjectId);
                 if (item) pinTo(item.startAt);

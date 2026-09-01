@@ -24,10 +24,10 @@ import {
  * the page drives these four itself, so each one returning is a fact it already holds.
  */
 export const BUILD_STAGES = [
-  { key: "timezone", icon: Clock3 },
-  { key: "hours", icon: MapPinned },
-  { key: "routes", icon: Footprints },
-  { key: "variants", icon: Sparkles },
+  { key: "timezone", icon: Clock3, estimateSeconds: [5, 15] },
+  { key: "hours", icon: MapPinned, estimateSeconds: [2, 10] },
+  { key: "routes", icon: Footprints, estimateSeconds: [15, 90] },
+  { key: "variants", icon: Sparkles, estimateSeconds: [45, 120] },
 ] as const;
 
 /**
@@ -37,7 +37,7 @@ export const BUILD_STAGES = [
  * call returns, never on a timer. This path is the longest wait in the app — it
  * writes the dates, rebuilds discovery against the new setup hash, collects route
  * evidence, and then runs a full three-variant proposal — and it was showing only
- * `Thinking`: one rotating line and an elapsed counter, which cannot say which of
+ * `Thinking`: one rotating line, which cannot say which of
  * them it is on. A wait that reports nothing is the same silence that had
  * `/optimize` reported as broken before `BUILD_STAGES` existed.
  *
@@ -51,10 +51,10 @@ export const BUILD_STAGES = [
  * fiction `BuildStages` exists to refuse.
  */
 export const PLAN_STAGES = [
-  { key: "dates", icon: CalendarCheck },
-  { key: "discovery", icon: MapPinned },
-  { key: "routes", icon: Footprints },
-  { key: "plan", icon: Sparkles },
+  { key: "dates", icon: CalendarCheck, estimateSeconds: [2, 10] },
+  { key: "discovery", icon: MapPinned, estimateSeconds: [5, 90] },
+  { key: "routes", icon: Footprints, estimateSeconds: [15, 90] },
+  { key: "plan", icon: Sparkles, estimateSeconds: [45, 120] },
 ] as const;
 
 /**
@@ -76,11 +76,11 @@ export const PLAN_STAGES = [
  * request. There the page shows `Thinking`, as it always has.
  */
 export const PLACES_STAGES = [
-  { key: "place_lookup", icon: Search },
-  { key: "place_landmarks", icon: Landmark },
-  { key: "place_baseline", icon: MapPinned },
-  { key: "place_catalogue", icon: ListChecks },
-  { key: "place_ranking", icon: Sparkles },
+  { key: "place_lookup", icon: Search, estimateSeconds: [5, 15] },
+  { key: "place_landmarks", icon: Landmark, estimateSeconds: [10, 25] },
+  { key: "place_baseline", icon: MapPinned, estimateSeconds: [20, 60] },
+  { key: "place_catalogue", icon: ListChecks, estimateSeconds: [3, 10] },
+  { key: "place_ranking", icon: Sparkles, estimateSeconds: [2, 10] },
 ] as const;
 
 /** How many of `PLACES_STAGES` the worker reports; the rest is the page's own wait. */
@@ -100,8 +100,8 @@ export const PLACES_WORKER_STAGES = 4;
  * at the last row without passing through the first three, which is what happened.
  */
 export const PREVIEW_STAGES = [
-  { key: "variant_balanced", icon: Scale },
-  { key: "variant_relaxed", icon: Wind },
-  { key: "variant_highlights", icon: Sparkles },
-  { key: "preview_saved", icon: Save },
+  { key: "variant_balanced", icon: Scale, estimateSeconds: [10, 35] },
+  { key: "variant_relaxed", icon: Wind, estimateSeconds: [10, 35] },
+  { key: "variant_highlights", icon: Sparkles, estimateSeconds: [10, 35] },
+  { key: "preview_saved", icon: Save, estimateSeconds: [1, 5] },
 ] as const;

@@ -198,6 +198,7 @@ export function PlacesPage() {
    */
   const [discoverStage, setDiscoverStage] = useState<number | undefined>(undefined);
   const [insights, setInsights] = useState<Record<string, PlaceInsight>>({});
+  const [providerNoMatch, setProviderNoMatch] = useState<Set<string>>(() => new Set());
 
   const [photoIndexes, setPhotoIndexes] = useState<Record<string, number>>({});
 
@@ -235,6 +236,7 @@ export function PlacesPage() {
     queryFn: async () => {
       const value = await rpc<RankedDiscovery>("get_ranked_discovery", { trip_id: tripId });
       if (value.ranking) queryClient.setQueryData(["ranking", tripId], value.ranking);
+      setProviderNoMatch(new Set(value.provider_no_match ?? []));
       return value.discovery;
     },
   });
@@ -485,6 +487,12 @@ export function PlacesPage() {
       // into the free-summary store, so refetching that query only returns the old blank
       // card and leaves the paid photographs stranded in the detail panel.
     },
+    onError: (error, placeId) => {
+      if (error instanceof ApiError && error.code === "place_not_in_provider") {
+        const id = placeId ?? selectedId;
+        setProviderNoMatch((current) => new Set(current).add(id));
+      }
+    },
   });
 
   // "Image loading very slow" was mostly not the network: a card showed a button
@@ -703,7 +711,9 @@ export function PlacesPage() {
     return copy("photo_ask_failed", language);
   };
   const cardError =
-    enrich.error && enrich.variables === cardId ? photoFailure(enrich.error) : null;
+    enrich.error && (enrich.variables ?? selectedId) === cardId
+      ? photoFailure(enrich.error)
+      : null;
 
   /* Discovery is two Overpass blocks and runs 30-90s; paced at the low end so the
      lines are not still arriving after the places are. Named rather than inlined
@@ -714,11 +724,6 @@ export function PlacesPage() {
       expectSeconds={40}
       language={language}
       lines={["think_reading_setup", "think_searching", "think_dedup", "think_scoring", "think_lanes", "think_photos", "think_almost"]}
-      /* The mutation's own start, so the counter keeps counting across the remount
-         that happens when the first stage arrives and this moves inside the list.
-         Zero on the paths where no discovery ran -- a page arriving on an existing
-         catalogue waits only for the ranking, and that wait starts at mount. */
-      startedAt={discover.submittedAt || undefined}
     />
   );
 
@@ -1012,7 +1017,7 @@ export function PlacesPage() {
                 <select value={selectedId} onChange={(event) => setCardId(event.target.value)}>
                   {entries.map((entry) => {
                     const item = catalog.find((value) => value.place_id === entry.place_id);
-                    return <option key={entry.place_id} value={entry.place_id}>{item ? placeName(item, language, item.name) : entry.place_id} · {Math.round(ranking.data!.cards[entry.place_id]?.total_score ?? 0)}%</option>;
+                    return <option key={entry.place_id} value={entry.place_id}>{item ? placeName(item, language, item.name) : entry.place_id} · {ranking.data!.cards[entry.place_id]?.relative_match_percent ?? Math.round(ranking.data!.cards[entry.place_id]?.total_score ?? 0)}%</option>;
                   })}
                 </select>
               </label>
@@ -1066,6 +1071,8 @@ export function PlacesPage() {
                 onWantPhotos={(placeId) => enrich.mutate(placeId)}
                 photosLoading={enrich.isPending}
                 photoError={cardError}
+                photosUnavailable={providerNoMatch.has(cardId)}
+                optimisticDecided={justDecided}
                 onWantSummary={(placeId) => fetchCard.mutate(placeId)}
                 paidPhotoUsd={paidAllowed ? paidEstimate : null}
                 summaryLoading={summaryPendingForCard}
@@ -1091,7 +1098,7 @@ export function PlacesPage() {
             <article className="place-card">
               <header className="place-card-head">
                 <div><h3>{placeName(candidate, language, candidate.name)}</h3>{candidate.names?.local && candidate.names.local !== placeName(candidate, language, candidate.name) ? <p>{candidate.names.local}</p> : null}<span className="money-tag">{categoryName(candidate.category, language)}</span></div>
-                <strong className="place-score">{copyFormat("match_for_you", language, { percent: Math.round(card.total_score) })}</strong>
+                <strong className="place-score">{copyFormat("relative_match", language, { percent: card.relative_match_percent ?? Math.round(card.total_score) })}</strong>
               </header>
               {(() => {
                 const about = summaries.data?.[selectedId];
@@ -1217,6 +1224,11 @@ export function PlacesPage() {
                   <p className="setup-hint">{copy("loading", language)}</p>
                 </div>
               ) : (
+                providerNoMatch.has(selectedId) ? (
+                <div className="place-paid-action">
+                  <p className="setup-hint">{copy("photo_ask_none", language)}</p>
+                </div>
+              ) : (
                 <div className="place-paid-action">
                   <p className="setup-hint">{detailsCost.isPending || photosCost.isPending ? copy("loading", language) : paidCaption}</p>
                   <button disabled={!paidAllowed || enrich.isPending} onClick={() => enrich.mutate(undefined)} type="button">{copy("load_live_details", language)}</button>
@@ -1232,6 +1244,7 @@ export function PlacesPage() {
                     </p>
                   ) : null}
                 </div>
+              )
               ))}
 
               {choice ? <p className="setup-hint">{copy("current_choice", language)}: {copy(choice.action, language)}{choice.reason ? ` · ${copyFrom("REJECTION_TEXT", choice.reason, language)}` : ""}</p> : null}

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from bisect import bisect_left, bisect_right
 from collections import Counter
 from math import asin, cos, radians, sin, sqrt
 from statistics import median
@@ -182,6 +183,21 @@ def build_ranking(
         )
         for candidate in candidates
     }
+    # `total_score` is an evidence-aware planning priority, not a calibrated chance that
+    # the owner will like a place. Unknown route/hour evidence deliberately gives many
+    # cards similar middle scores. The percentile answers the card's actual question --
+    # how this place compares with the catalogue in front of this owner -- without
+    # changing the optimizer's established score contract.
+    score_order = sorted(card["total_score"] for card in cards.values())
+    for card in cards.values():
+        lower = bisect_left(score_order, card["total_score"])
+        upper = bisect_right(score_order, card["total_score"])
+        percentile = (
+            100
+            if len(score_order) == 1
+            else round(100 * ((lower + upper - 1) / 2) / (len(score_order) - 1))
+        )
+        card["relative_match_percent"] = max(1, min(99, percentile)) if len(score_order) > 1 else 100
     ordered_ids = sorted(
         cards,
         key=lambda place_id: (
@@ -392,6 +408,7 @@ def _score_candidate(
     }
     return {
         "place_id": candidate["place_id"],
+        "category": category,
         "total_score": total,
         "dimensions": dimensions,
         "deductions": deductions,
@@ -663,13 +680,13 @@ def _spread_families(
         # comparison made it: 1.38s on the owner's 1108-place Hong Kong catalogue.
         best_at, best_turn = 0, None
         for position, item in enumerate(remaining):
-            turn = last_used.get(_family(cards[item]), -1)
+            turn = last_used.get(_spread_key(cards[item]), -1)
             if best_turn is None or turn < best_turn:
                 best_at, best_turn = position, turn
                 if turn == -1:
                     break
         pick = remaining.pop(best_at)
-        last_used[_family(cards[pick])] = len(result)
+        last_used[_spread_key(cards[pick])] = len(result)
         result.append(pick)
     return result
 
@@ -686,19 +703,19 @@ def _protected_queue(
                 break
             place_id = remaining.pop(0)
             result.append({"place_id": place_id, "role": "ranked"})
-            seen_families[_family(cards[place_id])] += 1
+            seen_families[_spread_key(cards[place_id])] += 1
         if remaining:
             place_id = min(
                 remaining,
                 key=lambda item: (
-                    seen_families[_family(cards[item])],
+                    seen_families[_spread_key(cards[item])],
                     -cards[item]["total_score"],
                     item,
                 ),
             )
             remaining.remove(place_id)
             result.append({"place_id": place_id, "role": "protected_exploration"})
-            seen_families[_family(cards[place_id])] += 1
+            seen_families[_spread_key(cards[place_id])] += 1
     return result
 
 
@@ -708,6 +725,12 @@ def _family(card: dict[str, Any]) -> str:
         if preferred in tags:
             return preferred
     return tags[0] if tags else "other"
+
+
+def _spread_key(card: dict[str, Any]) -> str:
+    """Use the exact place category for streak control, with legacy-test fallback."""
+
+    return str(card.get("category") or _family(card))
 
 
 def _local_alternatives(

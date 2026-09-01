@@ -1059,9 +1059,17 @@ def _operational_layout(
     first, last = day == dates[0], day == dates[-1]
     prefix: list[dict[str, Any]] = []
     if first:
+        terminal = snapshot["trip"].get("terminal") or {}
         prefix.extend(
             [
-                {"type": "logistics", "kind": "airport_arrival", "duration_minutes": 60},
+                {
+                    "type": "logistics",
+                    "kind": "airport_arrival",
+                    "duration_minutes": 60,
+                    "name": terminal.get("name"),
+                    "latitude": terminal.get("latitude"),
+                    "longitude": terminal.get("longitude"),
+                },
                 {
                     "type": "logistics",
                     "kind": "arrival_transfer",
@@ -1084,6 +1092,7 @@ def _operational_layout(
 
     suffix: list[dict[str, Any]]
     if last:
+        terminal = snapshot["trip"].get("terminal") or {}
         extra = {
             "departure_transfer": {
                 "mode": "confirm",
@@ -1100,6 +1109,13 @@ def _operational_layout(
             }
             for kind, minutes in DEPARTURE_LOGISTICS
         ]
+        for block in suffix:
+            if block["kind"] == "airport_departure":
+                block.update(
+                    name=terminal.get("name"),
+                    latitude=terminal.get("latitude"),
+                    longitude=terminal.get("longitude"),
+                )
     else:
         suffix = [
             {
@@ -1158,8 +1174,8 @@ def _append_operational(
         {
             "type": block["type"],
             "subject_id": f"{kind}:{day}",
-            "name": english,
-            "names": {"en": english, "th": thai},
+            "name": block.get("name") or english,
+            "names": {} if block.get("name") else {"en": english, "th": thai},
             "kind": kind,
             "date": day,
             "start": _clock(current),
@@ -1171,12 +1187,17 @@ def _append_operational(
             "to_name": block.get("to_name"),
             "mode": block.get("mode"),
             "reason": "confirm_after_booking",
+            "latitude": block.get("latitude"),
+            "longitude": block.get("longitude"),
         }
     )
     return current + duration
 
 
 def _terminal_name(snapshot: dict[str, Any], *, arrival: bool) -> str:
+    terminal = snapshot["trip"].get("terminal") or {}
+    if terminal.get("name"):
+        return str(terminal["name"])
     destination = snapshot["trip"].get("destination") or "Destination"
     direction = "arrival" if arrival else "departure"
     return f"{destination} {direction} airport / station (confirm)"
@@ -1523,7 +1544,10 @@ def _hotel_recommendation(
 
 
 def _stay_recommendations(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    minutes = sum(_duration(item, "ideal") + 30 for item in candidates)
+    # Reserve the arrival and departure logistics already present in every generated
+    # plan. Omitting them made the date recommendation optimistic and forced the owner
+    # to add a day immediately after accepting it.
+    minutes = 315 + sum(_duration(item, "ideal") + 30 for item in candidates)
     minimum = max(1, ceil(minutes / 540))
     balanced = max(minimum, ceil(minutes / 420))
     relaxed = max(balanced, ceil(minutes / 330))

@@ -252,7 +252,11 @@ export interface DiscoveryRun {
 
 export interface RankingCard {
   place_id: string;
+  category?: string;
   total_score: number;
+  /** Percentile inside this trip's current catalogue; unlike `total_score`, this is
+   *  suitable for a comparative "fit" label on the swipe card. */
+  relative_match_percent?: number;
   dimensions: Record<string, { score: number; max: number }>;
   deductions: { code: string; points: number }[];
   candidate_tags: string[];
@@ -292,6 +296,7 @@ export interface Ranking {
 export interface RankedDiscovery {
   discovery: DiscoveryRun | null;
   ranking: Ranking | null;
+  provider_no_match: string[];
 }
 
 /** One candidate place to stay. `WF-040`. The unit is a transit station, because that
@@ -437,6 +442,11 @@ export interface PlanPreview {
         id?: string;
         name?: string;
         names?: Names;
+        duration_bounds?: {
+          minimum_minutes?: number;
+          ideal_minutes?: number;
+          maximum_minutes?: number;
+        };
         /** `selected_place_centroid` when no address was booked. */
         planning_basis?: string;
       }[];
@@ -483,6 +493,8 @@ export interface ExportPlanItem {
   to_name?: string | null;
   reason?: string | null;
   photo_reference?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   /** The ranking card's `total_score` for this place, carried through
    *  `actions._optimizer_input` and the optimizer onto the exported row. Out of 100, so
    *  it renders as the same "% match" the deck shows -- one number, two screens. Absent

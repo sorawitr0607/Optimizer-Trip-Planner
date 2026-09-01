@@ -366,6 +366,28 @@ class ActivationGateTest(unittest.TestCase):
         # Activation consumes the preview rather than leaving it reusable.
         self.assertIsNone(self.actions.get_plan_preview(self.trip_id))
 
+    def test_activation_revalidates_instead_of_trusting_the_stored_flag(self) -> None:
+        proposal = json.loads(json.dumps(self.proposal))
+        variant = next(item for item in proposal["variants"] if item["variant_id"] == "best_balance")
+        variant["days"][0]["items"][0]["start"] = "00:00"
+        variant["validation"] = {"valid": True, "hard_violations": []}
+        self.actions.store.save_optimization_preview(
+            new_optimization_preview(
+                trip_id=self.trip_id,
+                optimizer_input=self.snapshot,
+                proposal=proposal,
+            )
+        )
+
+        with patch.object(self.actions, "_optimizer_input", return_value=self.snapshot):
+            with self.assertRaises(PlannerRefusal) as caught:
+                self.actions.activate_plan_preview(
+                    trip_id=self.trip_id, variant_id="best_balance"
+                )
+
+        self.assertEqual("variant_not_ready", caught.exception.code)
+        self.assertIsNone(self.actions.get_active_plan(self.trip_id))
+
     def test_a_stale_input_hash_refuses_and_writes_nothing(self) -> None:
         self.save_preview()
         moved = {**self.snapshot, "trip_id": "something the preview never saw"}

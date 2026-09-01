@@ -228,6 +228,9 @@ describe("the build checklist itself", () => {
     expect(html).toContain("Places for those dates");
     expect(html).toContain("Three plan options");
     expect(html).toContain("Your plan is ready");
+    expect(html).toContain("Usually 2–10 sec");
+    expect(html).toContain("Overall progress · 0%");
+    expect(html).toContain("<progress");
   });
 
   it("marks exactly the calls that have returned", () => {
@@ -243,5 +246,6 @@ describe("the build checklist itself", () => {
 
     expect(html).toContain('aria-busy="false"');
     expect(html.match(/build-stage active/g) ?? []).toHaveLength(0);
+    expect(html).toContain("Overall progress · 100%");
   });
 });

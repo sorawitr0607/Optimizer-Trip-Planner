@@ -188,10 +188,13 @@ export function StayPlanner({ tripId, language, proposal, today = new Date() }: 
     mutationFn: async () => {
       setBuilt(0);
       setRoutesMeasured(undefined);
-      const draft = await rpc<SetupDraft>("save_setup", {
-        trip_id: tripId,
-        ...wholeDraftWithDates(stored.data ?? null, start, end),
-      });
+      const [draft] = await Promise.all([
+        rpc<SetupDraft>("save_setup", {
+          trip_id: tripId,
+          ...wholeDraftWithDates(stored.data ?? null, start, end),
+        }),
+        rpc("resolve_default_terminal", { trip_id: tripId }).catch(() => null),
+      ]);
       setBuilt(1);
       await rpc("discover_places", { trip_id: tripId, force_refresh: false });
       setBuilt(2);

@@ -1084,6 +1084,22 @@
   color: var(--color-on-accent);
 }
 
+.comfort-acceptance {
+  align-items: stretch;
+  flex-direction: column;
+}
+
+.comfort-acceptance fieldset {
+  display: grid;
+  gap: 8px;
+}
+
+.comfort-acceptance label {
+  align-items: flex-start;
+  display: flex;
+  gap: 8px;
+}
+
 .optimize-variant {
   display: flex;
   flex-direction: column;
@@ -10454,6 +10470,28 @@
 .build-stage-detail {
   color: var(--text-secondary);
   font-size: var(--text-2xs);
+}
+
+.build-stage-estimate {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+}
+
+.build-progress {
+  display: grid;
+  gap: 5px;
+}
+
+.build-progress span {
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+}
+
+.build-progress progress {
+  accent-color: var(--color-accent);
+  inline-size: 100%;
 }
 
 .build-stage-count {

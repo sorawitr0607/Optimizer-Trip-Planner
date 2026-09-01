@@ -169,6 +169,10 @@ export interface PlaceDeckProps {
    *  card it was asked for by the caller, and answered inside the photo area rather
    *  than in a banner above the deck, where it read as the deck being broken. */
   photoError?: string | null;
+  /** Google's durable no-match answer. Both paid controls hide on the same fact. */
+  photosUnavailable?: boolean;
+  /** Decisions made before the choices refetch completes. */
+  optimisticDecided?: ReadonlySet<string>;
   /** What that costs, so the price is on the button rather than a screen away. */
   paidPhotoUsd?: number | null;
   /** Fetches the free description and photographs for one place. */
@@ -206,6 +210,8 @@ export function PlaceDeck({
   onWantPhotos,
   photosLoading = false,
   photoError = null,
+  photosUnavailable = false,
+  optimisticDecided = new Set(),
   paidPhotoUsd,
   onWantSummary,
   summaryLoading = false,
@@ -262,7 +268,10 @@ export function PlaceDeck({
       .finally(() => markLoaded(url));
   }
 
-  const decided = new Set(choices.map((choice) => choice.place_id));
+  const decided = new Set([
+    ...choices.map((choice) => choice.place_id),
+    ...optimisticDecided,
+  ]);
   // And by name, not only by id. Discovery merges two records of one place when the
   // name and the spot match, but it cannot merge what it cannot tell apart — a zoo
   // signs the same exhibit twice, 200m apart — so the same attraction still reaches
@@ -760,8 +769,8 @@ export function PlaceDeck({
               actually for. Rounded, because a tenth of a percent of a heuristic is
               precision the number does not have. */}
           <strong className="place-score">
-            {copyFormat("match_for_you", language, {
-              percent: Math.round(card.total_score),
+            {copyFormat("relative_match", language, {
+              percent: card.relative_match_percent ?? Math.round(card.total_score),
             })}
           </strong>
         </header>
@@ -923,6 +932,7 @@ export function PlaceDeck({
           // side, where the answer was nothing at all. One photograph back is still
           // thin, and still not a reason to pay twice.
           && !insights[entry.place_id]
+          && !photosUnavailable
           // Asked and failed. Leaving the button up invites paying again for the answer
           // that just did not arrive, and the card is already saying no photograph was
           // found — a control beside that sentence contradicts it. Scoped to this card by

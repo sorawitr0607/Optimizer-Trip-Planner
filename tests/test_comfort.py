@@ -265,6 +265,24 @@ class AcceptanceActionsTest(unittest.TestCase):
         self.assertTrue(rule["exceeds"])
         self.assertFalse(rule["covered"])
 
+    def test_a_new_preview_wins_over_an_older_active_plan(self) -> None:
+        active_payload = {"variant": {"metrics": {"maximum_plain_walking_minutes_per_day": 50}}}
+        preview_payload = {
+            "variants": [{"metrics": {"maximum_plain_walking_minutes_per_day": 95}}]
+        }
+        snapshot = lambda value: type("S", (), {"as_dict": lambda self: value})()
+        active = type("V", (), {"snapshot": snapshot(active_payload)})()
+        preview = type("P", (), {"proposal": snapshot(preview_payload)})()
+
+        with (
+            patch.object(self.actions, "get_active_plan", return_value=active),
+            patch.object(self.actions, "get_plan_preview", return_value=preview),
+        ):
+            report = self.actions.comfort_tradeoffs(self.trip.trip_id)
+
+        rule = next(r for r in report["rules"] if r["code"] == "PLAIN_WALK_THRESHOLD")
+        self.assertEqual(95, rule["measured"])
+
 
 if __name__ == "__main__":
     unittest.main()

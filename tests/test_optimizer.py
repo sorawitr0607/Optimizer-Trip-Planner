@@ -465,6 +465,42 @@ class OptimizerCoreTest(unittest.TestCase):
 
 
 class OptimizerActionsTest(unittest.TestCase):
+    def test_default_airport_is_assumed_once_and_then_reused(self) -> None:
+        class TerminalProvider(FakePlaceProvider):
+            def __init__(self) -> None:
+                self.queries: list[str] = []
+
+            def geocode(self, query: str) -> dict:
+                self.queries.append(query)
+                return {
+                    "name": "Taipei Songshan Airport",
+                    "address": "Taipei Songshan Airport",
+                    "latitude": 25.0665,
+                    "longitude": 121.5549,
+                    "provider": self.name,
+                }
+
+        provider = TerminalProvider()
+        with TemporaryDirectory() as directory:
+            actions = PlannerActions(
+                Path(directory) / "airport.sqlite3", place_provider=provider
+            )
+            trip = actions.create_trip(name="Taipei", destination="Taipei, Taiwan")
+            actions.save_setup(
+                trip_id=trip.trip_id,
+                main_style=["sightseeing"],
+                confirmed=True,
+            )
+            actions.discover_places(trip_id=trip.trip_id)
+
+            first = actions.resolve_default_terminal(trip.trip_id)
+            second = actions.resolve_default_terminal(trip.trip_id)
+
+        self.assertEqual(["airport near Taipei, Taiwan"], provider.queries)
+        self.assertEqual("assumed", first["status"])
+        self.assertFalse(first["from_cache"])
+        self.assertTrue(second["from_cache"])
+
     def test_ready_preview_activates_as_an_immutable_plan_version(self) -> None:
         snapshot = fixture("ix-jp-shibuya-hours-view-walk")["planner_input"]
         proposal = optimize_trip(snapshot)
@@ -541,6 +577,33 @@ class OptimizerActionsTest(unittest.TestCase):
 
         self.assertEqual("stay_recommendation", result["mode"])
         self.assertEqual(["minimum", "balanced", "relaxed"], [item["id"] for item in result["stay_recommendations"]])
+        self.assertEqual(2, result["stay_recommendations"][1]["days"])
+
+    def test_assumed_airport_coordinates_reach_both_operational_pins(self) -> None:
+        snapshot = json.loads(json.dumps(fixture("jp-shibuya-sky-morning-view")["planner_input"]))
+        snapshot["trip"].update(
+            include_operational_timeline=True,
+            destination="Tokyo",
+            accommodation_status="unbooked",
+            terminal={
+                "name": "Haneda Airport",
+                "latitude": 35.5494,
+                "longitude": 139.7798,
+                "status": "assumed",
+            },
+        )
+
+        variant = optimize_trip(snapshot)["variants"][0]
+        airport_rows = [
+            item
+            for day in variant["days"]
+            for item in day["items"]
+            if item.get("kind") in {"airport_arrival", "airport_departure"}
+        ]
+
+        self.assertEqual(2, len(airport_rows))
+        self.assertEqual({35.5494}, {item["latitude"] for item in airport_rows})
+        self.assertEqual({"Haneda Airport"}, {item["name"] for item in airport_rows})
 
 
 if __name__ == "__main__":

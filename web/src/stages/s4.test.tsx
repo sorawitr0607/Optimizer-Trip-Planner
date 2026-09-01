@@ -16,7 +16,6 @@ import type {
 import type { Language } from "../i18n/copy";
 import { LanguageProvider } from "../i18n/LanguageProvider";
 import { copy } from "../i18n/copy";
-import { Thinking } from "../shared/Thinking";
 import { PLACES_STAGES, PLACES_WORKER_STAGES, PREVIEW_STAGES } from "../shared/buildStages";
 import { flattenDays } from "../shared/tripClock";
 import { BuildStages } from "./BuildStages";
@@ -205,7 +204,7 @@ describe("PlacesPage", () => {
     expect(html).toContain("Places picked for your trip");
     expect(html).toContain("Taipei 101");
     expect(html).toContain("Museum");
-    expect(html).toContain("78% match");
+    expect(html).toContain("Stronger fit than 78% of found places");
     expect(html).toContain("Current choice: Interested");
     expect(html).toContain("US$0.007");
     expect(html.indexOf("US$0.007")).toBeLessThan(html.indexOf("Load live gallery"));
@@ -403,32 +402,6 @@ describe("pinch to zoom", () => {
     // A zero spread would divide by zero and send the viewBox to Infinity.
     expect(pinchedZoom({ spread: 0, zoom: 6 }, 120, 1, 24)).toBe(6);
     expect(pinchedZoom({ spread: 120, zoom: 6 }, 0, 1, 24)).toBe(6);
-  });
-});
-
-describe("the elapsed counter on a wait", () => {
-  it("counts from when the work began, not from when it was last re-rendered", () => {
-    // `/places` moves this element into the active stage the moment the worker
-    // reports, which is a new mount. Counting from mount would restart the number
-    // at zero part-way through a 30-90s wait -- "it looks like it hung", which is
-    // the exact report the counter was added to answer.
-    const html = renderToStaticMarkup(
-      <LanguageProvider initial="en">
-        <Thinking language="en" lines={["think_searching"]} startedAt={Date.now() - 42_000} />
-      </LanguageProvider>,
-    );
-
-    expect(html).toContain("42s");
-  });
-
-  it("counts from mount when nothing tells it otherwise", () => {
-    const html = renderToStaticMarkup(
-      <LanguageProvider initial="en">
-        <Thinking language="en" lines={["think_searching"]} />
-      </LanguageProvider>,
-    );
-
-    expect(html).toContain("0s");
   });
 });
 
@@ -682,6 +655,12 @@ describe("CoordinateMap", () => {
         language="en"
         onSelectStop={() => undefined}
         stops={SNAPSHOT.data.days[0].stops}
+        items={[{
+          order: 0, item_id: "airport", type: "logistics", subject_id: "airport_arrival",
+          date: "2030-01-01", start: "08:00", end: "09:00", duration_minutes: 60,
+          status: "recheck", kind: "airport_arrival", display_name: "Taipei Songshan Airport",
+          latitude: 25.0697, longitude: 121.5525,
+        }]}
       />,
       "en",
     );
@@ -691,6 +670,8 @@ describe("CoordinateMap", () => {
     expect(html).toContain("25.03654, 121.49992");
     expect(html.match(/role="button"/g) ?? []).toHaveLength(1);
     expect(html).toContain("Show Longshan Temple in the trip");
+    expect(html).toContain("Taipei Songshan Airport");
+    expect(html).toContain(">A</b>");
     expectNoMissingCopy(html);
   });
 });

@@ -17,6 +17,7 @@ import { PlaceDeck } from "./PlaceDeck";
 const CARD = {
   place_id: "",
   total_score: 71.5,
+  relative_match_percent: 88,
   dimensions: {
     group_preference_fit: { score: 24, max: 30 },
     experience_value: { score: 18, max: 20 },
@@ -46,7 +47,10 @@ const CARD = {
 } as unknown as Ranking["cards"][string];
 
 const RANKING = {
-  cards: { first: { ...CARD }, explore: { ...CARD, total_score: 52.0 } },
+  cards: {
+    first: { ...CARD },
+    explore: { ...CARD, total_score: 52.0, relative_match_percent: 35 },
+  },
   lanes: {
     main_queue: [
       { place_id: "first", role: "ranked" },
@@ -88,6 +92,8 @@ function render(
   ranking: Ranking = RANKING,
   insights: Record<string, PlaceInsight> = {},
   photoError: string | null = null,
+  photosUnavailable = false,
+  optimisticDecided: ReadonlySet<string> = new Set(),
 ) {
   return renderToStaticMarkup(
     <PlaceDeck
@@ -106,6 +112,8 @@ function render(
       onWantSummary={() => {}}
       paidPhotoUsd={0.075}
       photoError={photoError}
+      photosUnavailable={photosUnavailable}
+      optimisticDecided={optimisticDecided}
       ranking={ranking}
       summaryLoading={summaryLoading}
       summaries={summaries}
@@ -146,6 +154,12 @@ describe("PlaceDeck paid photo control", () => {
     // And the reason is on the card, where the question was asked.
     expect(html).toContain("No photograph could be found for this place");
   });
+
+  it("withdraws the purchase after Google's durable no-match answer", () => {
+    const html = render(BLANK, [], RANKING.lanes.main_queue, [], false, RANKING, {}, null, true);
+
+    expect(html).not.toContain("Get photographs from Google");
+  });
 });
 
 describe("PlaceDeck", () => {
@@ -157,7 +171,7 @@ describe("PlaceDeck", () => {
     expect(html).toContain("台北101");
     // The score reads as fit now, not as an exam mark: same number out of the same 100,
     // rounded, because a tenth of a percent of a heuristic is precision it does not have.
-    expect(html).toContain("72% match");
+    expect(html).toContain("Stronger fit than 88% of found places");
     expect(html).not.toContain("/100");
     // The description is deliberately NOT here. The panel beside the deck renders the
     // same paragraph from the same summary, so the card printed text already on screen
@@ -186,6 +200,13 @@ describe("PlaceDeck", () => {
     expect(html).toContain("CC BY-SA");
     // The second card must not be on screen: this is a deck, not a list.
     expect(html).not.toContain("A quiet park");
+  });
+
+  it("advances immediately while a decision is waiting for its refetch", () => {
+    const html = render(SUMMARY, [], RANKING.lanes.main_queue, [], false, RANKING, {}, null, false, new Set(["first"]));
+
+    expect(html).toContain("A quiet park");
+    expect(html).not.toContain("Taipei 101");
   });
 
   it("shows value once visit time has been estimated", () => {
@@ -264,7 +285,7 @@ describe("PlaceDeck", () => {
     const html = render(SUMMARY, ["first"]);
     expect(html).toContain("A quiet park");
     expect(html).toContain("widen the search");
-    expect(html).toContain("52% match");
+    expect(html).toContain("Stronger fit than 35% of found places");
   });
 
   it("shows a placeholder outside the card it stands in for", () => {

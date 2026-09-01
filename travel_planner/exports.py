@@ -415,6 +415,8 @@ def _item(
                 "to_name": item.get("to_name"),
                 "mode": item.get("mode"),
                 "reason": item.get("reason"),
+                "latitude": item.get("latitude"),
+                "longitude": item.get("longitude"),
                 "status": RECHECK if item.get("status") == "assumed" else CONFIRMED,
             }
         )

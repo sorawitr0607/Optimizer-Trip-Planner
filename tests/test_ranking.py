@@ -607,6 +607,10 @@ class ProviderNoMatchIsRememberedTest(unittest.TestCase):
 
             with self.assertRaises(ProviderNoMatch):
                 actions.enrich_place_card(trip.trip_id, place_id)
+            self.assertEqual(
+                [place_id],
+                actions.get_ranked_discovery(trip.trip_id)["provider_no_match"],
+            )
             spent_once = actions.paid_usage_status()["by_operation"]
             self.assertEqual(1, spent_once["google_places:card_details"]["requests"])
 
@@ -741,6 +745,33 @@ class LaneVarietyTest(unittest.TestCase):
         ids, cards = self._cards(["culture"] * 6)
 
         self.assertEqual(ids, ranking._spread_families(ids, cards))
+
+    def test_exact_categories_do_not_streak_when_broad_families_match(self) -> None:
+        ids, cards = self._cards(["culture"] * 6)
+        for place_id, category in zip(ids, ["museum"] * 3 + ["historic"] * 3):
+            cards[place_id]["category"] = category
+
+        spread = ranking._spread_families(ids, cards)
+        categories = [cards[place_id]["category"] for place_id in spread]
+
+        self.assertNotEqual(categories[0], categories[1])
+
+    def test_relative_fit_uses_catalogue_position_without_changing_raw_score(self) -> None:
+        result = build_ranking(
+            setup=setup_payload(),
+            candidates=[
+                candidate("low", "theme_park", 1),
+                candidate("middle", "museum", 2),
+                candidate("high", "viewpoint", 4, icon=True, opening=True),
+            ],
+            choices=[],
+            discovery_status="verified",
+        )
+        cards = result["cards"]
+        raw = {place_id: card["total_score"] for place_id, card in cards.items()}
+
+        self.assertGreater(cards["high"]["relative_match_percent"], cards["low"]["relative_match_percent"])
+        self.assertEqual(raw, {place_id: card["total_score"] for place_id, card in cards.items()})
 
 
 

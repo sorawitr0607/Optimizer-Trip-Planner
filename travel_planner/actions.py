@@ -880,10 +880,18 @@ class PlannerActions:
 
         discovery = self.store.get_latest_discovery(trip_id)
         if discovery is None:
-            return {"discovery": None, "ranking": None}
+            return {"discovery": None, "ranking": None, "provider_no_match": []}
         return {
             "discovery": discovery,
             "ranking": self._rank_candidates(trip_id, discovery),
+            # Tiny state piggy-backed on the existing discovery read. Both paid-photo
+            # buttons can now withdraw after Google's durable no-match answer, including
+            # after reload, without another request or another catalogue transfer.
+            "provider_no_match": [
+                row["place_id"]
+                for row in self.store.list_place_evidence(trip_id, PROVIDER_NO_MATCH_KIND)
+                if row.get("place_id")
+            ],
         }
 
     def enrich_place_card(
@@ -1145,12 +1153,36 @@ class PlannerActions:
         evidence and a guess.
         """
 
-        snapshot = self._optimizer_input(trip_id)
+        # This price box used to build the whole optimizer input just to count opening
+        # rows. That reread and rescored the entire candidate catalogue (hundreds of KB)
+        # before the build choice could appear. Selected choices already freeze the
+        # operational fields this decision needs, so stay on that small boundary.
+        setup = self.store.get_setup(trip_id)
+        if setup is None or not setup.confirmed:
+            raise PlannerRefusal("setup_not_confirmed")
+        selected = [
+            choice
+            for choice in self.store.list_candidate_choices(trip_id)
+            if choice.action in {"must_do", "interested", "maybe"}
+        ]
+        if not selected:
+            raise PlannerRefusal("no_places_chosen", purpose="planning", minimum=1)
+        intervals = self.opening_intervals(trip_id)
         verified = {
-            fact["subject_id"]
-            for fact in snapshot["facts"]
-            if fact.get("fact_type") == "opening_interval"
-            and fact.get("status") == "verified"
+            choice.place_id
+            for choice in selected
+            if (intervals.get(choice.place_id) or {}).get("interval")
+            or (
+                (choice.candidate.as_dict().get("operational_evidence") or {})
+                .get("opening_hours", {})
+                .get("state")
+                in {"official_confirmed", "current_provider"}
+                and _simple_interval(
+                    (choice.candidate.as_dict().get("operational_evidence") or {})
+                    .get("opening_hours", {})
+                    .get("value")
+                )
+            )
         }
         held = self.list_assumed_windows(trip_id)
         places = self._selected_places(trip_id)
@@ -1190,7 +1222,7 @@ class PlannerActions:
             },
             # A trip that will not read an assumed fact should not be offered one.
             "assumed_is_usable": bool(
-                snapshot["trip"].get("allow_provisional_assumptions")
+                setup.snapshot.as_dict().get("planning_mode") == "explore_first"
             ),
         }
 
@@ -1329,7 +1361,9 @@ class PlannerActions:
             "provider_errors": errors,
         }
 
-    def comfort_tradeoffs(self, trip_id: str) -> dict[str, Any]:
+    def comfort_tradeoffs(
+        self, trip_id: str, variant_id: str | None = None
+    ) -> dict[str, Any]:
         """What the current plan exceeds, what is agreed, and by how much. `WF-039`.
 
         One read for the screen, so it never has to know which metric belongs to which
@@ -1339,14 +1373,19 @@ class PlannerActions:
         snapshot = self._optimizer_input(trip_id)
         thresholds = snapshot["thresholds"]
         accepted = {item["code"]: item for item in snapshot["comfort_acceptances"]}
-        active = self.get_active_plan(trip_id)
-        variant = (
-            active.snapshot.as_dict().get("variant", {}) if active is not None else {}
-        )
         preview = self.get_plan_preview(trip_id)
-        if not variant and preview is not None:
+        variant: dict[str, Any] = {}
+        if preview is not None:
             variants = preview.proposal.as_dict().get("variants", [])
-            variant = variants[0] if variants else {}
+            variant = next(
+                (item for item in variants if item.get("variant_id") == variant_id),
+                variants[0] if variants else {},
+            )
+        if not variant:
+            active = self.get_active_plan(trip_id)
+            variant = (
+                active.snapshot.as_dict().get("variant", {}) if active is not None else {}
+            )
         metrics = variant.get("metrics", {})
 
         rules = []
@@ -1499,6 +1538,10 @@ class PlannerActions:
         )
         if variant is None:
             raise PlannerRefusal("unknown_plan_variant", variant_id=variant_id)
+        # Revalidate the exact variant being activated against the unchanged frozen
+        # input. A stored `validation` field is a preview-time report, not authority to
+        # write an immutable plan version after either data has been corrupted.
+        variant["validation"] = validate_variant(stored, variant)
         trip = self.store.get_trip(trip_id)
         provisional_allowed = bool(
             trip
@@ -1872,6 +1915,9 @@ class PlannerActions:
             capability_gaps.append("OPENING_EVIDENCE_MISSING")
         if any(person.get("constraints") for person in travellers):
             capability_gaps.append("FREE_TEXT_HARD_CONSTRAINT_NEEDS_STRUCTURED_CONFIRMATION")
+        terminal = self.store.get_trip_evidence(trip_id, "default_terminal")
+        if terminal and terminal.get("expires_at", "") <= datetime.now(timezone.utc).isoformat():
+            terminal = None
         return {
             "schema_version": 1,
             "source": {
@@ -1886,6 +1932,7 @@ class PlannerActions:
                 "include_operational_timeline": True,
                 "arrival_time": basics.get("arrival_time"),
                 "departure_time": basics.get("departure_time"),
+                **({"terminal": terminal} if terminal else {}),
                 "accommodation_base_id": (
                     "booked_accommodation_base" if accommodation_base else None
                 ),
@@ -1920,6 +1967,44 @@ class PlannerActions:
             # can tell an accepted overage from a worse one that merely shares its code.
             "comfort_acceptances": self.store.list_comfort_acceptances(trip_id),
         }
+
+    def resolve_default_terminal(self, trip_id: str) -> dict[str, Any] | None:
+        """Cache the destination's likely airport as an explicit, provisional assumption."""
+
+        trip = self.store.get_trip(trip_id)
+        if trip is None:
+            raise PlannerRefusal("unknown_trip", trip_id=trip_id)
+        now = datetime.now(timezone.utc)
+        held = self.store.get_trip_evidence(trip_id, "default_terminal")
+        if held and held.get("expires_at", "") > now.isoformat():
+            return {**held, "from_cache": True}
+        provider = self.place_provider or OpenStreetMapProvider()
+        try:
+            # Nominatim interprets "Taipei, Taiwan airport" as a literal locality name
+            # and returns no row; its supported proximity form resolves the city airport.
+            match = provider.geocode(f"airport near {trip.destination}")
+            centre = self._destination_centre(trip_id)
+        except (ProviderUnavailable, PlannerRefusal, AttributeError):
+            return None
+        if _distance_metres(centre, match) > 200_000:
+            return None
+        value = {
+            "name": match.get("address") or match.get("name") or f"{trip.destination} airport",
+            "latitude": float(match["latitude"]),
+            "longitude": float(match["longitude"]),
+            "status": "assumed",
+            "provider": str(match.get("provider") or provider.name),
+            "reason": "nearest_destination_airport_assumption",
+        }
+        self.store.upsert_trip_evidence(
+            trip_id=trip_id,
+            kind="default_terminal",
+            value=value,
+            provider=value["provider"],
+            retrieved_at=now.isoformat(),
+            expires_at=(now + timedelta(days=365)).isoformat(),
+        )
+        return {**value, "from_cache": False}
 
     def save_plan_version(
         self,
