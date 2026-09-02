@@ -1,0 +1,17 @@
+# The Supabase structure backup is verified byte-for-byte.
+#
+# `tests/test_schema_backup.py` hashes the file on disk and compares it to
+# `supabase/backups/SHA256SUMS`, which is computed over LF content. Git's
+# `core.autocrlf` is on by default on Windows, so a checkout there rewrites every
+# line ending and the hash no longer matches — the committed blob is correct, the
+# working tree is not, and the two differ by nothing but bytes git inserted.
+#
+# The failure reads as "the recovery artifact is corrupt", on the one file whose
+# whole purpose is restoring the live database structure. That is the worst place
+# to have a false alarm, and the reason it is pinned rather than the test loosened:
+# a checksum that tolerates a rewrite cannot detect the corruption it exists for.
+#
+# `-text` disables end-of-line conversion in both directions, so the file is
+# checked out exactly as committed on every platform.
+supabase/backups/*.sql -text
+supabase/backups/SHA256SUMS -text
