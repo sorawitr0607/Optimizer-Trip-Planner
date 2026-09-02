@@ -37,6 +37,7 @@ from .optimizer import (
     DEPARTURE_LOGISTICS_MINUTES,
     date_range,
     optimize_trip,
+    usable_route_statuses,
     validate_variant,
 )
 from .gtfs import GtfsUnavailable
@@ -1583,6 +1584,27 @@ class PlannerActions:
         inventing three stages nothing ran.
         """
 
+        # Resolve the assumed terminal **before** freezing the input, not after.
+        #
+        # This is why activation reported `preview_stale` for no reason the owner could
+        # see. `resolve_default_terminal` was called only by the browser, from three
+        # separate `/optimize` mutations, and one of them swallows its failure with
+        # `.catch(() => null)`. So a build could freeze `trip.terminal: None`, a later
+        # visit could resolve it successfully, and `activate_plan_preview` then compared
+        # the two inputs and refused with `changed=['trip']`. Found in production: the
+        # Porto preview built 2026-09-02T06:56 held `terminal: None` against a live input
+        # carrying a resolved airport.
+        #
+        # Doing it here makes every build path agree -- the queued worker, the local
+        # server, a test -- because the freeze and the resolve are the same operation
+        # rather than two things a client is trusted to order. Free and cached for 365
+        # days, and it already returns None rather than raising when the geocoder will not
+        # answer, so a build never depends on it succeeding.
+        try:
+            self.resolve_default_terminal(trip_id)
+        except PlannerRefusal:
+            # An unknown trip, which `_optimizer_input` is about to report properly.
+            pass
         optimizer_input = self._optimizer_input(trip_id)
         proposal = optimize_trip(
             optimizer_input,
@@ -1942,15 +1964,14 @@ class PlannerActions:
             "booked_accommodation_base",
             "provisional_accommodation_base",
         }
-        # `verified` always; `estimated` only for an Explore preview, which is the
-        # same rule `optimizer._planning_fact` already applies to opening hours --
-        # "a visible assumption allowed only for an Explore preview". A transit leg
-        # is `estimated` by construction, derived from a timetable or from topology
-        # rather than looked up, so without this the 162 metro routes `WF-038`
-        # fetches never reach the optimizer and the whole ticket buys nothing.
-        # A `ready_to_schedule` trip is unaffected and still demands verification.
-        usable_route_statuses = (
-            {"verified", "estimated"} if allow_provisional_assumptions else {"verified"}
+        # The optimizer's own rule, imported rather than restated. This was a second
+        # copy of it, and the copies disagreed: when `estimated` was widened to every
+        # trip on 2026-09-02 the optimizer learned it and this line did not, so a
+        # `ready_to_schedule` trip still had its metro legs dropped here -- one layer
+        # before the code that had just been taught to accept them. Measured at the
+        # time: 2 transit legs stored, 0 reaching the snapshot.
+        statuses = usable_route_statuses(
+            allow_provisional_assumptions=allow_provisional_assumptions
         )
         # `geometry` is dropped here and nowhere else. It is stored with the route
         # because it arrived in the same response, but the optimizer input is **hashed**
@@ -1960,7 +1981,7 @@ class PlannerActions:
         routes = [
             {key: value for key, value in route.items() if key != "geometry"}
             for route in self.list_routes(trip_id)
-            if route.get("status") in usable_route_statuses
+            if route.get("status") in statuses
             and all(
                 endpoint not in accommodation_ids or endpoint == active_base_id
                 for endpoint in (route.get("origin_id"), route.get("destination_id"))
@@ -3786,7 +3807,9 @@ class PlannerActions:
         report["reason"] = "AREA_TIMES_ARE_WALKING_ONLY"
         return report
 
-    def recommend_areas(self, trip_id: str) -> dict[str, Any]:
+    def recommend_areas(
+        self, trip_id: str, *, progress: Callable[[int], None] | None = None
+    ) -> dict[str, Any]:
         """Rank transit-station neighbourhoods as places to stay. `WF-040`.
 
         Three stages, cheapest first, because the expensive one should only ever see a
@@ -3801,7 +3824,19 @@ class PlannerActions:
         Refuses rather than guesses when there is no metro graph for the destination:
         an area ranking with no travel times is a list of amenity counts pretending to
         be advice.
+
+        `progress` counts those three as they *finish*, on exactly the rule every other
+        reporting operation follows: a number moves because work came back, never because
+        time passed. `/stay` had one rotating line for the whole of it, which on a real
+        city is tens of seconds of Dijkstra followed by an Overpass request -- the same
+        silence `BUILD_STAGES` was built for. The walking fallback below reports 1 and
+        then 3: it genuinely skips the shortlist stage, and claiming it would be the
+        invented milestone `jobs.REPORTS_PROGRESS` refuses.
         """
+
+        def reached(stage: int) -> None:
+            if progress is not None:
+                progress(stage)
 
         trip = self.store.get_trip(trip_id)
         if trip is None:
@@ -3830,7 +3865,10 @@ class PlannerActions:
             # It is not a station list and does not pretend to be: every area is named
             # for a place the owner chose, and the report carries
             # `AREA_TIMES_ARE_WALKING_ONLY` so the ranking says what it was computed from.
-            return self._walkable_areas(trip_id, places)
+            reached(1)
+            answer = self._walkable_areas(trip_id, places)
+            reached(3)
+            return answer
 
         # One area per **named station**, not per graph stop. `transit.STOP_TAGS`
         # deliberately admits `stop_position` and `platform` so subway relations stay
@@ -3905,6 +3943,7 @@ class PlannerActions:
         if not candidates:
             raise PlannerRefusal("no_area_reaches_any_place")
 
+        reached(1)
         candidates.sort(
             key=lambda item: (
                 item["total_travel_minutes"] / item["reachable_place_count"],
@@ -3913,11 +3952,13 @@ class PlannerActions:
             )
         )
         shortlist = candidates[: self.AREA_SHORTLIST]
+        reached(2)
 
         counts, counted = self._area_amenity_counts(trip_id, shortlist)
         for area in shortlist:
             area.update(counts.get(area["area_id"], {}))
         report = areas.score_areas(shortlist, place_count=len(places))
+        reached(3)
         report["amenities_counted"] = counted
         report["considered_area_count"] = len(candidates)
         # The travel time of the first area that missed the cut, so a reader can see how

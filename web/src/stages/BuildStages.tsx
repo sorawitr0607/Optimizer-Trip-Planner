@@ -1,8 +1,8 @@
 import { Check, Loader2 } from "lucide-react";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { copy, copyFormat, type Language } from "../i18n/copy";
-import { BUILD_STAGES } from "../shared/buildStages";
+import { BUILD_STAGES, formatCountdown, remainingSeconds } from "../shared/buildStages";
 
 /**
  * What the build is doing, as the stages it actually goes through.
@@ -36,6 +36,45 @@ export interface BuildStagesProps {
   routesMeasured?: number;
 }
 
+/**
+ * The wait, counted down rather than stated.
+ *
+ * The estimate used to sit on every stage line as static text — four "Usually 5–15 sec"
+ * rows under four names and four details, the same fact repeated where it is least
+ * useful. It belongs on the progress bar, once, and it belongs *moving*: a range that
+ * never changes says nothing about how far through you are.
+ *
+ * **This does not weaken the rule the rest of this file exists for.** A stage is still
+ * marked done only when its call returns, and no stage or percentage advances on a
+ * timer. The only thing the clock drives is the clock. It counts `remainingSeconds` —
+ * the *ceiling* — and says "up to", so an ordinary build finishes with time still on it
+ * rather than the counter hitting zero mid-build; past the ceiling it says it is taking
+ * longer instead of sitting at 0:00, which would read as stuck.
+ *
+ * Its own component, mounted with `key={budget}`, because that makes remounting the
+ * re-baseline: when a stage returns the budget changes and React starts a fresh counter
+ * on the new number. Resetting state from inside an effect instead is what
+ * `react-hooks/set-state-in-effect` exists to stop, and the effect here only subscribes
+ * to a clock, which is what an effect is for.
+ */
+function Countdown({ language, seconds }: { language: Language; seconds: number }) {
+  const [left, setLeft] = useState(seconds);
+  useEffect(() => {
+    const tick = setInterval(
+      () => setLeft((value) => (value > 0 ? value - 1 : 0)),
+      1_000,
+    );
+    return () => clearInterval(tick);
+  }, []);
+  return (
+    <span className="build-progress-left">
+      {left > 0
+        ? copyFormat("build_time_left", language, { clock: formatCountdown(left) })
+        : copy("build_taking_longer", language)}
+    </span>
+  );
+}
+
 export function BuildStages({
   language,
   reached,
@@ -43,6 +82,8 @@ export function BuildStages({
   routesMeasured,
   stages = BUILD_STAGES,
 }: BuildStagesProps) {
+  const budget = remainingSeconds(stages, reached);
+
   return (
     <div aria-busy={reached < stages.length} className="build-stages">
       <p className="build-stages-title">{copy("build_stages_title", language)}</p>
@@ -63,12 +104,6 @@ export function BuildStages({
                 <span className="build-stage-name">{copy(`stage_${stage.key}`, language)}</span>
                 <span className="build-stage-detail">
                   {copy(`stage_${stage.key}_detail`, language)}
-                </span>
-                <span className="build-stage-estimate">
-                  {copyFormat("stage_estimate_seconds", language, {
-                    min: stage.estimateSeconds[0],
-                    max: stage.estimateSeconds[1],
-                  })}
                 </span>
                 {/* Only where there is a real number to show. A stage that cannot count
                     says nothing rather than inventing a fraction. */}
@@ -93,7 +128,17 @@ export function BuildStages({
         </li>
       </ol>
       <label className="build-progress">
-        <span>{copyFormat("build_progress", language, { percent: Math.round(100 * Math.min(reached, stages.length) / stages.length) })}</span>
+        <span>
+          {copyFormat("build_progress", language, {
+            percent: Math.round(100 * Math.min(reached, stages.length) / stages.length),
+          })}
+          {/* Nothing at all once the build is done: a stopped clock beside "100%" is
+              worse than no clock. `key={budget}` is the re-baseline — a stage returning
+              changes the budget, which remounts the counter on the new one. */}
+          {budget ? (
+            <Countdown key={budget} language={language} seconds={budget} />
+          ) : null}
+        </span>
         <progress max={stages.length} value={Math.min(reached, stages.length)} />
       </label>
     </div>

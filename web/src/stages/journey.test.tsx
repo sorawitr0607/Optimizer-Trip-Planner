@@ -342,10 +342,49 @@ describe("OptimizePage", () => {
   it("offers provisional activation for an explore-first trip", () => {
     const html = render(<OptimizePage />, "en");
 
-    // explore_first + provisional + valid is the one case that activates
-    // without a ready variant, and it says so before the button.
-    expect(html).toContain("provisional");
+    // explore_first + provisional + valid is the one case that activates without a
+    // ready variant, and it says so **before** the button rather than inside its
+    // label. The button read "Use and export this provisional itinerary" — a sentence
+    // on the terminal control of the longest screen in the app — and this assertion
+    // was matching that word inside it. The caveat is `provisional_activation_help`,
+    // which is where it was always meant to be; the button is now the same short
+    // "Use this itinerary" the ready case has always used.
+    expect(html).toContain("stays Provisional and must be optimized again");
+    expect(html).toContain("Use this itinerary");
     expect(html).not.toContain("optimize-actions\"><button class=\"setup-primary\" disabled");
+  });
+
+  it("reduces the kept-places table to three columns and one outcome cell", () => {
+    const html = render(<OptimizePage />, "en");
+
+    // Five columns inside a horizontal scroller put the answer off the right edge of a
+    // phone, and four of the five repeated each other on an ordinary row: a place that
+    // fits reports reason `SCHEDULED` and consequence `scheduled_once`, which is the
+    // feasibility column twice more in different words.
+    const header = html.slice(html.indexOf("reconcile-table"));
+    const columns = header.slice(0, header.indexOf("</thead>")).match(/<th>/g) ?? [];
+    expect(columns).toHaveLength(3);
+    // Every cell carries its column name, which is what the mobile restack labels with.
+    expect(html).toContain('data-label="Name"');
+    expect(html).toContain('data-label="Feasibility"');
+    // This fixture's row is not a plain fit, so it still explains itself.
+    expect(html).toContain("reconcile-why");
+  });
+
+  it("says nothing extra about a place that simply fits", () => {
+    const fitting = structuredClone(PREVIEW);
+    fitting.proposal.data.variants![0].reconciliation[0] = {
+      ...fitting.proposal.data.variants![0].reconciliation[0],
+      status: "fits",
+      reason: "SCHEDULED",
+      consequence: "scheduled_once",
+    };
+    const html = render(<OptimizePage />, "en", fitting);
+
+    // The outcome cell is the status alone. `SCHEDULED` and `scheduled_once` say the
+    // same thing a third and fourth time, which is what made the table hard to read.
+    expect(html).toContain("reconcile-table");
+    expect(html).not.toContain("reconcile-why");
   });
 
   it("renders optimizer warnings through the code catalogue", () => {

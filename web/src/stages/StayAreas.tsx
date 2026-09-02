@@ -1,9 +1,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 
 import { ApiError, rpc, type StayAreaReport } from "../api/client";
 import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
 import { placeAltName, placeName } from "../shared/names";
-import { Thinking } from "../shared/Thinking";
+import { AREA_STAGES } from "../shared/buildStages";
+import { BuildStages } from "./BuildStages";
 
 /**
  * Where to stay, for an owner who has not booked. `WF-040`.
@@ -40,8 +42,14 @@ export interface StayAreasProps {
 
 export function StayAreas({ tripId, language, onOutcome, onChosen, onRanking }: StayAreasProps) {
   const queryClient = useQueryClient();
+  const [areaStage, setAreaStage] = useState<number | undefined>(undefined);
   const recommend = useMutation<StayAreaReport, Error, void>({
-    mutationFn: () => rpc<StayAreaReport>("recommend_areas", { trip_id: tripId }),
+    mutationFn: () => {
+      // Cleared per run, not per success: a second ranking must not open on the last
+      // one's finished checklist during the poll before the worker speaks.
+      setAreaStage(undefined);
+      return rpc<StayAreaReport>("recommend_areas", { trip_id: tripId }, setAreaStage);
+    },
     // Ranking reads the transit graph and takes a while. The page above this is a form
     // for the *other* way of answering the same question, so leaving it up invites
     // filling in an address that the ranking is about to make irrelevant -- the same
@@ -84,14 +92,20 @@ export function StayAreas({ tripId, language, onOutcome, onChosen, onRanking }: 
         {recommend.isPending ? copy("loading", language) : copy("rank_areas", language)}
       </button>
       {recommend.isPending ? (
-        // The counted wait, not a bare dot: this is a queued job that scores every
-        // neighbourhood against the transit map and runs a minute or more, and a
-        // rotating line with no elapsed figure is the exact "it looks like it hung"
-        // the counter was added to answer.
-        <Thinking
-          expectSeconds={75}
+        // The stages, not a rotating line. This is a queued job that times every
+        // station in the transit graph against every chosen place and then makes one
+        // Overpass request, and it ran for a minute or more saying only that it was
+        // running — the exact "it looks like it hung" the other three queued screens
+        // already answer with a checklist. `recommend_areas` reports the three as they
+        // return, so this claims nothing it has not been told.
+        //
+        // `areaStage` is undefined until the worker speaks, which is the honest
+        // difference between "queued, nobody has this" and "a worker started": until
+        // then the first row is simply the active one at zero.
+        <BuildStages
           language={language}
-          lines={[copy("ranking_areas", language)]}
+          reached={areaStage ?? 0}
+          stages={AREA_STAGES}
         />
       ) : null}
       {/* Choosing an area geocodes it before it can be stored, so the tick is a network

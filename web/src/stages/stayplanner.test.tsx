@@ -228,9 +228,22 @@ describe("the build checklist itself", () => {
     expect(html).toContain("Places for those dates");
     expect(html).toContain("Three plan options");
     expect(html).toContain("Your plan is ready");
-    expect(html).toContain("Usually 2–10 sec");
     expect(html).toContain("Overall progress · 0%");
     expect(html).toContain("<progress");
+    // One clock on the progress bar, not a static range under every stage. It starts
+    // at the ceiling of the pending stages: `PLAN_STAGES` maxima are 10+90+90+120.
+    expect(html).toContain("Up to 5:10 left");
+    expect(html).not.toContain("Usually 2–10 sec");
+  });
+
+  it("re-bases the clock as stages return, and drops it when none are left", () => {
+    // Two returned leaves routes and plan, so the ceiling is 90+120.
+    expect(stages(2)).toContain("Up to 3:30 left");
+    // Everything returned: there is no wait left to count, and a stopped clock beside
+    // "100%" would read as stuck.
+    const finished = stages(PLAN_STAGES.length);
+    expect(finished).toContain("Overall progress · 100%");
+    expect(finished).not.toContain("left");
   });
 
   it("marks exactly the calls that have returned", () => {

@@ -1170,25 +1170,51 @@ export function OptimizePage() {
           {activationAllowed ? (
           <>
           <h2 className="money-eyebrow">{copy("optimizer_reconciliation", language)}</h2>
+          {/* Three columns, and the third only says something when there is something
+              to say.
+
+              It was five — name, choice, feasibility, reason, consequence — inside a
+              horizontal scroller, so on a phone the answer was off the right-hand edge
+              and had to be dragged into view. Four of the five were also redundant for
+              the ordinary row: a place that fits reports reason `SCHEDULED` and
+              consequence `scheduled_once`, which is the feasibility column twice more in
+              different words. So `reason` and `consequence` fold into one outcome cell
+              and appear only where the place did *not* simply fit, which is the only case
+              either was ever informative.
+
+              `reconcile-table` restacks each row as a labelled card under 860px, so the
+              whole thing is readable down the page and the scroller never engages. */}
           <div className="money-table-scroll">
-            <table className="money-table">
+            <table className="money-table reconcile-table">
               <thead>
                 <tr>
                   <th>{copy("name", language)}</th>
                   <th>{copy("choice", language)}</th>
                   <th>{copy("feasibility", language)}</th>
-                  <th>{copy("reason", language)}</th>
-                  <th>{copy("consequence", language)}</th>
                 </tr>
               </thead>
               <tbody>
                 {variant.reconciliation.map((item, index) => (
                   <tr key={`${item.name}-${index}`}>
-                    <td>{placeName(item, language, item.name)}</td>
-                    <td>{copy(item.priority, language)}</td>
-                    <td>{copy(item.status, language)}</td>
-                    <td>{copyFrom("OPTIMIZER_CODE_TEXT", item.reason, language)}</td>
-                    <td>{copyFrom("OPTIMIZER_CODE_TEXT", item.consequence, language)}</td>
+                    <td data-label={copy("name", language)}>
+                      {placeName(item, language, item.name)}
+                    </td>
+                    <td data-label={copy("choice", language)}>
+                      {copy(item.priority, language)}
+                    </td>
+                    <td data-label={copy("feasibility", language)}>
+                      {copy(item.status, language)}
+                      {item.status === "fits" ? null : (
+                        <>
+                          <span className="reconcile-why">
+                            {copyFrom("OPTIMIZER_CODE_TEXT", item.reason, language)}
+                          </span>
+                          <span className="reconcile-why">
+                            {copyFrom("OPTIMIZER_CODE_TEXT", item.consequence, language)}
+                          </span>
+                        </>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -1276,15 +1302,26 @@ export function OptimizePage() {
             </>
           )}
           <div className="optimize-actions">
+            {/* One label for both cases, and `optimize-activate` to give it the weight
+                of a terminal action.
+
+                It read "Use and export this provisional itinerary" — a sentence, on a
+                control the size of the "Places" link beside it, at the end of the
+                longest screen in the app. The provisional caveat is already on screen
+                immediately above in `provisional_activation_help`, which says it stays
+                Provisional and must be optimized again after a change, so the button
+                does not have to carry it a second time. `activate_plan` is "Use this
+                itinerary" and has always been the non-provisional label; the two cases
+                differ in what is true of the plan, not in what the press does. */}
             <button
-              className="setup-primary"
+              className="setup-primary optimize-activate"
               disabled={!activationAllowed || activate.isPending}
               onClick={() => activate.mutate(variant.variant_id)}
               type="button"
             >
               {activate.isPending
                 ? copy("opening_itinerary", language)
-                : copy(provisionalAllowed ? "use_provisional_plan" : "activate_plan", language)}
+                : copy("activate_plan", language)}
             </button>
             <Link className="primary-link" to={`/trips/${tripId}/places`}>
               {copy("stage_places", language)}

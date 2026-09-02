@@ -105,3 +105,59 @@ export const PREVIEW_STAGES = [
   { key: "variant_highlights", icon: Sparkles, estimateSeconds: [10, 35] },
   { key: "preview_saved", icon: Save, estimateSeconds: [1, 5] },
 ] as const;
+
+/**
+ * What `recommend_areas` does, in the order it does it.
+ *
+ * A queued job, and until 2026-09-02 the only queued one that reported nothing: `/stay`
+ * showed a single rotating line for a minute or more of Dijkstra over every station in
+ * the transit graph followed by an Overpass request. The operation's own docstring had
+ * always named these three — "three stages, cheapest first, because the expensive one
+ * should only ever see a shortlist" — so the list existed and nothing was reading it.
+ *
+ * The walking fallback, for a destination with no metro graph, reports 1 and then 3. It
+ * really does skip the shortlist, and marking it would be the invented milestone
+ * `jobs.REPORTS_PROGRESS` exists to refuse.
+ */
+export const AREA_STAGES = [
+  { key: "area_times", icon: Footprints, estimateSeconds: [10, 45] },
+  { key: "area_shortlist", icon: Scale, estimateSeconds: [1, 5] },
+  { key: "area_amenities", icon: Landmark, estimateSeconds: [10, 40] },
+] as const;
+
+/** One stage's shape, shared by every list above and by `BuildStages`. */
+export interface BuildStage {
+  key: string;
+  icon: unknown;
+  estimateSeconds: readonly [number, number];
+}
+
+/**
+ * Seconds still to wait: the **ceiling** of the stages that have not returned yet.
+ *
+ * The ceiling rather than the midpoint, because this number is counted down on screen
+ * and a counter that reaches zero while the build carries on is a promise broken in
+ * front of the owner. Counting the ceiling makes it an upper bound — labelled as one —
+ * so the ordinary case is a build that finishes with time still on the clock, and the
+ * overrun case is rare enough to be worth its own honest line.
+ *
+ * Zero when nothing is pending, so the caller renders nothing rather than a stopped
+ * clock.
+ */
+export function remainingSeconds(stages: readonly BuildStage[], reached: number): number {
+  return stages
+    .slice(Math.max(0, Math.min(reached, stages.length)))
+    .reduce((total, stage) => total + stage.estimateSeconds[1], 0);
+}
+
+/** `m:ss`, or `h:mm:ss` past an hour. Zero-padded so the width does not jump. */
+export function formatCountdown(seconds: number): string {
+  const whole = Math.max(0, Math.round(seconds));
+  const hours = Math.floor(whole / 3600);
+  const minutes = Math.floor((whole % 3600) / 60);
+  const rest = whole % 60;
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return hours
+    ? `${hours}:${pad(minutes)}:${pad(rest)}`
+    : `${minutes}:${pad(rest)}`;
+}

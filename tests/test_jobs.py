@@ -15,7 +15,16 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from travel_planner.jobs import DONE, FAILED, QUEUED, REPORTS_PROGRESS, RUNNING, JobQueue, run_one
+from travel_planner.jobs import (
+    DONE,
+    FAILED,
+    HANDLERS,
+    QUEUED,
+    REPORTS_PROGRESS,
+    RUNNING,
+    JobQueue,
+    run_one,
+)
 from travel_planner.store import SQLiteStore
 
 
@@ -548,18 +557,52 @@ class ProgressReportingTest(unittest.TestCase):
         self.assertEqual(stored, [0, 1, 2, 3, 4])
         self.assertEqual(queue.get(job_id)["progress"], 4)
 
-    def test_an_operation_with_no_milestones_is_not_handed_one(self) -> None:
-        """An ignored `progress` argument on the other three would be three lies."""
+    def test_a_reporting_operation_must_actually_be_able_to_report(self) -> None:
+        """The rule, asserted against the code rather than against an example.
+
+        This used to name `recommend_areas` as the operation with nothing to report, and
+        that stopped being true on 2026-09-02: it has three real returns -- local travel
+        times, the shortlist, then the one Overpass count -- and `/stay` was showing a
+        rotating line for all of them. So the example is gone and the *rule* is checked
+        instead, which is what mattered: membership of `REPORTS_PROGRESS` is a claim that
+        the operation can say where it is, and an operation whose method cannot even
+        accept a sink would make that claim a lie the type system never sees.
+        """
+
+        import inspect
+
+        from travel_planner.actions import PlannerActions
+
+        self.assertTrue(
+            REPORTS_PROGRESS <= set(HANDLERS),
+            f"not queueable: {sorted(REPORTS_PROGRESS - set(HANDLERS))}",
+        )
+        for kind in sorted(REPORTS_PROGRESS):
+            method = getattr(PlannerActions, HANDLERS[kind])
+            parameter = inspect.signature(method).parameters.get("progress")
+            self.assertIsNotNone(
+                parameter, f"{kind} is in REPORTS_PROGRESS but takes no progress sink"
+            )
+
+    def test_recommend_areas_reports_the_three_stages_it_has(self) -> None:
+        """And they are counted as they finish, not on a timer."""
+
+        stored: list[int] = []
 
         class FakeActions:
-            def recommend_areas(self, *, trip_id):  # noqa: ARG002
+            def recommend_areas(self, *, trip_id, progress):  # noqa: ARG002
+                # What the real operation does: local travel times, the shortlist, then
+                # the single Overpass amenity count.
+                for reached in (1, 2, 3):
+                    progress(reached)
+                    stored.append(reached)
                 return {"ok": True}
 
-        self.assertNotIn("recommend_areas", REPORTS_PROGRESS)
         job_id = self.queue.enqueue("recommend_areas", "T1")
         job = run_one(self.queue, FakeActions(), "worker-a")
         self.assertEqual(job["status"], DONE)
-        self.assertIsNone(self.queue.get(job_id)["progress"])
+        self.assertEqual([1, 2, 3], stored)
+        self.assertEqual(3, self.queue.get(job_id)["progress"])
 
     def test_a_retry_starts_its_stage_list_over(self) -> None:
         """Stages left at 3 describe work the next attempt has not done."""

@@ -69,7 +69,7 @@ PAYLOAD_KEYS: dict[str, frozenset[str]] = {
 #: kind to report is left out — an ignored `progress` argument would be a claim it
 #: can say where it is.
 REPORTS_PROGRESS: frozenset[str] = frozenset(
-    {"discover_places", "refresh_routes", "generate_plan_preview"}
+    {"discover_places", "refresh_routes", "generate_plan_preview", "recommend_areas"}
 )
 
 QUEUED, RUNNING, DONE, FAILED = "queued", "running", "done", "failed"

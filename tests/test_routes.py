@@ -756,6 +756,59 @@ class TransitRouteTest(unittest.TestCase):
         self.assertEqual("estimated", longest["status"])
         self.assertEqual("gtfs", longest["provider"])
 
+    def test_transit_legs_reach_a_scheduled_trip_s_optimizer_input(self) -> None:
+        """The layer the 2026-09-02 transit fix missed, on the trip mode it missed.
+
+        `_usable_route_statuses` was widened to admit `estimated` on every trip, but
+        `_optimizer_input` held a **second copy** of the same rule and kept the old
+        `{"verified"}` for a `ready_to_schedule` trip. So the legs were fetched, stored,
+        and then dropped one layer *before* the code that had just been taught to accept
+        them: measured at 2 stored, 0 reaching the snapshot. Every test that proved the
+        fix handed the optimizer a snapshot directly and so could not see it.
+
+        This asserts the carry-through on a real `ready_to_schedule` trip, which is the
+        mode that was broken — `self.trip` is created with it in `setUp`.
+        """
+
+        self.actions.refresh_transit_routes(self.trip.trip_id)
+        stored = [
+            route
+            for route in self.actions.list_routes(self.trip.trip_id)
+            if route["mode"] == "transit"
+        ]
+        self.assertTrue(stored, "no transit legs were stored to carry through")
+
+        snapshot = self.actions._optimizer_input(self.trip.trip_id)
+        self.assertEqual(
+            "ready_to_schedule",
+            snapshot["trip"].get("planning_mode", "ready_to_schedule"),
+        )
+        self.assertFalse(snapshot["trip"]["allow_provisional_assumptions"])
+        reached = [route for route in snapshot["routes"] if route["mode"] == "transit"]
+        self.assertEqual(
+            len(stored), len(reached),
+            f"{len(stored)} transit legs stored, {len(reached)} reached the snapshot",
+        )
+
+    def test_an_owner_accepted_straight_line_still_does_not_reach_a_scheduled_trip(self) -> None:
+        """The other half of that rule, at the same layer.
+
+        Widening `estimated` must not have widened `accepted_estimate`, which is a
+        fabricated crow-flies line rather than an unrouted real one. Asserted here
+        because this is the layer where the two used to be treated alike.
+        """
+
+        from travel_planner.optimizer import usable_route_statuses
+
+        self.assertEqual(
+            {"verified", "estimated"},
+            usable_route_statuses(allow_provisional_assumptions=False),
+        )
+        self.assertEqual(
+            {"verified", "estimated", "accepted_estimate"},
+            usable_route_statuses(allow_provisional_assumptions=True),
+        )
+
     def test_transit_is_stored_beside_walking_rather_than_replacing_it(self) -> None:
         """The store keys by (origin, destination, mode), so both survive."""
 

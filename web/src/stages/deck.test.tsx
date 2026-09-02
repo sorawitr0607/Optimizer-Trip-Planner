@@ -205,7 +205,7 @@ describe("PlaceDeck", () => {
     expect(html).toContain("台北101");
     // The score reads as fit now, not as an exam mark: same number out of the same 100,
     // rounded, because a tenth of a percent of a heuristic is precision it does not have.
-    expect(html).toContain("Stronger fit than 88% of found places");
+    expect(html).toContain("88% match");
     expect(html).not.toContain("/100");
     // The description is deliberately NOT here. The panel beside the deck renders the
     // same paragraph from the same summary, so the card printed text already on screen
@@ -319,7 +319,7 @@ describe("PlaceDeck", () => {
     const html = render(SUMMARY, ["first"]);
     expect(html).toContain("A quiet park");
     expect(html).toContain("widen the search");
-    expect(html).toContain("Stronger fit than 35% of found places");
+    expect(html).toContain("35% match");
   });
 
   it("shows a placeholder outside the card it stands in for", () => {

@@ -28,6 +28,8 @@ import { useLanguage } from "../i18n/LanguageProvider";
 import { mergeNames, placeAltName, placeName } from "../shared/names";
 import { distinguishingCons, evaluatedFeasibility } from "../shared/cards";
 import { PHOTO_THIN_AT, galleryFor } from "../shared/photos";
+import { laneAlreadyChosen, rememberLaneChoice } from "../shared/laneChoice";
+import { LaneChooser } from "./LaneChooser";
 import { mapPlaces, shortlistNumber } from "../shared/map";
 import { loadBasemap } from "../shared/basemap";
 import { PlaceMap } from "./PlaceMap";
@@ -56,11 +58,14 @@ const PHOTO_LIMIT = 5;
 const PREFETCH_AHEAD = 10;
 /** How much of a lane the deck offers before asking whether you want more.
  *
- *  Twenty is about a sitting: enough that the strongest of a lane are all in reach, few
+ *  Fifteen is about a sitting: enough that the strongest of a lane are all in reach, few
  *  enough that finishing it is a real event rather than a horizon. The lanes are score
- *  ordered, so the first twenty of City Icons are its twenty best — on the owner's Hong
- *  Kong catalogue that lane holds **431**, which is a catalogue, not a shortlist. */
-const LANE_PAGE = 20;
+ *  ordered, so the first fifteen of City Icons are its fifteen best — on the owner's Hong
+ *  Kong catalogue that lane holds **431**, which is a catalogue, not a shortlist.
+ *
+ *  Was twenty until 2026-09-02; the owner asked for fifteen after using it. `dealMore`
+ *  extends by this same number, so "show more" is a second sitting rather than a jump. */
+const LANE_PAGE = 15;
 
 /** How many audit rows to build at a time. The Taipei catalogue is 849 places, and
  *  the table listing them sits inside a `<details>` that is closed on arrival —
@@ -250,6 +255,13 @@ export function PlacesPage() {
     queryKey: ["candidate_choices", tripId],
     queryFn: () => rpc<CandidateChoice[]>("list_candidate_choices", { trip_id: tripId }),
   });
+  // Asked once per discovery run — see `LaneChooser`. `runId` is empty until the search
+  // lands, and `laneAlreadyChosen("")` is a read of a key nothing writes, so the panel
+  // simply does not appear before there is anything to choose between.
+  const runId = discovery.data?.run_id ?? "";
+  const [laneChosen, setLaneChosen] = useState<string>("");
+  const chooseLane = runId !== "" && laneChosen !== runId && !laneAlreadyChosen(runId);
+
   const catalog = discovery.data?.candidates.data.candidates ?? [];
   const byId = Object.fromEntries(catalog.map((item) => [item.place_id, item]));
   const ranking = useQuery({
@@ -271,7 +283,7 @@ export function PlacesPage() {
   // order, so the strongest are all at the front and everything after about the first
   // page is diminishing returns. The cap is a *view* over the lane, never a filter on
   // the ranking: nothing is dropped, and pressing for more is one press.
-  // A page of twenty that can actually be finished.
+  // A page of `LANE_PAGE` that can actually be finished.
   //
   // "I think the deck shows more than 20" was real. `main_queue` excludes decided places
   // *server-side*, every decision invalidates the ranking, and so each refetch shifted
@@ -287,9 +299,10 @@ export function PlacesPage() {
   // decision must not cost you a card you have not seen.
   //
   // The window is a *set of places*, not a count. Filled from the top of the lane and
-  // kept, so deciding one leaves the other nineteen exactly where they were, and "every
-  // unseen place has had a decision" is only true once all twenty really are. `dealMore`
-  // extends it. Derived on first render rather than seeded in an effect, because seeding
+  // kept, so deciding one leaves the rest of the page exactly where they were, and
+  // "every unseen place has had a decision" is only true once the whole page really has.
+  // `dealMore` extends it. (The reports quoted above are from when the page was twenty;
+  // the counts in them are what was measured, not what it is now.) Derived on first render rather than seeded in an effect, because seeding
   // from `useEffect` left the first paint with no cards and six tests caught it.
   const allEntries = ranking.data ? laneEntries(ranking.data, activeLane) : [];
   const held = windowIds[activeLane] ?? [];
@@ -1031,13 +1044,33 @@ export function PlacesPage() {
               in the report below, which is what the list was actually being used for.
               `mode` stays because the report and the deck still read it; deleting it is a
               separate tidy-up. */}
+          {/* The one decision before the first swipe, and it stands **in place of** the
+              picker row and the deck rather than above them.
+              Both alternatives were wrong: a deck dealing behind the question answers it
+              for the owner, and a tab row beside it is the same choice offered twice in
+              two shapes — measured on a 500px capture, the question landed below the
+              tabs and off the bottom of the card, which is the burial it exists to
+              avoid. `chooseLane` is false for the rest of the run, so this is one screen
+              once, not a mode. */}
+          {chooseLane ? (
+            <LaneChooser
+              countOf={(value) => laneEntries(ranking.data!, value as Lane).length}
+              language={language}
+              lanes={availableLanes}
+              onPick={(value) => {
+                rememberLaneChoice(runId);
+                setLaneChosen(runId);
+                pickLane(value as Lane);
+              }}
+            />
+          ) : null}
           {/* The lane picker drives both modes now. In deck mode it was hidden, so the
               deck always dealt from `main_queue` while the list opened on City Icons —
               and the queue's top 20 have no Wikidata id, so the deck showed twenty
               photo-less cards and the fix for that was a control you could not see.
               Buttons rather than a select: five lanes is a small enough set to show at
               once, and which lane you are in is then readable without opening anything. */}
-          <div className="places-pickers">
+          <div className="places-pickers" hidden={chooseLane}>
             <div className="lane-tabs" role="group" aria-label={copy("lane", language)}>
               {availableLanes.map((value) => (
                 <button
@@ -1074,7 +1107,10 @@ export function PlacesPage() {
               leaving the deck and finding it again. It follows the deck's own card now
               and owns no decision buttons — the deck is where deciding happens, and two
               sets of them under one card was the duplication reported earlier. */}
-          <div className={mode === "deck" ? "places-workspace" : undefined} hidden={busy}>
+          <div
+            className={mode === "deck" ? "places-workspace" : undefined}
+            hidden={busy || chooseLane}
+          >
           {mode === "deck" ? (
             <>
               {/* The tab counts the whole lane and the deck deals a page of it, so

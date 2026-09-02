@@ -329,6 +329,15 @@
   overflow-x: auto;
 }
 
+/* The outcome cell's second and third lines: why a place did not fit, and what that
+   costs. Blocks under the status rather than two more columns — they only appear on the
+   rows that are not a plain fit, so a column for each would be empty on most of them. */
+.reconcile-why {
+  color: var(--text-secondary);
+  display: block;
+  font-size: var(--text-2xs);
+}
+
 .money-table {
   border-collapse: collapse;
   font-size: var(--text-base);
@@ -1082,6 +1091,28 @@
 .optimize-actions .setup-primary {
   background: var(--color-accent);
   color: var(--color-on-accent);
+}
+
+/* The one press that turns a draft into the itinerary, sized like it.
+
+   `.optimize-actions button` is `--text-xs` at `6px 14px` — right for "Build again"
+   and "Cut the places that do not fit", and wrong for the terminal action on the
+   longest screen in the app, which sat at the same weight as the "Places" link
+   beside it and was reported as hard to find. The phone already gets 48px
+   full-width from the `.setup-primary` rule further down; this is the desktop half.
+   Colour is unchanged — it is already the accent — so this adds size and weight
+   only, and no new token. */
+.optimize-actions .optimize-activate {
+  font-size: var(--text-sm);
+  /* `--weight-selected`, the heaviest of the three defined weights, and a real loaded
+     face by D8. Note there is no `--weight-primary`: writing one here fell back to 400
+     and made this *lighter* than the `--weight-secondary: 600` on its siblings — the
+     opposite of the intent, and silent, because an undefined custom property is not an
+     error. The three are `--weight-unselected: 500`, `--weight-secondary: 600` and
+     `--weight-selected: 800`. */
+  font-weight: var(--weight-selected);
+  min-height: 44px;
+  padding: 10px 22px;
 }
 
 .comfort-acceptance {
@@ -10472,12 +10503,6 @@
   font-size: var(--text-2xs);
 }
 
-.build-stage-estimate {
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-}
-
 .build-progress {
   display: grid;
   gap: 5px;
@@ -10487,6 +10512,20 @@
   color: var(--text-secondary);
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
+}
+
+/* The remaining estimate sits beside the percentage rather than under each stage.
+   Wrapping is allowed and deliberate: on a narrow phone "Overall progress · 50%" and
+   "Usually 1–4 min" each take a line rather than one being clipped. */
+.build-progress > span {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+.build-progress-left {
+  color: var(--text-muted);
 }
 
 .build-progress progress {
@@ -10778,4 +10817,138 @@
 .place-deck-kind-glyph {
   color: var(--text-muted);
   opacity: 0.55;
+}
+
+/* "What happened to each place you kept", readable down a phone rather than across it.
+
+   The table is three columns now, and even three of prose in a 390px card meant the
+   third was reached by dragging the `.money-table-scroll` wrapper sideways — reported as
+   not being able to see the whole thing in mobile view. So under the app's 860px
+   breakpoint each row becomes its own labelled card: the header row is hidden, every
+   cell carries its column name from `data-label`, and the name gets the card's heading
+   weight because it is what the reader is scanning for.
+
+   Scoped to `.reconcile-table`, and that scope is load-bearing rather than tidy.
+   `.money-table` and `.money-table-scroll` are shared by the timeline, the score
+   breakdown, the unscheduled list on `/itinerary` and the money pages; restacking all of
+   them from here would change five screens nobody asked about. */
+@media (max-width: 860px) {
+  .reconcile-table,
+  .reconcile-table tbody,
+  .reconcile-table tr,
+  .reconcile-table td {
+    display: block;
+    width: auto;
+  }
+
+  /* The labels move into the cells, so the header row has nothing left to say.
+     `display: none` rather than a visually-hidden class: these are duplicated verbatim
+     into every card below, so a screen reader would otherwise hear each one twice. */
+  .reconcile-table thead {
+    display: none;
+  }
+
+  .reconcile-table tr {
+    background: var(--bg-card);
+    border: 1px solid var(--bg-card-border);
+    border-radius: var(--radius-house);
+    margin-block-end: 8px;
+    padding: 10px 12px;
+  }
+
+  /* The cell borders belong to a grid of rows and columns that no longer exists. */
+  .reconcile-table td {
+    border: 0;
+    display: grid;
+    gap: 2px;
+    grid-template-columns: 8rem 1fr;
+    padding: 3px 0;
+  }
+
+  .reconcile-table td::before {
+    color: var(--text-muted);
+    content: attr(data-label);
+    font-size: var(--text-2xs);
+    font-weight: var(--weight-selected);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  /* The name is the card's title, so it spans instead of sitting in the value column. */
+  .reconcile-table td:first-child {
+    grid-template-columns: 1fr;
+    padding-block-end: 6px;
+  }
+
+  .reconcile-table td:first-child::before {
+    display: none;
+  }
+}
+
+/* "Where would you like to start?" — the one question before the first swipe.
+
+   Full-width stacked buttons rather than a row of five: each one carries a name, a count
+   and a sentence, which is more than a tab can hold, and a column is what makes them
+   comparable. On a wide screen they sit two abreast; the sentence is why they cannot be
+   narrower than about 20rem. */
+.lane-chooser {
+  display: grid;
+  gap: 8px;
+  margin-block-end: 14px;
+}
+
+.lane-chooser-options {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+}
+
+.lane-chooser-option {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius-house);
+  cursor: pointer;
+  display: grid;
+  gap: 3px;
+  padding: 11px 14px;
+  text-align: start;
+}
+
+.lane-chooser-option:hover {
+  border-color: var(--color-accent);
+}
+
+.lane-chooser-name {
+  align-items: center;
+  color: var(--text-primary);
+  display: flex;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-selected);
+  gap: 7px;
+}
+
+.lane-chooser-detail {
+  color: var(--text-secondary);
+  font-size: var(--text-2xs);
+}
+
+/* The way past the question, which must not read as the recommended answer — it is the
+   behaviour the screen had before, kept for anyone who does not want to choose. */
+.lane-chooser-skip {
+  background: none;
+  border: 0;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: var(--text-2xs);
+  justify-self: start;
+  padding: 4px 0;
+  text-decoration: underline;
+}
+
+/* One column on a phone: two 20rem tracks cannot both fit, and `auto-fit` would give
+   each of them the full width anyway — this only makes the intent explicit. */
+@media (max-width: 860px) {
+  .lane-chooser-options {
+    grid-template-columns: 1fr;
+  }
 }

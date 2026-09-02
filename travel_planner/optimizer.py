@@ -1993,6 +1993,28 @@ def _best_inbound_route(snapshot: dict[str, Any], destination: str) -> dict[str,
     return deepcopy(min(routes, key=lambda item: int(item.get("duration_minutes", 0)))) if routes else None
 
 
+def usable_route_statuses(*, allow_provisional_assumptions: bool) -> set[str]:
+    """The route-status rule, in one place, for the snapshot's builder and its reader.
+
+    `actions._optimizer_input` decides which stored routes reach the snapshot and this
+    module decides which of those it will plan on. **They had separate copies of the same
+    rule, and that is how the 2026-09-02 transit fix shipped half-finished:**
+    `_usable_route_statuses` was widened to admit `estimated` on every trip, the inline
+    literal in `_optimizer_input` was not, and so a `ready_to_schedule` trip still had its
+    metro legs filtered out one layer earlier. Measured on a trip holding two transit
+    legs: **2 stored, 0 reaching the snapshot.** The optimizer's relaxation had nothing
+    left to act on, and every test that proved the fix fed the optimizer a snapshot
+    directly, bypassing the layer that was dropping them.
+
+    Takes the flag rather than the snapshot so the builder can call it before a snapshot
+    exists. `_usable_route_statuses` below is the snapshot-shaped form.
+    """
+
+    if allow_provisional_assumptions:
+        return {"verified", "estimated", "accepted_estimate"}
+    return {"verified", "estimated"}
+
+
 def _usable_route_statuses(snapshot: dict[str, Any]) -> set[str]:
     """`verified` and `estimated` always; `accepted_estimate` on an Explore preview.
 
@@ -2025,9 +2047,11 @@ def _usable_route_statuses(snapshot: dict[str, Any]) -> set[str]:
     inventing one.
     """
 
-    if snapshot.get("trip", {}).get("allow_provisional_assumptions"):
-        return {"verified", "estimated", "accepted_estimate"}
-    return {"verified", "estimated"}
+    return usable_route_statuses(
+        allow_provisional_assumptions=bool(
+            snapshot.get("trip", {}).get("allow_provisional_assumptions")
+        )
+    )
 
 
 def _routes_between(
