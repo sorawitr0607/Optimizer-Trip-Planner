@@ -43,6 +43,15 @@
 - `capture_screen_baselines.stable_capture` takes `budget` in **milliseconds**. If a
   one-off capture shows "Loading…" everywhere, check that first, then capture the same
   screen from a worktree at `HEAD` before believing you broke something.
+- **Never delete a slice of a file by its start and end markers without reading what is
+  between them.** Removing an obsolete CSS block that way silently took the whole
+  `.lane-chooser` ruleset with it, because it sat between the two markers — and it
+  shipped, so the panel reached production as unstyled text running together on one line.
+  Nothing caught it: the token gate checks tokens, not that a class still has a rule, and
+  no test renders CSS. Delete by the rules you can name, then `grep` the class out of
+  both the stylesheet and the components.
+- A screen that looks wrong is worth *rendering*. Two regressions this week were invisible
+  to a green suite and obvious in one screenshot.
 
 ## Graphify cadence
 

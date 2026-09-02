@@ -5809,3 +5809,94 @@ local trip so `/optimize` had a variant to draw, the day groups were read at 144
 and one was forced open to check the shifted phone grid. The local draft was discarded
 afterwards, so the fixture trip is as it was. Stage 9 still reports `DID NOT RUN` and now
 has a third screen legitimately changed since its baselines were approved.
+
+## A deletion that shipped, and the rebuild that was never needed, 2026-09-02
+
+Four from testing `382d031`: "where would you like to start" looks weird on production;
+a comfort refusal took three presses to clear — "build them again", then "accept selected
+criteria and rebuild once", then "add more days"; removing a place after adding days is
+slow when it only removes a place; and reorder "What else you can do".
+
+### The panel was unstyled, and I broke it in the commit before
+
+Looking at it was the whole diagnosis. The option cards had no border, no padding and no
+background: the name, count and description ran together on one line and two of them
+centred oddly. `grep -c lane-chooser web/src/shell.css` returned **0**.
+
+Removing the obsolete `.stacks-on-phone` block in `f9462ae` was done by slicing the file
+between two comment markers, and the entire `.lane-chooser` ruleset sat between them. It
+went out with the deletion and shipped.
+
+**Nothing could have caught it.** The design-token gate checks that colours go through
+tokens, not that a class still has a rule. No test renders CSS. The web suite asserts the
+markup, which was unchanged and correct. The only instrument that sees this is a rendered
+screen, and stage 9 — the gate that would — has been unable to run for three days for an
+unrelated reason.
+
+The block was recovered from `29223bc` rather than retyped, so the comments explaining
+why each rule exists came back with it. `AGENTS.md` now says: never delete a slice of a
+file by its start and end markers without reading what is between them, and grep the
+class out of both the stylesheet and the components afterwards.
+
+Two smaller things while the screen was open. The lane question was landing under three
+lines that describe the ranked deck — "Places picked for your trip", "Order only, not a
+promise", "A middle score means something is unknown" — cards that are not on screen
+while the question stands in front of them. Those three now wait for the deck.
+
+### The first of the three presses was a bug, not a step
+
+`variantId` is null until the owner picks a plan option, and the screen draws
+`variants[0]`. So `comfort_tradeoffs` was asked with `variant_id: null`, which the server
+answers **from the active plan** — while the figures on screen came from the draft
+variant. `comfortOnly`, read from the drawn variant's own `UNAPPROVED_` violations, said a
+comfort budget was the only problem; `overBudget`, read from the report, had nothing to
+accept because it described a different plan; and the screen fell through to a bare "build
+them again". That press changed nothing except that the second pass happened to line the
+two up.
+
+`ComfortTradeoffs` had the same defect from the other side: it asked with no variant at
+all. The comment above the page's query claimed the two shared a key "so the two cannot
+disagree about which budget is exceeded" — they shared a key only by both omitting the
+variant, and agreed by being wrong together. Both take `shownVariantId` now.
+
+While the report is loading the screen waits rather than offering a rebuild, and when the
+report has loaded with nothing to agree to it routes through `resolveAllAndRebuild` like
+everything else, so there is one control that applies whatever is outstanding.
+
+**What is left is not waste.** Accepting a comfort figure changes what fits, so a day
+shortfall can genuinely become visible only after the acceptance — that is new
+information, not a step that could have been skipped. Two presses where the plan needs
+both a consent and a date change; one where it needs only one. The three-press sequence
+reported was the bug above, and it is gone.
+
+### Removing a place was rebuilding the world
+
+`cutUnfitAndRebuild` called `autoResolveAndGenerate`: the timezone lookup, the assumed
+terminal, the default opening windows, and `collectRouteEvidence`, which loops queued
+route passes until coverage. On a real trip that is minutes, and **none of it can be
+changed by dropping a place** — the timezone and the terminal belong to the destination,
+the windows to the dates, and a route snapshot to a pair, so every remaining pair is
+measured exactly as it was and the pairs that are gone will never be asked about again.
+It goes straight to `generate_plan_preview` now. `dropAndRebuild` beside it had always
+done that; this was the odd one out.
+
+The date-changing path keeps the preamble, deliberately: a new date is a new window, and
+moving the setup hash re-keys discovery.
+
+### And the reorder
+
+"What else you can do" on `/itinerary` is now change the plan, costs, check trip facts,
+readiness. `split` keeps a place at the end rather than being dropped — it was not in the
+order given, and removing a route from the list is not what was asked for.
+
+### Release evidence
+
+**12 of 13** stages: 715 Python tests, 218 web tests, the 20 atomic and 7 interaction
+optimizer regressions, graph integrity, provider redaction, the design-token gate, element
+parity, reference workbooks, typecheck and lint.
+
+The panel was re-rendered at 500px before and after the CSS was restored, which is the
+only check that would have seen the original defect. Stage 9 still reports `DID NOT RUN`,
+and this entry is the clearest argument yet for re-basing it: an unstyled panel reached
+production because the one gate that photographs screens has had no fixture trip since
+2026-09-02.

@@ -655,6 +655,26 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   `overBudget` (from a live query) — two sources that diverge, so the note could appear
   alone. Gate them together, and where there is genuinely nothing to agree to, offer the
   rebuild that clears a variant lagging behind an agreement.
+- **The comfort report must be asked about the variant on screen.** `variantId` is null
+  until the owner picks a plan option and the screen falls back to `variants[0]`, so
+  `comfort_tradeoffs` was asked with `variant_id: null` — which the server answers from
+  the **active plan**. `comfortOnly` (the drawn variant's own `UNAPPROVED_` violations)
+  then said a comfort budget was the only problem while `overBudget` (the report) had
+  nothing to accept, and the screen fell through to a bare "Build them again" whose only
+  effect was that the second pass happened to line the two up. Reported as the first of
+  three presses to get one plan. `shownVariantId` is the fix and **both** the page and
+  `ComfortTradeoffs` take it: they previously shared a query key only by both omitting the
+  variant, so they agreed by being wrong together. While the report is loading the screen
+  waits; it does not offer a rebuild.
+- **Removing a place needs the solve, not the evidence preamble.** `cutUnfitAndRebuild`
+  called `autoResolveAndGenerate`, which re-runs the timezone lookup, the assumed
+  terminal, the default opening windows and `collectRouteEvidence` — and that last loops
+  queued route passes until coverage, which on a real trip is minutes. Dropping a place
+  cannot invalidate any of it: the timezone and terminal belong to the destination, the
+  windows to the dates, and a route snapshot to a *pair*, so every remaining pair is
+  measured exactly as it was. Both drop paths go straight to `generate_plan_preview`.
+  The date-changing path still needs the preamble, because a new date is a new window and
+  moving the setup hash re-keys discovery.
 - **Comfort consent belongs to the preview being judged, not an older active plan.**
   `comfort_tradeoffs(trip_id, variant_id)` prefers the matching preview variant and falls
   back to the active plan only when there is no preview. Existing consent is covered only
