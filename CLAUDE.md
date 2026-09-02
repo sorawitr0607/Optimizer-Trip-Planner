@@ -410,6 +410,21 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   Anything worth seeing goes above 200 or below 610, and the waterline sits at 772 rather
   than 646 so there is water to moor a boat on *outside* those rectangles. Re-measure
   before moving an object; twice now something has been drawn correctly and been invisible.
+- **The draft timeline is one collapsible group per day, and the mobile grid is keyed on
+  column position.** It was a flat table of every item on every day; grouping is what a
+  reader scans by, so `/optimize` draws a `<details>` per day whose summary carries the
+  date, the number of places and the hours the day runs — collapsed, so that line has to
+  be worth reading on its own. `<details>` rather than state: the platform owns the
+  toggle, the keyboard and the open/closed semantics.
+  **The date column is gone**, because the summary carries it, and the phone rules under
+  `@media (max-width: 860px)` address cells by `nth-child` — so every one of them shifted
+  down by one. A stale mapping there does not fail a test; it quietly puts the times
+  where the chip belongs. Check a rendered phone view after changing that table's columns.
+  "What happened to each place you kept" was removed in the same pass: a place that fits
+  is on the timeline and a place that does not is in `optimize-unfit` with the way out
+  beside it, so the table was the third place the same facts appeared and the only one
+  with nothing to press. `reason` and `consequence` stay on the wire — `/itinerary` still
+  lists the unscheduled ones.
 - **`BuildStages` takes a stage list, and every list is the calls its page awaits.**
   `BUILD_STAGES` is `/optimize`'s four; `PLAN_STAGES` is `StayPlanner`'s three —
   `save_setup`, `discover_places`, `generate_plan_preview`. That press is the longest
@@ -567,6 +582,31 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   trip's first `route_snapshots.retrieved_at` means something built a plan before any route
   existed. `PLAN_STAGES` carries `routes` because the call is there; adding one without the
   other is the fiction `BuildStages` exists to refuse.
+- **"No remaining capacity" is a claim that a longer trip would help, so only make it
+  when that is true.** `_skip_reason` answered `NO_TIME_CAPACITY` for anything unplaced
+  that was not in `skipped`, and `_insertion_search` only offers the skip branch to
+  candidates below `must_do` — so a must-do place that could not be placed **for any
+  reason at all** was reported as the trip being short of time, and `/optimize` offered
+  "add N days and rebuild once". Measured on a place whose own visit exceeds a
+  09:00–21:00 window: the same refusal and the same button at 3, 4, 6, 9 and 14 days.
+  Reported as "it can't fit the leftover place and returns another plan with still the
+  same button".
+  `_fits_an_empty_day` is the fix and is the question *"would another day help?"* asked
+  honestly — a new day is at best another empty day, so if no empty day can hold the
+  place, no added day ever will. It probes `_build_schedules` with the one candidate
+  rather than enumerating the ways a place can be unplaceable, because that list is a
+  second implementation of `_build_day` that would drift from the first. The distinct
+  reason is `NO_DAY_LONG_ENOUGH`, and the screen recommends **removing** the place on it.
+  Keep both sides tested: `NO_TIME_CAPACITY` must still appear where days genuinely help,
+  or the offer disappears from the case it exists for.
+- **An offer that did not work is not offered twice.** Even a true `NO_TIME_CAPACITY` can
+  fail in practice — the added days go on the end, and hours, routes or locks can leave
+  the place unplaced anyway — so `shared/dayExtension` records, per trip, which places
+  days were already added for, and `planDecisions` moves a place that is *still* short of
+  capacity into the drop recommendation. That memory is the only thing that knows better
+  than the optimizer here: the draft cannot know what was tried. The two wordings are
+  deliberately different — `unfit_impossible` states what is proved, and
+  `unfit_days_did_not_help` states only what happened.
 - **Any rebuild that writes setup must re-run `discover_places` first.** Discovery stores
   the setup hash it ran against, so moving a date stales the found places and the rebuild
   refuses `discovery_stale` before doing any work — which is what "Add a day and rebuild"

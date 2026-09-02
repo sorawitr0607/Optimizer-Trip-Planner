@@ -5729,3 +5729,83 @@ design-token gate, element parity, reference workbooks, typecheck and lint. Stag
 reports `DID NOT RUN` — its fixture trip is absent from every database, as
 `artifacts/parity/screen-baselines/README.md` records — and this round adds a reason to
 re-base it: `/places` and `/optimize` both legitimately change appearance.
+
+## The button that could not work, and the table that said nothing, 2026-09-02
+
+Three from testing `29223bc`: "add N days and rebuild once" produced another plan still
+carrying the same button; remove "What happened to each place you kept"; and group the
+validated timeline by day, collapsed and expandable.
+
+### The add-days button was offering something it could not deliver
+
+`_skip_reason` answered `NO_TIME_CAPACITY` for anything unplaced that was not in
+`skipped`, and `_insertion_search` only ever offers the skip branch to candidates below
+`must_do`. So a must-do place that could not be placed **for any reason at all** was
+reported as the trip being short of time, and `/optimize` derived "add 3 days" from it.
+Measured on a place whose own visit exceeds a 09:00-21:00 window: the identical refusal
+and the identical button at 3, 4, 6, 9 and 14 days.
+
+`_fits_an_empty_day` is the question the screen needed and did not have — *would another
+day help?* — asked directly. A new day is at best another empty day, so if no empty day
+in the trip can hold the place, no added day ever will. It probes `_build_schedules` with
+that one candidate rather than enumerating the ways a place can be unplaceable: its own
+duration against the window, an opening interval shorter than its visit, the meals and
+the operational prefix eating the day, a date lock. That list is a second implementation
+of `_build_day` and would drift from the first.
+
+The reason is `NO_DAY_LONG_ENOUGH` and the screen recommends removing the place on it.
+Both sides are pinned, because a fix here could easily delete a real answer: four
+three-hour places still report `NO_TIME_CAPACITY` at one day and fit cleanly at four.
+
+**And then the owner sharpened the ask mid-change**: the recommendation to drop should
+also come after *trying* to add a day and finding the place still does not fit. That is a
+different claim and the optimizer cannot make it — `NO_TIME_CAPACITY` really is "a longer
+trip would hold this", and it can still be wrong in practice, because the added days go
+on the end and hours, routes or locks can leave the place unplaced anyway.
+
+So `shared/dayExtension` records, per trip, which places days were already added for, and
+`planDecisions` moves a place that is *still* short of capacity into the drop
+recommendation. The offer is made once per place. No invalidation, deliberately: the set
+is only ever consulted for places that are still unplaced, so an entry for a place that
+now fits is never read. The two messages are kept apart — `unfit_impossible` states what
+is proved, `unfit_days_did_not_help` states only what happened, and saying the first about
+the second would assert something stronger than the evidence.
+
+### The table went, and the timeline became days
+
+"What happened to each place you kept" is gone. Every row it carried is said where it is
+actionable now: a place that fits is on the timeline, a place that does not is in
+`optimize-unfit` with the way out beside it. It was the third place the same facts
+appeared and the only one with nothing to press. `reason` and `consequence` stay on the
+wire, since `/itinerary` still lists the unscheduled ones.
+
+The timeline is one `<details>` per day. Collapsed, so the summary line has to earn its
+place — the date, how many places, and the hours the day actually runs — otherwise
+collapsing would only hide the timetable. `<details>` rather than a click handler and
+state: the platform owns the toggle, the keyboard behaviour and the open/closed semantics
+for a screen reader, and none of that has to stay right in our own code.
+
+**The dangerous part was not the grouping.** The date column left the table, because the
+summary carries it, and the existing phone rules address cells by `nth-child` — a
+purpose-built grid layout added when the owner reported the timetable was "really hard to
+read cause I can't see the whole thing". Every one of those selectors had to shift down by
+one, and a stale mapping there fails no test: it quietly puts the times where the chip
+belongs. Checked on a rendered phone view with a day forced open, which is the only way to
+see it.
+
+Two pieces of CSS were orphaned by this and removed rather than left: `.reconcile-why` and
+the `.timeline-day-start` rules, whose class no longer exists on any row. A generic
+`.stacks-on-phone` written on the way through was also deleted — the timeline already had
+a better, purpose-built stack, and the table the generic one was for is gone.
+
+### Release evidence
+
+**12 of 13** stages: 715 Python tests, 216 web tests, the 20 atomic and 7 interaction
+optimizer regressions across all three variants, graph integrity, provider redaction,
+the design-token gate, element parity, reference workbooks, typecheck and lint.
+
+Verified by rendering rather than only by assertion: a draft was generated against the
+local trip so `/optimize` had a variant to draw, the day groups were read at 1440 and 500,
+and one was forced open to check the shifted phone grid. The local draft was discarded
+afterwards, so the fixture trip is as it was. Stage 9 still reports `DID NOT RUN` and now
+has a third screen legitimately changed since its baselines were approved.
