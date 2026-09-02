@@ -4,7 +4,7 @@ import type { CandidateChoice, DiscoveryCandidate, PlaceInsight, PlaceSummary, R
 import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
 import { flyToShortlist } from "../shared/flyToShortlist";
 import { distinguishingCons, evaluatedEffort, evaluatedFeasibility } from "../shared/cards";
-import { PHOTO_THIN_AT, galleryFor } from "../shared/photos";
+import { PHOTO_THIN_AT, galleryFor, warmTargets } from "../shared/photos";
 import { tagIcon } from "../shared/tagIcons";
 
 /**
@@ -463,18 +463,20 @@ export function PlaceDeck({
   // start — a direct `upload.wikimedia.org/thumb/...` URL would save it, and cannot be
   // built: Wikimedia refuses widths outside its own listed set, measured as HTTP 400 for
   // the 640 this app asks for. Warming them early is the way to pay that cost off screen.
+  // ...but not while the card is still withheld waiting for its own first photograph.
+  // `warmTargets` holds that rule and the measurement behind it; the burst was competing
+  // with the one download the gate is blocked on, over the single connection they share.
   const galleryKey = gallery.join("|");
   const aheadKey = nextUrls.join("|");
   useEffect(() => {
-    for (const url of [...gallery, ...nextUrls]) {
-      if (!url) continue;
+    for (const url of warmTargets(cardPending, gallery, nextUrls)) {
       const image = new Image();
       image.decoding = "async";
       image.src = url;
     }
     // `gallery` and `nextUrls` are rebuilt each render; their contents are what matter.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [galleryKey, aheadKey]);
+  }, [galleryKey, aheadKey, cardPending]);
 
   if (!entry || !card) {
     const rejectedChoices = choices.filter((c) => c.action === "not_for_trip");

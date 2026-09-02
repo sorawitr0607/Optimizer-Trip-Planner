@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import type { DiscoveryCandidate, PlaceInsight, PlaceSummary, Ranking } from "../api/client";
+import { warmTargets } from "../shared/photos";
 import { PlaceDeck } from "./PlaceDeck";
 
 /**
@@ -311,6 +312,24 @@ describe("PlaceDeck", () => {
     const html = render(SUMMARY);
     expect(html).toMatch(/<img[^>]*loading="eager"/);
     expect(html).not.toContain('loading="lazy"');
+  });
+
+  it("warms nothing while the card is still waiting for its own photograph", () => {
+    /**
+     * The gate and the warming were competing for one connection. Every URL here is
+     * `commons.wikimedia.org`, so the whole gallery plus the lead images of the next four
+     * cards are multiplexed alongside the single download that decides whether the card
+     * may be shown — ~3 MB of speculative bytes against the ~344 kB one the owner is
+     * actually waiting on.
+     *
+     * Withheld means warm nothing. Shown means warm everything, which is the state the
+     * card spends seconds in while it is read, so nothing is lost by waiting.
+     */
+    const gallery = ["a.jpg", "b.jpg"];
+    const ahead = ["next-1.jpg", "next-2.jpg"];
+
+    expect(warmTargets(true, gallery, ahead)).toEqual([]);
+    expect(warmTargets(false, gallery, ahead)).toEqual(["a.jpg", "b.jpg", "next-1.jpg", "next-2.jpg"]);
   });
 
   it("labels the exploration card so a low score is not read as a bad pick", () => {

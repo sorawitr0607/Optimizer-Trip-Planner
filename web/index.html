@@ -5,6 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#a30000" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <!-- Every swipe-card photograph is a `Special:FilePath` URL on commons.wikimedia.org
+         that 302s to upload.wikimedia.org, so the first picture pays DNS + TCP + TLS to
+         two origins before its first byte. Measured cold from here: 234 ms to complete the
+         commons handshake and 1.1 s to first byte across the chain. The redirect itself
+         cannot be skipped — a direct upload.wikimedia.org/thumb/ URL only answers for
+         widths Wikimedia has already materialised, and 400s for the rest — so the round
+         trip is paid off by opening both sockets while the page is still booting.
+         No credentials: an `<img>` with no crossorigin attribute is a no-CORS fetch, and
+         a `crossorigin` preconnect would warm a connection it then could not use. -->
+    <link rel="preconnect" href="https://commons.wikimedia.org" />
+    <link rel="preconnect" href="https://upload.wikimedia.org" />
     <!-- The shell rewrites this per route once React mounts (`AppShell`), so a tab
          reads "Places · Taipei, Taiwan · Optimizer Trip Planner" rather than nine
          screens all spelled the same. This is what shows before that happens. -->
