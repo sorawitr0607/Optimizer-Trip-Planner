@@ -10782,6 +10782,74 @@
   opacity: 0.55;
 }
 
+/* "Where would you like to start?" — the one question before the first swipe.
+
+   Full-width stacked buttons rather than a row of five: each one carries a name, a count
+   and a sentence, which is more than a tab can hold, and a column is what makes them
+   comparable. On a wide screen they sit two abreast; the sentence is why they cannot be
+   narrower than about 20rem. */
+.lane-chooser {
+  display: grid;
+  gap: 8px;
+  margin-block-end: 14px;
+}
+
+.lane-chooser-options {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+}
+
+.lane-chooser-option {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius-house);
+  cursor: pointer;
+  display: grid;
+  gap: 3px;
+  padding: 11px 14px;
+  text-align: start;
+}
+
+.lane-chooser-option:hover {
+  border-color: var(--color-accent);
+}
+
+.lane-chooser-name {
+  align-items: center;
+  color: var(--text-primary);
+  display: flex;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-selected);
+  gap: 7px;
+}
+
+.lane-chooser-detail {
+  color: var(--text-secondary);
+  font-size: var(--text-2xs);
+}
+
+/* The way past the question, which must not read as the recommended answer — it is the
+   behaviour the screen had before, kept for anyone who does not want to choose. */
+.lane-chooser-skip {
+  background: none;
+  border: 0;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: var(--text-2xs);
+  justify-self: start;
+  padding: 4px 0;
+  text-decoration: underline;
+}
+
+/* One column on a phone: two 20rem tracks cannot both fit, and `auto-fit` would give
+   each of them the full width anyway — this only makes the intent explicit. */
+@media (max-width: 860px) {
+  .lane-chooser-options {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* One collapsible group per day of the draft timeline.
 
    The summary is read far more often than the rows inside it — the groups arrive

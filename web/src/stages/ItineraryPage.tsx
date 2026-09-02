@@ -990,14 +990,18 @@ export function ItineraryPage() {
           lands on for the rest of the trip — they read as six more places to check
           rather than as six answers to questions they will actually have. */}
       <h2 className="money-eyebrow">{copy("what_next", language)}</h2>
+      {/* Ordered by what an owner reaches for, at their asking: change the plan, then
+          money, then the facts behind it, then getting ready. `split` keeps its place at
+          the end rather than being dropped — it was not in the order given and removing a
+          route from the list is not what was asked for. */}
       <ul className="plan-next-links">
         {(
           [
+            ["revise", "next_revise"],
             ["costs", "next_costs"],
-            ["split", "next_split"],
             ["evidence", "next_evidence"],
             ["readiness", "next_readiness"],
-            ["revise", "next_revise"],
+            ["split", "next_split"],
           ] as const
         ).map(([route, blurb]) => (
           // The sentence leads and the control follows, at the owner's asking: a link

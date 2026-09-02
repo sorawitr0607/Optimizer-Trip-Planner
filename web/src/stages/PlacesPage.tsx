@@ -1029,9 +1029,18 @@ export function PlacesPage() {
             </>
           ) : null}
 
-      <h2 className="money-eyebrow">{copy("ranking_title", language)}</h2>
-      <p className="setup-hint">{copy("ranking_help", language)}</p>
-      <p className="setup-hint">{copy("formula_note", language)}</p>
+      {/* These three describe the ranked deck, so they wait for it. With the lane
+          question standing in front of the deck they landed above it — "Places picked
+          for your trip", "Order only, not a promise", "A middle score means something is
+          unknown" — three lines about cards that are not on screen yet, pushing the one
+          question that is down past them. */}
+      {chooseLane ? null : (
+        <>
+          <h2 className="money-eyebrow">{copy("ranking_title", language)}</h2>
+          <p className="setup-hint">{copy("ranking_help", language)}</p>
+          <p className="setup-hint">{copy("formula_note", language)}</p>
+        </>
+      )}
       {catalog.length && ranking.isPending ? <p>{copy("loading", language)}</p> : null}
       {ranking.isError ? <p className="field-error">⚠ {errorText(ranking.error, language)}</p> : null}
 

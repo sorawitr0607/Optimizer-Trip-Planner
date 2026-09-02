@@ -146,8 +146,14 @@ function render(
   language: Language,
   plan: PlanPreview = PREVIEW,
   setup: SetupDraft = SETUP,
+  /** Seed `["comfort_tradeoffs", trip, variantId]`. The key is the point of the test
+   *  that uses it: the page must ask about the variant it is drawing. */
+  comfort?: { variantId: string | null; report: unknown },
 ): string {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  if (comfort) {
+    client.setQueryData(["comfort_tradeoffs", TRIP, comfort.variantId], comfort.report);
+  }
   client.setQueryData(["trips"], TRIPS);
   client.setQueryData(["setup", TRIP], setup);
   client.setQueryData(["setup_vocabulary"], VOCABULARY);
@@ -394,6 +400,76 @@ describe("OptimizePage", () => {
 
     expect(html).toContain("day(s) and rebuild once");
     expect(html).not.toContain("cannot fit any single day");
+  });
+
+  /**
+   * The wasted rebuild, and why it happened.
+   *
+   * `variantId` is null until the owner picks a plan option, and the screen draws
+   * `variants[0]` — so the report was asked about `variant_id: null`, which the server
+   * answers from the **active plan**. `comfortOnly` (the drawn variant's own violations)
+   * said a comfort budget was the only problem while `overBudget` (the report) had
+   * nothing to accept, so the screen fell through to a bare "Build them again" that
+   * changed nothing except lining the two up. Reported as the first of three presses to
+   * get one plan.
+   *
+   * Seeding under the **drawn variant's** id is the assertion: the accept control only
+   * appears if the page asks the question this test answers.
+   */
+  const COMFORT_REPORT = {
+    has_plan: true,
+    rules: [
+      {
+        code: "DAILY_WALKING_BUDGET",
+        threshold: 45,
+        measured: 61,
+        exceeds: true,
+        accepted_value: null,
+        covered: false,
+      },
+    ],
+  };
+
+  function overBudgetPlan() {
+    const plan = structuredClone(PREVIEW) as PlanPreview;
+    plan.proposal.data.variants![0].validation = {
+      valid: false,
+      hard_violations: [{ code: "UNAPPROVED_DAILY_WALKING_BUDGET", subject_id: null }],
+    };
+    plan.proposal.data.variants![0].status = "unavailable";
+    return plan;
+  }
+
+  /** Just the comfort refusal's own action row.
+   *
+   *  Scoped deliberately: "Build them again" also sits at the top of the screen as the
+   *  owner's own way to rebuild the options, which is a deliberate affordance and stays.
+   *  The one that was waste is the one that appeared *as the way out of this refusal*. */
+  function comfortAction(html: string): string {
+    const at = html.indexOf('class="optimize-actions comfort-acceptance"');
+    expect(at).toBeGreaterThan(-1);
+    return html.slice(at, html.indexOf("</div>", at));
+  }
+
+  it("offers the acceptance straight away, not a bare rebuild first", () => {
+    const html = render(<OptimizePage />, "en", overBudgetPlan(), SETUP, {
+      variantId: "best_balance",
+      report: COMFORT_REPORT,
+    });
+
+    // The measured figure is on the button, which only happens if the page asked the
+    // report about the variant it is drawing.
+    expect(comfortAction(html)).toContain("61");
+    expect(comfortAction(html)).not.toContain("Build them again");
+  });
+
+  it("waits rather than offering a rebuild while the report is still arriving", () => {
+    // No seed, so the query is pending. A rebuild here is a whole build whose only
+    // effect is that the next pass has the figures loaded.
+    const html = render(<OptimizePage />, "en", overBudgetPlan());
+
+    expect(comfortAction(html)).toContain("Loading");
+    expect(comfortAction(html)).not.toContain("Build them again");
   });
 
   it("renders optimizer warnings through the code catalogue", () => {

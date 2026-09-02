@@ -20,13 +20,26 @@ import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
 export interface ComfortTradeoffsProps {
   tripId: string;
   language: Language;
+  /** The draft variant on screen, so this panel and the accept control beside it
+   *  describe the same plan.
+   *
+   *  They did not. This asked with no variant at all and `OptimizePage` asked with its
+   *  `variantId` state, which is null until the owner picks an option — and the server
+   *  answers a null variant from the **active plan**. So both described the active plan
+   *  while the figures on screen came from the first draft variant, and the two only ever
+   *  "agreed" by being wrong together. Passed in rather than derived here, because the
+   *  page is what knows which variant it drew. */
+  variantId: string | null;
 }
 
-export function ComfortTradeoffs({ tripId, language }: ComfortTradeoffsProps) {
+export function ComfortTradeoffs({ tripId, language, variantId }: ComfortTradeoffsProps) {
   const queryClient = useQueryClient();
   const report = useQuery({
-    queryKey: ["comfort_tradeoffs", tripId],
-    queryFn: () => rpc<ComfortTradeoffReport>("comfort_tradeoffs", { trip_id: tripId }),
+    queryKey: ["comfort_tradeoffs", tripId, variantId],
+    queryFn: () => rpc<ComfortTradeoffReport>("comfort_tradeoffs", {
+      trip_id: tripId,
+      variant_id: variantId,
+    }),
   });
 
   const refresh = async () => {

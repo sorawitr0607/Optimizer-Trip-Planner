@@ -202,14 +202,32 @@ export function OptimizePage() {
     queryKey: ["opening_options", tripId],
     queryFn: () => rpc<OpeningEvidenceOptions>("opening_evidence_options", { trip_id: tripId }),
   });
-  // Same key the tradeoff panel uses, so TanStack serves both from one response and the
-  // two cannot disagree about which budget is exceeded.
+  /* The variant this screen is actually drawing, which is not always the one selected.
+   *
+   * `variantId` is null until the owner picks from the plan-option list, and the screen
+   * falls back to `variants[0]` — so the report below was asked about `variant_id: null`,
+   * which the server answers from the **active plan**, while the figures on screen came
+   * from the first draft variant. That is the whole of the wasted rebuild the owner
+   * reported: `comfortOnly` (from the drawn variant's own violations) said a comfort
+   * budget was the only problem, `overBudget` (from the report) had nothing to accept
+   * because it described a different plan, and the screen fell through to a bare "build
+   * them again" — which changed nothing except that the second pass happened to line the
+   * two up. Asking about the variant being drawn removes the step entirely.
+   */
+  const shownVariantId =
+    variantId ?? preview.data?.proposal.data.variants?.[0]?.variant_id ?? null;
+  // Same key the tradeoff panel uses — it takes `shownVariantId` too — so TanStack
+  // serves both from one response and the two cannot disagree about which budget is
+  // exceeded. They previously shared a key only by both omitting the variant.
   const tradeoffs = useQuery({
-    queryKey: ["comfort_tradeoffs", tripId, variantId],
+    queryKey: ["comfort_tradeoffs", tripId, shownVariantId],
     queryFn: () => rpc<ComfortTradeoffReport>("comfort_tradeoffs", {
       trip_id: tripId,
-      variant_id: variantId,
+      variant_id: shownVariantId,
     }),
+    // Nothing to ask about until a draft exists; without this the first fetch goes out
+    // against a null variant and its answer is cached under a key the screen then uses.
+    enabled: Boolean(shownVariantId) || !preview.isPending,
   });
 
   /**
@@ -412,6 +430,7 @@ export function OptimizePage() {
   //   places that could not.
   const cutUnfitAndRebuild = useMutation({
     mutationFn: async (placeIds: string[]) => {
+      setPreviewStage(undefined);
       for (const placeId of placeIds) {
         await rpc("save_candidate_choice", {
           trip_id: tripId,
@@ -421,7 +440,31 @@ export function OptimizePage() {
         });
       }
       await queryClient.invalidateQueries({ queryKey: ["candidate_choices", tripId] });
-      await autoResolveAndGenerate.mutateAsync();
+      /* Just the solve, not the whole evidence preamble.
+       *
+       * This called `autoResolveAndGenerate`, which re-runs the timezone lookup, the
+       * assumed terminal, the default opening windows and `collectRouteEvidence` — and
+       * that last one loops queued route passes until coverage, which on a real trip is
+       * minutes. **Removing a place cannot invalidate any of it.** The timezone and the
+       * terminal belong to the destination, the windows to the dates, and a route
+       * snapshot to a *pair* — every remaining pair is measured exactly as it was, and
+       * the pairs that are gone are the ones nothing will ask about again.
+       *
+       * Reported as "why the remove after adding days took a long time cause it just
+       * removes the place, not build the whole new plan". `dropAndRebuild` beside it has
+       * always gone straight to the solve; this was the odd one out. */
+      return rpc<PlanPreview>(
+        "generate_plan_preview",
+        { trip_id: tripId },
+        setPreviewStage,
+      );
+    },
+    onSuccess: async () => {
+      setRefusal(null);
+      await Promise.all([
+        invalidatePlan(),
+        queryClient.invalidateQueries({ queryKey: ["journey", tripId] }),
+      ]);
     },
     onError: (error) => setRefusal(error instanceof ApiError ? error.code : String(error)),
   });
@@ -838,7 +881,9 @@ export function OptimizePage() {
       {/* `WF-039`. Above the variant picker, because an overage is the reason a variant
           is unactivatable and the owner needs the choice before, not after, the button
           that refuses. Renders nothing when no budget is exceeded or agreed. */}
-      <ComfortTradeoffs language={language} tripId={tripId} />
+      {/* The same variant the accept control asks about, so the panel and the button
+          cannot describe different plans. See the prop's own note. */}
+      <ComfortTradeoffs language={language} tripId={tripId} variantId={shownVariantId} />
 
         <div hidden={building}>
       {variant ? (
@@ -1031,14 +1076,29 @@ export function OptimizePage() {
                             })}
                   </button>
                 </>
+              ) : tradeoffs.isPending ? (
+                /* Waiting, not a button. The report was still arriving and the screen
+                   offered a bare "build them again" — a whole rebuild whose only effect
+                   was that the second pass happened to have the figures loaded. The
+                   owner reported it as the first of three presses to get one plan. */
+                <p aria-busy="true" className="setup-hint">
+                  {copy("loading", language)}
+                </p>
               ) : (
+                /* The report has loaded with nothing to agree to, while the drawn
+                   variant still carries an `UNAPPROVED_` violation: the figures were
+                   already accepted and this draft predates the acceptance. One rebuild
+                   is the way out, and it goes through the same control as everything
+                   else so there is one path that applies whatever is outstanding. */
                 <button
                   className="setup-primary"
                   disabled={building}
-                  onClick={() => autoResolveAndGenerate.mutate()}
+                  onClick={() => resolveAllAndRebuild.mutate()}
                   type="button"
                 >
-                  {building ? copy("loading", language) : copy("build_again", language)}
+                  {building
+                    ? copy("loading", language)
+                    : copy("resolve_all_and_continue", language)}
                 </button>
               )}
             </div>
