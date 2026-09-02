@@ -99,6 +99,36 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   217 KB basemap is immutable until its evidence expiry, so `shared/basemap.ts` also keeps it in
   browser storage until the server-provided `expires_at`; do not replace that with a cache for mutable
   plan or route snapshots without measuring another egress problem first.
+
+  **Measure the wire, not the disk (2026-09-02).** The earlier figures here came from
+  `pg_total_relation_size / n_live_tup`, which reports *compressed TOAST* and understated the
+  catalogue by about fivefold. On the live database `octet_length(candidates_json)` is **630 KB at the
+  median, 3.23 MB at the largest, 141 KB at the smallest** across 19 runs, and `jobs.result_json`
+  averages **479 KB and reaches 3.76 MB**. Quote `octet_length`, because that is what crosses the wire.
+
+  **The catalogue is read once per run, not once per caller.** `PlannerActions.get_latest_discovery`
+  memoises the `DiscoveryRun` on the run id and validates it with the 111-byte header on every call.
+  That is sound *only* because `discovery_runs` is append-only — enforced by the
+  `discovery_runs_no_update` and `discovery_runs_no_delete` triggers — so a run id names bytes that
+  cannot change and the invalidation is the id, never a clock. It is not licence to cache anything
+  mutable. What it fixes: `_current_choice_inputs` runs on **every swipe** and each decision also
+  invalidates the ranking the page refetches, so a twenty-card session paid for the same immutable blob
+  about forty times — 129 MB to record twenty verdicts on the largest trip. Route internal reads through
+  `self.get_latest_discovery`, never `self.store.get_latest_discovery`.
+
+  **Navigation reads two columns, not every chosen place.** `journey()` runs on every page load and
+  wants only which actions exist; `store.list_candidate_actions()` is that read. The `SELECT *` it
+  replaced carries `candidate_json` at **1.1 KB a row measured on the wire** and ran 8,110 times over
+  two weeks. `list_candidate_choices()` stays for the callers that genuinely need the place — ranking,
+  the optimizer input, the checklist — and `journey()` still uses it in the one branch that reads
+  `operational_evidence`.
+
+  **A job poll must not select `result_json` before it returns one.** `JobQueue.status()` is the poll's
+  read and `JobQueue.get()` stays the worker's. Be honest about the size of this one: the column is NULL
+  until `complete` writes it, so the sixty polls a build makes were each reading a NULL and the saving on
+  an ordinary build is small. It matters for the polls that meet a *finished* job they were not waiting
+  for — a reload mid-build, a second tab, a retried poll — where `SELECT *` moves up to 3.76 MB to
+  answer a status string.
 - **`TOURIST_DB_URL` is a *template* in `.env`, not a literal — it reads
   `"$POSTGRES_URL_NON_POOLING"`.** Passing that commented line's value through verbatim
   starts a worker that loops on `missing "=" after "$POSTGRES_URL_NON_POOLING"`. The
@@ -138,6 +168,16 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   comma-separated segment, so a city-only string silently loses the destination accent.
 - **A slow operation must be queued.** `DEFERRED` is derived from `HANDLERS`; anything inline over
   ~60s answers `http_504` on the deployment while working perfectly locally.
+- **A poll must survive one network failure; the build must not die of it.** A build is
+  30-90s against a 1.5s poll, so one run asks about sixty times, and `fetch` rejects with a
+  bare `TypeError: Failed to fetch` for anything below HTTP — a cold start closing an idle
+  socket, DNS, a phone changing network. One such rejection used to throw straight out of
+  `rpc`'s poll loop and fail a build the worker was finishing perfectly; reported as "the
+  building plan is sometimes got failed to fetch". A poll is a pure read of a row the worker
+  owns, so it retries. **Only network-level failures**: an `ApiError` means the server
+  answered — 404 `unknown_job`, 403 `not_your_trip` — and retrying would bury a real refusal
+  under a five-minute wait. Nothing new bounds it; the existing `deadline` still fires, as
+  `job_unreachable`.
 - **A queued job's client deadline measures *silence*, not duration.** It always meant
   "fire when the worker is down, not when the work is slow", and as a flat ceiling on
   total runtime it did the opposite: a `refresh_routes` sweep stored 462 routes in **843
@@ -162,6 +202,25 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   **Note the shape of `list_place_evidence`** — it returns the stored
   snapshot, not the row, so anything that needs `place_id` back must put it *inside* the
   value, which is why `list_venue_notices` does.
+
+  **And it returns expired rows, which made that expiry decorative until 2026-09-02.**
+  `list_place_evidence` deliberately does no freshness filtering — venue notices and assumed
+  windows judge their own — so `PROVIDER_NO_MATCH_DAYS` was written and never read, and both
+  photo controls stayed withdrawn for good. Reported as "it is always hidden after I once hid
+  it". `actions._provider_no_match_ids()` is now the one read both callers use and it compares
+  `expires_at`. If you add a third caller of a *gating* evidence kind, filter the expiry there
+  too — the shared read will not do it for you.
+- **Two controls that buy the same call must withhold on the same condition.**
+  `PlacesPage.photoWithheld(placeId)` is that condition — bought / not in Google's index /
+  just asked and failed — and both the deck's "Get photographs from Google" and the detail
+  panel's "Load live details" consult it. They had drifted: the deck withdrew on a failed ask
+  and the panel did not, so one card offered the purchase in one place and refused it in the
+  other. Affordability is deliberately **not** in there: whether the cap allows a purchase is a
+  fact about the trip, and the two surfaces are right to present it differently — the deck has
+  no button, the panel keeps a disabled one under the price so the reason is on screen.
+  `PlaceDeck` takes `photoWithheld` and `photoErrorOf` as **functions of a place id**, not
+  booleans, so a card cannot be told about a different card: the scalars they replaced were
+  derived from `cardId`, the id the deck last *reported*, while the card drawn is `queue[0]`.
 - **One worker runs one job at a time, so a long job is a queue-wide outage.** Measured:
   an 843-second `refresh_routes` sweep left `generate_plan_preview` — *three seconds* of
   work — waiting 482s to be claimed, and discovery waiting 885s, which the client
@@ -524,6 +583,19 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   while its accepted measurement still reaches the rebuilt variant. When several rules
   exceed their caps, the screen renders checked boxes and submits the selected rules before
   one rebuild; making the owner rebuild once per rule recreates the original bug.
+- **Every decision a draft is waiting for is applied in one pass, then built once
+  (2026-09-02).** The rule above was right and scoped too narrowly: comfort figures were
+  batched, but the *other* conditions each kept their own control and their own rebuild, so
+  the owner walked the refusals in series — reported as "it went through like build them
+  again → accept the criteria → add the day → add the day". Every one of them is derivable
+  from the first draft. `shared/planDecisions.ts` is the single derivation —
+  `{unfit, selectedComfort, needsRoutes, needsDays, extraDays, outstanding}` — and
+  `OptimizePage.resolveAllAndRebuild` applies `outstanding` in order before calling
+  `autoResolveAndGenerate` once. It was previously derived in three places at three depths
+  of the tree, which is how a button and the sentence beside it come to disagree.
+  Order matters: the two acceptances are per-trip writes, so the **date write goes last** —
+  it moves the setup hash, and discovery stores the hash it ran against, so the catalogue
+  must be re-keyed with `force_refresh: false` before anything will build.
 - **Extending a page needs the updater form.** `dealMore` read `setShown(LANE_PAGE)` —
   assigning the value it already held — so "Show 20 more from here" recomputed an
   identical window and the deck did not move. A pager that appears to do nothing is
@@ -927,11 +999,25 @@ holds, so short hops keep their walk. `PlannerActions._default_transit_provider`
 an assumed 6-minute headway. Taipei's own GTFS is **not sourced**: TDX needs a Taiwan mobile number.
 
 Three consequences worth knowing. **A transit route is `status: "estimated"`, never `"verified"`**, and
-three sites used to admit only `verified` — `actions._optimizer_input`,
-`optimizer._routes_between` and `optimizer._best_inbound_route`. All three now admit `estimated` when
-`allow_provisional_assumptions` is set, which only `explore_first` sets; a `ready_to_schedule` trip is
-unaffected and `ROUTE_UNVERIFIED` stays fatal for it. The precedent is `_planning_fact`'s own docstring —
-"a visible assumption allowed only for an Explore preview". **`walking_minutes` excludes the ride**, which
+`optimizer._usable_route_statuses` is the single chokepoint every route reader goes through —
+`actions._optimizer_input`, `optimizer._routes_between`, `optimizer._best_inbound_route`,
+`validate_variant` and `_has_incident_usable_route` included.
+
+**As of 2026-09-02 it admits `estimated` on every trip, not only an Explore preview.** The earlier rule
+grouped `estimated` with `accepted_estimate` and withheld both from a `ready_to_schedule` trip, reasoning
+that a scheduled plan must not rest on a guess. That is right about `accepted_estimate` and wrong about a
+timetable, and the consequence was that **every scheduled plan discarded every metro leg it had already
+fetched and stored** and laid the city out on foot and by car — reported as "why is the walking not
+considering the metro line too", which is exactly what it was doing. `estimated` is emitted by precisely
+two things, `GtfsTransitProvider` and `OsmMetroProvider`, so admitting it is a narrow rule and not a
+relaxation. Measured on a cross-city pair holding both: `walk 55` before, `transit 15` after.
+
+`accepted_estimate` is unchanged and stays Explore-only — a crow-flies line inflated by
+`ACCEPTED_ROUTE_DETOUR` is *fabricated*, not merely unrouted. The two statuses had always been separate
+and nothing had used the difference. Nothing about a missing route softened: `_missing_route_edges` and
+`ROUTE_UNVERIFIED` are untouched, so admitting a real journey never became inventing one.
+
+**`walking_minutes` excludes the ride**, which
 is the whole point: `maximum_walking_minutes_per_leg` measures it, so a 43-minute ride reached by a
 2-minute walk passes a 25-minute cap no walk of that distance could. And **`refresh_routes` sorts pairs
 nearest-first**, because the 60-per-run cap bites long before 41 places' 1640 pairs and a missing route
@@ -984,6 +1070,31 @@ misread: `deterministic_signature` hashes the **input**, so it cannot detect a l
 an expired budget legitimately yields 0 visits where greedy's only schedule carries a comfort violation,
 because `comfort_violations` outranks `experience_value` in the objective tuple — that ordering is
 `WF-039`'s question.
+
+**The objective spreads places across the days as of 2026-09-02.** `_search_objective` is
+`(hard_errors, missing_route_edges, must_missing, soft, -experience, _day_crowding, travel_minutes,
+-lower, len(skipped), ids)` and `_day_crowding` is the new sixth term: the **sum of the squares** of each
+day's visit count. Nothing had preferred using a day and `travel_minutes` actively preferred not to —
+every day a plan opens costs another base-to-place-and-back journey — so the cheapest arrangement was to
+pile everything onto as few days as possible. Measured on twelve ordinary places over seven ordinary days
+with nothing in the way, all three variants scheduled all twelve and still left most of the trip blank:
+`[0,0,0,0,0,6,6]`, `[0,0,0,0,4,4,4]`, `[0,0,0,0,0,3,9]`. Reported as "the output trip is so weird, it has
+a lot of days that have only free times". **No rule was broken by any of those and the reconciliation was
+empty**, which is why nothing in the suite could have caught it.
+
+Two things about it. Squares rather than a count of empty days, because a count is indifferent between
+`[6,6]` and `[11,1]` while squares fall as the load levels out — one number for "use the days" and "do not
+cram one". And **its position is the design**: after `-experience` so a smoother trip can never cost a
+chosen place, after `soft` so it cannot buy spread by breaking a threshold, before `travel_minutes`
+because a second hotel round trip is the honest price of not spending a day indoors. A one-day trip has
+one arrangement and the term is constant for it, which is why none of the 27 historic single-day
+regressions move. `_greedy_sequences` was separately plain first-fit over the dates in order — filling day
+one to its ceiling before day two was offered anything — and now takes the emptiest day first, ties broken
+on date, so the fallback the search lands on under a real catalogue does not reintroduce the crammed shape.
+
+**This also removes the repeated "add a day" loop.** Extending the trip used not to help, because the
+optimizer still crammed the front and left the new day empty, so the same refusal returned and the owner
+pressed again.
 
 **Assumed windows are batched and the cost trade is reported, not taken, as of 2026-08-07 (`WF-047`).**
 `google_places:search_text` is **US$0.025 a place** and is the only paid step that scales with trip size —

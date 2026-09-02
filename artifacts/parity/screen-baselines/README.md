@@ -26,6 +26,24 @@ Auto-Bill and must not be described as if it does — Auto-Bill has two screens
 and the planner has nine, so a whole-screen comparison between them is
 meaningless. Parity with the donor is `check_element_parity.py`'s job.
 
+## The fixture trip these were captured from is missing
+
+Recorded 2026-09-02, because it costs a session an hour to rediscover. The approved images
+show a trip named **"Taipei 4-Day Food & Night…"** in the sidebar's trip selector, and that
+trip is in neither `data/tourist.sqlite3` (which holds only "Baseline set") nor the hosted
+Postgres. Capturing against any other trip changes that dropdown on **every** screen, so the
+comparison reports drift on ~116 of 136 images that is entirely the trip name — cropping the
+diff shows the changed pixels are the selector, not a layout.
+
+So stage 9 cannot currently be re-approved honestly: replacing 136 images captured from a
+trip nobody can reproduce would silently change what the gate compares, and this file's own
+history is about a gate that compared nothing under a green tick. Until the fixture trip is
+restored or deliberately re-based, `check_screen_baselines.py` reporting **DID NOT RUN**
+(exit 2) with no `screen-current/` present is the accurate state, not a failure to paper over.
+
+Re-basing is a decision, not a fix: it needs one named trip, kept, with its id and owner
+token written down here.
+
 ## Reproducing
 
 ```bash

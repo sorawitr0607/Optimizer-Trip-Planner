@@ -10,6 +10,18 @@
   1,000 rows. Free operations never read spend before they are recorded.
 - Navigation must not fetch `discovery_runs.candidates_json`. Use the lightweight header
   or report methods unless the caller actually renders or ranks the candidate catalogue.
+- Read the catalogue through `PlannerActions.get_latest_discovery`, never
+  `self.store.get_latest_discovery`. It memoises on the run id and revalidates with the
+  111-byte header. Sound only because `discovery_runs` is append-only by trigger, so the id
+  is the invalidation — this is not licence to cache anything mutable.
+- `journey()` and anything else that only needs *which* choices exist uses
+  `store.list_candidate_actions()`. `list_candidate_choices()` is `SELECT *` and carries
+  `candidate_json` on every row.
+- The job poll is `JobQueue.status()`; `JobQueue.get()` is the worker's. A poll must not
+  select `result_json` before there is one to return.
+- Quote `octet_length`, not `pg_total_relation_size / n_live_tup`. The latter reports
+  compressed TOAST and understated the catalogue fivefold in the figures written before
+  2026-09-02.
 
 ## Graphify cadence
 

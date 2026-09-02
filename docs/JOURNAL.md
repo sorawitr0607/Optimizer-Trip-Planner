@@ -5410,3 +5410,189 @@ piggy-backs Google no-match ids on an existing catalogue response, adds only one
 evidence row, and passed the SQL egress guard. It cannot erase the 15.93 GB already counted by Supabase,
 and the previously measured roughly 602 KB decoded `/places` catalogue response remains the next
 response-size target.
+
+## Six reports, and two of them were one bug, 2026-09-02
+
+Owner testing returned six: Supabase counted about **1.3 GB again** the previous day; the two
+Google photograph controls stayed hidden for good once hidden, and did not share their
+condition; building a plan sometimes failed with `Failed to fetch`; the confirm-plan journey ran
+`build again → accept the criteria → add the day → add the day`; the output trip carried a lot
+of days holding only free time; and walking legs did not consider the metro.
+
+The middle four are independent. The last two are the same bug, and the first was not the bug it
+looked like.
+
+### The 15.93 GB was already fixed; what remained was five times bigger per read than recorded
+
+There is no management-API token in `.env`, so the dashboard could not be read. `pg_stat_statements`
+is better evidence anyway, and it is unambiguous: the two `SELECT * FROM paid_usage` statements
+account for **45,978,476 rows over 4,896 calls**, and both stopped being reachable on 2026-08-28.
+The window simply starts on 19 August, before the fix. Nothing in the current code repeats that
+mechanism.
+
+The live paths that remained were `SELECT *` reads, and re-measuring them corrected a figure this
+repository had been quoting for a week. The earlier numbers came from
+`pg_total_relation_size / n_live_tup`, which reports **compressed TOAST**. `octet_length` reports
+what crosses the wire, and it is about five times larger: `candidates_json` is **630 KB at the
+median, 3.23 MB at the largest and 141 KB at the smallest** across 19 runs, against the "134 KB
+mean" the disk figure implied. Every egress number in `CLAUDE.md` now cites `octet_length`.
+
+Three fixes, and the first is the one that mattered:
+
+- `PlannerActions.get_latest_discovery` memoises the run on its id and revalidates with the
+  111-byte header. `discovery_runs` is append-only by trigger, so a run id names bytes that cannot
+  change — the invalidation is the id and never a clock, which is the whole reason this is not the
+  mutable caching the previous handoff warned against. It matters because
+  `_current_choice_inputs` runs on **every swipe** and each decision also invalidates the ranking
+  the page refetches, so a twenty-card session paid for the same immutable blob about forty times:
+  **129 MB to record twenty verdicts** on the largest trip. `as_dict()` is
+  `json.loads(canonical_json)`, a fresh dict per call, so nothing shared is mutable.
+- `store.list_candidate_actions()` is two columns. `journey()` runs on every page load and wants
+  only which actions exist; the `SELECT *` it replaced carries `candidate_json` at **1.1 KB a row**
+  and ran **8,110 times** in two weeks. `journey()` still takes the wide read in the one branch
+  that reads `operational_evidence`, and nowhere else.
+- `JobQueue.status()` is the poll's read. **This one is smaller than it first appears and the
+  claim was corrected before committing:** `result_json` averages 479 KB and reaches 3.76 MB, but
+  it is NULL until `complete` writes it, so the sixty polls a build makes were each reading a NULL.
+  What it fixes is a poll meeting a *finished* job it was not waiting for — a reload, a second tab,
+  a retried poll — where `SELECT *` moved up to 3.76 MB to answer a status string. An earlier draft
+  of this work asserted 312 MB for it; that was arithmetic on the disk average and on an assumption
+  that the column was always populated. Both were wrong.
+
+The statement was run against the real Postgres rather than SQLite alone. `AGENTS.md` records a
+Postgres-only failure the whole suite could not reach — `hashtext` on a NUL byte — and a new
+statement inside a `CASE` with two translated placeholders is exactly that shape of risk.
+
+### The 90-day expiry on a paid refusal was never read
+
+`PROVIDER_NO_MATCH_DAYS` exists because "a permanent refusal would be a worse lie than the
+repeated charge it replaces". Nothing compared it. `list_place_evidence` deliberately does no
+freshness filtering — venue notices and assumed windows judge their own — so the expiry was
+decorative and both photo controls stayed withdrawn for ever. That is the whole of "it is always
+hidden after I once hid it". `actions._provider_no_match_ids()` is now the one read both callers
+use and it compares `expires_at`.
+
+The second half of the report was that the controls should behave alike, and they did not: the
+deck withdrew on a failed ask and the detail panel did not, so one card offered the same purchase
+in one place and refused it in the other. `PlacesPage.photoWithheld(placeId)` is now the single
+condition. Affordability is deliberately excluded from it — whether the cap allows a purchase is a
+fact about the trip, and the two surfaces are right to differ: the deck has no button, the panel
+keeps a disabled one under the price so the reason stays on screen.
+
+`PlaceDeck` takes `photoWithheld` and `photoErrorOf` as **functions of a place id**. The booleans
+they replaced were derived from `cardId` — the id the deck last *reported* — while the card drawn
+is `queue[0]`; they agree in the settled state and need not during a decision, so the condition
+was correct by the parent's bookkeeping rather than by construction. Worth being precise about
+what that was and was not: it was not the cause of the permanence, and the deck draws one card, not
+a stack. An earlier note here claimed both.
+
+### One dropped poll killed a build the worker was finishing
+
+`fetch` rejects with a bare `TypeError: Failed to fetch` for anything below HTTP. A build is
+30-90 seconds against a 1.5-second poll, so one run asks about sixty times, and a single rejection
+anywhere in that sequence threw out of `rpc`'s loop. The work usually completed on the worker —
+the same shape as the 843-second sweep that `JOB_TIMEOUT_MS` already documents.
+
+A poll is a pure read of a row a worker owns, so it retries. Only network-level failures: an
+`ApiError` means the server answered, and retrying a 404 `unknown_job` or 403 `not_your_trip`
+would bury a real refusal under a five-minute wait. The existing `deadline` still bounds it and
+fires as `job_unreachable`. The initial enqueue is deliberately **not** retried: `rpc` serves every
+method, including paid ones, and a blind repeat of a POST is not the same kind of safe.
+
+### The empty days and the repeated "add a day" were one missing objective term
+
+`_search_objective` had nothing that preferred using a day, and `travel_minutes` actively preferred
+not to — every day a plan opens costs another base-to-place-and-back journey. So the cheapest
+arrangement of twelve places over seven days is to pile them onto as few days as possible, and that
+is what it did. Measured on twelve ordinary places, seven ordinary days, every pair fifteen minutes
+apart, nothing closed and no threshold set:
+
+    best_balance     [0, 0, 0, 0, 0, 6, 6]
+    relaxed          [0, 0, 0, 0, 4, 4, 4]
+    more_highlights  [0, 0, 0, 0, 0, 3, 9]
+
+All twelve places scheduled, no rule broken, reconciliation empty — which is why no existing test
+could have caught it, and why it read as "the output trip is so weird". It was the plan the
+objective asked for.
+
+`_day_crowding` is the sum of the squares of each day's visit count, inserted as the sixth term.
+Squares rather than a count of empty days, because a count is indifferent between `[6, 6]` and
+`[11, 1]` while squares fall as the load levels out — one number for "use the days" and "do not
+cram one". Its position is the design: after `-experience`, so a smoother trip can never cost a
+chosen place; after the comfort count, so it cannot buy spread by breaking a threshold; before
+`travel_minutes`, because a second hotel round trip is the honest price of not spending a day
+indoors. The same input now returns `[1, 1, 2, 2, 2, 2, 2]` on all three variants.
+
+`_greedy_sequences` was separately plain first-fit over the dates in order, filling day one to its
+ceiling before day two was offered anything. It takes the emptiest day first now, ties broken on
+date, because it is the floor `_insertion_search` lands on when the budget fires and a real city's
+catalogue is exactly where that happens. Forced with a 1 ms budget it returns `[2, 2, 2, 2, 2, 1, 1]`.
+
+A one-day trip has one arrangement and the term is constant for it, which is why all **27 historic
+regressions** are unmoved — they are single-day cases by construction, and the two-day ones were
+already `[1, 1]`.
+
+**This is also why "add the day" needed pressing twice.** Extending the trip did not help: the
+optimizer still crammed the front and left the new day empty, so the same `NO_TIME_CAPACITY`
+refusal returned.
+
+### The metro was fetched, stored, and then thrown away
+
+`_usable_route_statuses` grouped `estimated` with `accepted_estimate` and withheld both from a
+`ready_to_schedule` trip, on the reasoning that a scheduled plan must not rest on a guess. That is
+right about `accepted_estimate` and wrong about a published timetable. `refresh_transit_routes` had
+always run ungated and stored transit legs beside the walking ones; `_best_route` had always taken
+the fastest route for a pair. The legs were simply filtered out of the snapshot before `_best_route`
+could see them, so **every scheduled plan laid the city out on foot and by car** while holding the
+rides in the database.
+
+`estimated` is emitted by precisely two things in this repository — `GtfsTransitProvider` from a
+published timetable and `OsmMetroProvider` from a subway relation's topology — which is what makes
+admitting it a narrow rule rather than a relaxation. `accepted_estimate` is unchanged and stays
+Explore-only: a crow-flies line inflated by `ACCEPTED_ROUTE_DETOUR` is fabricated, not merely
+unrouted. The two statuses had always been separate and nothing had used the difference.
+
+Measured on a cross-city pair holding a 55-minute walk and a 15-minute ride, with the old rule
+restored for the comparison: `walk 55` before, `transit 15` after. Nothing about a missing route
+softened — `_missing_route_edges` and `ROUTE_UNVERIFIED` are untouched, so admitting a real journey
+never became inventing one, and a fabricated straight line is still refused on a scheduled trip.
+
+### Four refusals became one press
+
+The batching rule from 2026-09-01 was right and scoped too narrowly. Comfort figures were submitted
+together, but each *other* condition kept its own control and its own rebuild, so the owner learned
+the next condition only after paying a full build for the last — every one of which was derivable
+from the first draft. The conditions were also derived in three places at three depths of
+`OptimizePage`, which is how a button and the sentence beside it come to disagree.
+
+`shared/planDecisions.ts` is the one derivation and is pure, so it is unit-tested directly rather
+than through a page render. `resolveAllAndRebuild` applies `outstanding` in order and then calls
+`autoResolveAndGenerate` once. Order is load-bearing: the two acceptances are per-trip writes and
+survive a setup change, so the **date write goes last** — it moves the setup hash, discovery stores
+the hash it ran against, and the catalogue must be re-keyed with `force_refresh: false` first, which
+is the lesson the old `addDayAndRebuild` had already learned. "Cut the places that do not fit" stays
+as a genuine alternative, because it is a different outcome rather than a further step.
+`acceptAll` and `addDayAndRebuild` were deleted as the orphans this made them.
+
+### Release evidence, and the one gate that could not run
+
+**12 of 13** stages passed: hosted-egress checks first, **707 Python tests**, the 20 atomic and 7
+interaction optimizer regressions across all three variants, fixture structure, graph integrity,
+provider redaction, the design-token gate, element parity, reference workbooks, typecheck, lint and
+**190 web tests**. 24 tests were added.
+
+**Stage 9 did not run, and re-approving it would have been dishonest.** The approved 136 images show
+a trip named "Taipei 4-Day Food & Night…" in the sidebar selector, and that trip exists in neither
+`data/tourist.sqlite3` nor the hosted Postgres. A full 136/136 capture against the only available
+local trip reported drift on 116 images; cropping the diff showed the changed pixels were the trip
+selector, not a layout. Replacing the approved set with images from a different trip would silently
+change what the gate compares, which is the failure `artifacts/parity/screen-baselines/README.md`
+exists to prevent — so that capture was deleted and the stage reports `DID NOT RUN` (exit 2), which
+is the accurate state. The gap is written up in that README as a decision to take, not a fix.
+`OptimizePage` does legitimately change appearance — a step list and a new button label — so it
+needs re-approving once a fixture trip is named and kept.
+
+The Supabase claim stays narrow, as it did last time. This removes repeated reads of an immutable
+catalogue, narrows navigation to two columns, and stops a finished payload answering a status
+string. It cannot remove egress already counted, and the account's own usage and any standing
+restriction remain an account matter to verify live.
