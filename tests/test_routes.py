@@ -756,6 +756,38 @@ class TransitRouteTest(unittest.TestCase):
         self.assertEqual("estimated", longest["status"])
         self.assertEqual("gtfs", longest["provider"])
 
+    def test_every_transit_pair_is_swept_because_a_pair_costs_no_request(self) -> None:
+        """The Tokyo plan's 8.5, 9.5, 15.7 and 17.6 km walks, at the source.
+
+        `refresh_transit_routes` runs through `_refresh_routes_with`, so it inherited
+        `MAX_ROUTE_REQUESTS` — a cap that prices *outbound requests* at roughly 2.1s each.
+        A transit pair is not one: the graph is built once and every pair after that is a
+        Dijkstra against memory. `collectRouteEvidence` calls this exactly once, so sixty
+        of a 22-place trip's 462 ordered pairs is 13% coverage, and the seven pairs in
+        eight that held no metro route left the optimizer taking "the shortest route it
+        holds" — the walk, however far.
+
+        The cap still binds a provider that really does spend a request per pair, which is
+        the half that must not change: lifting it for walking would restore the twelve
+        hundred seconds `collectRouteEvidence` was written to stop spending.
+        """
+
+        with patch("travel_planner.actions.MAX_ROUTE_REQUESTS", 2):
+            transit = self.actions.refresh_transit_routes(self.trip.trip_id)
+            walking = self.actions.refresh_routes(self.trip.trip_id)
+
+        # More pairs than the patched cap, or this asserts nothing at all.
+        self.assertGreater(transit["pairs_needed"], 2)
+        # Swept whole: nothing left behind, and the reply says so rather than reporting a
+        # cap it did not apply.
+        self.assertEqual(0, transit["skipped_over_cap"])
+        self.assertEqual(transit["pairs_needed"], transit["request_cap"])
+        self.assertEqual(transit["pairs_needed"], transit["fetched"] + transit["failed"])
+
+        # The paid per-pair provider is still capped, unchanged.
+        self.assertEqual(2, walking["request_cap"])
+        self.assertGreater(walking["skipped_over_cap"], 0)
+
     def test_transit_legs_reach_a_scheduled_trip_s_optimizer_input(self) -> None:
         """The layer the 2026-09-02 transit fix missed, on the trip mode it missed.
 
@@ -838,6 +870,137 @@ class TransitRouteTest(unittest.TestCase):
         self.assertEqual(0, report["fetched"])
         self.assertTrue(report["provider_errors"])
         self.assertIn("GTFS feed unusable", report["provider_errors"][0])
+
+
+class MetroInterchangeTest(unittest.TestCase):
+    """Two lines meeting at one station must actually connect.
+
+    A `route=subway` relation lists its *own* platform nodes, so an interchange arrives
+    as two unrelated ids and the graph had no edge between them. `journey` already
+    charges a transfer penalty and counts the change; it was never offered one. Measured
+    against live Overpass for Tokyo before this was fixed: 1489 stops, 2194 edges, every
+    successful journey reporting `transfers=0`, and Hama-rikyu to Shibuya — 5.6 km across
+    the middle of the city — answering `None`. After grouping: 496 stations, 6 of 7 sample
+    pairs served, and that pair a 33-minute ride with 8 minutes of walking.
+    """
+
+    #: Line A ends at "Interchange"; line B starts at "Interchange" 111 m away, tagged by
+    #: a different operator as a separate node. That is the whole of the real case.
+    ELEMENTS = [
+        {"type": "node", "id": 11, "lat": 25.0400, "lon": 121.5700,
+         "tags": {"name": "Alpha", "railway": "station", "station": "subway"}},
+        {"type": "node", "id": 12, "lat": 25.0500, "lon": 121.5800,
+         "tags": {"name": "Interchange", "railway": "station", "station": "subway"}},
+        {"type": "node", "id": 22, "lat": 25.0510, "lon": 121.5800,
+         "tags": {"name": "Interchange", "railway": "station", "station": "subway"}},
+        {"type": "node", "id": 23, "lat": 25.0600, "lon": 121.5900,
+         "tags": {"name": "Beta", "railway": "station", "station": "subway"}},
+        {"type": "relation", "id": 90, "tags": {"route": "subway", "ref": "A"},
+         "members": [{"type": "node", "ref": 11}, {"type": "node", "ref": 12}]},
+        {"type": "relation", "id": 91, "tags": {"route": "subway", "ref": "B"},
+         "members": [{"type": "node", "ref": 22}, {"type": "node", "ref": 23}]},
+    ]
+
+    ALPHA = (25.0400, 121.5700)
+    BETA = (25.0600, 121.5900)
+
+    def test_two_lines_sharing_a_station_are_one_station(self) -> None:
+        from travel_planner.transit import graph_from_osm
+
+        graph = graph_from_osm(self.ELEMENTS)
+        # Four platform nodes, three stations: the two "Interchange" nodes are one.
+        self.assertEqual(3, len(graph.stops))
+
+        journey = graph.journey(origin=self.ALPHA, destination=self.BETA)
+        self.assertIsNotNone(journey)
+        assert journey is not None
+        self.assertEqual(1, journey.transfers)
+        self.assertEqual(("A", "B"), journey.boarded_routes)
+
+    def test_without_grouping_the_same_trip_has_no_answer(self) -> None:
+        """The negative control, and the exact shape of the Tokyo failure.
+
+        Radius zero is the old graph: nothing merges, the two lines never touch, and a
+        journey needing the change is refused — so the optimizer sees no transit route
+        for the pair and takes the walk, however far.
+        """
+
+        from travel_planner import transit
+
+        with patch.object(transit, "STATION_GROUP_METRES", 0.0):
+            graph = transit.graph_from_osm(self.ELEMENTS)
+            self.assertEqual(4, len(graph.stops))
+            self.assertIsNone(graph.journey(origin=self.ALPHA, destination=self.BETA))
+
+    def test_a_shared_name_far_apart_is_not_welded_together(self) -> None:
+        """Two different stations that happen to share a name must stay separate, or the
+        graph invents a ride between them. The bound is why the radius exists."""
+
+        from travel_planner.transit import graph_from_osm
+
+        distant = [
+            dict(element) for element in self.ELEMENTS
+        ]
+        # Move line B's "Interchange" 11 km away, keeping the name identical.
+        for element in distant:
+            if element.get("id") == 22:
+                element["lat"] = 25.1500
+        graph = graph_from_osm(distant)
+
+        self.assertEqual(4, len(graph.stops))
+        self.assertIsNone(graph.journey(origin=self.ALPHA, destination=self.BETA))
+
+
+class MetroQueryRetryTest(unittest.TestCase):
+    """A fast 5xx must not cost the trip its whole transit graph.
+
+    The third site of a fault the codebase already fixed twice — `_attempt_block` for
+    discovery, `_drawing_elements` for the basemap. Reproduced on the Tokyo network while
+    this was being written: two consecutive HTTP 504s, then 200 on the identical query.
+
+    It costs more here than at either of the others. A thin catalogue or a plain map is a
+    degraded answer; the metro graph is **one** request, so losing it sends every pair
+    back to walking — which is the 8.5 to 17.6 km of walking the owner reported.
+    """
+
+    def setUp(self) -> None:
+        from travel_planner.providers import OsmMetroProvider
+
+        self.provider = OsmMetroProvider(destination="Tokyo, Japan")
+        self.provider.RETRY_PAUSE_SECONDS = 0
+
+    def _answers(self, *outcomes):
+        seen = {"n": 0}
+
+        def call(request, timeout=None):
+            outcome = outcomes[min(seen["n"], len(outcomes) - 1)]
+            seen["n"] += 1
+            if isinstance(outcome, Exception):
+                raise outcome
+            return outcome
+
+        self.provider._osm._request_json = call  # type: ignore[method-assign]
+        return seen
+
+    def test_a_fast_five_hundred_is_asked_again(self) -> None:
+        seen = self._answers(ProviderUnavailable("Provider HTTP 504"), {"elements": []})
+        self.assertEqual({"elements": []}, self.provider._metro_payload("q"))
+        self.assertEqual(2, seen["n"])
+
+    def test_a_refusal_is_an_answer_and_is_not_retried(self) -> None:
+        seen = self._answers(ProviderUnavailable("Provider HTTP 429"))
+        with self.assertRaises(ProviderUnavailable):
+            self.provider._metro_payload("q")
+        self.assertEqual(1, seen["n"])
+
+    def test_a_slow_failure_is_not_retried(self) -> None:
+        """It died of the query's own 90s timeout; asking again spends 90s to hear it."""
+
+        self.provider.FAST_FAILURE_SECONDS = -1
+        seen = self._answers(ProviderUnavailable("Provider HTTP 504"))
+        with self.assertRaises(ProviderUnavailable):
+            self.provider._metro_payload("q")
+        self.assertEqual(1, seen["n"])
 
 
 class OsmMetroTransitTest(unittest.TestCase):

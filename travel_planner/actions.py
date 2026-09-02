@@ -3675,12 +3675,24 @@ class PlannerActions:
         optimizer takes the shortest route it holds for a pair. So a short hop keeps
         its walk and a cross-city hop gains a ride, and neither decision is made
         here.
+
+        Every pair is swept, not the first `MAX_ROUTE_REQUESTS` of them: these providers
+        set `answers_pairs_locally`, because after one graph build a pair is a Dijkstra
+        against memory rather than a request. Sixty of a Tokyo trip's 462 pairs left seven
+        legs in eight with no metro route to be shortest, which is what put four
+        multi-kilometre walks in a plan the owner correctly refused.
+
+        The sweep is still **bounded** — by `ROUTE_SWEEP_SECONDS`, the same deadline
+        `refresh_routes` uses. It had none at all before, which was survivable only
+        because the count cap was doing the bounding by accident; with the cap gone the
+        deadline is the whole of it, and a job that can run long must be bounded.
         """
 
         return self._refresh_routes_with(
             self.transit_provider or self._default_transit_provider(trip_id),
             trip_id,
             force=force,
+            deadline=monotonic() + ROUTE_SWEEP_SECONDS,
         )
 
     #: How far a GTFS stop may be from the trip's centre for the feed to count as
@@ -4166,7 +4178,27 @@ class PlannerActions:
                     and existing[key].get("provider") != OpenRouteServiceMatrixProvider.name
                 )
             ]
-        attempted, skipped = pairs[:MAX_ROUTE_REQUESTS], pairs[MAX_ROUTE_REQUESTS:]
+        # `MAX_ROUTE_REQUESTS` prices *outbound requests*, so a provider that makes none
+        # per pair is not what it is counting.
+        #
+        # This is why the owner's Tokyo plan walked 8.5, 9.5, 15.7 and 17.6 km between
+        # sights in a city with the densest metro on earth. `refresh_transit_routes` runs
+        # through this same function, `collectRouteEvidence` calls it exactly **once**, and
+        # sixty pairs of a 22-place trip's 462 is 13% — so seven pairs in eight held only a
+        # walking route, the optimizer took "the shortest route it holds for a pair", and
+        # the shortest it held was the walk. Nothing was fabricated and nothing was
+        # unverified: the metro leg simply did not exist to be compared against.
+        #
+        # A transit pair is not a request. `OsmMetroProvider.build_graph` memoises after
+        # one Overpass call and `GtfsTransitProvider` reads a local file, so every pair
+        # after the first is a Dijkstra over a graph already in memory — no network, and
+        # priced at US$0.00, which `_spend` answers without reading the ledger. Capping
+        # that at sixty bought nothing and cost the plan its trains.
+        #
+        # The **deadline** still bounds the job, and it is the right bound: it measures the
+        # thing that can actually run long. Both callers pass one.
+        cap = len(pairs) if getattr(provider, "answers_pairs_locally", False) else MAX_ROUTE_REQUESTS
+        attempted, skipped = pairs[:cap], pairs[cap:]
 
         fetched = cached = failed = 0
         errors: list[str] = []
@@ -4239,7 +4271,7 @@ class PlannerActions:
             "from_cache": cached,
             "failed": failed,
             "skipped_over_cap": len(skipped),
-            "request_cap": MAX_ROUTE_REQUESTS,
+            "request_cap": cap,
             "provider_errors": errors,
             # How many places still have no route at all, in any mode — the count that
             # decides whether asking again is worth a caller's time. `skipped_over_cap`

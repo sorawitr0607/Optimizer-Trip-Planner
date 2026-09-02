@@ -2691,6 +2691,12 @@ class OsmMetroProvider:
     # A metro network changes on the timescale of construction projects.
     cache_ttl_days = 30
     mode = "transit"
+    #: Every pair after the first is answered from something already in memory -- a
+    #: memoised graph here, a local feed in `GtfsTransitProvider` -- so a pair costs no
+    #: outbound request and `MAX_ROUTE_REQUESTS` is not counting anything real. It is read
+    #: by `PlannerActions._refresh_routes_with`, which sweeps every pair for a provider
+    #: that sets this and stays bounded by its deadline instead.
+    answers_pairs_locally = True
 
     def __init__(self, destination: str = "", graph: Any | None = None) -> None:
         self.destination = destination
@@ -2724,18 +2730,7 @@ out body qt;
                 raise ProviderUnavailable("no destination to look up a metro network for")
             location = self._osm._find_destination(self.destination)
             bbox = self._osm._bounded_bbox(location)
-            payload = self._osm._request_json(
-                Request(
-                    self._osm.overpass_url,
-                    data=urlencode({"data": self.metro_query(bbox)}).encode("utf-8"),
-                    headers={
-                        "Accept": "application/json",
-                        "Content-Type": "application/x-www-form-urlencoded",
-                        "User-Agent": self._osm.user_agent,
-                    },
-                    method="POST",
-                )
-            )
+            payload = self._metro_payload(self.metro_query(bbox))
             graph = graph_from_osm(payload.get("elements") or [])
             if not graph.edges:
                 raise ProviderUnavailable(
@@ -2743,6 +2738,50 @@ out body qt;
                 )
             self._graph = graph
         return self._graph
+
+    #: The same fault, and the same two numbers, as `_attempt_block` and
+    #: `_drawing_elements`. Only a *fast* 5xx is retried: a request that died at the
+    #: query's own 90s timeout would spend another 90s to fail identically.
+    FAST_FAILURE_SECONDS = 20
+    RETRY_PAUSE_SECONDS = 6
+
+    def _metro_payload(self, query: str) -> dict[str, Any]:
+        """The metro query, retried once if it failed fast. The third site of this fault.
+
+        `overpass-api.de` balances across backends and an unhealthy one answers 504 in
+        seconds. `_attempt_block` has been retrying discovery since 2026-08-08 and
+        `_drawing_elements` the basemap since 2026-08-10; the metro query never got it,
+        and reproduced immediately when it was looked for — **two consecutive 504s on the
+        Tokyo network at 18s, then 200 on the identical query.**
+
+        It matters more here than it reads. A failed block costs a thinner catalogue and a
+        failed basemap costs a plainer map, but the whole transit graph is one request:
+        lose it and *every* pair falls back to walking, which is how a metro city ends up
+        with 15 km on foot between sights. One transient gateway error should not cost a
+        plan its trains.
+        """
+
+        started = monotonic()
+        request = lambda: self._osm._request_json(  # noqa: E731 - one shape, used twice
+            Request(
+                self._osm.overpass_url,
+                data=urlencode({"data": query}).encode("utf-8"),
+                headers={
+                    "Accept": "application/json",
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "User-Agent": self._osm.user_agent,
+                },
+                method="POST",
+            )
+        )
+        try:
+            return request()
+        except ProviderUnavailable as error:
+            elapsed = monotonic() - started
+            if "HTTP 5" not in str(error) or elapsed > self.FAST_FAILURE_SECONDS:
+                raise
+        sleep(self.RETRY_PAUSE_SECONDS)
+        return request()
 
     def cache_descriptor(
         self, origin: dict[str, Any], destination: dict[str, Any]
@@ -2814,6 +2853,12 @@ class GtfsTransitProvider:
     # file is the deliberate act that should invalidate these.
     cache_ttl_days = 30
     mode = "transit"
+    #: Every pair after the first is answered from something already in memory -- a
+    #: memoised graph here, a local feed in `GtfsTransitProvider` -- so a pair costs no
+    #: outbound request and `MAX_ROUTE_REQUESTS` is not counting anything real. It is read
+    #: by `PlannerActions._refresh_routes_with`, which sweeps every pair for a provider
+    #: that sets this and stays bounded by its deadline instead.
+    answers_pairs_locally = True
 
     def __init__(self, feed: Any | None = None) -> None:
         self._feed = feed

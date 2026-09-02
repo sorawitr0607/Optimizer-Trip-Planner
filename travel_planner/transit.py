@@ -226,6 +226,86 @@ def is_stop(tags: dict) -> bool:
     return any(str(tags.get(key, "")) in values for key, values in STOP_TAGS)
 
 
+#: How far apart two platform nodes of the *same named* station may sit.
+#:
+#: A big interchange spreads a long way underground — Shibuya's Fukutoshin platforms are
+#: a few hundred metres from its Ginza ones — so this is generous. It is bounded only
+#: because a name is not unique: grouping on the name alone would weld together two
+#: genuinely different stations that happen to share one, and invent a ride between them.
+STATION_GROUP_METRES = 400.0
+
+
+def _station_name_key(stop: Stop) -> str:
+    """What counts as the same station's name. Case and spacing folded; `駅`/`Station`
+    dropped, because one operator tags `渋谷` where the next tags `渋谷駅`."""
+
+    name = (stop.name_en or stop.name).strip().lower()
+    for suffix in ("station", "駅", "stn"):
+        if name.endswith(suffix):
+            name = name[: -len(suffix)].strip()
+    return "".join(character for character in name if character.isalnum())
+
+
+def _station_of(stops: dict[str, Stop]) -> dict[str, str]:
+    """Map every platform node to the one node standing for its station.
+
+    **The graph had no interchanges at all, and that is why a metro city still walked.**
+    A `route=subway` relation lists its own platform nodes, so two lines meeting at one
+    station arrive as two unrelated ids with no edge between them. `journey`'s Dijkstra
+    already charges `TRANSFER_PENALTY_MINUTES` for a route change and counts the transfer
+    — it was simply never offered one, so every answer it could give was a single-line
+    ride and everything needing a change came back `None`. Measured on live Overpass for
+    Tokyo before this existed: 1489 stops, 2194 edges, **every** successful journey
+    reporting `transfers=0`, and Hama-rikyu to Shibuya — 5.6 km across central Tokyo —
+    answering "no metro connection", which is what left an 8.5 km walk in the owner's
+    plan.
+
+    Merging the nodes is the fix rather than adding transfer edges, because a transfer
+    edge would have to spend its walk as `ride_minutes` — invisible to `walking_minutes`,
+    which is the number the comfort cap measures, so a leg would pass a walking budget by
+    hiding the walk. Sharing one node instead lets the existing penalty mean what it
+    already says it means: finding the platform and reading the sign.
+
+    Same normalised name, within `STATION_GROUP_METRES`, single-linkage. Conservative on
+    purpose — an interchange whose two halves carry *different* names (Tokyo has several)
+    stays unmerged, which loses a connection rather than inventing one.
+    """
+
+    groups: dict[str, list[Stop]] = {}
+    for stop in stops.values():
+        key = _station_name_key(stop)
+        if key:
+            groups.setdefault(key, []).append(stop)
+
+    canonical = {stop_id: stop_id for stop_id in stops}
+    for members in groups.values():
+        if len(members) < 2:
+            continue
+        # Single-linkage within the radius: platforms chain across a long interchange
+        # without letting one hop of 400 m become a licence for a kilometre.
+        unassigned = sorted(members, key=lambda stop: stop.stop_id)
+        while unassigned:
+            seed = unassigned.pop(0)
+            cluster, frontier = [seed], [seed]
+            while frontier:
+                current = frontier.pop()
+                near = [
+                    stop
+                    for stop in unassigned
+                    if metres(
+                        current.latitude, current.longitude, stop.latitude, stop.longitude
+                    )
+                    <= STATION_GROUP_METRES
+                ]
+                for stop in near:
+                    unassigned.remove(stop)
+                    cluster.append(stop)
+                    frontier.append(stop)
+            for stop in cluster:
+                canonical[stop.stop_id] = seed.stop_id
+    return canonical
+
+
 def graph_from_osm(elements: list[dict]) -> TransitGraph:
     """Build a graph from an Overpass answer for subway routes and stations.
 
@@ -256,6 +336,11 @@ def graph_from_osm(elements: list[dict]) -> TransitGraph:
             name_en=str(tags.get("name:en") or "").strip(),
         )
 
+    canonical = _station_of(stops)
+    stops = {
+        stop_id: stop for stop_id, stop in stops.items() if canonical[stop_id] == stop_id
+    }
+
     edges: dict[tuple[str, str], Edge] = {}
     for element in elements:
         if element.get("type") != "relation":
@@ -263,9 +348,9 @@ def graph_from_osm(elements: list[dict]) -> TransitGraph:
         tags = element.get("tags") or {}
         route_id = str(tags.get("ref") or tags.get("name") or element.get("id"))
         ordered = [
-            f"n{member['ref']}"
+            canonical[f"n{member['ref']}"]
             for member in element.get("members") or []
-            if member.get("type") == "node" and f"n{member['ref']}" in stops
+            if member.get("type") == "node" and f"n{member['ref']}" in canonical
         ]
         for left, right in zip(ordered, ordered[1:]):
             if left == right:
