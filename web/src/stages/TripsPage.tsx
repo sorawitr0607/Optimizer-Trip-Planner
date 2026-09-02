@@ -925,11 +925,27 @@ const DEMO_DESTINATIONS: DemoCity[] = [
   },
 ];
 
+/**
+ * Starting points for the creator form. `name` becomes the **trip's** name.
+ *
+ * So it carries no day count. It used to — "Tokyo 6-Day City & Culture" — and
+ * `applyPreset` writes it straight into the form, where it is saved as the trip name and
+ * read back by `exporters.py` as the workbook's title. Nothing recomputes it when the
+ * owner then picks their real dates, so a trip running 25 Nov to 2 Dec printed **"Tokyo
+ * 6-Day"** across the top of a workbook describing eight days, and the owner reported the
+ * workbook and the itinerary contradicting each other.
+ *
+ * The count is a *suggestion about the preset*, not a fact about the trip, so it stays
+ * where it is true: `days` renders as the card's badge and `tagKey` as its heading, both
+ * on the landing page and neither attached to anything the owner saves. A name that
+ * asserts a duration the trip does not have is the same defect as printing a placeholder
+ * as a finding — do not put one back.
+ */
 const PRESETS = [
   {
     country: "Japan",
     city: "Tokyo",
-    name: "Tokyo 6-Day City & Culture",
+    name: "Tokyo City & Culture",
     badge: "Shrines & Tech",
     days: "6 Days",
     tagKey: "landing_preset_tokyo",
@@ -937,7 +953,7 @@ const PRESETS = [
   {
     country: "Taiwan",
     city: "Taipei",
-    name: "Taipei 4-Day Food & Night Markets",
+    name: "Taipei Food & Night Markets",
     badge: "Street Food",
     days: "4 Days",
     tagKey: "landing_preset_taipei",
@@ -945,7 +961,7 @@ const PRESETS = [
   {
     country: "Portugal",
     city: "Porto",
-    name: "Porto 3-Day Riverfront & Wine",
+    name: "Porto Riverfront & Wine",
     badge: "Wine & History",
     days: "3 Days",
     tagKey: "landing_preset_porto",
@@ -953,7 +969,7 @@ const PRESETS = [
   {
     country: "Switzerland",
     city: "Interlaken",
-    name: "Switzerland 5-Day Waterfalls & Glaciers",
+    name: "Switzerland Waterfalls & Glaciers",
     badge: "Alpine",
     days: "5 Days",
     tagKey: "landing_preset_interlaken",
