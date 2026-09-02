@@ -447,7 +447,7 @@ def _solve_variant(
                 _reconciliation(
                     candidate,
                     "cannot_currently_fit",
-                    _skip_reason(snapshot, candidate, skipped, metrics),
+                    _skip_reason(snapshot, candidate, skipped, metrics, config),
                     "kept_in_unscheduled_shortlist",
                 )
             )
@@ -2263,11 +2263,53 @@ def _reconciliation(
     }
 
 
+def _fits_an_empty_day(
+    snapshot: dict[str, Any], candidate: dict[str, Any], config: dict[str, Any]
+) -> bool:
+    """Could this place be placed on a day with nothing else on it?
+
+    **This is the question "would another day help?" asked honestly**, and it is the one
+    the screen needed and did not have. A new day is, at best, another empty day — so if
+    no empty day in the trip can hold this place, no number of added days ever will.
+
+    The bug it closes. `_skip_reason` answered `NO_TIME_CAPACITY` for anything unplaced
+    that was not in `skipped`, and `must_do` places are never put in `skipped` by
+    construction (`_insertion_search` only offers the skip branch to lower priorities). So
+    a `must_do` place that could not be placed *for any reason at all* was reported as the
+    trip being short of time, and `/optimize` offered "add N days and rebuild once".
+    Measured on a place whose own minimum duration exceeds a 09:00-21:00 window: the same
+    refusal and the same button came back at 3, 4, 6, 9 and 14 days. Reported as "it
+    can't fit the leftover place and returns another plan with still the same button".
+
+    A direct probe rather than a list of conditions. Enumerating the ways a place can be
+    unplaceable — its own duration against the window, an opening interval shorter than
+    its visit, the mandatory meals and the operational prefix eating the day, a date lock
+    on a day that cannot hold it — is a second implementation of `_build_day` that would
+    drift from the first. Asking `_build_schedules` is the same judgement the solver
+    itself makes.
+
+    Cost is one build per usable day per unplaced candidate, on a schedule holding a
+    single place, and only for candidates that already failed to be scheduled.
+    """
+
+    dates = [window["date"] for window in snapshot["trip"]["usable_windows"]]
+    lock = _lock_for(snapshot, _candidate_id(candidate))
+    for day in dates:
+        if lock and lock.get("date") and lock["date"] != day:
+            continue
+        proposal: dict[str, list[dict[str, Any]]] = {value: [] for value in dates}
+        proposal[day] = [candidate]
+        if not _build_schedules(snapshot, proposal, config)["hard_errors"]:
+            return True
+    return False
+
+
 def _skip_reason(
     snapshot: dict[str, Any],
     candidate: dict[str, Any],
     skipped: set[str],
     metrics: dict[str, Any],
+    config: dict[str, Any],
 ) -> str:
     """Why a chosen place is not on the plan.
 
@@ -2286,6 +2328,10 @@ def _skip_reason(
     the same rule `WF-018` sets for rounding and `WF-039` for consent.
     """
 
+    # "No remaining capacity" is a claim that a longer trip would hold this, so it may
+    # only be made when that is true. See `_fits_an_empty_day`.
+    if not _fits_an_empty_day(snapshot, candidate, config):
+        return "NO_DAY_LONG_ENOUGH"
     if _candidate_id(candidate) not in skipped:
         return "NO_TIME_CAPACITY"
     thresholds = _thresholds(snapshot)

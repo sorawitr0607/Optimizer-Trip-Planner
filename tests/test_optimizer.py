@@ -700,6 +700,136 @@ class OptimizerCoreTest(unittest.TestCase):
                 f"{variant['variant_id']} left a day with only free time: {per_day}",
             )
 
+    @staticmethod
+    def _week_with(*, impossible_minutes: int | None) -> dict:
+        """Four ordinary places, and optionally one that no day could hold."""
+
+        dates = [f"2030-03-{day:02d}" for day in range(2, 9)]
+        places = [f"ok_{index}" for index in range(4)]
+        if impossible_minutes is not None:
+            places.append("too_long")
+        candidates = [{"id": "base", "kind": "hotel_area"}]
+        for place_id in places:
+            long = place_id == "too_long"
+            minutes = impossible_minutes if long else 90
+            candidates.append({
+                "id": place_id,
+                "kind": "culture",
+                "name": place_id,
+                # `must_do`, deliberately: `_insertion_search` never puts a must-do in
+                # `skipped`, which is the branch that used to answer NO_TIME_CAPACITY
+                # for everything unplaced.
+                "priority": "must_do",
+                "score": 60,
+                "duration_bounds": {
+                    "minimum_minutes": minutes if long else 60,
+                    "ideal_minutes": minutes,
+                    "maximum_minutes": minutes if long else 120,
+                },
+            })
+        nodes = ["base", *places]
+        return {
+            "trip": {
+                "timezone": "Asia/Taipei",
+                "local_dates": dates,
+                "usable_windows": [
+                    {"date": date, "start": "09:00", "end": "21:00"} for date in dates
+                ],
+                "accommodation_status": "booked",
+            },
+            "travellers": [],
+            "candidates": candidates,
+            "facts": [],
+            "routes": [
+                {
+                    "origin_id": origin,
+                    "destination_id": destination,
+                    "mode": "walk",
+                    "duration_minutes": 10,
+                    "walking_minutes": 10,
+                    "status": "verified",
+                }
+                for origin in nodes
+                for destination in nodes
+                if origin != destination
+            ],
+            "locks": [],
+            "weights": {},
+            "thresholds": {},
+        }
+
+    def _shortened(self, snapshot: dict, days: int) -> dict:
+        snapshot["trip"]["local_dates"] = snapshot["trip"]["local_dates"][:days]
+        snapshot["trip"]["usable_windows"] = snapshot["trip"]["usable_windows"][:days]
+        return snapshot
+
+    def test_a_place_no_day_could_hold_does_not_ask_for_another_day(self) -> None:
+        """The endless "add N days and rebuild once" button.
+
+        `_skip_reason` answered `NO_TIME_CAPACITY` for anything unplaced that was not in
+        `skipped`, and `_insertion_search` only offers the skip branch to candidates below
+        `must_do` — so a must-do place that could not be placed **for any reason at all**
+        was reported as the trip being short of time, and `/optimize` offered to lengthen
+        it. Reported as "it can't fit the leftover place and returns another plan with
+        still the same button".
+
+        A 900-minute visit cannot fit a 720-minute window at any trip length, so the
+        answer must be the same at three days and at fourteen — which is what makes
+        "adding days will not help" a fact rather than a guess.
+        """
+
+        for days in (3, 14):
+            variant = optimize_trip(
+                self._shortened(self._week_with(impossible_minutes=900), days)
+            )["variants"][0]
+            unfit = {
+                item["place_id"]: item["reason"]
+                for item in variant["reconciliation"]
+                if item["status"] == "cannot_currently_fit"
+            }
+            self.assertEqual(
+                {"too_long": "NO_DAY_LONG_ENOUGH"}, unfit, f"at {days} days"
+            )
+
+    def test_a_trip_genuinely_short_of_time_still_says_so(self) -> None:
+        """The other side of the split, or the fix would have deleted a real answer.
+
+        Four three-hour places cannot share one day and can share four, so
+        `NO_TIME_CAPACITY` has to appear at one and be gone at four — otherwise "add a
+        day" would never be offered where it does help.
+        """
+
+        def crowded(days: int) -> dict:
+            snapshot = self._shortened(self._week_with(impossible_minutes=None), days)
+            for candidate in snapshot["candidates"]:
+                if candidate["id"] != "base":
+                    candidate["duration_bounds"] = {
+                        "minimum_minutes": 150,
+                        "ideal_minutes": 180,
+                        "maximum_minutes": 200,
+                    }
+            return snapshot
+
+        one = optimize_trip(crowded(1))["variants"][0]
+        self.assertIn(
+            "NO_TIME_CAPACITY",
+            {
+                item["reason"]
+                for item in one["reconciliation"]
+                if item["status"] == "cannot_currently_fit"
+            },
+        )
+        four = optimize_trip(crowded(4))["variants"][0]
+        self.assertEqual(
+            [],
+            [
+                item
+                for item in four["reconciliation"]
+                if item["status"] == "cannot_currently_fit"
+            ],
+            "four days should hold what one could not",
+        )
+
     def test_the_greedy_floor_spreads_too(self) -> None:
         """The fallback is where a real city's catalogue actually lands.
 

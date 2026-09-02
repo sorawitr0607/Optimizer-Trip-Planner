@@ -148,6 +148,64 @@ describe("planDecisions", () => {
     expect(decisions.outstanding).toEqual([]);
   });
 
+  it("recommends dropping a place no day could hold, and never offers it a day", () => {
+    // `NO_DAY_LONG_ENOUGH` is the optimizer's answer to "could this fit an *empty*
+    // day", so no added day can change it and the offer would be an endless loop.
+    const decisions = planDecisions(
+      variantWith([unfitPlace("giant", "NO_DAY_LONG_ENOUGH")]),
+      [], new Set(), [],
+    );
+
+    expect(decisions.impossible.map((item) => item.place_id)).toEqual(["giant"]);
+    expect(decisions.needsDays).toEqual([]);
+    expect(decisions.extraDays).toBe(0);
+    expect(decisions.outstanding).toEqual([]);
+  });
+
+  it("offers a day for a capacity refusal the first time", () => {
+    const decisions = planDecisions(
+      variantWith([unfitPlace("museum", "NO_TIME_CAPACITY")]),
+      [], new Set(), [], new Set(),
+    );
+
+    expect(decisions.needsDays.map((item) => item.place_id)).toEqual(["museum"]);
+    expect(decisions.impossible).toEqual([]);
+    expect(decisions.outstanding).toEqual(["days"]);
+  });
+
+  it("stops offering a day once one was added and the place still did not fit", () => {
+    // Reported as "after you try to add the day but it still have some place that still
+    // can't fit". The optimizer cannot prove this one — it really is short of capacity —
+    // so the fact that the owner already tried is the only thing that knows better.
+    const decisions = planDecisions(
+      variantWith([unfitPlace("museum", "NO_TIME_CAPACITY")]),
+      [], new Set(), [], new Set(["museum"]),
+    );
+
+    expect(decisions.needsDays).toEqual([]);
+    expect(decisions.impossible.map((item) => item.place_id)).toEqual(["museum"]);
+    expect(decisions.extraDays).toBe(0);
+    expect(decisions.outstanding).toEqual([]);
+  });
+
+  it("keeps offering a day for a place that has not had one", () => {
+    // The memory is per place, not per trip: one place having been tried must not
+    // withdraw the offer from another that has not.
+    const decisions = planDecisions(
+      variantWith([
+        unfitPlace("tried", "NO_TIME_CAPACITY"),
+        unfitPlace("fresh", "NO_TIME_CAPACITY"),
+      ]),
+      [], new Set(), [], new Set(["tried"]),
+    );
+
+    expect(decisions.needsDays.map((item) => item.place_id)).toEqual(["fresh"]);
+    expect(decisions.impossible.map((item) => item.place_id)).toEqual(["tried"]);
+    // And the day it asks for is sized for the one place still being offered one.
+    expect(decisions.extraDays).toBe(1);
+    expect(decisions.outstanding).toEqual(["days"]);
+  });
+
   it("answers for a draft that does not exist yet", () => {
     expect(planDecisions(undefined, [], new Set(), undefined).outstanding).toEqual([]);
   });

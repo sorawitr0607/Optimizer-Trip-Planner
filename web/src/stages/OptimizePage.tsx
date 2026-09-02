@@ -10,6 +10,7 @@ import { StayPlanner } from "./StayPlanner";
 import { addDays } from "../shared/dates";
 import { wholeDraftWithDates } from "../shared/setupDraft";
 import { planDecisions } from "../shared/planDecisions";
+import { placesDaysWereAddedFor, rememberDaysAddedFor } from "../shared/dayExtension";
 
 import {
   ApiError,
@@ -460,6 +461,10 @@ export function OptimizePage() {
         const start = basics?.start_date;
         const end = basics?.end_date;
         if (!start || !end) throw new ApiError("setup_missing", {});
+        // Written before the rebuild, so a place that comes back unplaced is known to
+        // have had its day already and is recommended for removal rather than offered
+        // the same button again. See `shared/dayExtension`.
+        rememberDaysAddedFor(tripId, needsDays.map((item) => item.place_id));
         await rpc<SetupDraft>("save_setup", {
           trip_id: tripId,
           ...wholeDraftWithDates(stored.data ?? null, start, addDays(end, extraDays)),
@@ -548,12 +553,16 @@ export function OptimizePage() {
    * condition after the last one had been applied. Four builds to answer four questions
    * that were all already known after the first. See `shared/planDecisions`. */
   const {
-    unfit, selectedComfort, needsRoutes, needsDays, extraDays, outstanding,
+    unfit, impossible, selectedComfort, needsRoutes, needsDays, extraDays, outstanding,
   } = planDecisions(
     variant,
     tradeoffs.data?.rules ?? [],
     excludedComfort,
     optimizerInput?.candidates,
+    // Read on every render rather than held in state: `resolveAllAndRebuild` writes it
+    // and the rebuild that follows re-renders this, so a ref would have to be kept in
+    // step by hand. `localStorage` also survives the reload a long build invites.
+    placesDaysWereAddedFor(tripId),
   );
 
   const area = optimizerInput?.candidates?.find(
@@ -1104,6 +1113,56 @@ export function OptimizePage() {
                     </div>
                   </>
                 ) : null}
+                {/* Places no length of trip will hold, and so the one case where "add a
+                    day" must not be offered.
+
+                    Reported as: press "add 3 days and rebuild once", get another plan
+                    still showing the same button. It was not a UI bug — `_skip_reason`
+                    answered `NO_TIME_CAPACITY` for anything unplaced that was not in
+                    `skipped`, and a `must_do` place is never in `skipped`, so a place
+                    that could not fit *for any reason* was reported as the trip being
+                    short of time. Measured on a place whose own visit exceeds a
+                    09:00-21:00 window: the same refusal at 3, 4, 6, 9 and 14 days.
+
+                    `NO_DAY_LONG_ENOUGH` is the optimizer's answer to "could this fit an
+                    empty day", so removing the place really is the only way forward and
+                    that is what this offers. `cutUnfitAndRebuild` is the same mutation
+                    the capacity branch uses; only the reason and the wording differ. */}
+                {impossible.length ? (
+                  <>
+                    <p className="field-error" role="status">
+                      {/* Two ways to reach this list and they are not the same claim,
+                          so they do not share a sentence. `NO_DAY_LONG_ENOUGH` is
+                          proved — no day of any length holds the place. The other is
+                          experience: days were added for it and it still did not fit.
+                          Saying the first about the second would assert something
+                          stronger than what happened. */}
+                      ⚠ {impossible.every((item) => item.reason === "NO_DAY_LONG_ENOUGH")
+                        ? copyFormat("unfit_impossible", language, {
+                            count: impossible.length,
+                          })
+                        : copyFormat("unfit_days_did_not_help", language, {
+                            count: impossible.length,
+                          })}
+                    </p>
+                    <div className="optimize-actions">
+                      <button
+                        className="setup-primary"
+                        disabled={building || cutUnfitAndRebuild.isPending}
+                        onClick={() =>
+                          cutUnfitAndRebuild.mutate(
+                            impossible.map((item) => item.place_id ?? ""),
+                          )
+                        }
+                        type="button"
+                      >
+                        {copyFormat("unfit_drop_impossible", language, {
+                          count: impossible.length,
+                        })}
+                      </button>
+                    </div>
+                  </>
+                ) : null}
                 {/* The other way past a route nothing will measure. "Fix routes" asks
                     the routers again, which is right when they were merely busy and
                     useless when they will not answer this pair at all — and then the only
@@ -1162,119 +1221,95 @@ export function OptimizePage() {
             );
           })()}
 
-          {/* Only once the draft is usable. Before the evidence is settled every row
-              said "cannot currently fit" about a plan that had not really been attempted
-              yet — a wall of failure describing a state the owner had not reached, and
-              read as the app having decided against their places. The button above is
-              the thing to look at until then. */}
-          {activationAllowed ? (
-          <>
-          <h2 className="money-eyebrow">{copy("optimizer_reconciliation", language)}</h2>
-          {/* Three columns, and the third only says something when there is something
-              to say.
-
-              It was five — name, choice, feasibility, reason, consequence — inside a
-              horizontal scroller, so on a phone the answer was off the right-hand edge
-              and had to be dragged into view. Four of the five were also redundant for
-              the ordinary row: a place that fits reports reason `SCHEDULED` and
-              consequence `scheduled_once`, which is the feasibility column twice more in
-              different words. So `reason` and `consequence` fold into one outcome cell
-              and appear only where the place did *not* simply fit, which is the only case
-              either was ever informative.
-
-              `reconcile-table` restacks each row as a labelled card under 860px, so the
-              whole thing is readable down the page and the scroller never engages. */}
-          <div className="money-table-scroll">
-            <table className="money-table reconcile-table">
-              <thead>
-                <tr>
-                  <th>{copy("name", language)}</th>
-                  <th>{copy("choice", language)}</th>
-                  <th>{copy("feasibility", language)}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {variant.reconciliation.map((item, index) => (
-                  <tr key={`${item.name}-${index}`}>
-                    <td data-label={copy("name", language)}>
-                      {placeName(item, language, item.name)}
-                    </td>
-                    <td data-label={copy("choice", language)}>
-                      {copy(item.priority, language)}
-                    </td>
-                    <td data-label={copy("feasibility", language)}>
-                      {copy(item.status, language)}
-                      {item.status === "fits" ? null : (
-                        <>
-                          <span className="reconcile-why">
-                            {copyFrom("OPTIMIZER_CODE_TEXT", item.reason, language)}
-                          </span>
-                          <span className="reconcile-why">
-                            {copyFrom("OPTIMIZER_CODE_TEXT", item.consequence, language)}
-                          </span>
-                        </>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          </>
-          ) : null}
+          {/* "What happened to each place you kept" removed at the owner's asking.
+              Every row it could carry is now said where it is actionable: a place that
+              fits is on the timeline below, and a place that does not is in the
+              `optimize-unfit` list above with the way out beside it. The table was the
+              third place the same facts appeared and the only one with nothing to press.
+              `reason` and `consequence` stay on the wire — `/itinerary` still lists the
+              unscheduled ones — so nothing about the payload changed. */}
 
           {variant.days.some((day) => day.items.length > 0) ? (
             <>
               <h2 className="money-eyebrow">{copy("timeline", language)}</h2>
-              <div className="money-table-scroll">
-                <table className="money-table timeline-table">
-                  <thead>
-                    <tr>
-                      <th>{copy("days", language)}</th>
-                      <th>{copy("start", language)}</th>
-                      <th>{copy("end", language)}</th>
-                      <th>{copy("item_type", language)}</th>
-                      <th>{copy("place_or_leg", language)}</th>
-                      <th>{copy("duration", language)}</th>
-                    </tr>
-                  </thead>
-                  {/* Sixty identical grey rows repeating the same date twenty times was
-                      the "hard to read and distinguish" report. Three changes, no new
-                      data: the date is printed once per day and a rule marks where the
-                      day turns over, the kind is a coloured chip in the same five
-                      families the itinerary's own rows use, and the kind is finally
-                      translated — it was the raw `visit` / `buffer` code in both
-                      languages. */}
-                  <tbody>
-                    {variant.days.flatMap((day) =>
-                      day.items.map((item, index) => (
-                        <tr
-                          className={index === 0 ? "timeline-day-start" : undefined}
-                          key={`${day.date}-${index}`}
-                        >
-                          <td>{index === 0 ? day.date : ""}</td>
-                          <td className="money-num">{item.start}</td>
-                          <td className="money-num">{item.end}</td>
-                          <td>
-                            <span className={`plan-row-kind ${item.type}`}>
-                              {item.type === "buffer" &&
-                              (item.reason === "free_time_or_rest" || item.reason === "day_ends_free")
-                                ? copyFrom("OPTIMIZER_CODE_TEXT", item.reason, language)
-                                : copy(`type_${item.type}`, language)}
-                            </span>
-                          </td>
-                          {/* Empty rather than the raw `buffer` / `travel` code it used
-                              to repeat: the chip beside it already says which it is. */}
-                          <td>{item.name ? placeName(item, language, item.name) : ""}</td>
-                          <td className="money-num">
-                            {item.duration_minutes} {copy("minutes", language)}
-                          </td>
-                        </tr>
-                      )),
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              {/* One collapsible group per day, at the owner's asking.
+                  It was a single flat table of every item on every day — on a real trip
+                  sixty-odd rows, and the date printed once per day with a rule under it
+                  was as far as a flat table could go towards being readable. Grouping is
+                  what it wanted: a day is the unit a reader scans by.
+
+                  Collapsed by default, so the **summary line has to be worth reading on
+                  its own** — the date, how many places, and the hours the day actually
+                  runs. Otherwise collapsing would just hide the timeline. `<details>`
+                  rather than a click handler and state: the platform gives the toggle,
+                  the keyboard behaviour and the open/closed semantics for a screen
+                  reader, and none of it has to be right forever in our own code. */}
+              {variant.days
+                .filter((day) => day.items.length > 0)
+                .map((day) => {
+                  const visits = day.items.filter((item) => item.type === "visit").length;
+                  const from = day.items[0].start;
+                  const to = day.items[day.items.length - 1].end;
+                  return (
+                    <details className="timeline-day" key={day.date}>
+                      <summary>
+                        <span className="timeline-day-date">{day.date}</span>
+                        <span className="timeline-day-facts">
+                          {copyFormat("timeline_day_summary", language, {
+                            places: visits,
+                            start: from,
+                            end: to,
+                          })}
+                        </span>
+                      </summary>
+                      <div className="money-table-scroll">
+                        <table className="money-table timeline-table">
+                          <thead>
+                            <tr>
+                              <th>{copy("start", language)}</th>
+                              <th>{copy("end", language)}</th>
+                              <th>{copy("item_type", language)}</th>
+                              <th>{copy("place_or_leg", language)}</th>
+                              <th>{copy("duration", language)}</th>
+                            </tr>
+                          </thead>
+                          {/* The kind is a coloured chip in the same five families the
+                              itinerary's own rows use, and it is translated — it was the
+                              raw `visit` / `buffer` code in both languages. */}
+                          <tbody>
+                            {day.items.map((item, index) => (
+                              <tr key={`${day.date}-${index}`}>
+                                <td className="money-num">
+                                  {item.start}
+                                </td>
+                                <td className="money-num">
+                                  {item.end}
+                                </td>
+                                <td>
+                                  <span className={`plan-row-kind ${item.type}`}>
+                                    {item.type === "buffer" &&
+                                    (item.reason === "free_time_or_rest" || item.reason === "day_ends_free")
+                                      ? copyFrom("OPTIMIZER_CODE_TEXT", item.reason, language)
+                                      : copy(`type_${item.type}`, language)}
+                                  </span>
+                                </td>
+                                {/* Empty rather than the raw `buffer` / `travel` code it
+                                    used to repeat: the chip beside it already says
+                                    which it is. */}
+                                <td>
+                                  {item.name ? placeName(item, language, item.name) : ""}
+                                </td>
+                                <td className="money-num">
+                                  {item.duration_minutes} {copy("minutes", language)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </details>
+                  );
+                })}
             </>
           ) : (
             <p className="money-note money-note-warn">

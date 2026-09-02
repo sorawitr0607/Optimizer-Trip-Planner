@@ -289,7 +289,8 @@
       "LATE_MEAL_NOT_ACCEPTED": "This meal would still be running after your meal window closes, and you asked to avoid late meals.",
       "QUEUE_LONGER_THAN_ACCEPTED": "The queue here is longer than you said you would accept.",
       "not_your_trip": "This trip belongs to someone else on this deployment. Your own trips are on the home screen.",
-      "place_not_in_provider": "Google has no record of this place, so there is no live gallery, rating or reviews to load. The free OpenStreetMap details and its position on the map are all that exist for it — asking again will not find more."
+      "place_not_in_provider": "Google has no record of this place, so there is no live gallery, rating or reviews to load. The free OpenStreetMap details and its position on the map are all that exist for it — asking again will not find more.",
+      "NO_DAY_LONG_ENOUGH": "No single day of the trip is long enough for this place"
     },
     "th": {
       "broader_replan_required": "ต้องวางแผนใหม่ในภาพกว้าง — วันนี้รับเพิ่มไม่ไหว",
@@ -434,7 +435,8 @@
       "LATE_MEAL_NOT_ACCEPTED": "มื้อนี้จะยังไม่จบเมื่อเลยช่วงเวลามื้ออาหารของคุณ และคุณเลือกหลีกเลี่ยงมื้อดึก",
       "QUEUE_LONGER_THAN_ACCEPTED": "คิวที่นี่นานกว่าที่คุณระบุว่ารับได้",
       "not_your_trip": "ทริปนี้เป็นของผู้ใช้อื่นในระบบนี้ ทริปของคุณอยู่ที่หน้าแรก",
-      "place_not_in_provider": "Google ไม่มีข้อมูลของสถานที่นี้ จึงไม่มีแกลเลอรี คะแนน หรือรีวิวสดให้โหลด มีเพียงข้อมูลฟรีจาก OpenStreetMap และตำแหน่งบนแผนที่ การกดซ้ำจะไม่พบข้อมูลเพิ่ม"
+      "place_not_in_provider": "Google ไม่มีข้อมูลของสถานที่นี้ จึงไม่มีแกลเลอรี คะแนน หรือรีวิวสดให้โหลด มีเพียงข้อมูลฟรีจาก OpenStreetMap และตำแหน่งบนแผนที่ การกดซ้ำจะไม่พบข้อมูลเพิ่ม",
+      "NO_DAY_LONG_ENOUGH": "ไม่มีวันใดในทริปที่ยาวพอสำหรับที่นี่"
     }
   },
   "REJECTION_TEXT": {
@@ -1800,7 +1802,11 @@
       "city_icons_detail": "The places the city is known for",
       "worth_it_if_detail": "Good, but only with the right timing or effort",
       "local_alternatives_detail": "Quieter stand-ins for the busy favourites",
-      "browse_all_detail": "Everything found, strongest first"
+      "browse_all_detail": "Everything found, strongest first",
+      "unfit_impossible": "{count} place(s) cannot fit any single day of this trip, however long the trip is. Adding days will not change that.",
+      "unfit_drop_impossible": "Remove {count} place(s) and rebuild once",
+      "timeline_day_summary": "{places} place(s) · {start}–{end}",
+      "unfit_days_did_not_help": "{count} place(s) still do not fit after the days were added. Removing them is the way forward."
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -3070,7 +3076,11 @@
       "city_icons_detail": "ที่ที่เมืองนี้มีชื่อเสียง",
       "worth_it_if_detail": "ดี แต่ต้องได้จังหวะหรือออกแรงหน่อย",
       "local_alternatives_detail": "ตัวเลือกที่เงียบกว่าแทนที่ยอดนิยม",
-      "browse_all_detail": "ทุกที่ที่พบ เรียงจากตรงใจที่สุด"
+      "browse_all_detail": "ทุกที่ที่พบ เรียงจากตรงใจที่สุด",
+      "unfit_impossible": "มี {count} ที่ ที่ไม่พอดีกับวันใดเลยในทริปนี้ ไม่ว่าทริปจะยาวแค่ไหน การเพิ่มวันจะไม่ช่วย",
+      "unfit_drop_impossible": "นำ {count} ที่ออก แล้วสร้างใหม่ครั้งเดียว",
+      "timeline_day_summary": "{places} ที่ · {start}–{end}",
+      "unfit_days_did_not_help": "ยังมี {count} ที่ ที่ไม่พอดีแม้เพิ่มวันแล้ว การนำออกคือทางไปต่อ"
     }
   }
 }

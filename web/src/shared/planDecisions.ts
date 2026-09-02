@@ -37,6 +37,19 @@ export interface OptimizerCandidate {
 export interface PlanDecisions {
   /** Every chosen place the draft could not place. */
   unfit: Reconciliation[];
+  /** Places no length of trip will hold, so the only way forward is to drop them.
+   *
+   *  Split out from `needsDays` because offering "add days" for these was an endless
+   *  loop: the owner pressed it, the rebuild produced the same refusal with the same
+   *  button, and nothing about the trip had changed that could help.
+   *
+   *  Two ways in. The optimizer *proves* one — `NO_DAY_LONG_ENOUGH`, its answer to
+   *  "could this fit an empty day", which no added day can change. And experience
+   *  supplies the other: a place still short of capacity **after days were already
+   *  added for it** is one that adding days did not help, whatever can be proved. The
+   *  second is why `alreadyTried` is a parameter rather than something derivable from
+   *  the draft — the draft cannot know what was tried. */
+  impossible: Reconciliation[];
   /** The comfort figures the owner has not agreed to and has not unticked. Returned
    *  rather than recomputed by the caller: `outstanding` already depends on it, and two
    *  filters over the same rules are how the button and the list come to disagree. */
@@ -57,12 +70,21 @@ export function planDecisions(
   comfortRules: ComfortRuleState[],
   excludedComfort: ReadonlySet<string>,
   candidates: OptimizerCandidate[] | undefined,
+  /** Places the owner has already lengthened the trip for. See `shared/dayExtension`. */
+  alreadyTried: ReadonlySet<string> = new Set(),
 ): PlanDecisions {
   const unfit = (variant?.reconciliation ?? []).filter(
     (item) => item.status === "cannot_currently_fit",
   );
   const needsRoutes = unfit.some((item) => item.reason === "ROUTE_UNVERIFIED");
-  const needsDays = unfit.filter((item) => item.reason === "NO_TIME_CAPACITY");
+  const shortOfTime = unfit.filter((item) => item.reason === "NO_TIME_CAPACITY");
+  // Offered once per place: still short of capacity after days were added for it is a
+  // place adding days did not help.
+  const needsDays = shortOfTime.filter((item) => !alreadyTried.has(item.place_id));
+  const impossible = [
+    ...unfit.filter((item) => item.reason === "NO_DAY_LONG_ENOUGH"),
+    ...shortOfTime.filter((item) => alreadyTried.has(item.place_id)),
+  ];
   const extraMinutes = needsDays.reduce((sum, item) => {
     const candidate = candidates?.find((entry) => entry.id === item.place_id);
     return (
@@ -88,6 +110,7 @@ export function planDecisions(
   );
   return {
     unfit,
+    impossible,
     selectedComfort,
     needsRoutes,
     needsDays,

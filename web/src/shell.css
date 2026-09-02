@@ -329,14 +329,6 @@
   overflow-x: auto;
 }
 
-/* The outcome cell's second and third lines: why a place did not fit, and what that
-   costs. Blocks under the status rather than two more columns — they only appear on the
-   rows that are not a plain fit, so a column for each would be empty on most of them. */
-.reconcile-why {
-  color: var(--text-secondary);
-  display: block;
-  font-size: var(--text-2xs);
-}
 
 .money-table {
   border-collapse: collapse;
@@ -2291,11 +2283,6 @@
 /* The day boundary. Rows within a day keep the dashed hairline they already had; only
    where the date turns over does the rule go solid, so a day is a block you can find
    without reading twenty repeated dates. */
-.money-table tr.timeline-day-start td {
-  border-top: 1.5px solid var(--bg-card-border);
-  padding-top: 12px;
-}
-
 .plan-row h3,
 .plan-row p {
   margin: 2px 0;
@@ -10660,18 +10647,19 @@
 
 /* The draft timetable stops being a table on a phone.
 
-   Six columns cannot be read at 390px. The generic rule above gives every wide table
+   Five columns cannot be read at 390px. The generic rule above gives every wide table
    its own horizontal scroller, on the reasoning that "a data table cannot be made
-   narrow -- its columns are its content", and for the reconciliation table that still
-   holds. It did not hold here: the owner's report was that the validated timetable is
-   "really hard to read cause I can't see the whole thing", and a row you have to scroll
-   sideways to finish is one you read twice and trust once.
+   narrow -- its columns are its content". It did not hold here: the owner's report was
+   that the validated timetable is "really hard to read cause I can't see the whole
+   thing", and a row you have to scroll sideways to finish is one you read twice and
+   trust once.
 
    So each row becomes a block instead, and the columns become a small layout: the time
    range and the kind chip on one line, the place under them, the duration last. No data
-   is dropped and nothing is abbreviated — the same six cells, stacked. The header row
-   goes because each value is self-describing once it is not in a column, and the date
-   keeps `.timeline-day-start`'s rule as the thing that separates one day from the next.
+   is dropped and nothing is abbreviated — the same five cells, stacked. The header row
+   goes because each value is self-describing once it is not in a column. The date is no
+   longer among them: the timeline is grouped into one `<details>` per day now, and the
+   day's summary line carries it.
 
    Placed after the generic rule on purpose: both selectors are one class, so source
    order is what decides, and this has to win the `white-space: nowrap` it sets. */
@@ -10716,8 +10704,12 @@
     column-gap: 8px;
     display: grid;
     row-gap: 2px;
+    /* **Every `nth-child` below shifted down by one, and the `date` area is gone.**
+       The table lost its date column when the timeline was grouped into one
+       `<details>` per day: the day's summary carries the date now, so repeating it on
+       the first row of the group would be printing it twice. A stale mapping here
+       would not fail a test — it would quietly put the times where the chip belongs. */
     grid-template-areas:
-      "date  date date"
       "start end  kind"
       "name  name name"
       "dur   dur  dur";
@@ -10725,72 +10717,43 @@
     padding: 10px 0;
   }
 
-  /* The date cell is an empty string on every row but the first of its day, and an
-     empty grid area still reserves its row. */
   .timeline-table td:nth-child(1) {
-    color: var(--text-muted);
-    font-size: var(--text-xs);
-    grid-area: date;
-  }
-
-  .timeline-table td:nth-child(1):empty {
-    display: none;
-  }
-
-  .timeline-table td:nth-child(2) {
     grid-area: start;
   }
 
-  .timeline-table td:nth-child(3) {
+  .timeline-table td:nth-child(2) {
     grid-area: end;
   }
 
   /* The dash the column heads used to supply by sitting next to each other. */
-  .timeline-table td:nth-child(3)::before {
+  .timeline-table td:nth-child(2)::before {
     content: "– ";
   }
 
-  .timeline-table td:nth-child(4) {
+  .timeline-table td:nth-child(3) {
     grid-area: kind;
     justify-self: end;
   }
 
   /* The chip is taller than the times it sits beside; centring it on their line
      keeps the row from looking like two rows. */
-  .timeline-table td:nth-child(4) .plan-row-kind {
+  .timeline-table td:nth-child(3) .plan-row-kind {
     display: block;
     margin-top: -1px;
   }
 
-  .timeline-table td:nth-child(5) {
+  .timeline-table td:nth-child(4) {
     grid-area: name;
   }
 
-  .timeline-table td:nth-child(5):empty {
+  .timeline-table td:nth-child(4):empty {
     display: none;
   }
 
-  .timeline-table td:nth-child(6) {
+  .timeline-table td:nth-child(5) {
     color: var(--text-muted);
     font-size: var(--text-xs);
     grid-area: dur;
-  }
-
-  /* The day boundary belongs to the row here, not to its cells.
-
-     `.money-table tr.timeline-day-start td` gives every cell a solid top rule and
-     12px of top padding, which is right for a column layout and wrong for a stack:
-     the rule is drawn six times, and the padding lands once per *grid row*, adding
-     48px to the one row that has a date. It also outranks the `padding: 0` above on
-     specificity, which is why zeroing the border alone was not enough. */
-  .timeline-table tr.timeline-day-start td {
-    border-top: 0;
-    padding-top: 0;
-  }
-
-  .timeline-table tr.timeline-day-start {
-    border-top: 1.5px solid var(--bg-card-border);
-    padding-top: 12px;
   }
 }
 
@@ -10819,136 +10782,41 @@
   opacity: 0.55;
 }
 
-/* "What happened to each place you kept", readable down a phone rather than across it.
+/* One collapsible group per day of the draft timeline.
 
-   The table is three columns now, and even three of prose in a 390px card meant the
-   third was reached by dragging the `.money-table-scroll` wrapper sideways — reported as
-   not being able to see the whole thing in mobile view. So under the app's 860px
-   breakpoint each row becomes its own labelled card: the header row is hidden, every
-   cell carries its column name from `data-label`, and the name gets the card's heading
-   weight because it is what the reader is scanning for.
-
-   Scoped to `.reconcile-table`, and that scope is load-bearing rather than tidy.
-   `.money-table` and `.money-table-scroll` are shared by the timeline, the score
-   breakdown, the unscheduled list on `/itinerary` and the money pages; restacking all of
-   them from here would change five screens nobody asked about. */
-@media (max-width: 860px) {
-  .reconcile-table,
-  .reconcile-table tbody,
-  .reconcile-table tr,
-  .reconcile-table td {
-    display: block;
-    width: auto;
-  }
-
-  /* The labels move into the cells, so the header row has nothing left to say.
-     `display: none` rather than a visually-hidden class: these are duplicated verbatim
-     into every card below, so a screen reader would otherwise hear each one twice. */
-  .reconcile-table thead {
-    display: none;
-  }
-
-  .reconcile-table tr {
-    background: var(--bg-card);
-    border: 1px solid var(--bg-card-border);
-    border-radius: var(--radius-house);
-    margin-block-end: 8px;
-    padding: 10px 12px;
-  }
-
-  /* The cell borders belong to a grid of rows and columns that no longer exists. */
-  .reconcile-table td {
-    border: 0;
-    display: grid;
-    gap: 2px;
-    grid-template-columns: 8rem 1fr;
-    padding: 3px 0;
-  }
-
-  .reconcile-table td::before {
-    color: var(--text-muted);
-    content: attr(data-label);
-    font-size: var(--text-2xs);
-    font-weight: var(--weight-selected);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-  }
-
-  /* The name is the card's title, so it spans instead of sitting in the value column. */
-  .reconcile-table td:first-child {
-    grid-template-columns: 1fr;
-    padding-block-end: 6px;
-  }
-
-  .reconcile-table td:first-child::before {
-    display: none;
-  }
-}
-
-/* "Where would you like to start?" — the one question before the first swipe.
-
-   Full-width stacked buttons rather than a row of five: each one carries a name, a count
-   and a sentence, which is more than a tab can hold, and a column is what makes them
-   comparable. On a wide screen they sit two abreast; the sentence is why they cannot be
-   narrower than about 20rem. */
-.lane-chooser {
-  display: grid;
-  gap: 8px;
-  margin-block-end: 14px;
-}
-
-.lane-chooser-options {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
-}
-
-.lane-chooser-option {
-  background: var(--bg-card);
+   The summary is read far more often than the rows inside it — the groups arrive
+   collapsed — so it carries the date, the number of places and the hours the day runs,
+   and is sized to be scanned as a list. */
+.timeline-day {
   border: 1px solid var(--bg-card-border);
   border-radius: var(--radius-house);
+  margin-block-end: 6px;
+}
+
+.timeline-day > summary {
+  align-items: baseline;
   cursor: pointer;
-  display: grid;
-  gap: 3px;
-  padding: 11px 14px;
-  text-align: start;
-}
-
-.lane-chooser-option:hover {
-  border-color: var(--color-accent);
-}
-
-.lane-chooser-name {
-  align-items: center;
-  color: var(--text-primary);
   display: flex;
-  font-size: var(--text-sm);
-  font-weight: var(--weight-selected);
-  gap: 7px;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  padding: 9px 12px;
 }
 
-.lane-chooser-detail {
+.timeline-day[open] > summary {
+  border-block-end: 1px solid var(--bg-card-border);
+}
+
+.timeline-day-date {
+  font-family: var(--font-mono);
+  font-weight: var(--weight-selected);
+}
+
+.timeline-day-facts {
   color: var(--text-secondary);
   font-size: var(--text-2xs);
 }
 
-/* The way past the question, which must not read as the recommended answer — it is the
-   behaviour the screen had before, kept for anyone who does not want to choose. */
-.lane-chooser-skip {
-  background: none;
-  border: 0;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: var(--text-2xs);
-  justify-self: start;
-  padding: 4px 0;
-  text-decoration: underline;
-}
-
-/* One column on a phone: two 20rem tracks cannot both fit, and `auto-fit` would give
-   each of them the full width anyway — this only makes the intent explicit. */
-@media (max-width: 860px) {
-  .lane-chooser-options {
-    grid-template-columns: 1fr;
-  }
+/* The table sits inside the disclosure, so it owes it a little breathing room. */
+.timeline-day > .money-table-scroll {
+  padding: 4px 12px 12px;
 }

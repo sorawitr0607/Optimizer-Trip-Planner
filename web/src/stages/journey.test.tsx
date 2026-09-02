@@ -354,37 +354,46 @@ describe("OptimizePage", () => {
     expect(html).not.toContain("optimize-actions\"><button class=\"setup-primary\" disabled");
   });
 
-  it("reduces the kept-places table to three columns and one outcome cell", () => {
+  it("no longer prints the kept-places table", () => {
     const html = render(<OptimizePage />, "en");
 
-    // Five columns inside a horizontal scroller put the answer off the right edge of a
-    // phone, and four of the five repeated each other on an ordinary row: a place that
-    // fits reports reason `SCHEDULED` and consequence `scheduled_once`, which is the
-    // feasibility column twice more in different words.
-    const header = html.slice(html.indexOf("reconcile-table"));
-    const columns = header.slice(0, header.indexOf("</thead>")).match(/<th>/g) ?? [];
-    expect(columns).toHaveLength(3);
-    // Every cell carries its column name, which is what the mobile restack labels with.
-    expect(html).toContain('data-label="Name"');
-    expect(html).toContain('data-label="Feasibility"');
-    // This fixture's row is not a plain fit, so it still explains itself.
-    expect(html).toContain("reconcile-why");
+    // Removed at the owner's asking. Every row it carried is said where it is
+    // actionable now: a place that fits is on the timeline, a place that does not is in
+    // the unfit list with the way out beside it.
+    expect(html).not.toContain("reconcile-table");
+    expect(html).not.toContain("What happened to each place you kept");
   });
 
-  it("says nothing extra about a place that simply fits", () => {
-    const fitting = structuredClone(PREVIEW);
-    fitting.proposal.data.variants![0].reconciliation[0] = {
-      ...fitting.proposal.data.variants![0].reconciliation[0],
-      status: "fits",
-      reason: "SCHEDULED",
-      consequence: "scheduled_once",
+  /** A place no length of trip can hold, which is the endless-button bug. */
+  function withReason(reason: string) {
+    const plan = structuredClone(PREVIEW);
+    plan.proposal.data.variants![0].reconciliation[0] = {
+      ...plan.proposal.data.variants![0].reconciliation[0],
+      status: "cannot_currently_fit",
+      reason,
+      consequence: "kept_in_unscheduled_shortlist",
     };
-    const html = render(<OptimizePage />, "en", fitting);
+    return plan;
+  }
 
-    // The outcome cell is the status alone. `SCHEDULED` and `scheduled_once` say the
-    // same thing a third and fourth time, which is what made the table hard to read.
-    expect(html).toContain("reconcile-table");
-    expect(html).not.toContain("reconcile-why");
+  it("recommends removing a place no length of trip can hold, not adding days", () => {
+    // Reported as: press "add 3 days and rebuild once", get another plan still showing
+    // the same button. `NO_DAY_LONG_ENOUGH` is the optimizer's answer to "could this fit
+    // an *empty* day", so more days provably cannot help and must not be offered.
+    const html = render(<OptimizePage />, "en", withReason("NO_DAY_LONG_ENOUGH"));
+
+    expect(html).toContain("cannot fit any single day");
+    expect(html).toContain("Remove 1 place(s) and rebuild once");
+    expect(html).not.toContain("day(s) and rebuild once");
+  });
+
+  it("still offers days when more days would actually help", () => {
+    // The other side of the split: `NO_TIME_CAPACITY` now means only what it says, so
+    // the offer is honest where it appears.
+    const html = render(<OptimizePage />, "en", withReason("NO_TIME_CAPACITY"));
+
+    expect(html).toContain("day(s) and rebuild once");
+    expect(html).not.toContain("cannot fit any single day");
   });
 
   it("renders optimizer warnings through the code catalogue", () => {
