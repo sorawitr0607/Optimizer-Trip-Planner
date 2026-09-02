@@ -423,6 +423,26 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   **worker** rather than awaited by the page, because `/places` is one queued job. See
   the rule on `REPORTS_PROGRESS` below — the count still moves only on a call returning,
   which is what let that screen have stages at all instead of timed fiction.
+  `AREA_STAGES` is the fourth, added 2026-09-02: `recommend_areas` is a queued job and was
+  the only one reporting nothing, so `/stay` showed one rotating line through tens of
+  seconds of Dijkstra over every station in the transit graph and then an Overpass
+  request. Its own docstring had always named the three — local travel times, the
+  shortlist, the single amenity count — so the list existed and nothing read it. The
+  walking fallback, for a destination with no metro graph, reports 1 and then 3: it
+  genuinely skips the shortlist, and marking it would be the invented milestone
+  `REPORTS_PROGRESS` refuses.
+- **The time estimate lives on the progress bar, as a clock, and is the one thing a timer
+  may drive.** It used to be static text on every stage line — four "Usually 5–15 sec"
+  rows under four names and four details, the same fact repeated where it is least
+  useful. `remainingSeconds` sums the **ceilings** of the stages still pending and
+  `Countdown` counts that down beside the percentage. The ceiling and the "up to" wording
+  are deliberate: a counter that reaches zero while the build carries on is a promise
+  broken on screen, so the ordinary build finishes with time left, and past the ceiling it
+  says it is taking longer rather than sitting at 0:00. **This does not weaken the rule
+  above** — no stage and no percentage moves on time; only the clock does. `Countdown` is
+  mounted with `key={budget}` so a stage returning remounts it on the new number:
+  resetting that state from inside an effect is what `react-hooks/set-state-in-effect`
+  forbids, and the lint rule will stop you.
 - **`ShoreScene` is `slice`, and `SceneEnvironment` is `none`, and the difference is
   what each one draws.** That comment is right that abstract terrain "is the one thing
   that tolerates" stretching; a lighthouse and a boat do not. Measured, `none` on this
@@ -552,7 +572,25 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   refuses `discovery_stale` before doing any work — which is what "Add a day and rebuild"
   did. It is free: the provider cache is keyed on the destination alone, so the run
   rebuilds from disk with no network call. `StayPlanner` has done this since 2026-08-08;
-  `addDayAndRebuild` is the second site and there will be a third.
+  `resolveAllAndRebuild` is the second site and there will be a third.
+- **Anything a preview's digest depends on must be settled *before* the freeze, not by a
+  client.** `activate_plan_preview` re-derives `_optimizer_input` and refuses
+  `preview_stale` when the digest moved, which is right — but `resolve_default_terminal`
+  was called only by the browser, from three separate `/optimize` mutations, one of them
+  swallowing its failure with `.catch(() => null)`. So a build could freeze
+  `trip.terminal: None`, a later visit could resolve the airport, and activation then
+  refused with `changed=['trip']` for a change the owner never made. Found in production:
+  the Porto preview built 2026-09-02T06:56 held no terminal against a live input carrying
+  one. `generate_plan_preview` resolves it itself now, so the freeze and the resolve are
+  one operation. Do not "fix" a future instance of this by adding the field to
+  `_VOLATILE_KEYS`: the terminal puts real arrival and departure rows on the plan, so a
+  genuine change to it *must* still invalidate a preview.
+  Note the shape too — `_optimizer_input` **omits** `terminal` rather than writing `None`,
+  so absent is what both sides see and the digest stays consistent.
+  The tests that could not catch this are worth knowing: `test_preview_staleness`'s
+  originals are unit tests of `_plan_digest` on synthetic dicts, and the one end-to-end
+  activation test patches `_optimizer_input` to return the same snapshot twice. Its
+  `ProvisionalActivationTest` builds and activates for real.
 - **A label is a promise, and "Build the plan" on `/places` went to "Where to stay".** The
   destination is right — the journey is places → stay → build and skipping `/stay` skips a
   required stage — but the button named the stage it *unlocks* rather than the one it
@@ -999,9 +1037,19 @@ holds, so short hops keep their walk. `PlannerActions._default_transit_provider`
 an assumed 6-minute headway. Taipei's own GTFS is **not sourced**: TDX needs a Taiwan mobile number.
 
 Three consequences worth knowing. **A transit route is `status: "estimated"`, never `"verified"`**, and
-`optimizer._usable_route_statuses` is the single chokepoint every route reader goes through —
-`actions._optimizer_input`, `optimizer._routes_between`, `optimizer._best_inbound_route`,
-`validate_variant` and `_has_incident_usable_route` included.
+`optimizer.usable_route_statuses` is the single source of the rule, and
+`optimizer._usable_route_statuses` is its snapshot-shaped form. Every reader goes through one
+or the other — `actions._optimizer_input`, `optimizer._routes_between`,
+`optimizer._best_inbound_route`, `validate_variant` and `_has_incident_usable_route`.
+
+**That was not true when it was first written, and the gap shipped a half-finished fix.**
+`_optimizer_input` held its own inline copy of the rule, so widening `estimated` on
+2026-09-02 taught the optimizer and not the layer that decides which stored routes reach the
+snapshot: a `ready_to_schedule` trip still had its metro legs filtered out one step earlier.
+Measured on a trip holding two transit legs — **2 stored, 0 reaching the snapshot** — and
+every test that proved the widening fed the optimizer a snapshot directly, bypassing the
+layer that was dropping them. If you add a third reader, call the shared function; a second
+copy of a rule is how the copies come to disagree.
 
 **As of 2026-09-02 it admits `estimated` on every trip, not only an Explore preview.** The earlier rule
 grouped `estimated` with `accepted_estimate` and withheld both from a `ready_to_schedule` trip, reasoning

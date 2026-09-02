@@ -23,6 +23,27 @@
   compressed TOAST and understated the catalogue fivefold in the figures written before
   2026-09-02.
 
+## A rule with two copies is a rule with two behaviours
+
+- `optimizer.usable_route_statuses` is the route-status rule. `_optimizer_input` held a
+  second copy of it as an inline literal, so widening `estimated` on 2026-09-02 shipped
+  half-applied: 2 transit legs stored, 0 reaching the snapshot on a `ready_to_schedule`
+  trip. Call the shared function; never restate the rule.
+- A test that feeds the optimizer a snapshot directly cannot see the layer that builds the
+  snapshot. When a fix spans both, assert the carry-through on a real trip — see
+  `test_routes.test_transit_legs_reach_a_scheduled_trip_s_optimizer_input`.
+- Anything a preview's digest depends on is settled **before** the freeze, server-side.
+  `generate_plan_preview` resolves the assumed terminal itself; leaving it to one of three
+  client mutations is what made `activate_plan_preview` refuse `preview_stale` for a change
+  nobody made.
+- Before shipping a CSS change, sweep it for `var(--x)` with no definition. An undefined
+  custom property silently falls back and the token gate does not catch it —
+  `--weight-primary` made a button lighter than its neighbours while claiming to make it
+  heavier.
+- `capture_screen_baselines.stable_capture` takes `budget` in **milliseconds**. If a
+  one-off capture shows "Loading…" everywhere, check that first, then capture the same
+  screen from a worktree at `HEAD` before believing you broke something.
+
 ## Graphify cadence
 
 - Use direct source files and tests for routine implementation work.

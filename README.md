@@ -106,8 +106,8 @@ Never commit `secrets.local.json` or `.env`.
 Every trip flows through ten real, interactive screens:
 
 1. **Setup (`/trips/:id/setup`)**: 5-step wizard configuring destination country/city, travel dates, pacing constraints, and traveler preferences.
-2. **Places (`/trips/:id/places`)**: Candidate place discovery via free OpenStreetMap/Overpass data or custom place additions. Cards show catalogue-relative fit while preserving the raw optimizer score, avoid consecutive exact categories where alternatives exist, and remember a Google no-match so both paid-photo controls disappear without another paid request — for the 90 days that refusal is dated to stand, after which the place is askable again.
-3. **Stay (`/trips/:id/stay`)**: Where to base the trip, recommended by transit station rather than by hotel or district — the only unit whose travel time the app can measure exactly. Suggested trip lengths reserve time for arrival and departure logistics before estimating how many days the chosen places need.
+2. **Places (`/trips/:id/places`)**: Candidate place discovery via free OpenStreetMap/Overpass data or custom place additions. When a search lands it asks once which list to work through first, describing each rather than offering five bare names. The deck then deals a page of fifteen. Cards show catalogue-relative fit as a plain match percentage while preserving the raw optimizer score, avoid consecutive exact categories where alternatives exist, and remember a Google no-match so both paid-photo controls disappear without another paid request — for the 90 days that refusal is dated to stand, after which the place is askable again.
+3. **Stay (`/trips/:id/stay`)**: Where to base the trip, recommended by transit station rather than by hotel or district — the only unit whose travel time the app can measure exactly. Ranking areas reports its own three stages as they return, like every other long wait. Suggested trip lengths reserve time for arrival and departure logistics before estimating how many days the chosen places need.
 4. **Evidence (`/trips/:id/evidence`)**: Verify opening hours, exact coordinates, admission fees, and transit requirements. Metro and timetable legs are free and offline, and now count as evidence on a scheduled plan as well as an exploratory one — so a cross-city hop is planned as the ride it is rather than as an hour's walk.
 5. **Optimize (`/trips/:id/optimize`)**: Deterministic constraint-aware solver computing daily visit orders and route pacing. Build choices render before their evidence read finishes, and every real stage carries a realistic time range and overall progress. Places are **spread across the trip's days** rather than packed into as few as possible — an otherwise cheaper arrangement, since each day the plan opens costs another journey out from the base and back. Whatever a draft is waiting for — comfort figures to agree to, estimated legs to accept, days to add — is listed together and applied in **one** rebuild.
 6. **Itinerary (`/trips/:id/itinerary`)**: Interactive day-by-day dashboard coordinating the map, timeline, live clock, search, photographs, and one-tap phone navigation. Wide screens show map and timeline together; phones use a compact view switch. When no terminal was supplied, a cached nearby-airport assumption appears as an `A` pin and remains visibly marked `Recheck`.
@@ -119,8 +119,10 @@ Every trip flows through ten real, interactive screens:
 A long wait says where it has got to rather than only that it is running. Discovery and
 the draft build are queued jobs, so the worker reports the stages it has finished — the
 two Overpass blocks, each plan variant — and the screen draws them. A stage is marked
-when its call **returns**, never on a timer. The time ranges are estimates rather than an
-elapsed counter, and the progress bar is derived only from completed stages.
+when its call **returns**, never on a timer. The progress bar is derived only from
+completed stages, and carries one countdown of the time still expected — an upper bound,
+so a build normally finishes with time left on it rather than the clock hitting zero
+while work continues.
 
 ### The map
 

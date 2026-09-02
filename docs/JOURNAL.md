@@ -5596,3 +5596,136 @@ The Supabase claim stays narrow, as it did last time. This removes repeated read
 catalogue, narrows navigation to two columns, and stops a finished payload answering a status
 string. It cannot remove egress already counted, and the account's own usage and any standing
 restriction remain an account matter to verify live.
+
+## Seven from testing, and one of them was a fix that had shipped half-done, 2026-09-02
+
+Owner testing of `8429361` returned seven: move the time estimate off each build step onto
+the progress bar; put the same step lines on `/stay`; shorten "Stronger fit than X% of
+found places" to a plain match percentage; deal fifteen cards rather than twenty; offer the
+categories with descriptions once, after a search lands, before the first swipe; make "What
+happened to each place you kept" readable on a phone without dragging it sideways; and
+simplify the provisional activation button, which was also warning **"the plan preview is
+stale, optimize again"** for no reason the owner could see.
+
+A follow-up during the work: the estimate should be a *countdown*, not static text.
+
+### The stale warning was real, and production had a copy of it
+
+`activate_plan_preview` re-derives `_optimizer_input` and compares its digest with the one
+the preview froze. Reproducing it needed the real thing on both sides, which is exactly
+what the existing tests avoid: `test_preview_staleness` is seven unit tests of
+`_plan_digest` over synthetic dicts, and the one end-to-end activation test patches
+`_optimizer_input` to return the same snapshot twice. A clean local build-then-activate
+passed.
+
+So the three stored previews in the hosted database were compared against a freshly
+derived input instead, read-only. Two differed:
+
+- **Porto**, built that morning at 06:56, held `trip.terminal: None` against a live input
+  carrying a resolved airport. `resolve_default_terminal` was called **only by the
+  browser**, from three separate `/optimize` mutations, and one of them swallows its
+  failure with `.catch(() => null)` — so a build could freeze without a terminal, a later
+  visit could resolve it, and activation then refused with `changed=['trip']` for a change
+  nobody made. `generate_plan_preview` resolves it itself now, before the freeze, so every
+  build path agrees whatever the client did. It is free and cached 365 days and already
+  returns None rather than raising, so no build depends on it succeeding.
+- **Switzerland**, built 2026-08-20, whose frozen candidates carry no `names`, `score` or
+  `priority` — a preview from older code. That is legitimate staleness and "optimize
+  again" is the correct advice; nothing to fix.
+
+The terminal is deliberately **not** added to `_VOLATILE_KEYS`. It puts real arrival and
+departure rows on the plan, so a genuine change to it must still invalidate a preview.
+
+### And the metro fix from earlier the same day was only half applied
+
+Chasing the digest through `_optimizer_input` found a second copy of the route-status rule
+sitting there as an inline literal. Widening `estimated` to every trip had taught
+`optimizer._usable_route_statuses` and not this, so a `ready_to_schedule` trip still had its
+metro legs filtered out **one layer before** the code that had just been taught to accept
+them. Measured on a trip holding two transit legs: **2 stored, 0 reaching the snapshot.**
+
+Every test that proved the widening handed the optimizer a snapshot directly, bypassing the
+layer that was dropping them — which is why a green suite meant nothing here. The rule is
+one function now, `optimizer.usable_route_statuses`, and `test_routes` asserts the
+carry-through on a real `ready_to_schedule` trip with real GTFS legs. `CLAUDE.md`'s claim
+that this was already a single chokepoint has been corrected rather than deleted; it was
+written the same day and was wrong when written.
+
+### The clock is the one thing a timer may drive
+
+The estimate was static text on every stage line — four "Usually 5–15 sec" rows under four
+names and four details, the same fact repeated where it is least useful. It is one clock on
+the progress bar now, counting down.
+
+That sits carefully beside the rule the whole component exists for. No stage and no
+percentage moves on time; only the clock does. It counts the **ceiling** of the pending
+stages and says "up to", because a counter reaching zero while the build carries on is a
+promise broken on screen — so an ordinary build finishes with time still on it, and past the
+ceiling it says it is taking longer rather than sitting at 0:00. `Countdown` is a child
+mounted with `key={budget}`, which makes remounting the re-baseline when a stage returns;
+resetting that state inside an effect is what `react-hooks/set-state-in-effect` forbids, and
+the lint rule caught the first attempt.
+
+### `/stay` was the last queued job reporting nothing
+
+`recommend_areas` is queued, and it was the only one of the four not in `REPORTS_PROGRESS`,
+so the screen showed a single rotating line through tens of seconds of Dijkstra over every
+station in the transit graph followed by an Overpass request. Its own docstring had named
+the three stages since it was written — local travel times, the shortlist, the single
+amenity count — so the list existed and nothing read it. `AREA_STAGES` reads it now.
+
+The walking fallback reports 1 and then 3. It really does skip the shortlist, and marking it
+would be the invented milestone `REPORTS_PROGRESS` exists to refuse. `test_jobs`'s
+"an operation with no milestones is not handed one" used `recommend_areas` as its example,
+which is no longer true — it asserts the underlying rule instead: every member of
+`REPORTS_PROGRESS` must be a real handler whose method can actually accept a sink.
+
+### The rest
+
+The table went from five columns in a horizontal scroller to three, because four of the five
+were redundant on an ordinary row — a place that fits reports reason `SCHEDULED` and
+consequence `scheduled_once`, which is the feasibility column twice more in different words.
+Those two fold into one outcome cell that appears only where the place did not simply fit,
+and `.reconcile-table` restacks each row as a labelled card under 860px so nothing is
+reached by dragging. The scope is load-bearing: `.money-table` is shared by the timeline,
+the score breakdown and the money pages, and restacking all of them would change five
+screens nobody asked about.
+
+`LANE_PAGE` is fifteen. `relative_match` is "{percent}% match". The activation button is the
+same short "Use this itinerary" the ready case always used — the provisional caveat is
+already on screen immediately above it in `provisional_activation_help`, so the button does
+not have to carry it a second time — with `optimize-activate` giving it the weight of a
+terminal action on desktop, where it had been the same size as the "Places" link beside it.
+
+`LaneChooser` asks which list to start with, once per **discovery run** rather than per
+trip, because "after finish load" is the trigger and a fresh search is a fresh set of lanes
+with fresh counts. It stands in place of the lane-tab row and the deck rather than above
+them: a deck dealing behind the question answers it for the owner, and a tab row beside it
+is the same choice offered twice. Both of those were caught by looking — the first
+placement put the question below the tabs and off the bottom of a 500px card.
+
+### Two mistakes worth recording
+
+`--weight-primary` does not exist. Writing it in the activation button's rule fell back to
+400 and made the button **lighter** than the `--weight-secondary: 600` on its siblings —
+the opposite of "more visible", and silent, because an undefined custom property is not an
+error and the token gate does not check for one. The three real weights are
+`--weight-unselected: 500`, `--weight-secondary: 600`, `--weight-selected: 800`. A sweep for
+`var(--x)` with no definition anywhere now runs as part of reviewing a CSS change; it also
+turned up seven pre-existing dead references, left alone.
+
+And `capture_screen_baselines.stable_capture` takes `budget` in **milliseconds**. A one-off
+harness passed 40, meaning 40 ms of virtual time, and photographed `StageGate`'s "Loading…"
+on every screen. That looked exactly like a regression this round had introduced, and the
+thing that settled it was capturing the same screen from a worktree at `HEAD` and getting
+the identical image. Reach for that comparison earlier than feels necessary: it took two
+minutes and replaced a long line of plausible wrong theories.
+
+### Release evidence
+
+**12 of 13** stages: 713 Python tests, 206 web tests, the 20 atomic and 7 interaction
+optimizer regressions across all three variants, graph integrity, provider redaction, the
+design-token gate, element parity, reference workbooks, typecheck and lint. Stage 9 still
+reports `DID NOT RUN` — its fixture trip is absent from every database, as
+`artifacts/parity/screen-baselines/README.md` records — and this round adds a reason to
+re-base it: `/places` and `/optimize` both legitimately change appearance.
