@@ -764,6 +764,30 @@ class SQLiteStore:
             ).fetchall()
         return [self._candidate_choice(row) for row in rows]
 
+    def list_candidate_actions(self, trip_id: str) -> list[dict[str, Any]]:
+        """What was decided, without the candidate each decision was about.
+
+        `list_candidate_choices` is `SELECT *` and every row carries `candidate_json` --
+        the whole discovered place, measured on the live database at **1.1 KB a row on
+        the wire**. `journey()` runs on every page load and wants one thing from these
+        rows: which actions exist. Between 19 August and 2 September that statement was
+        called **8,110 times and returned 161,123 rows**, so roughly 22 KB a call against
+        the 0.7 KB the two columns weigh -- about 170 MB to answer a question two columns
+        hold.
+
+        The same distinction `get_latest_discovery_header` draws for `discovery_runs`.
+        Callers that genuinely need the place -- ranking, the optimizer input, the
+        checklist -- still use `list_candidate_choices`.
+        """
+
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT place_id, action FROM candidate_choices WHERE trip_id = ?"
+                " ORDER BY updated_at, place_id",
+                (trip_id,),
+            ).fetchall()
+        return [{"place_id": row["place_id"], "action": row["action"]} for row in rows]
+
     def upsert_checklist_item(self, item: ChecklistItem) -> ChecklistItem:
         with self.connect() as connection:
             existing = None

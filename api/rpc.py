@@ -122,7 +122,10 @@ def handle(
     actions, queue = _planner()
 
     if method == "job_status":
-        job = queue.get(str(payload.get("job_id", "")))
+        # `status`, not `get`: the poll runs every 1.5s for the length of the work and
+        # `get` is `SELECT *`, so the finished `result_json` crossed the wire on every
+        # tick to answer a status string. See `JobQueue.status`.
+        job = queue.status(str(payload.get("job_id", "")))
         if job is None:
             return 404, {"code": "unknown_job"}
         # Same question `dispatch` asks of every trip-scoped call, asked here

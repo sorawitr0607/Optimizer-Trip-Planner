@@ -1782,7 +1782,11 @@
       "stage_variant_highlights": "More highlights",
       "stage_variant_highlights_detail": "As much as the days will hold",
       "stage_preview_saved": "Your draft",
-      "stage_preview_saved_detail": "Saving it so you can compare the three"
+      "stage_preview_saved_detail": "Saving it so you can compare the three",
+      "resolve_all_and_continue": "Apply everything above and rebuild once",
+      "resolve_step_comfort": "agree to the comfort figures",
+      "resolve_step_routes": "accept the estimated legs",
+      "resolve_step_days": "lengthen the trip"
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -3034,7 +3038,11 @@
       "stage_variant_highlights": "เก็บให้ครบที่สุด",
       "stage_variant_highlights_detail": "เท่าที่เวลาในแต่ละวันจะพอ",
       "stage_preview_saved": "ฉบับร่างของคุณ",
-      "stage_preview_saved_detail": "บันทึกไว้เพื่อเปรียบเทียบทั้งสามแบบ"
+      "stage_preview_saved_detail": "บันทึกไว้เพื่อเปรียบเทียบทั้งสามแบบ",
+      "resolve_all_and_continue": "ใช้ทุกอย่างข้างต้น แล้วสร้างใหม่ครั้งเดียว",
+      "resolve_step_comfort": "ยอมรับตัวเลขความสบาย",
+      "resolve_step_routes": "ยอมรับเส้นทางที่ประมาณไว้",
+      "resolve_step_days": "ขยายวันเดินทาง"
     }
   }
 }

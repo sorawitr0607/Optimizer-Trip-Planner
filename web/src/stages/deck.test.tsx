@@ -94,7 +94,22 @@ function render(
   photoError: string | null = null,
   photosUnavailable = false,
   optimisticDecided: ReadonlySet<string> = new Set(),
+  /** Which place the failure and the no-match are about. Defaults to the card these
+   *  tests put in front, so the two cases above read exactly as they did. */
+  about = "first",
 ) {
+  const photoErrorOf = (placeId: string) =>
+    placeId === about ? photoError : null;
+  // Mirrors `PlacesPage.photoWithheld`, which is the caller this prop exists for: a
+  // stored no-match withdraws the offer, and so does a failed ask.
+  const photoWithheld = (placeId: string) =>
+    placeId === about && photosUnavailable
+      ? "none"
+      : photoErrorOf(placeId)
+        ? "failed"
+        : insights[placeId]
+          ? "bought"
+          : null;
   return renderToStaticMarkup(
     <PlaceDeck
       candidates={CANDIDATES}
@@ -111,8 +126,8 @@ function render(
       onWantPhotos={() => {}}
       onWantSummary={() => {}}
       paidPhotoUsd={0.075}
-      photoError={photoError}
-      photosUnavailable={photosUnavailable}
+      photoErrorOf={photoErrorOf}
+      photoWithheld={photoWithheld}
       optimisticDecided={optimisticDecided}
       ranking={ranking}
       summaryLoading={summaryLoading}
@@ -159,6 +174,25 @@ describe("PlaceDeck paid photo control", () => {
     const html = render(BLANK, [], RANKING.lanes.main_queue, [], false, RANKING, {}, null, true);
 
     expect(html).not.toContain("Get photographs from Google");
+  });
+
+  /**
+   * The withdrawal belongs to one place, and the deck must ask about the card it is
+   * drawing rather than trust a scalar the parent derived from another id.
+   *
+   * `photosUnavailable` and `photoError` used to arrive already reduced to booleans
+   * against `cardId` — the id this deck last *reported* — so the condition was correct
+   * by the parent's bookkeeping rather than by construction. Answering for a different
+   * place now leaves the drawn card's offer exactly where it was.
+   */
+  it("keeps the offer up when the refusal belongs to a different place", () => {
+    const html = render(
+      BLANK, [], RANKING.lanes.main_queue, [], false, RANKING, {},
+      "No photograph could be found for this place", true,
+      new Set(), "some-other-place",
+    );
+
+    expect(html).toContain("Get photographs from Google");
   });
 });
 

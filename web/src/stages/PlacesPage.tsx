@@ -239,6 +239,12 @@ export function PlacesPage() {
       setProviderNoMatch(new Set(value.provider_no_match ?? []));
       return value.discovery;
     },
+    // The catalogue cannot change under us: `discovery_runs` is append-only by trigger,
+    // and a new run arrives through `discover`'s own `setQueryData` below rather than by
+    // this query going stale. Without this it refetched on every mount and every window
+    // focus, and the response is a real city's whole candidate list -- ~602 KB decoded,
+    // read out of Supabase each time to redraw a deck that had not changed.
+    staleTime: Infinity,
   });
   const choices = useQuery({
     queryKey: ["candidate_choices", tripId],
@@ -710,10 +716,45 @@ export function PlacesPage() {
     if (code === "provider_unavailable") return copy("photo_ask_unavailable", language);
     return copy("photo_ask_failed", language);
   };
-  const cardError =
-    enrich.error && (enrich.variables ?? selectedId) === cardId
+  /** Why the last paid ask for one place failed, or null. Per place, so a failure on
+   *  one card is not still on screen three cards later. */
+  const photoErrorOf = (placeId: string): string | null =>
+    enrich.error && (enrich.variables ?? selectedId) === placeId
       ? photoFailure(enrich.error)
       : null;
+
+  /**
+   * Why the paid photo offer is withheld for one place, or null when it should be
+   * offered. **One derivation, consulted by both controls.**
+   *
+   * The deck's "get photographs from Google" and the panel's "load live details" buy
+   * the same call from the same provider, and they had drifted into different
+   * conditions: the deck withdrew on a failed ask and the panel did not, so the same
+   * card offered the purchase in one place and refused it in the other. Reported
+   * together with the permanence — "it is always hidden after I once hid it" — which
+   * had two causes, both fixed here and in `actions._provider_no_match_ids`:
+   *
+   * - The deck was handed booleans derived from the card in front, then applied them to
+   *   every card it drew, so one card's answer hid the button on all of them.
+   * - `provider_no_match` was stored with a 90-day expiry that nothing read, so the
+   *   server kept reporting the refusal for ever.
+   *
+   * `failed` is deliberately session state and not stored: a provider that was merely
+   * busy is not a finding about the place, so a reload offers it again.
+   */
+  const photoWithheld = (placeId: string): string | null => {
+    if (!placeId) return "no_card";
+    if (insights[placeId]) return "bought";
+    if (providerNoMatch.has(placeId)) return "none";
+    if (photoErrorOf(placeId)) return "failed";
+    return null;
+  };
+
+  // Affordability is deliberately **not** in there. Whether the cap allows a purchase is
+  // a fact about the trip, not about this place, and the two surfaces are right to
+  // present it differently: the deck simply has no button (`paidPhotoUsd` is null), while
+  // the panel keeps a disabled one under the price so the reason is on screen. Folding it
+  // in would have deleted that explanation, which is the opposite of the report.
 
   /* Discovery is two Overpass blocks and runs 30-90s; paced at the low end so the
      lines are not still arriving after the places are. Named rather than inlined
@@ -1070,8 +1111,8 @@ export function PlacesPage() {
                 onCardChange={setCardId}
                 onWantPhotos={(placeId) => enrich.mutate(placeId)}
                 photosLoading={enrich.isPending}
-                photoError={cardError}
-                photosUnavailable={providerNoMatch.has(cardId)}
+                photoErrorOf={photoErrorOf}
+                photoWithheld={photoWithheld}
                 optimisticDecided={justDecided}
                 onWantSummary={(placeId) => fetchCard.mutate(placeId)}
                 paidPhotoUsd={paidAllowed ? paidEstimate : null}
@@ -1224,9 +1265,15 @@ export function PlacesPage() {
                   <p className="setup-hint">{copy("loading", language)}</p>
                 </div>
               ) : (
-                providerNoMatch.has(selectedId) ? (
+                // The same call the deck's button asks about, so the two cannot offer
+                // and refuse the same card at once. `bought` cannot reach here — the
+                // `insight` branch above draws the gallery instead — and `failed` says
+                // what went wrong rather than asserting Google has nothing.
+                photoWithheld(selectedId) ? (
                 <div className="place-paid-action">
-                  <p className="setup-hint">{copy("photo_ask_none", language)}</p>
+                  <p className="setup-hint">
+                    {photoErrorOf(selectedId) ?? copy("photo_ask_none", language)}
+                  </p>
                 </div>
               ) : (
                 <div className="place-paid-action">

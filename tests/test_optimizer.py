@@ -105,11 +105,17 @@ class OptimizerCoreTest(unittest.TestCase):
             self.assertGreaterEqual(int(visits[1]["start"][:2]), 10)
             self.assertGreaterEqual(int(visits[2]["start"][:2]), 16)
 
-    def _route_evidence_snapshot(self, *, provisional: bool) -> dict:
-        """Shibuya, but every route is `estimated` and every place demands evidence.
+    def _route_evidence_snapshot(
+        self, *, provisional: bool, status: str = "estimated"
+    ) -> dict:
+        """Shibuya, but no route is `verified` and every place demands evidence.
 
-        That is the real shape of a transit leg: `WF-038` states a route derived from a
-        timetable or from OSM topology is `estimated` by construction, never `verified`.
+        `estimated` is the real shape of a transit leg: `WF-038` states a route derived
+        from a timetable or from OSM topology is `estimated` by construction, never
+        `verified`, and `GtfsTransitProvider` and `OsmSubwayProvider` are the only two
+        things that emit it. `status` is a parameter so the *other* non-verified status
+        -- `accepted_estimate`, the owner-accepted straight line -- can be asked the
+        same question, because the answers differ and that difference is the rule.
         """
 
         snapshot = json.loads(
@@ -120,7 +126,7 @@ class OptimizerCoreTest(unittest.TestCase):
         for candidate in snapshot["candidates"]:
             candidate["requires_route_evidence"] = True
         for route in snapshot["routes"]:
-            route["status"] = "estimated"
+            route["status"] = status
             route["mode"] = "transit"
         return snapshot
 
@@ -142,11 +148,39 @@ class OptimizerCoreTest(unittest.TestCase):
         ])
         self.assertTrue(variant["metrics"]["scheduled_visits"])
 
-    def test_an_estimated_route_is_still_refused_when_the_trip_is_not_exploring(self) -> None:
-        """The other half, and the reason this is a status rule rather than a relaxation:
-        a `ready_to_schedule` trip is unaffected and `ROUTE_UNVERIFIED` stays fatal."""
+    def test_a_transit_estimate_is_evidence_enough_for_a_scheduled_trip_too(self) -> None:
+        """"Why is the walking not considering the metro line too" -- it could not.
 
-        variant = optimize_trip(self._route_evidence_snapshot(provisional=False))["variants"][0]
+        `estimated` was grouped with `accepted_estimate` and both were withheld from a
+        `ready_to_schedule` trip, so on every scheduled plan the optimizer discarded
+        **every metro leg it had been given** and laid the city out on foot and by car.
+        A published timetable is not a guess, and `estimated` is emitted by nothing but
+        the two transit providers, so this is the status doing the job it exists for.
+        """
+
+        variant = optimize_trip(
+            self._route_evidence_snapshot(provisional=False)
+        )["variants"][0]
+
+        self.assertEqual([], [
+            item for item in variant["reconciliation"] if item["reason"] == "ROUTE_UNVERIFIED"
+        ])
+        self.assertTrue(variant["metrics"]["scheduled_visits"])
+
+    def test_an_owner_accepted_straight_line_is_still_refused_when_not_exploring(self) -> None:
+        """The half of the old rule that survives, and the reason it is a status rule.
+
+        `accepted_estimate` is a crow-flies distance the owner agreed to, inflated so it
+        can only over-state the journey. It is *fabricated*, not merely unrouted, so a
+        plan claiming to be scheduled must still not rest on one -- however conservative
+        and however explicitly it was asked for. That it and a timetable now diverge here
+        is the point: they were always separate statuses and nothing had used the
+        difference.
+        """
+
+        variant = optimize_trip(
+            self._route_evidence_snapshot(provisional=False, status="accepted_estimate")
+        )["variants"][0]
 
         refused = [
             item for item in variant["reconciliation"] if item["reason"] == "ROUTE_UNVERIFIED"
@@ -154,6 +188,116 @@ class OptimizerCoreTest(unittest.TestCase):
         self.assertTrue(refused)
         self.assertEqual("cannot_currently_fit", refused[0]["status"])
         self.assertEqual("collect_a_verified_route", refused[0]["consequence"])
+
+    def test_a_scheduled_trip_takes_the_metro_over_a_fifty_five_minute_walk(self) -> None:
+        """The reported symptom, not the mechanism.
+
+        `_best_route` already picked the fastest route it held for a pair, and the
+        transit legs were already being fetched and stored -- `refresh_transit_routes`
+        keys them by mode alongside the walking ones. They were then filtered out of the
+        snapshot by status before `_best_route` ever saw them, so a cross-city pair with
+        a metro ride sitting in the database was planned as an hour on foot.
+
+        Measured on this input: the same pair came back `walk 55` under the old status
+        rule and `transit 15` under the new one.
+        """
+
+        snapshot = {
+            "trip": {
+                "timezone": "Asia/Taipei",
+                "local_dates": ["2030-03-02"],
+                "usable_windows": [
+                    {"date": "2030-03-02", "start": "09:00", "end": "21:00"}
+                ],
+                "accommodation_status": "booked",
+                "allow_provisional_assumptions": False,
+            },
+            "travellers": [],
+            "facts": [],
+            "locks": [],
+            "weights": {},
+            "thresholds": {},
+            "candidates": [
+                {"id": "base", "kind": "hotel_area"},
+                *[
+                    {
+                        "id": place_id,
+                        "kind": "culture",
+                        "name": place_id,
+                        "priority": "must_do",
+                        "score": 90,
+                        "duration_bounds": {
+                            "minimum_minutes": 60,
+                            "ideal_minutes": 60,
+                            "maximum_minutes": 90,
+                        },
+                    }
+                    for place_id in ("north", "south")
+                ],
+            ],
+            "routes": [
+                *[
+                    {
+                        "origin_id": origin,
+                        "destination_id": destination,
+                        "mode": "walk",
+                        "duration_minutes": 10,
+                        "walking_minutes": 10,
+                        "status": "verified",
+                    }
+                    for origin, destination in (
+                        ("base", "north"), ("north", "base"),
+                        ("base", "south"), ("south", "base"),
+                    )
+                ],
+                # The cross-city pair, offered both ways: an hour on foot, or a ride.
+                *[
+                    {
+                        "origin_id": origin,
+                        "destination_id": destination,
+                        "mode": "walk",
+                        "duration_minutes": 55,
+                        "walking_minutes": 55,
+                        "status": "verified",
+                    }
+                    for origin, destination in (("north", "south"), ("south", "north"))
+                ],
+                *[
+                    {
+                        "origin_id": origin,
+                        "destination_id": destination,
+                        "mode": "transit",
+                        "duration_minutes": 15,
+                        "walking_minutes": 6,
+                        "status": "estimated",
+                        "transfers": 0,
+                        "boarding_buffer_minutes": 4,
+                    }
+                    for origin, destination in (("north", "south"), ("south", "north"))
+                ],
+            ],
+        }
+
+        variant = optimize_trip(snapshot)["variants"][0]
+        legs = [
+            (item.get("mode"), item.get("duration_minutes"))
+            for day in variant["days"]
+            for item in day["items"]
+            if item["type"] == "travel" and "->" in str(item.get("subject_id", ""))
+        ]
+        self.assertIn(("transit", 15), legs, legs)
+        self.assertNotIn(("walk", 55), legs, legs)
+
+    def test_an_accepted_straight_line_is_still_admitted_on_an_explore_preview(self) -> None:
+        """And it must not have become refused everywhere: Explore still accepts it."""
+
+        variant = optimize_trip(
+            self._route_evidence_snapshot(provisional=True, status="accepted_estimate")
+        )["variants"][0]
+
+        self.assertEqual([], [
+            item for item in variant["reconciliation"] if item["reason"] == "ROUTE_UNVERIFIED"
+        ])
 
     def test_a_place_with_no_route_at_all_is_still_refused(self) -> None:
         """It admits a route the snapshot *has*; it does not invent one. A fabricated
@@ -462,6 +606,119 @@ class OptimizerCoreTest(unittest.TestCase):
 
     def test_all_historic_fixtures_pass_the_real_optimizer(self) -> None:
         self.assertEqual([], run_catalog())
+
+    @staticmethod
+    def _ordinary_week() -> dict:
+        """Twelve ordinary places over seven ordinary days, and nothing in the way.
+
+        Every pair fifteen minutes apart, nothing closed, no threshold set, one booked
+        base. Whatever shape comes out of this is the objective's own preference rather
+        than a constraint it was forced into, which is what makes it a fair question to
+        ask of the objective.
+        """
+
+        dates = [f"2030-03-{day:02d}" for day in range(2, 9)]
+        places = [f"place_{index:02d}" for index in range(12)]
+        candidates = [{"id": "base", "kind": "hotel_area"}]
+        for index, place_id in enumerate(places):
+            candidates.append({
+                "id": place_id,
+                "kind": "culture",
+                "name": place_id,
+                "priority": "interested",
+                "score": 50 + index,
+                "duration_bounds": {
+                    "minimum_minutes": 60,
+                    "ideal_minutes": 90,
+                    "maximum_minutes": 120,
+                },
+            })
+        nodes = ["base", *places]
+        routes = [
+            {
+                "origin_id": origin,
+                "destination_id": destination,
+                "mode": "walk",
+                "duration_minutes": 15,
+                "walking_minutes": 15,
+                "status": "verified",
+            }
+            for origin in nodes
+            for destination in nodes
+            if origin != destination
+        ]
+        return {
+            "trip": {
+                "timezone": "Asia/Shanghai",
+                "local_dates": dates,
+                "usable_windows": [
+                    {"date": date, "start": "09:00", "end": "21:00"} for date in dates
+                ],
+                "accommodation_status": "booked",
+            },
+            "travellers": [],
+            "candidates": candidates,
+            "facts": [],
+            "routes": routes,
+            "locks": [],
+            "weights": {},
+            "thresholds": {},
+        }
+
+    @staticmethod
+    def _visits_per_day(variant: dict) -> list[int]:
+        return [
+            sum(1 for item in day["items"] if item["type"] == "visit")
+            for day in variant["days"]
+        ]
+
+    def test_a_week_of_places_is_spread_over_the_week(self) -> None:
+        """"It has a lot of days that have only free times", and it was the objective.
+
+        Nothing preferred using a day and `travel_minutes` preferred not to: each day a
+        plan opens costs another base-to-place-and-back journey, so the cheapest layout
+        of twelve places over seven days was to pile them onto as few days as possible.
+        Measured on this exact input before `_day_crowding` existed, all three variants
+        scheduled all twelve places and still left most of the trip blank --
+        `[0, 0, 0, 0, 0, 6, 6]`, `[0, 0, 0, 0, 4, 4, 4]`, `[0, 0, 0, 0, 0, 3, 9]`.
+
+        No rule was broken by any of those and the reconciliation was empty, so nothing
+        else in the suite could have caught it. What is asserted is the residual: with
+        room to spare and nothing in the way, a day of the trip must not be left
+        carrying only free time.
+        """
+
+        result = optimize_trip(self._ordinary_week())
+        self.assertTrue(result["variants"])
+        for variant in result["variants"]:
+            per_day = self._visits_per_day(variant)
+            self.assertEqual(
+                12, sum(per_day), f"{variant['variant_id']} lost a chosen place"
+            )
+            self.assertEqual(
+                [], [index for index, count in enumerate(per_day) if count == 0],
+                f"{variant['variant_id']} left a day with only free time: {per_day}",
+            )
+
+    def test_the_greedy_floor_spreads_too(self) -> None:
+        """The fallback is where a real city's catalogue actually lands.
+
+        `_insertion_search` hands over to `_greedy_sequences` whenever it runs out of
+        time, which on a full catalogue is the ordinary case rather than the exception.
+        Plain first-fit walks the dates in order and takes the first day that still
+        builds, so it filled day one to its ceiling before day two was offered anything
+        -- the same crammed plan by a different route. Forced here with a budget no
+        search can finish inside.
+        """
+
+        result = optimize_trip(self._ordinary_week(), time_limit_seconds=0.001)
+        self.assertTrue(result["stopped_at_limit"])
+        for variant in result["variants"]:
+            per_day = self._visits_per_day(variant)
+            self.assertEqual(
+                [], [index for index, count in enumerate(per_day) if count == 0],
+                f"{variant['variant_id']} crammed the front: {per_day}",
+            )
 
 
 class OptimizerActionsTest(unittest.TestCase):

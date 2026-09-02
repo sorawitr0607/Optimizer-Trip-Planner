@@ -407,6 +407,41 @@ class JobQueue:
             row = connection.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
             return dict(row) if row else None
 
+    def status(self, job_id: str) -> dict | None:
+        """The poll's read: `result_json` only on the poll that returns it.
+
+        **Measured on the live database, and the measurement is the reason to be
+        careful rather than triumphant.** `result_json` on a finished discovery or
+        proposal averages **479 KB and reaches 3.76 MB**, and `get` is `SELECT *` -- so
+        the shape is alarming. But the column is NULL until `complete` writes it, so
+        the sixty polls a 90-second build makes were each reading a NULL, and the one
+        poll that finds a payload is the poll that wants it. The saving on an ordinary
+        build is therefore small, and any claim of GB here would be false.
+
+        What it does fix is every poll that meets a *finished* job it was not waiting
+        for, where `SELECT *` moves up to 3.76 MB to answer a status string: a reload
+        mid-build, a second tab, and -- since the client now retries a poll that fails
+        at the network level -- a retry landing after the job completed. It also makes
+        the transfer proportional to what the caller reads, which is the property
+        `AGENTS.md` asks of every hot path and the one `get_latest_discovery_report`
+        established for `discovery_runs`.
+
+        `CASE` keeps it a single round trip, and `DONE` is bound rather than written as
+        a literal because `pgstore._to_pg_placeholders` decides what is a placeholder by
+        counting quotes. Verified against the real Postgres, not only SQLite: `AGENTS.md`
+        records a Postgres-only failure (`hashtext` on a NUL byte) that the whole suite
+        could not reach, and a new statement is exactly that shape of risk.
+        """
+
+        with self.store.connect() as connection:
+            row = connection.execute(
+                "SELECT id, kind, trip_id, status, attempts, error, progress,"
+                " CASE WHEN status = ? THEN result_json END AS result_json"
+                " FROM jobs WHERE id = ?",
+                (DONE, job_id),
+            ).fetchone()
+            return dict(row) if row else None
+
 
 def run_one(queue: JobQueue, actions: Any, worker_id: str) -> dict | None:
     """Claim a job, run it, record the outcome. Returns the job, or None if idle."""

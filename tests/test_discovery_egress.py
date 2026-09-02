@@ -162,8 +162,14 @@ class DiscoveryReportReadTest(unittest.TestCase):
             self.assertNotIn("SELECT *", text.upper())
             self.assertNotIn("candidates_json", text)
 
-    def test_ranked_discovery_reads_the_candidate_catalogue_once(self) -> None:
-        """The places page needs the run and its ranking, but not two blob reads."""
+    def _traced_discovery_reads(self, call) -> tuple[list[str], object]:
+        """Run `call` and return the `discovery_runs` statements it issued.
+
+        Counted by what each statement *costs*, which is the only thing the billing
+        line measures: a `candidates_json` read is 630 KB at the median on the live
+        database and the three-column header is 111 bytes. A test that counted statements instead would forbid paying a
+        seek to skip a blob, which is the whole trade `get_latest_discovery` makes.
+        """
 
         statements: list[str] = []
         original = SQLiteStore.connect
@@ -177,13 +183,94 @@ class DiscoveryReportReadTest(unittest.TestCase):
                 yield connection
 
         with unittest.mock.patch.object(SQLiteStore, "connect", traced):
-            result = self.actions.get_ranked_discovery(self.trip.trip_id)
+            value = call()
+        return [text for text in statements if "FROM discovery_runs" in text], value
 
-        selects = [text for text in statements if "FROM discovery_runs" in text]
-        self.assertEqual(1, len(selects), selects)
+    @staticmethod
+    def _blob_reads(selects: list[str]) -> list[str]:
+        return [text for text in selects if "*" in text or "candidates_json" in text]
+
+    def test_ranked_discovery_reads_the_candidate_catalogue_once(self) -> None:
+        """The places page needs the run and its ranking, but not two blob reads."""
+
+        selects, result = self._traced_discovery_reads(
+            lambda: self.actions.get_ranked_discovery(self.trip.trip_id)
+        )
+        self.assertEqual(1, len(self._blob_reads(selects)), selects)
         self.assertEqual(
             len(result["discovery"].candidates.as_dict()["candidates"]),
             len(result["ranking"]["lanes"]["browse_all"]),
+        )
+
+    def test_the_catalogue_is_not_read_twice_for_the_same_run(self) -> None:
+        """The measurement behind the memo, not the intention.
+
+        `discovery_runs` is append-only by trigger, so a run id names bytes that cannot
+        change -- and `_current_choice_inputs` runs on every swipe. Before this, a
+        twenty-card session read the same immutable 630 KB-to-3 MB blob about forty times.
+        """
+
+        first, _ = self._traced_discovery_reads(
+            lambda: self.actions.get_ranked_discovery(self.trip.trip_id)
+        )
+        self.assertEqual(1, len(self._blob_reads(first)), first)
+
+        second, run = self._traced_discovery_reads(
+            lambda: self.actions.get_latest_discovery(self.trip.trip_id)
+        )
+        self.assertEqual([], self._blob_reads(second), second)
+        # Served from the memo, and still the same catalogue -- not a stale shape or an
+        # empty one, which is the failure a memo actually risks.
+        self.assertTrue(run.candidates.as_dict()["candidates"])
+        self.assertEqual(
+            self.store.get_latest_discovery(self.trip.trip_id).run_id, run.run_id
+        )
+
+    def test_a_new_run_invalidates_the_memo_by_its_id(self) -> None:
+        """The id is the invalidation, so a fresh discovery must not serve the old one."""
+
+        held = self.actions.get_latest_discovery(self.trip.trip_id)
+        replaced = self.actions.discover_places(
+            trip_id=self.trip.trip_id, force_refresh=True
+        )
+        self.assertNotEqual(held.run_id, replaced.run_id)
+        self.assertEqual(
+            replaced.run_id, self.actions.get_latest_discovery(self.trip.trip_id).run_id
+        )
+
+    def test_journey_reads_no_candidate_payload_when_a_plan_exists(self) -> None:
+        """Navigation's own read is two columns, not every chosen place."""
+
+        full = self.store.get_latest_discovery(self.trip.trip_id)
+        candidate = full.candidates.as_dict()["candidates"][0]
+        self.actions.save_candidate_choice(
+            trip_id=self.trip.trip_id,
+            place_id=candidate["place_id"],
+            action="interested",
+        )
+        statements: list[str] = []
+        original = SQLiteStore.connect
+
+        import contextlib
+
+        @contextlib.contextmanager
+        def traced(store_self):
+            with original(store_self) as connection:
+                connection.set_trace_callback(statements.append)
+                yield connection
+
+        with unittest.mock.patch.object(SQLiteStore, "connect", traced):
+            self.actions.journey(self.trip.trip_id)
+
+        selects = [text for text in statements if "candidate_choices" in text]
+        self.assertTrue(selects, "journey did not look at the choices at all")
+        # `journey` may fall through to the capability-gap branch, which legitimately
+        # needs the payload; what must never happen is the *narrow* question being
+        # answered by the wide statement. At least one read is narrow, and the narrow
+        # one is the one that always runs.
+        self.assertTrue(
+            any("candidate_json" not in text and "*" not in text for text in selects),
+            selects,
         )
 
     def test_optimizer_input_reads_the_candidate_catalogue_once(self) -> None:

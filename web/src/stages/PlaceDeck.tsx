@@ -165,12 +165,28 @@ export interface PlaceDeckProps {
   onWantPhotos?: (placeId: string) => void;
   /** Prevents a second paid press while the first gallery is still arriving. */
   photosLoading?: boolean;
-  /** Why the photographs did not come, when the ask itself failed — scoped to the
-   *  card it was asked for by the caller, and answered inside the photo area rather
-   *  than in a banner above the deck, where it read as the deck being broken. */
-  photoError?: string | null;
-  /** Google's durable no-match answer. Both paid controls hide on the same fact. */
-  photosUnavailable?: boolean;
+  /** Why the photographs did not come, when the ask itself failed — answered inside
+   *  the photo area rather than in a banner above the deck, where it read as the deck
+   *  being broken. Asked **per place**: see `photoWithheld`. */
+  photoErrorOf?: (placeId: string) => string | null;
+  /** Why the paid offer is withheld for one place, or null when it should be offered.
+   *
+   *  A function rather than a boolean because the answer is *about a place*. These
+   *  arrived as two scalars the parent derived from `cardId` — the id this deck last
+   *  reported through `onCardChange` — while the card actually drawn is `queue[0]`.
+   *  The two agree in the settled state and need not during a decision, so the
+   *  condition was right by the parent's bookkeeping rather than by construction.
+   *  Asking about `entry.place_id` cannot be scoped to the wrong card.
+   *
+   *  The permanence reported as "it is always hidden after I once hid it" was not
+   *  here: `provider_no_match` was stored with a 90-day expiry that nothing read, so
+   *  the server kept reporting the refusal for ever. Fixed in
+   *  `actions._provider_no_match_ids`.
+   *
+   *  What *is* fixed here is the two controls disagreeing. The deck withdrew on a
+   *  failed ask and the detail panel beside it did not, so one card offered the same
+   *  purchase in one place and refused it in the other; both now ask this. */
+  photoWithheld?: (placeId: string) => string | null;
   /** Decisions made before the choices refetch completes. */
   optimisticDecided?: ReadonlySet<string>;
   /** What that costs, so the price is on the button rather than a screen away. */
@@ -209,8 +225,8 @@ export function PlaceDeck({
   onPendingChange,
   onWantPhotos,
   photosLoading = false,
-  photoError = null,
-  photosUnavailable = false,
+  photoErrorOf = () => null,
+  photoWithheld = () => null,
   optimisticDecided = new Set(),
   paidPhotoUsd,
   onWantSummary,
@@ -889,13 +905,13 @@ export function PlaceDeck({
                 caller scopes it, so the next card never inherits the last one's
                 refusal. */}
             <p className="setup-hint">
-              {photoError ?? copy("photo_none_kind", language)}
+              {photoErrorOf(entry.place_id) ?? copy("photo_none_kind", language)}
             </p>
           </div>
         ) : (
           <div className="place-deck-photo place-deck-photo-empty">
-            {photoError ? (
-              <p className="setup-hint">{photoError}</p>
+            {photoErrorOf(entry.place_id) ? (
+              <p className="setup-hint">{photoErrorOf(entry.place_id)}</p>
             ) : (
               <>
                 <p className="setup-hint">{copy("photos_load_themselves", language)}</p>
@@ -926,21 +942,11 @@ export function PlaceDeck({
         {onWantPhotos
           && paidPhotoUsd != null
           && gallery.length <= PHOTO_THIN_AT
-          // Bought already. Google was asked about this place and this is what it had,
-          // so offering the same purchase again spends the same money for the same
-          // answer — the failure the remembered `provider_no_match` closes on the other
-          // side, where the answer was nothing at all. One photograph back is still
-          // thin, and still not a reason to pay twice.
-          && !insights[entry.place_id]
-          && !photosUnavailable
-          // Asked and failed. Leaving the button up invites paying again for the answer
-          // that just did not arrive, and the card is already saying no photograph was
-          // found — a control beside that sentence contradicts it. Scoped to this card by
-          // the caller, so the next card is offered the purchase as normal, and a reload
-          // offers this one again: a provider that was merely busy is not a finding about
-          // the place, which is why this is session state and not a stored refusal like
-          // `provider_no_match`.
-          && !photoError ? (
+          // Bought already, not in Google's index, or just asked and failed — the three
+          // reasons for withdrawing the offer, all answered by the caller's one
+          // `photoWithheld` so this control and the detail panel's cannot disagree about
+          // them. Asked about the card being drawn rather than the one last reported.
+          && !photoWithheld(entry.place_id) ? (
           <button
             className="place-deck-buy-photo"
             disabled={photosLoading}

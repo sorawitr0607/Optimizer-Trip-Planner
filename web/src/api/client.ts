@@ -1063,7 +1063,36 @@ export async function rpc<T>(
   let reported: number | null = null;
   for (;;) {
     await new Promise((resume) => setTimeout(resume, JOB_POLL_MS));
-    const { value } = await post("job_status", { job_id: jobId }, 30_000);
+    let value: unknown;
+    try {
+      value = (await post("job_status", { job_id: jobId }, 30_000)).value;
+    } catch (error) {
+      // "Failed to fetch" while the build was running, reported by the owner.
+      //
+      // A build is 30-90 seconds and this polls every 1.5, so a single run asks about
+      // sixty times. `fetch` rejects with a bare `TypeError: Failed to fetch` for
+      // anything below HTTP -- a Vercel cold start closing an idle socket, a DNS
+      // blip, a phone changing network -- and one such rejection anywhere in that
+      // sequence threw out of the loop and failed the whole build. The work itself was
+      // usually finishing perfectly on the worker, exactly as with the 843-second
+      // discovery that `JOB_TIMEOUT_MS` above documents.
+      //
+      // A poll is a pure read of a row a worker owns, so asking again is always safe
+      // and costs one more request. Only network-level failures are swallowed: an
+      // `ApiError` means the server answered -- 404 unknown_job, 403 not_your_trip --
+      // and repeating that would hide a real refusal behind a five-minute wait.
+      //
+      // Nothing new bounds this. `deadline` is unchanged and still fails a job that
+      // has genuinely stopped reporting, which is the case worth surfacing.
+      if (error instanceof ApiError) throw error;
+      if (Date.now() > deadline) {
+        throw new ApiError("job_unreachable", {
+          job_id: jobId,
+          detail: error instanceof Error ? error.message : String(error),
+        });
+      }
+      continue;
+    }
     const job = value as JobEnvelope;
     // Before the exits, so the last count reported still reaches the caller on the
     // poll that also carries the result.

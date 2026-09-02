@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
 import json
 import os
@@ -625,6 +626,88 @@ class ProviderNoMatchIsRememberedTest(unittest.TestCase):
                 spent_twice["google_places:card_details"]["requests"],
                 "the second refusal was billed",
             )
+
+    def test_the_refusal_lifts_when_its_expiry_has_passed(self) -> None:
+        """`PROVIDER_NO_MATCH_DAYS` is a date, and nothing was reading it.
+
+        The refusal is written with `expires_at` 90 days out, and the constant says why
+        it is bounded: Google's index "does change eventually and a permanent refusal
+        would be a worse lie than the repeated charge it replaces". But
+        `list_place_evidence` returns every row it holds whatever its expiry -- rightly,
+        because venue notices and assumed windows judge their own freshness -- so both
+        photo controls stayed withdrawn for good. Reported as "it is always hidden after
+        I once hid it".
+
+        Written as an expired row rather than by moving a clock: the store is the thing
+        that has to be asked correctly, and a stale date is exactly what it will hold on
+        the ninety-first day.
+        """
+
+        with TemporaryDirectory() as directory:
+            actions = PlannerActions(
+                Path(directory) / "expired.sqlite3",
+                place_provider=RankingActionsTest.Provider(),
+                card_provider=FakeCardProvider(),
+            )
+            trip = actions.create_trip(name="Taipei", destination="Taipei")
+            actions.save_setup(
+                trip_id=trip.trip_id, main_style=["sightseeing"], confirmed=True
+            )
+            actions.discover_places(trip_id=trip.trip_id)
+            place_id = actions.rank_candidates(trip.trip_id)["lanes"]["browse_all"][0]
+
+            stale = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+            actions.store.upsert_place_evidence(
+                trip_id=trip.trip_id,
+                place_id=place_id,
+                kind="provider_no_match",
+                value={"place_id": place_id, "provider": "google_places"},
+                provider="google_places",
+                retrieved_at=stale,
+                expires_at=stale,
+            )
+
+            # Neither control is told to withdraw...
+            self.assertEqual(
+                [], actions.get_ranked_discovery(trip.trip_id)["provider_no_match"]
+            )
+            # ...and the purchase is allowed to run again rather than being refused.
+            self.assertTrue(actions.enrich_place_card(trip.trip_id, place_id))
+
+    def test_a_standing_refusal_still_withdraws_both_controls(self) -> None:
+        """The other side of the same date: unexpired, it must still refuse."""
+
+        with TemporaryDirectory() as directory:
+            actions = PlannerActions(
+                Path(directory) / "standing.sqlite3",
+                place_provider=RankingActionsTest.Provider(),
+                card_provider=FakeCardProvider(),
+            )
+            trip = actions.create_trip(name="Taipei", destination="Taipei")
+            actions.save_setup(
+                trip_id=trip.trip_id, main_style=["sightseeing"], confirmed=True
+            )
+            actions.discover_places(trip_id=trip.trip_id)
+            place_id = actions.rank_candidates(trip.trip_id)["lanes"]["browse_all"][0]
+
+            now = datetime.now(timezone.utc)
+            actions.store.upsert_place_evidence(
+                trip_id=trip.trip_id,
+                place_id=place_id,
+                kind="provider_no_match",
+                value={"place_id": place_id, "provider": "google_places"},
+                provider="google_places",
+                retrieved_at=now.isoformat(),
+                expires_at=(now + timedelta(days=90)).isoformat(),
+            )
+
+            self.assertEqual(
+                [place_id],
+                actions.get_ranked_discovery(trip.trip_id)["provider_no_match"],
+            )
+            with self.assertRaises(PlannerRefusal) as caught:
+                actions.enrich_place_card(trip.trip_id, place_id)
+            self.assertEqual("place_not_in_provider", caught.exception.code)
 
     def test_another_place_is_unaffected(self) -> None:
         """The refusal is about one place, not about the provider."""

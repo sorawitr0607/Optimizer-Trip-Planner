@@ -84,8 +84,10 @@ export async function collectRouteEvidence(
   // unreachable on the owner's London trip — 60 of 60 attempts — which left every place
   // ROUTE_UNVERIFIED and the plan unbuildable, with nothing on screen to press. Transit
   // topology is free, comes from a different service, and produces `estimated` routes
-  // the optimizer accepts on an Explore trip. Asking for it costs one request when
-  // walking already succeeded and rescues the trip when it did not.
+  // the optimizer accepts on **any** trip: a published timetable is evidence, and
+  // `_usable_route_statuses` no longer holds it back from a scheduled one, which is why
+  // "the walking is not considering the metro line" was true. Asking for it costs one
+  // request when walking already succeeded and rescues the trip when it did not.
   //
   // Measured on London: 0 walking routes, then 24 transit legs, and the plan went from
   // `unavailable` with 0 visits to `provisional` with 5.

@@ -9,6 +9,7 @@ import { BUILD_STAGES, PREVIEW_STAGES } from "../shared/buildStages";
 import { StayPlanner } from "./StayPlanner";
 import { addDays } from "../shared/dates";
 import { wholeDraftWithDates } from "../shared/setupDraft";
+import { planDecisions } from "../shared/planDecisions";
 
 import {
   ApiError,
@@ -213,8 +214,9 @@ export function OptimizePage() {
   /**
    * The plan changed, so everything derived from the plan is stale.
    *
-   * **`comfort_tradeoffs` is derived from the plan and only `acceptAll` was refreshing
-   * it.** Every build path invalidated `plan_preview` and left the report alone, so after
+   * **`comfort_tradeoffs` is derived from the plan and only the comfort-acceptance path
+   * was refreshing it.** Every build path invalidated `plan_preview` and left the report
+   * alone (that path is `resolveAllAndRebuild` now), so after
    * a build the cache still held whatever it said *before* the plan existed — usually
    * nothing exceeding. Two things vanish together when that happens: `ComfortTradeoffs`
    * filters to zero rules and renders nothing, and `overBudget` is empty so the accept
@@ -251,34 +253,6 @@ export function OptimizePage() {
     onError: (error) => setRefusal(error instanceof ApiError ? error.code : String(error)),
   });
 
-  const acceptAll = useMutation({
-    mutationFn: async (rules: ComfortTradeoffReport["rules"]) => {
-      setPreviewStage(undefined);
-      for (const rule of rules) {
-        await rpc("accept_comfort_tradeoff", {
-          trip_id: tripId,
-          code: rule.code,
-          value: rule.measured,
-        });
-      }
-      // The plan is judged at build time, so agreeing to a figure changes nothing until
-      // it is rebuilt. Without this the button would appear to do nothing at all.
-      return rpc<PlanPreview>(
-        "generate_plan_preview",
-        { trip_id: tripId },
-        setPreviewStage,
-      );
-    },
-    onSuccess: async () => {
-      setRefusal(null);
-      await Promise.all(
-        ["comfort_tradeoffs", "plan_preview", "journey"].map((key) =>
-          queryClient.invalidateQueries({ queryKey: [key, tripId] }),
-        ),
-      );
-    },
-    onError: (error) => setRefusal(error instanceof ApiError ? error.code : String(error)),
-  });
   // The paid path is buy-then-build, not buy-and-stop. Buying the hours and leaving the
   // owner to press again was the "back and forth" report: the purchase is only ever made
   // *in order to* build, so the two are one press.
@@ -435,38 +409,6 @@ export function OptimizePage() {
   //   makes, for every place the refusal listed, then the same rebuild. This is the
   //   "variant that cuts some" the owner asked for: the plan that fits, without the
   //   places that could not.
-  const addDayAndRebuild = useMutation({
-    mutationFn: async (days: number) => {
-      const basics = stored.data?.snapshot.data.trip_basics;
-      const start = basics?.start_date;
-      const end = basics?.end_date;
-      if (!start || !end) throw new ApiError("setup_missing", {});
-      await rpc<SetupDraft>("save_setup", {
-        trip_id: tripId,
-        ...wholeDraftWithDates(stored.data ?? null, start, addDays(end, days)),
-      });
-      // Writing the dates moves the setup hash, and discovery stores the hash it ran
-      // against — so the found places go stale the instant the day is added, and the
-      // rebuild below refused with `discovery_stale`. Reported by the owner as the error
-      // that follows pressing "Add a day and rebuild", and it refused *before* doing any
-      // of the work, so the remedy looked like a second dead end.
-      //
-      // Nothing needs re-searching. `discover_places` keys the provider cache on the
-      // destination alone, so with a fresh entry this rebuilds the run from disk with no
-      // network call at all — measured at 0.05s on a 715-place catalogue — and `place_id`
-      // is a hash of name, coordinates and category, so every existing choice still
-      // points at the same place. `StayPlanner` has always done this after writing dates;
-      // this path was the one that did not. **Never `force_refresh` here** — that goes
-      // back to Overpass and undoes the point.
-      await rpc("discover_places", { trip_id: tripId, force_refresh: false });
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["setup", tripId] }),
-        queryClient.invalidateQueries({ queryKey: ["discovery", tripId] }),
-      ]);
-      await autoResolveAndGenerate.mutateAsync();
-    },
-    onError: (error) => setRefusal(error instanceof ApiError ? error.code : String(error)),
-  });
   const cutUnfitAndRebuild = useMutation({
     mutationFn: async (placeIds: string[]) => {
       for (const placeId of placeIds) {
@@ -483,14 +425,71 @@ export function OptimizePage() {
     onError: (error) => setRefusal(error instanceof ApiError ? error.code : String(error)),
   });
 
+  /**
+   * Every outstanding decision applied, then **one** rebuild.
+   *
+   * The reported journey was "build them again -> accept the criteria -> add the day ->
+   * add the day". Each of those was a separate control that wrote its own change and
+   * then rebuilt, so the owner paid a full build to discover each next condition -- even
+   * though every one of them is already derivable from the draft in hand. `outstanding`
+   * above lists them; this applies them in order and builds once at the end.
+   *
+   * Order is deliberate. The two acceptances are plain per-trip writes
+   * (`comfort_acceptances` and a `trip_evidence` row), so neither is disturbed by the
+   * date write that follows. The dates go last because writing them moves the setup hash
+   * and discovery stores the hash it ran against -- so the catalogue has to be re-keyed
+   * before anything will build, which is what `addDayAndRebuild` learned the hard way
+   * and why `force_refresh` stays false: `discover_places` keys the provider cache on
+   * the destination alone, so this rebuilds the run from disk with no network call.
+   *
+   * `autoResolveAndGenerate` does the building, unchanged, so the routes-and-hours
+   * preamble and the stage reporting are not duplicated here.
+   */
+  const resolveAllAndRebuild = useMutation({
+    mutationFn: async () => {
+      for (const rule of selectedComfort) {
+        await rpc("accept_comfort_tradeoff", {
+          trip_id: tripId,
+          code: rule.code,
+          value: rule.measured,
+        });
+      }
+      if (needsRoutes) await rpc("accept_route_estimates", { trip_id: tripId });
+      if (needsDays.length) {
+        const basics = stored.data?.snapshot.data.trip_basics;
+        const start = basics?.start_date;
+        const end = basics?.end_date;
+        if (!start || !end) throw new ApiError("setup_missing", {});
+        await rpc<SetupDraft>("save_setup", {
+          trip_id: tripId,
+          ...wholeDraftWithDates(stored.data ?? null, start, addDays(end, extraDays)),
+        });
+        await rpc("discover_places", { trip_id: tripId, force_refresh: false });
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["setup", tripId] }),
+          queryClient.invalidateQueries({ queryKey: ["discovery", tripId] }),
+        ]);
+      }
+      return autoResolveAndGenerate.mutateAsync();
+    },
+    onSuccess: async () => {
+      setRefusal(null);
+      await Promise.all(
+        ["comfort_tradeoffs", "plan_preview", "journey", "candidate_choices"].map((key) =>
+          queryClient.invalidateQueries({ queryKey: [key, tripId] }),
+        ),
+      );
+    },
+    onError: (error) => setRefusal(error instanceof ApiError ? error.code : String(error)),
+  });
+
   const building =
     generate.isPending ||
+    resolveAllAndRebuild.isPending ||
     autoResolveAndGenerate.isPending ||
     buyThenGenerate.isPending ||
-    addDayAndRebuild.isPending ||
     cutUnfitAndRebuild.isPending ||
     acceptRoutes.isPending ||
-    acceptAll.isPending ||
     dropAndRebuild.isPending;
 
   const activate = useMutation({
@@ -539,7 +538,23 @@ export function OptimizePage() {
   const overBudget = (tradeoffs.data?.rules ?? []).filter(
     (rule) => rule.exceeds && rule.measured !== null && !rule.covered,
   );
-  const selectedComfort = overBudget.filter((rule) => !excludedComfort.has(rule.code));
+
+  /* Everything standing between this draft and a plan, derived in one place.
+   *
+   * It was derived in three, at three different depths of the tree, and each one had its
+   * own button that rebuilt on its own. So the owner walked the refusals in series --
+   * reported as "it went through like build them again -> accept the criteria -> add the
+   * day -> add the day" -- paying a full rebuild for each, and only learning the next
+   * condition after the last one had been applied. Four builds to answer four questions
+   * that were all already known after the first. See `shared/planDecisions`. */
+  const {
+    unfit, selectedComfort, needsRoutes, needsDays, extraDays, outstanding,
+  } = planDecisions(
+    variant,
+    tradeoffs.data?.rules ?? [],
+    excludedComfort,
+    optimizerInput?.candidates,
+  );
 
   const area = optimizerInput?.candidates?.find(
     (candidate) => candidate.id === variant?.hotel_recommendation?.default_area_id,
@@ -975,19 +990,36 @@ export function OptimizePage() {
                       ))}
                     </fieldset>
                   ) : null}
+                  {/* One press, everything outstanding. This used to be `acceptAll`,
+                      which agreed to the figures and rebuilt — and then the rebuild
+                      surfaced the *next* condition, which had its own button and its own
+                      rebuild. `resolveAllAndRebuild` applies the acceptance together with
+                      whatever else this draft is waiting for and builds once; when the
+                      figures are the only thing outstanding it does exactly what
+                      `acceptAll` did. The steps are listed above the button when there is
+                      more than one, so the press is never larger than it looks. */}
+                  {outstanding.length > 1 ? (
+                    <p className="setup-hint">
+                      {outstanding
+                        .map((item) => copy(`resolve_step_${item}`, language))
+                        .join(" · ")}
+                    </p>
+                  ) : null}
                   <button
                     className="setup-primary"
-                    disabled={acceptAll.isPending || selectedComfort.length === 0}
-                    onClick={() => acceptAll.mutate(selectedComfort)}
+                    disabled={building || selectedComfort.length === 0}
+                    onClick={() => resolveAllAndRebuild.mutate()}
                     type="button"
                   >
-                    {acceptAll.isPending
+                    {building
                       ? copy("loading", language)
-                      : overBudget.length > 1
-                        ? copy("accept_selected_and_continue", language)
-                        : copyFormat("accept_measured_and_continue", language, {
-                            measured: String(overBudget[0].measured),
-                          })}
+                      : outstanding.length > 1
+                        ? copy("resolve_all_and_continue", language)
+                        : overBudget.length > 1
+                          ? copy("accept_selected_and_continue", language)
+                          : copyFormat("accept_measured_and_continue", language, {
+                              measured: String(overBudget[0].measured),
+                            })}
                   </button>
                 </>
               ) : (
@@ -1007,22 +1039,17 @@ export function OptimizePage() {
               below says *what* happened; this says what to do about it, which is what
               was missing — a row reading "cannot currently fit" and nothing to press. */}
           {(() => {
-            const unfit = (variant.reconciliation ?? []).filter(
-              (item) => item.status === "cannot_currently_fit",
-            );
-            if (!unfit.length) return null;
-            const needsRoutes = unfit.some((item) => item.reason === "ROUTE_UNVERIFIED");
+            // `unfit`, `needsRoutes`, `needsDays` and `extraDays` are derived once at the
+            // top of the component now: `resolveAllAndRebuild` needs the same four facts
+            // to apply every outstanding decision in one pass, and deriving them twice is
+            // how the button and the sentence beside it come to disagree.
+            //
             // "The trip has no remaining time capacity" is the honest residual: these
             // places fit nothing that is wrong, there are simply more of them than the
             // days hold. The optimizer cannot invent a day — the dates are the owner's —
             // so the only useful thing to say is how short the trip is and where to
             // lengthen it. Saying it without that link was the dead end reported.
-            const needsDays = unfit.filter((item) => item.reason === "NO_TIME_CAPACITY");
-            const extraMinutes = needsDays.reduce((sum, item) => {
-              const candidate = optimizerInput?.candidates?.find((entry) => entry.id === item.place_id);
-              return sum + (candidate?.duration_bounds?.ideal_minutes ?? 90) + 30;
-            }, 0);
-            const extraDays = Math.max(1, Math.ceil(extraMinutes / 420));
+            if (!unfit.length) return null;
             return (
               <section className="optimize-unfit">
                 <h2 className="money-eyebrow">{copy("unfit_title", language)}</h2>
@@ -1039,18 +1066,32 @@ export function OptimizePage() {
                         hide the old draft while it runs. The wizard link is gone on
                         purpose: it threw away this screen — the refusal, the reasons,
                         the plan so far — to change one date, and coming back meant
-                        building again from the top. */}
+                        building again from the top.
+
+                        The primary control is `resolveAllAndRebuild`, not the
+                        day-extension on its own: whatever else this draft is waiting for
+                        — an unapproved comfort figure, an unrouted pair — is applied in
+                        the same pass, so the owner is not walked through the refusals one
+                        rebuild at a time. When days are the only thing outstanding the
+                        two are the same action; `outstanding` says which. */}
+                    {outstanding.length > 1 ? (
+                      <p className="setup-hint">
+                        {outstanding
+                          .map((item) => copy(`resolve_step_${item}`, language))
+                          .join(" · ")}
+                      </p>
+                    ) : null}
                     <div className="optimize-actions">
                       <button
                         className="setup-primary"
-                        disabled={addDayAndRebuild.isPending || cutUnfitAndRebuild.isPending}
-                        onClick={() => addDayAndRebuild.mutate(extraDays)}
+                        disabled={building || cutUnfitAndRebuild.isPending}
+                        onClick={() => resolveAllAndRebuild.mutate()}
                         type="button"
                       >
                         {copyFormat("unfit_add_days", language, { count: extraDays })}
                       </button>
                       <button
-                        disabled={addDayAndRebuild.isPending || cutUnfitAndRebuild.isPending}
+                        disabled={building || cutUnfitAndRebuild.isPending}
                         onClick={() =>
                           cutUnfitAndRebuild.mutate(needsDays.map((item) => item.place_id ?? ""))
                         }

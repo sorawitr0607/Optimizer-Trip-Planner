@@ -1342,11 +1342,19 @@ def _greedy_sequences(
     """
 
     dates = [window["date"] for window in snapshot["trip"]["usable_windows"]]
+    order = {day: index for index, day in enumerate(dates)}
     sequences: dict[str, list[dict[str, Any]]] = {day: [] for day in dates}
     skipped: set[str] = set()
     for candidate in sorted(candidates, key=lambda item: _candidate_sort_key(snapshot, item)):
         placed = False
-        for day in dates:
+        # Emptiest day first, not the first day that fits. Plain first-fit walks the
+        # dates in order and takes the first day the schedule still builds on, which
+        # fills day one to its ceiling before day two is offered anything -- the same
+        # crammed shape `_day_crowding` exists to stop, arriving by a different route.
+        # It matters because this is the floor the beam search falls back to when it
+        # runs out of time, and a real city's catalogue is exactly where that happens.
+        # Ties break on the date, so the sweep stays deterministic.
+        for day in sorted(dates, key=lambda value: (len(sequences[value]), order[value])):
             lock = _lock_for(snapshot, _candidate_id(candidate))
             if lock and lock.get("date") and lock["date"] != day:
                 continue
@@ -1396,6 +1404,45 @@ def _greedy_baseline(
     }
 
 
+def _day_crowding(days: list[dict[str, Any]]) -> int:
+    """The sum of the squares of each day's visit count. Lower is better spread.
+
+    **What it exists to stop.** Nothing in the objective preferred using a day, and
+    `travel_minutes` actively preferred not to: every day the plan opens costs another
+    base-to-place-and-back journey, so the cheapest arrangement of twelve places over
+    seven days is to pile them onto as few days as possible. Measured on exactly that
+    input before this existed -- twelve ordinary places, seven ordinary days, every pair
+    fifteen minutes apart, nothing closed and no threshold set -- and all three variants
+    scheduled all twelve places onto the last two days:
+
+        best_balance     [0, 0, 0, 0, 0, 6, 6]
+        relaxed          [0, 0, 0, 0, 4, 4, 4]
+        more_highlights  [0, 0, 0, 0, 0, 3, 9]
+
+    Five days of a seven-day trip carrying nothing but free time, reported as "the
+    output trip is so weird, it has a lot of days that have only free times". Not one of
+    those was a scheduling failure -- every place fitted, no rule was broken, and the
+    reconciliation was empty. It was the plan the objective asked for.
+
+    **Squares, not a count of empty days.** Both would fill the blank days, but a count
+    is indifferent between `[6, 6]` and `[11, 1]` once neither day is empty, and squares
+    are not: they fall as the load levels out, so one number expresses "use the days"
+    and "do not cram one of them" together. On the input above it prefers
+    `[2, 2, 2, 2, 2, 1, 1]` at 22 over `[0, 0, 0, 0, 0, 6, 6]` at 72.
+
+    **Where it sits in the tuple is the whole design.** After `-experience`, so a
+    smoother trip can never cost a place the owner chose; after the comfort count, so it
+    cannot buy spread by breaking a threshold; and before `travel_minutes`, because a
+    second hotel round trip is exactly the price of not spending a day indoors, and it
+    is worth paying. A one-day trip has one arrangement and this is constant for it,
+    which is why none of the 27 historic single-day regressions move.
+    """
+
+    return sum(
+        sum(1 for item in day["items"] if item["type"] == "visit") ** 2 for day in days
+    )
+
+
 def _search_objective(
     snapshot: dict[str, Any],
     sequences: dict[str, list[dict[str, Any]]],
@@ -1430,6 +1477,8 @@ def _search_objective(
         must_missing,
         soft,
         -experience,
+        # Before travel, and deliberately. See `_day_crowding`.
+        _day_crowding(built["days"]),
         metrics["travel_minutes"],
         -lower,
         len(skipped),
@@ -1945,23 +1994,40 @@ def _best_inbound_route(snapshot: dict[str, Any], destination: str) -> dict[str,
 
 
 def _usable_route_statuses(snapshot: dict[str, Any]) -> set[str]:
-    """`verified` always; `estimated` and `accepted_estimate` on an Explore preview.
+    """`verified` and `estimated` always; `accepted_estimate` on an Explore preview.
 
-    The same rule `_planning_fact` applies to opening hours. A transit leg derived
-    from topology or a timetable is `estimated` by construction -- it is honest, not
-    looked up -- so without this the optimizer discards every transit route it is
-    given and `WF-038` buys nothing.
+    **`estimated` is the transit status, and only the transit status.** Exactly two
+    things in this project produce it -- `GtfsTransitProvider` from a published
+    timetable and `OsmSubwayProvider` from a subway relation's topology -- and both say
+    so where they set it. Nothing else emits it, which is what makes admitting it a
+    narrow rule rather than a relaxation.
 
-    `accepted_estimate` is a straight line the **owner asked for** where no router would
-    answer, deliberately inflated so it can only over-state the journey. It is admitted
-    on the same terms as `estimated` and never on a `ready_to_schedule` trip: a plan that
-    claims to be scheduled against verified evidence must not be resting on a guess,
-    however conservative, and however explicitly it was requested.
+    Why it used to be refused, and why that was wrong. `estimated` was grouped with
+    `accepted_estimate` and both were held back from a `ready_to_schedule` trip, on the
+    reasoning that "a plan that claims to be scheduled against verified evidence must
+    not be resting on a guess". That is right about `accepted_estimate` and wrong about
+    a timetable. The consequence was that on every ready-to-schedule trip the optimizer
+    threw away **every metro leg it had been given** and planned the city on foot and by
+    car alone -- reported as "why is the walking not considering the metro line too",
+    which is precisely what it was doing. A published ride time is not a guess; it is
+    evidence a router was not asked for, and `status: "estimated"` is already how the
+    plan tells the reader that.
+
+    `accepted_estimate` stays exactly where it was: a straight line the **owner asked
+    for** where no router would answer, inflated by `ACCEPTED_ROUTE_DETOUR` so it can
+    only over-state the journey. Deliberately fabricated, so it is admitted only on an
+    Explore preview however conservative and however explicitly it was requested. The
+    two statuses were already separate for this reason; this is the first thing to
+    actually use the distinction.
+
+    What is *not* softened: a leg with no route at all. `_missing_route_edges` and
+    `ROUTE_UNVERIFIED` are unchanged, so admitting a real transit journey never becomes
+    inventing one.
     """
 
     if snapshot.get("trip", {}).get("allow_provisional_assumptions"):
         return {"verified", "estimated", "accepted_estimate"}
-    return {"verified"}
+    return {"verified", "estimated"}
 
 
 def _routes_between(

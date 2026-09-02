@@ -215,6 +215,8 @@ class PlannerActions:
         self.card_provider = card_provider
         self.interpreter = interpreter
         self._job_queue: Any = None
+        #: The candidate catalogue, kept by run id. See `get_latest_discovery`.
+        self._discovery_memo: dict[str, DiscoveryRun] = {}
 
     def create_trip(
         self,
@@ -472,18 +474,21 @@ class PlannerActions:
             raise PlannerRefusal("unknown_trip", trip_id=trip_id)
         setup = self.store.get_setup(trip_id)
         discovery = self.store.get_latest_discovery_header(trip_id)
-        choices = [
-            choice
-            for choice in self.store.list_candidate_choices(trip_id)
-            if choice.action in {"must_do", "interested", "maybe"}
+        # Actions, not candidates. Navigation asks "has anything been kept", which is
+        # two columns; `list_candidate_choices` would drag every chosen place's payload
+        # out of the database on every page load. See `store.list_candidate_actions`.
+        kept = [
+            row["action"]
+            for row in self.store.list_candidate_actions(trip_id)
+            if row["action"] in {"must_do", "interested", "maybe"}
         ]
         active = self.store.get_active_plan(trip_id)
         # "I have finished choosing", pressed on `/places`. Both later stages wait for it.
-        chosen = bool(choices) and self._places_confirmed(
+        chosen = bool(kept) and self._places_confirmed(
             trip_id, has_active_plan=active is not None
         )
         gaps: list[str] = []
-        if setup is not None and setup.confirmed and discovery is not None and choices:
+        if setup is not None and setup.confirmed and discovery is not None and kept:
             if discovery["setup_sha256"] != setup.snapshot.sha256:
                 gaps = ["INPUT_NOT_READY"]
             elif active is not None:
@@ -494,7 +499,19 @@ class PlannerActions:
                     .get("capability_gaps", [])
                 )
             else:
-                gaps = self._journey_capability_gaps(trip_id, setup, choices)
+                # The one branch that needs the places themselves, and the only one that
+                # pays for them: it reads each candidate's `operational_evidence`. Every
+                # other path above answers from the narrow read, and a trip with a plan
+                # -- the common case on the itinerary screen -- never reaches here.
+                gaps = self._journey_capability_gaps(
+                    trip_id,
+                    setup,
+                    [
+                        choice
+                        for choice in self.store.list_candidate_choices(trip_id)
+                        if choice.action in {"must_do", "interested", "maybe"}
+                    ],
+                )
         stages = [
             {"key": "setup", "done": bool(setup and setup.confirmed), "blocked_by": None},
             {
@@ -506,7 +523,7 @@ class PlannerActions:
             },
             {
                 "key": "evidence",
-                "done": bool(choices and (not gaps or trip.planning_mode == "explore_first")),
+                "done": bool(kept and (not gaps or trip.planning_mode == "explore_first")),
                 "blocked_by": None if discovery is not None and chosen else "places",
             },
             {
@@ -540,7 +557,7 @@ class PlannerActions:
             "next": next((stage["key"] for stage in stages if not stage["done"]), "itinerary"),
             "capability_gaps": gaps,
             "has_active_plan": active is not None,
-            "choice_count": len(choices),
+            "choice_count": len(kept),
         }
 
     def _jobs(self) -> Any:
@@ -809,8 +826,59 @@ class PlannerActions:
             progress(4)
         return run
 
+    #: How many trips' catalogues to hold. A serverless function serves one owner at a
+    #: time in practice, and a catalogue is 630 KB at the median on the live database --
+    #: so this is a megabyte or two of process memory against the transfer measured below.
+    DISCOVERY_MEMO_TRIPS = 2
+
     def get_latest_discovery(self, trip_id: str) -> DiscoveryRun | None:
-        return self.store.get_latest_discovery(trip_id)
+        """The catalogue, read once per run rather than once per caller.
+
+        **Not a cache of mutable data.** `discovery_runs` is append-only, enforced by
+        `discovery_runs_no_update` and `discovery_runs_no_delete` triggers, so a given
+        `run_id` names bytes that cannot change. A new discovery writes a new row with a
+        new id, which the cheap header read below sees immediately. That property is
+        what makes this sound where caching a plan or a catalogue that can be edited
+        would not be -- the invalidation is the id, not a clock.
+
+        The measurement it answers. `candidates_json` on the live database is **630 KB
+        at the median and 3.23 MB at the largest**, measured as wire bytes rather than
+        the compressed on-disk size -- and `SELECT * FROM discovery_runs` was called
+        **5,860 times** between 19 August and 2 September. Nothing was wasteful about any
+        single read: `/places` renders the catalogue and `_optimizer_input` ranks it. But
+        `_current_choice_inputs` runs on *every swipe*, and each decision also invalidates
+        the ranking the page then refetches -- so a twenty-card session paid for the same
+        immutable blob about forty times. On the largest trip in the database that is
+        **129 MB to record twenty verdicts**.
+
+        The header is 111 bytes and an index seek. Paying it to skip a 630 KB-to-3 MB
+        transfer is the same trade `get_latest_discovery_report` already makes.
+
+        **Nothing shared is mutable.** A held `DiscoveryRun` is a frozen dataclass over a
+        `FrozenSnapshot`, and `as_dict()` is `json.loads(self.canonical_json)` -- a fresh
+        dict on every call. So a caller that edits the candidate list it was handed cannot
+        reach the copy the next caller gets, which is the failure a memo of parsed objects
+        would have.
+        """
+
+        header = self.store.get_latest_discovery_header(trip_id)
+        if header is None:
+            # No run at all. Drop any memo for this trip: a deleted trip's catalogue
+            # must not answer for the id that replaces it.
+            self._discovery_memo.pop(trip_id, None)
+            return None
+        held = self._discovery_memo.get(trip_id)
+        if held is not None and held.run_id == header["id"]:
+            return held
+        run = self.store.get_latest_discovery(trip_id)
+        if run is not None:
+            if len(self._discovery_memo) >= self.DISCOVERY_MEMO_TRIPS:
+                # Oldest insertion first; dicts preserve it. A process that really is
+                # serving many trips at once loses the least recently added rather than
+                # growing without bound.
+                self._discovery_memo.pop(next(iter(self._discovery_memo)))
+            self._discovery_memo[trip_id] = run
+        return run
 
     def list_discovery_runs(self, trip_id: str) -> list[DiscoveryRun]:
         return self.store.list_discovery_runs(trip_id)
@@ -875,10 +943,35 @@ class PlannerActions:
     def rank_candidates(self, trip_id: str) -> dict[str, Any]:
         return self._rank_candidates(trip_id)
 
+    def _provider_no_match_ids(self, trip_id: str) -> list[str]:
+        """Places a paid provider has searched for and not found, **while that stands**.
+
+        The bug this exists to close. The refusal is written with an `expires_at` 90 days
+        out, and `PROVIDER_NO_MATCH_DAYS` explains why it is bounded: "it does change
+        eventually and a permanent refusal would be a worse lie than the repeated charge
+        it replaces". Nothing ever read that column. `list_place_evidence` returns every
+        row it holds regardless of expiry -- correctly, because venue notices and assumed
+        windows judge their own freshness -- so the expiry was decorative and the two
+        photo buttons stayed hidden for good. Reported as "it is always hidden after I
+        once hid it", and that is exactly what the stored refusal did.
+
+        One helper rather than the comparison written twice, because the two callers are
+        the *same question asked by the two controls the owner sees*: the deck's "get
+        photographs from Google" and the panel's "load live details". They disagreeing is
+        the other half of the same report.
+        """
+
+        now = datetime.now(timezone.utc).isoformat()
+        return [
+            str(row["place_id"])
+            for row in self.store.list_place_evidence(trip_id, PROVIDER_NO_MATCH_KIND)
+            if row.get("place_id") and str(row.get("expires_at") or "") > now
+        ]
+
     def get_ranked_discovery(self, trip_id: str) -> dict[str, Any]:
         """The latest discovery and its ranking from one candidate-catalogue read."""
 
-        discovery = self.store.get_latest_discovery(trip_id)
+        discovery = self.get_latest_discovery(trip_id)
         if discovery is None:
             return {"discovery": None, "ranking": None, "provider_no_match": []}
         return {
@@ -886,12 +979,9 @@ class PlannerActions:
             "ranking": self._rank_candidates(trip_id, discovery),
             # Tiny state piggy-backed on the existing discovery read. Both paid-photo
             # buttons can now withdraw after Google's durable no-match answer, including
-            # after reload, without another request or another catalogue transfer.
-            "provider_no_match": [
-                row["place_id"]
-                for row in self.store.list_place_evidence(trip_id, PROVIDER_NO_MATCH_KIND)
-                if row.get("place_id")
-            ],
+            # after reload, without another request or another catalogue transfer -- and
+            # both come back when the refusal expires, which is what it is dated for.
+            "provider_no_match": self._provider_no_match_ids(trip_id),
         }
 
     def enrich_place_card(
@@ -919,10 +1009,7 @@ class PlannerActions:
         # button was pressed. It is not a failure to retry — Google's index is not
         # going to acquire a bicycle practice ground under a bridge because we asked
         # twice — so the refusal is remembered and costs nothing to repeat.
-        if any(
-            row.get("place_id") == place_id
-            for row in self.store.list_place_evidence(trip_id, PROVIDER_NO_MATCH_KIND)
-        ):
+        if place_id in self._provider_no_match_ids(trip_id):
             raise PlannerRefusal("place_not_in_provider", place_id=place_id)
 
         self._spend(
@@ -1606,7 +1693,7 @@ class PlannerActions:
         self, trip_id: str, *, discovery: DiscoveryRun | None = None
     ) -> tuple[SetupDraft, DiscoveryRun, list[dict[str, Any]]]:
         setup = self.store.get_setup(trip_id)
-        discovery = discovery or self.store.get_latest_discovery(trip_id)
+        discovery = discovery or self.get_latest_discovery(trip_id)
         if setup is None or not setup.confirmed:
             raise PlannerRefusal("setup_not_confirmed")
         if discovery is None:

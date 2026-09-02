@@ -2,14 +2,19 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError, rpc } from "./client";
 
+/** One scripted reply: an HTTP answer, or a network-level `fetch` rejection. */
+type Reply = { status: number; body: string } | { reject: string };
+
 /** Queue of replies, consumed one per fetch, so a polling sequence can be scripted. */
-function stubFetch(replies: { status: number; body: string }[]) {
+function stubFetch(replies: Reply[]) {
   const calls: string[] = [];
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string) => {
       calls.push(url);
       const next = replies.shift() ?? { status: 500, body: '{"code":"ran_out"}' };
+      // What a browser actually does below HTTP: a bare TypeError, no status, no body.
+      if ("reject" in next) throw new TypeError(next.reject);
       return new Response(next.body, {
         status: next.status,
         headers: { "Content-Type": "application/json" },
@@ -56,6 +61,42 @@ describe("rpc", () => {
     await expect(rpc("discover_places", { trip_id: "trip_x" })).resolves.toEqual({ places: 3 });
     expect(calls[0]).toBe("/api/discover_places");
     expect(calls[1]).toBe("/api/job_status");
+  }, 20_000);
+
+  it("keeps polling through a network failure instead of failing the build", async () => {
+    /**
+     * "Failed to fetch" while building the plan, reported by the owner.
+     *
+     * A build is 30-90 seconds against a 1.5-second poll, so one run asks about sixty
+     * times, and `fetch` rejects with a bare `TypeError` for anything below HTTP -- a
+     * cold start closing an idle socket, a DNS blip, a phone changing network. One
+     * such rejection used to throw straight out of the loop and fail a build the
+     * worker was finishing perfectly.
+     */
+    const calls = stubFetch([
+      { status: 202, body: '{"job_id":"job_2","status":"queued"}' },
+      { reject: "Failed to fetch" },
+      { status: 200, body: '{"job_id":"job_2","status":"running","error":null,"result":null}' },
+      { reject: "Failed to fetch" },
+      { status: 200, body: '{"job_id":"job_2","status":"done","error":null,"result":{"places":7}}' },
+    ]);
+    await expect(rpc("generate_plan_preview", { trip_id: "trip_x" })).resolves.toEqual({
+      places: 7,
+    });
+    // Every poll was made, including the two that never arrived.
+    expect(calls.length).toBe(5);
+  }, 20_000);
+
+  it("still surfaces a refusal the server actually answered with", async () => {
+    // The other side of the retry: an ApiError means the server replied, so repeating
+    // the poll would bury a real 404 or 403 under a five-minute wait.
+    stubFetch([
+      { status: 202, body: '{"job_id":"job_9","status":"queued"}' },
+      { status: 403, body: '{"code":"not_your_trip"}' },
+    ]);
+    await expect(
+      rpc("generate_plan_preview", { trip_id: "trip_x" }),
+    ).rejects.toMatchObject({ code: "not_your_trip" });
   }, 20_000);
 
   it("hands the caller each stage the worker reports, and nothing while it is queued", async () => {
