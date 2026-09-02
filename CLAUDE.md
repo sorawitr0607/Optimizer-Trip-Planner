@@ -277,6 +277,43 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   exempt it (the pair filter and the one inside the fetch loop — the second is what the
   per-pass cap is measured against), and the seed degrades to zero on any failure rather
   than refusing, because the worst case must be the behaviour that came before.
+- **`MAX_ROUTE_REQUESTS` prices outbound requests, so a provider that makes none per pair
+  is exempt.** `refresh_transit_routes` runs through the same `_refresh_routes_with`, so it
+  inherited the sixty-pair cap, and `collectRouteEvidence` calls it **once** — sixty of a
+  22-place trip's 462 ordered pairs is 13%, so seven pairs in eight held only a walking
+  route and the optimizer took "the shortest route it holds". That is the whole of the
+  owner's Tokyo plan walking 8.5, 9.5, 15.7 and **17.6 km** between sights. Nothing was
+  fabricated and nothing was unverified: the metro leg did not exist to be compared
+  against. `OsmMetroProvider.build_graph` memoises after one Overpass call and
+  `GtfsTransitProvider` reads a local file, so both set `answers_pairs_locally` and sweep
+  every pair. The **deadline** is what bounds such a job — `refresh_transit_routes` had
+  none at all, which was survivable only while the count cap bounded it by accident.
+- **A `route=subway` relation lists its own platform nodes, so without grouping the metro
+  graph has no interchanges at all.** Two lines meeting at one station arrive as two
+  unrelated ids with no edge between them, so `journey` — which already charges
+  `TRANSFER_PENALTY_MINUTES` and counts the change — was never *offered* a transfer.
+  Measured on live Overpass for Tokyo: 1489 stops, 2194 edges, **every** successful
+  journey reporting `transfers=0`, and Hama-rikyu to Shibuya, 5.6 km across the middle of
+  the city, answering `None`. `_station_of` groups on normalised name within
+  `STATION_GROUP_METRES`: **496 stations**, 6 of 7 sample pairs served, that pair a
+  33-minute ride with 8 minutes of walking. This is the same lesson `recommend_areas`
+  learned for Taipei — 437 stops are 138 stations — applied to the graph, which never got
+  it. **Merge the nodes; do not add transfer edges.** A transfer edge must spend its walk
+  as `ride_minutes`, which `walking_minutes` cannot see — and `walking_minutes` is what the
+  comfort cap measures, so a leg would pass a walking budget by hiding the walk. Grouping
+  stays conservative on purpose: an interchange whose halves carry *different* names stays
+  unmerged, losing a connection rather than inventing one.
+- **A fast Overpass 5xx is retried, and the metro query was the third site of that fault.**
+  `_attempt_block` has retried discovery since `WF-048` and `_drawing_elements` the basemap
+  since 2026-08-10; `OsmMetroProvider._metro_payload` was written after reproducing it —
+  two consecutive 504s on the Tokyo network, then 200 on the identical query. It costs more
+  here than at either of the others: a thin catalogue or a plain map is a degraded answer,
+  but the transit graph is **one** request, so losing it sends every pair back to walking.
+  Only a *fast* failure is retried; one that died at the query's own 90s timeout would
+  spend another 90s to fail identically. **Widening the query to reach JR and private rail
+  is not a free win** — `route=train` pulls every node of routes spanning the country
+  through `>;`, and both attempts answered 504. Kawagoe correctly returns no transit for
+  that reason, which is the app being honest rather than broken.
 - **A queued operation is expensive to ask for, so do not loop on one from the browser.**
   Every RPC for slow work is a job: enqueue, poll at 1.5s, wait for the worker to claim
   it, poll again — four to twelve seconds of latency before the work starts.
@@ -820,6 +857,35 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   `WARM_AHEAD` (4), and `PlacesPage` already has their URLs because it fetches summaries
   ten ahead. Lead images only — six-deep galleries for four upcoming cards is the burst
   Wikimedia answers 429 to. A broken image still releases the card, through `onError`.
+- **The warming must not race the photograph the card is gated on.** Both go to
+  `commons.wikimedia.org`, so the whole gallery plus `WARM_AHEAD` lead images are
+  multiplexed down **one** HTTP/2 connection alongside the single download that decides
+  whether the card may be shown — measured, a lead photograph is ~344 kB, so that is ~3 MB
+  of speculative bytes against the one the owner is waiting on. `shared/photos.ts`'s
+  `warmTargets` returns nothing while `cardPending`, and everything once the card is up.
+  Nothing is given up: a card is read for seconds, far longer than the warm run needs.
+  `fetchPriority="high"` is a hint about ordering, not a promise about bandwidth, and
+  Wikimedia may ignore the H2 priority — not *starting* the speculative work is the part
+  this app owns. It is a pure function in `shared/` because `PlaceDeck` may not export a
+  non-component (`react-refresh/only-export-components`) and the node test environment
+  runs no effects, so the rule is testable only if it lives outside the component.
+- **`index.html` preconnects to both Wikimedia origins, and the redirect is why.** A photo
+  URL is `commons.wikimedia.org/wiki/Special:FilePath/...`, which 302s to
+  `upload.wikimedia.org` — two origins, each wanting DNS, TCP and TLS before a byte
+  arrives. Measured cold: 234 ms to finish the commons handshake and **1.1 s to first
+  byte** across the chain. The redirect cannot be skipped: a direct
+  `upload.wikimedia.org/thumb/` URL answers only for widths Wikimedia has already
+  materialised and **400s** for the rest, which was checked rather than assumed — and note
+  that `?width=640` is served as the **960px** bucket at ~344 kB, so the width this app
+  asks for is not the width it gets.
+- **A preset's `name` becomes the trip's name, so it carries no day count.** It used to —
+  "Tokyo 6-Day City & Culture" — and `applyPreset` writes it straight into the form, where
+  `exporters.py` reads it back as the workbook's title. Nothing recomputes it when the
+  owner picks their real dates, so a trip running 25 Nov to 2 Dec printed **"Tokyo 6-Day"**
+  over a workbook describing eight days. The count is a suggestion about the preset, not a
+  fact about the trip, so it stays in the card's `days` badge and `tagKey` heading, neither
+  of which is saved. A name asserting a duration the trip does not have is the same defect
+  as printing a placeholder as a finding.
 - **The deck's buy button has three separate withdrawals, and they sit at different
   layers.** It renders only when `paidPhotoUsd != null` **and** the card is thinly
   pictured **and** the place has no session insight **and** this card's ask has not

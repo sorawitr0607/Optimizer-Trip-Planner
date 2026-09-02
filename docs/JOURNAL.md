@@ -5900,3 +5900,118 @@ only check that would have seen the original defect. Stage 9 still reports `DID 
 and this entry is the clearest argument yet for re-basing it: an unstyled panel reached
 production because the one gate that photographs screens has had no fixture trip since
 2026-09-02.
+
+## The metro city that walked, 2026-09-02
+
+Owner testing on a Tokyo trip, 25 Nov – 2 Dec. Seven reports. Two were one bug two layers
+deep, one was a label, one was a transient I reproduced by accident, and three are still
+open on purpose.
+
+### "Several days have unrealistic walk transfers: 8.5 km, 9.5 km, 15.7 km, 17.6 km"
+
+Two causes, and the first one hid the second.
+
+**The cap.** `refresh_transit_routes` runs through the same `_refresh_routes_with` as
+walking, so it inherited `MAX_ROUTE_REQUESTS` — sixty pairs — and `collectRouteEvidence`
+calls it exactly once. Sixty of a 22-place trip's 462 ordered pairs is 13%. Seven pairs in
+eight held only a walking route, and `optimizer._best_route` takes the shortest it holds.
+
+That cap prices *outbound requests* at the walking router's measured ~2.1s each. A transit
+pair is not one: `OsmMetroProvider.build_graph` memoises after one Overpass call and
+`GtfsTransitProvider` reads a local file. Both now set `answers_pairs_locally` and sweep
+every pair, bounded by `ROUTE_SWEEP_SECONDS` — a deadline `refresh_transit_routes` never
+had, which was survivable only while the count cap bounded it by accident.
+
+**The graph had no interchanges, and that was the real one.** Probing live Overpass for
+Tokyo, every successful journey reported `transfers=0`. In Tokyo that is not plausible, and
+it was the tell: `graph_from_osm` keyed stops by OSM **node id**, and edges only ever
+joined consecutive nodes *within one relation*. Two lines meeting at Shibuya arrived as two
+unrelated ids with nothing between them. `journey`'s Dijkstra already charges
+`TRANSFER_PENALTY_MINUTES` and counts the change — it was simply never offered one, so
+every answer it could give was a single-line ride and everything needing a change came back
+`None`.
+
+Measured, before and after `_station_of`:
+
+| | stations | edges | sample pairs served | transfers |
+|---|---|---|---|---|
+| before | 1489 | 2194 | 3/7 | always 0 |
+| after | **496** | 1108 | **6/7** | 0–1 |
+
+Hama-rikyu → Shibuya went from `None` to a 33-minute ride with 8 minutes of walking;
+Atagoyama → Meiji Jingu from `None` to 34 minutes. Walking per leg is now 7–17 minutes,
+inside the 15–25 minute pace caps, so these beat the walks they replace.
+
+1489 → 496 is the ratio `recommend_areas` already measured for Taipei — 437 stops, 138
+stations. That grouping went into the areas feature in `WF-040` and never into the graph.
+
+**Merging nodes, not adding transfer edges.** A transfer edge has to spend its walk as
+`ride_minutes`, which `walking_minutes` cannot see — and `walking_minutes` is the number
+the comfort cap measures, so the leg would pass a walking budget by hiding the walk.
+Sharing one node lets the existing penalty mean what it already says: finding the platform,
+reading the sign. Grouping is conservative — same normalised name within
+`STATION_GROUP_METRES`, so an interchange whose halves carry different names stays
+unmerged, losing a connection rather than inventing one.
+
+### "It said lost signal and failed, but after retry it worked"
+
+Reproduced without meaning to: the Tokyo metro query answered **504 twice**, then 200 on
+the identical query. `_attempt_block` has retried a fast Overpass 5xx since `WF-048` and
+`_drawing_elements` since 2026-08-10; the metro query was the third site of that fault and
+had never been given it. It matters more here than at either of the others — a thin
+catalogue or a plain map is a degraded answer, but the transit graph is *one* request, so
+losing it sends every pair back to walking. That is the same symptom as the bug above,
+arriving by a different road.
+
+### "The workbook says Tokyo 6-Day, but the trip runs 8 calendar days"
+
+Not the optimizer and not a computed count. `PRESETS[0].name` was the literal string
+`"Tokyo 6-Day City & Culture"`, `applyPreset` writes it into the form as the **trip name**,
+and `exporters.py` prints `snapshot["trip"]["name"]` as the workbook title. Nothing
+recomputes it when the owner picks dates. The count now lives only where it is true: the
+card's `days` badge and its heading, neither of which is saved to a trip.
+
+### Open, and why
+
+**Clustering and the near-empty days** are not addressed. They may well be downstream of
+the transit gap — with no metro legs the optimizer's notion of "near" *was* walking
+distance — but that is a hypothesis, and tuning an objective against travel times that have
+just changed would be measuring the wrong thing twice. Rebuild first.
+
+**Bell of Time / Kawagoe** is working as designed: the discovery window is 0.60°, or
+±33.4 km, and Kawagoe is ~30 km out with a Wikipedia article, so the indexed landmark block
+finds it. It also correctly gets **no** transit route — Tobu Tojo and JR Kawagoe are not
+`route=subway`. Widening the query to reach them is not a free win: `route=train` pulls
+every node of routes spanning the country through `>;`, and both attempts answered 504. The
+owner wants it kept as an excursion rather than removed, which is a day-trip concept the
+planner does not have.
+
+**Swiss Family Treehouse**, closed since 2022, cannot be caught: `VenueNoticeProvider`
+reads a landing page and is deliberately never a fact, and Disney's closure lives on an
+attraction page. The notices already render on `/evidence`.
+
+### Also in this batch
+
+The swipe deck's warming was racing the photograph its own gate waits for — same origin,
+one HTTP/2 connection, ~3 MB of speculative bytes against the ~344 kB the card is blocked
+on. `warmTargets` returns nothing while the card is pending. `index.html` preconnects to
+both Wikimedia origins, measured at 234 ms of handshake and 1.1 s to first byte across the
+`Special:FilePath` redirect; the redirect itself cannot be skipped, because a direct
+`upload.wikimedia.org/thumb/` URL 400s for any width Wikimedia has not materialised —
+checked, not assumed, and worth knowing that `?width=640` is served as the 960px bucket.
+
+`.gitattributes` pins the Supabase backup to LF. `core.autocrlf` is on by default on
+Windows, so a checkout there rewrote the **recovery artifact** and its checksum test failed
+— the committed blob correct, the working tree not, differing by nothing but bytes git
+inserted.
+
+### Evidence
+
+722 Python tests, 219 web, typecheck and lint clean. Every fix carries a negative control:
+the interchange test asserts the journey is `None` with grouping disabled, which is exactly
+the old Tokyo failure, and the cap test fails `0 != 4` with the exemption reverted.
+
+Eight Python tests fail on this Windows machine and did before any of this — path
+separators in the baseline gate, the source scan and one rpc test, plus two optimizer
+timing tests that collapse under a coarse clock. They pass on the owner's other platform.
+Worth fixing, and not fixed here.
