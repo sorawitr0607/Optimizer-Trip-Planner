@@ -167,12 +167,22 @@ ICON_CATEGORIES = frozenset(
 )
 
 
+#: Metres from the discovery centre beyond which a candidate is flagged far.
+#: The Bell of Time case: offered a single 82-minute slot after Rikugien, but it
+#: is in Kawagoe, Saitama -- an hour out -- and belongs to a Kawagoe half-day,
+#: not a Tokyo evening. `_route_fit` floors past 15 km, so nothing in the score
+#: says how far is too far; the flag says it on the card instead of re-weighting
+#: the established score contract.
+FAR_FROM_CENTRE_M = 30_000
+
+
 def build_ranking(
     *,
     setup: dict[str, Any],
     candidates: list[dict[str, Any]],
     choices: list[dict[str, Any]],
     discovery_status: str,
+    centre: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     choice_by_id = {choice["place_id"]: choice for choice in choices}
     base_weights, effective_weights = _group_weights(setup)
@@ -196,6 +206,21 @@ def build_ranking(
         )
         for candidate in candidates
     }
+    # Display only, never scored: how far each candidate sits from the discovery
+    # centre. Unknown where the centre is unknown -- no information, no flag.
+    for place_id, card in cards.items():
+        candidate = candidate_by_id[place_id]
+        distance: int | None = None
+        if (
+            centre is not None
+            and isinstance(candidate.get("latitude"), (int, float))
+            and isinstance(candidate.get("longitude"), (int, float))
+            and isinstance(centre.get("latitude"), (int, float))
+            and isinstance(centre.get("longitude"), (int, float))
+        ):
+            distance = int(_distance_metres(candidate, centre))
+        card["distance_from_centre_metres"] = distance
+        card["far_from_centre"] = distance is not None and distance > FAR_FROM_CENTRE_M
     # `total_score` is an evidence-aware planning priority, not a calibrated chance that
     # the owner will like a place. Unknown route/hour evidence deliberately gives many
     # cards similar middle scores. The percentile answers the card's actual question --

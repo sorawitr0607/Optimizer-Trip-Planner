@@ -172,6 +172,20 @@ class PlannerRefusal(ValueError):
         super().__init__(code)
 
 
+def _centre_of_boundary(boundary: list[float]) -> dict[str, float]:
+    """The middle of a discovery window in [south, west, north, east] order.
+
+    One copy on purpose: the destination centre is read in several places and
+    two orderings would silently move every far-from-centre flag.
+    """
+
+    south, west, north, east = boundary
+    return {
+        "latitude": round((south + north) / 2, 6),
+        "longitude": round((west + east) / 2, 6),
+    }
+
+
 class PlannerActions:
     def __init__(
         self,
@@ -447,10 +461,11 @@ class PlannerActions:
             )
         ):
             active_base_id = "provisional_accommodation_base"
-        usable_statuses = (
-            {"verified", "estimated"}
-            if payload["planning_mode"] == "explore_first"
-            else {"verified"}
+        # The route-status rule lives in one place (`usable_route_statuses`):
+        # an inline literal here shipped half-applied once before, with the gaps
+        # reporting ROUTE_SNAPSHOT_MISSING while the optimizer carried the legs.
+        usable_statuses = usable_route_statuses(
+            allow_provisional_assumptions=payload["planning_mode"] == "explore_first"
         )
         accommodation_ids = {
             "booked_accommodation_base",
@@ -949,11 +964,20 @@ class PlannerActions:
             }
             for choice in self.store.list_candidate_choices(trip_id)
         ]
+        # From the run already loaded, not another read: `_optimizer_input` may
+        # touch `discovery_runs` exactly once, and the egress gate pins it.
+        boundary = discovery.report.as_dict().get("query_boundary")
+        centre: dict[str, Any] | None = (
+            _centre_of_boundary([float(value) for value in boundary])
+            if isinstance(boundary, list) and len(boundary) == 4
+            else None
+        )
         return build_ranking(
             setup=setup.snapshot.as_dict(),
             candidates=candidates,
             choices=choices,
             discovery_status=discovery.status,
+            centre=centre,
         )
 
     def rank_candidates(self, trip_id: str) -> dict[str, Any]:
@@ -2808,11 +2832,7 @@ class PlannerActions:
         # provider's [south, west, north, east] order.
         bbox = self._discovery_boundary(trip_id)
         if bbox is not None:
-            south, west, north, east = bbox
-            return {
-                "latitude": round((south + north) / 2, 6),
-                "longitude": round((west + east) / 2, 6),
-            }
+            return _centre_of_boundary(bbox)
         points = self._route_points(trip_id)
         if points:
             return {

@@ -176,6 +176,63 @@ class RankingCoreTest(unittest.TestCase):
             places=1,
         )
 
+    def test_a_candidate_an_hour_out_is_flagged_far_without_rescoring(self) -> None:
+        """The Bell of Time case: a Kawagoe place offered in a Tokyo evening.
+
+        `_route_fit` floors past 15 km, so a 60 km candidate scores the same
+        3.0 as a 16 km one and nothing in the score says how far is too far.
+        The card carries the flag instead; the score contract is untouched,
+        asserted by ranking the same pair with no centre at all.
+        """
+
+        owner = build_setup_payload(
+            planning_mode="explore_first",
+            owner_age=40,
+            main_style=["sightseeing"],
+            also_enjoy=[],
+            avoid=[],
+            comfort=[],
+            owner_description="",
+            owner_must_respect=[],
+            travellers=[],
+            start_date=None,
+            end_date=None,
+            arrival_time=None,
+            departure_time=None,
+            accommodation_status="unknown",
+            confirmed=True,
+        )
+        # Even indices both, so both carry a website and the evidence terms tie
+        # -- the flag must be the only difference between the two cards.
+        near = candidate("near", "museum", 2, icon=True, opening=True)
+        near["latitude"], near["longitude"] = 35.6900, 139.7000
+        far = candidate("far", "museum", 4, icon=True, opening=True)
+        far["latitude"], far["longitude"] = 35.6800 + 60_000 / 111_320, 139.6900
+        centre = {"latitude": 35.6800, "longitude": 139.6900}
+        cards = build_ranking(
+            setup=owner,
+            candidates=[near, far],
+            choices=[],
+            discovery_status="verified",
+            centre=centre,
+        )["cards"]
+        self.assertFalse(cards["near"]["far_from_centre"])
+        self.assertLess(cards["near"]["distance_from_centre_metres"], 30_000)
+        self.assertTrue(cards["far"]["far_from_centre"])
+        self.assertGreater(cards["far"]["distance_from_centre_metres"], 30_000)
+        uncentred = build_ranking(
+            setup=owner,
+            candidates=[near, far],
+            choices=[],
+            discovery_status="verified",
+        )["cards"]
+        for place_id in ("near", "far"):
+            self.assertIsNone(uncentred[place_id]["distance_from_centre_metres"])
+            self.assertFalse(uncentred[place_id]["far_from_centre"])
+            self.assertEqual(
+                uncentred[place_id]["total_score"], cards[place_id]["total_score"]
+            )
+
     def test_a_landmark_is_not_buried_by_a_richer_tag_vocabulary(self) -> None:
         """`WF-037`. The ranker's output ordering had no test at all.
 
