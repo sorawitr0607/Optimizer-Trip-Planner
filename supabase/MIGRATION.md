@@ -39,11 +39,45 @@ Supabase restricted the project: **20.2 GB of egress against a 5.5 GB allowance*
 dropped until 19 September. Two thirds of that was the `paid_usage` full-table read fixed on
 28 August; the rest was the candidate catalogue, at 807 KB a read.
 
-**Read the region table below carefully before concluding anything about vendors.** It
-compares Supabase `ap-southeast-1` with Neon **`us-east-1`** — the 278 ms round trip is
-Bangkok-to-Virginia distance, not Neon. Neon offers `ap-southeast-1` now, so a like-for-like
-move is a different measurement that has not been taken. Take it before believing either
-number.
+**The region table below compares Supabase `ap-southeast-1` with Neon `us-east-1`, so its
+Neon column is distance and not vendor.** The like-for-like measurement was taken on
+2026-09-03, same machine, same pool, and it settles the question:
+
+| operation | Supabase `ap-southeast-1` | Neon `us-east-1` | **Neon `ap-southeast-1`** |
+|---|---|---|---|
+| connection handshake | 472 ms | 2580 ms | **365 ms** |
+| round trip, open connection | 42 ms | 278 ms | **37 ms** |
+| read | 108 ms | 788 ms | **38 ms** |
+
+Neon in the same region is as fast or faster on every figure. The 278 ms was Bangkok to
+Virginia.
+
+## The move to Neon `ap-southeast-1`, 2026-09-03
+
+Done and verified: 19,099 rows into 16 tables, every table's count equal to the dump, trip
+ids unique, all 11 owner tokens present, ledger US$9.3160, `schema_version` 14. The app was
+run against it before anything was pointed at it — `list_trips` and `journey` both 200 with
+no server error.
+
+**Two things a generated schema cannot see, and the restore has to add them.**
+`postgres_schema()` covers neither the `jobs` queue (its own idempotent DDL, deliberately
+outside `SCHEMA_VERSION`) nor `trips.owner_token` (an additive `ALTER` in `owners.py`). A
+restore that applies only the generated schema produces a database the dump will not load
+into — `COPY` matched by position and failed with "extra data after last expected column".
+
+**`jobs` is not restored, and should not be.** Its docstring is the argument: a queue holds
+no planning truth and can be dropped and rebuilt. Every row in a dump is a finished job
+carrying `result_json` — 57 MB of the 79 MB database. It also cannot be restored positionally
+anyway: `progress` was added by a later `ALTER`, so on an older database it sits last while
+`jobs.DDL` declares it twelfth, and the load fails on the type mismatch. `--include-transient`
+exists for anyone who needs to try; column lists in the dump are the durable fix and nothing
+needs them yet.
+
+**No trigger needs disabling.** All eight immutability triggers are `BEFORE UPDATE` or
+`BEFORE DELETE`; `COPY` is an insert and never fires one. The first version of the script set
+`session_replication_role = replica` out of caution and failed on Neon, whose `neondb_owner`
+is not superuser — the fix was to check what the triggers guard rather than to find a way
+round the permission.
 
 The migration path is short because structure comes from code:
 

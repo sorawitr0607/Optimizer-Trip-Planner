@@ -28,8 +28,25 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from travel_planner.jobs import DDL as JOBS_DDL  # noqa: E402
 from travel_planner.pgstore import normalise_url, postgres_schema  # noqa: E402
 from travel_planner.store import SCHEMA_VERSION  # noqa: E402
+
+#: Tables not worth restoring, and `jobs` is the only one.
+#:
+#: Its own docstring is the argument: "a queue holds no planning truth: it can be dropped
+#: and rebuilt at any time and no plan becomes unreadable." Every row in a dump is a
+#: finished or failed job, and they carry `result_json` — **57 MB of the 79 MB database**,
+#: the largest table in it by bytes, to restore work that has already been done.
+#:
+#: Skipping it also steps around a real trap. `progress` was added to `jobs` by a later
+#: `ALTER TABLE`, so on a database that predates it the column sits **last**, while
+#: `jobs.DDL` declares it twelfth — and `COPY` without a column list matches by position,
+#: so the load fails with "invalid input syntax for type integer" as a text value lands in
+#: the integer column. `--include-transient` restores it anyway for anyone who needs to,
+#: and will hit that if the orders still differ. The durable fix is column lists in the
+#: dump; nothing needs it yet.
+TRANSIENT = frozenset({"jobs"})
 
 #: Order matters: a child table cannot be loaded before the row it references. Derived
 #: from the dump's own order would be alphabetical, which puts `candidate_choices` before
@@ -72,6 +89,8 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--force", action="store_true",
                         help="load rows even if the target already has trips")
+    parser.add_argument("--include-transient", action="store_true",
+                        help=f"also restore {sorted(TRANSIENT)}, which is not worth it")
     args = parser.parse_args()
 
     import psycopg
@@ -85,7 +104,11 @@ def main() -> int:
     print(f"target      : {url.rsplit('@', 1)[-1].split('?')[0]}")
     print(f"schema      : generated at SCHEMA_VERSION {SCHEMA_VERSION}")
     print(f"row blocks  : {len(found)}")
-    by_table = dict(found)
+    by_table = {t: b for t, b in found
+                if args.include_transient or t not in TRANSIENT}
+    skipped_transient = sorted(t for t, _ in found if t not in by_table)
+    if skipped_transient:
+        print(f"skipping (transient): {', '.join(skipped_transient)}")
     # The order the real load uses, so a dry run shows what would actually happen
     # rather than the dump's alphabetical order — which puts `candidate_choices`
     # before `trips` and would fail the foreign key.
@@ -99,8 +122,26 @@ def main() -> int:
     with psycopg.connect(url, connect_timeout=30, autocommit=False) as conn:
         cur = conn.cursor()
         cur.execute(postgres_schema())
+        # Two things live **outside** `postgres_schema()` on purpose, and a restore that
+        # applies only the generated part produces a database the dump will not load into.
+        #
+        # `jobs` carries its own idempotent DDL because a queue holds no planning truth
+        # and must not be gated by `SCHEMA_VERSION` — see `travel_planner/jobs.py`. And
+        # `trips.owner_token` is an `ALTER TABLE` in `owners.py`, additive so a hosted
+        # database is never asked to migrate. `supabase/MIGRATION.md` names both as the
+        # things a generated schema cannot see; this is the same list, applied.
+        #
+        # The order matters for more than existence: `COPY` without a column list matches
+        # by **position**, and the dump was written with `owner_token` last because it was
+        # added by an ALTER there too. Adding it after the base schema reproduces that
+        # order. Emit explicit column lists in the dump and this stops mattering.
+        cur.execute(JOBS_DDL)
+        cur.execute("ALTER TABLE trips ADD COLUMN IF NOT EXISTS owner_token TEXT")
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS trips_owner_token ON trips (owner_token)"
+        )
         conn.commit()
-        print("schema applied")
+        print("schema applied (generated + jobs queue + owner_token)")
 
         cur.execute("select to_regclass('public.trips') is not null")
         if cur.fetchone()[0]:
@@ -111,10 +152,12 @@ def main() -> int:
                       file=sys.stderr)
                 return 1
 
-        # The immutability triggers refuse the very rows being restored, so they are
-        # disabled for the load and put back in the same transaction. `session_replication_role`
-        # is the supported way and needs no DDL on the triggers themselves.
-        cur.execute("set session_replication_role = replica")
+        # No trigger is disabled, and none needs to be. All eight immutability triggers
+        # are `BEFORE UPDATE` or `BEFORE DELETE` — `COPY` is an insert, so it never fires
+        # one. The first version of this set `session_replication_role = replica` out of
+        # caution and failed on Neon, whose `neondb_owner` is not superuser; the fix was
+        # to check what the triggers actually guard rather than to find a way round the
+        # permission. Add a `BEFORE INSERT` trigger to the schema and this needs revisiting.
         loaded = 0
         for table in ordered:
             body = by_table[table]
@@ -125,7 +168,6 @@ def main() -> int:
             n = body.count("\n")
             loaded += n
             print(f"  loaded {table:26} {n:6} rows")
-        cur.execute("set session_replication_role = origin")
         conn.commit()
         print(f"restored {loaded} rows into {len(ordered)} tables")
 
