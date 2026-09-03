@@ -1871,6 +1871,10 @@ def _activity_route(
         route
         for route in snapshot.get("routes", [])
         if route.get("status") in usable and route.get("mode") in set(allowed_modes)
+        # Same hard cap as `_routes_between`: a leg nobody will walk must not be
+        # plannable here either. Verified 87/103/237-minute walks reached real
+        # itineraries through this reader and `_best_inbound_route` below.
+        and _walkable(route)
     ]
     if not routes:
         return None
@@ -1899,7 +1903,11 @@ def _standalone_activity_route(
     if _has_incident_usable_route(snapshot, place_id):
         return None
     usable = _usable_route_statuses(snapshot)
-    routes = [route for route in snapshot.get("routes", []) if route.get("status") in usable]
+    routes = [
+        route
+        for route in snapshot.get("routes", [])
+        if route.get("status") in usable and _walkable(route)
+    ]
     if not routes:
         return None
     allowed = [str(route.get("mode")) for route in routes]
@@ -1990,6 +1998,8 @@ def _best_inbound_route(snapshot: dict[str, Any], destination: str) -> dict[str,
         if route.get("status") in usable
         and route.get("destination_id") == destination
         and route.get("origin_id") in base_ids
+        # Same hard cap as `_routes_between`: the day's first leg is still a leg.
+        and _walkable(route)
     ]
     return deepcopy(min(routes, key=lambda item: int(item.get("duration_minutes", 0)))) if routes else None
 

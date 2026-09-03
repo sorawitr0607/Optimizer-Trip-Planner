@@ -61,6 +61,51 @@ class OptimizerCoreTest(unittest.TestCase):
 
         self.assertEqual("base", route["origin_id"])
 
+    def test_a_walk_nobody_would_take_reaches_no_reader(self) -> None:
+        """Verified 87/103/237-minute walks reached a real Tokyo itinerary.
+
+        `_walkable` capped `_routes_between`, but `_best_inbound_route` and
+        `_activity_route` read the snapshot directly and took the shortest
+        route they held -- the walk -- whenever no transit leg had been
+        measured for the pair. All three readers now share the hard cap; a
+        40-minute ride with an 8-minute station walk still passes, because the
+        cap measures walking, not riding.
+        """
+
+        long_walk = {
+            "origin_id": "base",
+            "destination_id": "visit",
+            "mode": "walk",
+            "status": "verified",
+            "duration_minutes": 237,
+            "walking_minutes": 237,
+            "distance_m": 19730,
+        }
+        ride = {
+            "origin_id": "base",
+            "destination_id": "visit",
+            "mode": "transit",
+            "status": "estimated",
+            "duration_minutes": 40,
+            "walking_minutes": 8,
+            "distance_m": None,
+        }
+        snapshot = {
+            "candidates": [{"id": "visit", "kind": "museum"}],
+            "routes": [long_walk],
+            "trip": {},
+        }
+
+        self.assertIsNone(optimizer_module._best_inbound_route(snapshot, "visit"))
+        self.assertIsNone(
+            optimizer_module._activity_route(snapshot, {"id": "visit"}, ["walk"])
+        )
+
+        snapshot["routes"].append(ride)
+        inbound = optimizer_module._best_inbound_route(snapshot, "visit")
+        self.assertEqual("transit", inbound["mode"])
+        self.assertEqual(40, inbound["duration_minutes"])
+
     def test_free_time_is_not_counted_as_contingency_buffer(self) -> None:
         days = [
             {
