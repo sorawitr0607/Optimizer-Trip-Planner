@@ -258,6 +258,19 @@ class RankingCoreTest(unittest.TestCase):
             _season_note(["Renowned for autumn foliage."], [11])
         )
         self.assertIsNone(_season_note(["A venerable temple."], [12]))
+        # Plurals still flag, joined words do not: `windfall foliage` is not
+        # `fall foliage`.
+        self.assertEqual(
+            "cherry_blossom",
+            _season_note(["Famous for cherry blossoms in spring."], [12]),
+        )
+        self.assertIsNone(
+            _season_note(["Cleared of windfall foliage in October."], [4])
+        )
+        # Thai has no word spaces, so spaceless text still matches.
+        self.assertEqual(
+            "cherry_blossom", _season_note(["จุดชมซากุระยอดนิยม"], [12])
+        )
 
     def test_season_notes_ride_on_stored_summaries_without_rescoring(self) -> None:
         owner = build_setup_payload(

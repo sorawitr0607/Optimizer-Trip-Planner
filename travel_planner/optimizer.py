@@ -2003,14 +2003,12 @@ def _activity_route(
         )
         return cycling_over, heat_penalty, walk_over, int(route.get("duration_minutes", 0)), str(route.get("mode"))
     # Memoized pick, like `_best_route`: the modes alone decide it.
-    memo = route_index.setdefault("memo", {})
-    memo_key = ("activity", tuple(allowed_modes))
-    if memo_key not in memo:
-        # A shallow copy: every consumer only reads the leg (`_travel_item`
-        # copies the fields it schedules), and a grep for `route["…"] =`
-        # finds no writer.
-        memo[memo_key] = min(routes, key=key)
-    return dict(memo[memo_key])
+    # A shallow copy: every consumer only reads the leg (`_travel_item`
+    # copies the fields it schedules), and a grep for `route["…"] =`
+    # finds no writer.
+    return dict(
+        _memoized(route_index, (_MEMO_ACTIVITY, tuple(allowed_modes)), lambda: min(routes, key=key))
+    )
 
 
 def _standalone_activity_route(
@@ -2032,7 +2030,7 @@ def _standalone_activity_route(
     if not routes:
         return None
     allowed = [str(route.get("mode")) for route in routes]
-    return _activity_route(snapshot, {"id": place_id}, allowed)
+    return _activity_route(snapshot, {"id": place_id}, allowed, route_index=route_index)
 
 
 def _route_breaks_heat_or_cycling(snapshot: dict[str, Any], route: dict[str, Any]) -> bool:
@@ -2063,12 +2061,13 @@ def _best_route(
     # Memo first, like `_best_inbound_route`: the pick for a pair never changes
     # within a solve, and rebuilding the filtered list per segment evaluation
     # dominated the profile (12M `_routes_between` calls at Tokyo scale).
-    memo = route_index.setdefault("memo", {})
-    key = ("route", origin, destination)
-    found = memo.get(key, _ABSENT)
-    if found is _ABSENT:
-        found = _best_route_uncached(snapshot, origin, destination, route_index)
-        memo[key] = found
+    # The memo write lives in `_memoized` alone now: the uncached builder only
+    # computes, so the two cannot drift onto different keys or copies.
+    found = _memoized(
+        route_index,
+        (_MEMO_ROUTE, origin, destination),
+        lambda: _best_route_uncached(snapshot, origin, destination, route_index),
+    )
     return dict(found) if found is not None else None
 
 
@@ -2112,23 +2111,19 @@ def _best_route_uncached(
     if not routes:
         return None
     walk_limit = int(_thresholds(snapshot).get("walking_minutes_per_leg", 10**9))
-    # A shallow copy of the memoized pick: consumers read the leg, nobody writes
-    # it, and the memo lives in the per-snapshot bundle so it cannot leak across
-    # trips. The pick depends only on the pair, not on the day or the sequence,
-    # so the millionth segment evaluation reuses the first one's answer.
-    memo = route_index.setdefault("memo", {})
-    key = ("route", origin, destination)
-    if key not in memo:
-        memo[key] = min(
-            routes,
-            key=lambda item: (
-                int(item.get("walking_minutes", 0)) > walk_limit,
-                int(item.get("duration_minutes", 0)),
-                int(item.get("walking_minutes", 0)),
-                str(item.get("mode")),
-            ),
-        )
-    return dict(memo[key])
+    # Pure compute: the memo write and the single shallow copy on return both
+    # live in `_best_route`, so this never aliases snapshot-owned dicts outward.
+    # The pick depends only on the pair, not on the day or the sequence, so the
+    # millionth segment evaluation reuses the first one's answer.
+    return min(
+        routes,
+        key=lambda item: (
+            int(item.get("walking_minutes", 0)) > walk_limit,
+            int(item.get("duration_minutes", 0)),
+            int(item.get("walking_minutes", 0)),
+            str(item.get("mode")),
+        ),
+    )
 
 
 def _best_inbound_route(
@@ -2142,10 +2137,7 @@ def _best_inbound_route(
     # Memo first: the inbound leg for a place never changes within a solve, and
     # rebuilding the candidate list on each of a million segment evaluations is
     # what Tokyo-scale time was. Absence is memoized too, under a sentinel.
-    memo = route_index.setdefault("memo", {})
-    key = ("inbound", destination)
-    found = memo.get(key, _ABSENT)
-    if found is _ABSENT:
+    def build() -> dict[str, Any] | None:
         usable = _usable_route_statuses(snapshot)
         base_ids = route_index["base_ids"]
         # `by_destination` lists are built in snapshot order, so no sort: the
@@ -2158,14 +2150,42 @@ def _best_inbound_route(
             # Same hard cap as `_routes_between`: the day's first leg is still a leg.
             and _walkable(route)
         ]
-        found = (
+        return (
             min(routes, key=lambda item: int(item.get("duration_minutes", 0)))
             if routes
             else None
         )
-        memo[key] = found
+
+    found = _memoized(route_index, (_MEMO_INBOUND, destination), build)
     # Shallow copy: consumers read the leg, nobody writes it.
     return dict(found) if found is not None else None
+
+
+#: Memo namespaces inside the per-solve bundle. One constant per reader so a
+#: typo'd key cannot silently alias two readers' picks to the same slot.
+_MEMO_ROUTE = "route"
+_MEMO_ACTIVITY = "activity"
+_MEMO_INBOUND = "inbound"
+
+
+def _memoized(
+    route_index: dict[str, Any], key: tuple[Any, ...], build: Callable[[], Any]
+) -> Any:
+    """Get-or-build for the per-solve memo every route reader shares.
+
+    The pick for a pair, mode set, or inbound place never changes within a
+    solve, so the first evaluation's answer serves the millionth. `None`
+    (no usable leg) is stored too, under the `_ABSENT` sentinel, so absence
+    is computed once. Callers copy the returned dict before handing it out;
+    the memo itself holds snapshot-owned picks that must never escape.
+    """
+
+    memo = route_index.setdefault("memo", {})
+    found = memo.get(key, _ABSENT)
+    if found is _ABSENT:
+        found = build()
+        memo[key] = found
+    return found
 
 
 def usable_route_statuses(*, allow_provisional_assumptions: bool) -> set[str]:

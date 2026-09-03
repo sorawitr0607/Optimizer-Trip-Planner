@@ -5,6 +5,7 @@ from __future__ import annotations
 from bisect import bisect_left, bisect_right
 from collections import Counter
 from math import asin, cos, radians, sin, sqrt
+import re
 from statistics import median
 from typing import Any
 
@@ -201,6 +202,29 @@ SEASONAL_PHENOMENA = (
 )
 
 
+def _keyword_matcher(keyword: str):
+    """A whole-word test for a seasonal keyword against a casefolded blob.
+
+    Spaced scripts get a boundary-guarded pattern (plural-tolerant), so
+    `windfall foliage` no longer trips `fall foliage`. Thai has no word
+    spaces, so a boundary guard there would kill real matches (`ชมซากุระ`)
+    and those keywords stay substring tests.
+    """
+
+    if re.fullmatch(r"[a-z][a-z \-]*", keyword):
+        return re.compile(r"(?<!\w)" + re.escape(keyword) + r"s?(?!\w)").search
+    return lambda blob: keyword in blob
+
+
+_SEASONAL_MATCHERS = tuple(
+    (
+        phenomenon,
+        tuple(_keyword_matcher(keyword) for keyword in phenomenon["keywords"]),
+    )
+    for phenomenon in SEASONAL_PHENOMENA
+)
+
+
 def _season_note(texts: list[str], months: list[int]) -> str | None:
     """The phenomenon id when a summary describes one whose peak the trip misses."""
 
@@ -208,8 +232,8 @@ def _season_note(texts: list[str], months: list[int]) -> str | None:
     if not blob or not months:
         return None
     at = set(months)
-    for phenomenon in SEASONAL_PHENOMENA:
-        if any(keyword in blob for keyword in phenomenon["keywords"]):
+    for phenomenon, matchers in _SEASONAL_MATCHERS:
+        if any(match(blob) for match in matchers):
             if at.isdisjoint(phenomenon["peak_months"]):
                 return phenomenon["id"]
     return None
