@@ -973,6 +973,20 @@ export function PlaceDeck({
             })}
           </p>
         ) : null}
+        {/* Same muted pattern one line down: a hanami spot on a December trip.
+            The server names the phenomenon; this maps it to its sentence, so a
+            surprising id renders nothing rather than a raw code. */}
+        {card?.season_note === "cherry_blossom" ||
+        card?.season_note === "autumn_foliage" ? (
+          <p className="setup-hint">
+            {copy(
+              card.season_note === "cherry_blossom"
+                ? "season_cherry_blossom"
+                : "season_autumn_foliage",
+              language,
+            )}
+          </p>
+        ) : null}
         {entry.role === "protected_exploration" ? (
           <p className="setup-hint">{copy("deck_exploration_note", language)}</p>
         ) : null}

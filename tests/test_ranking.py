@@ -16,7 +16,7 @@ from travel_planner.providers import ProviderNoMatch
 from travel_planner.setup import AVOID_TAGS, COMFORT_TAGS
 from travel_planner.actions import PlannerActions, PlannerRefusal
 from travel_planner.providers import GooglePlacesCardProvider, ProviderUnavailable
-from travel_planner.ranking import FORMULA_WEIGHTS, build_ranking
+from travel_planner.ranking import FORMULA_WEIGHTS, build_ranking, _season_note
 from travel_planner.setup import build_setup_payload
 
 
@@ -231,6 +231,78 @@ class RankingCoreTest(unittest.TestCase):
             self.assertFalse(uncentred[place_id]["far_from_centre"])
             self.assertEqual(
                 uncentred[place_id]["total_score"], cards[place_id]["total_score"]
+            )
+
+    def test_a_hanami_spot_on_a_december_trip_says_so(self) -> None:
+        """Asukayama presented as hanami-viewing in December, with no signal
+        anywhere saying cherry season is March-April."""
+
+        self.assertEqual(
+            "cherry_blossom",
+            _season_note(
+                ["Famous for cherry blossom viewing in spring."], [12]
+            ),
+        )
+        self.assertIsNone(
+            _season_note(["Famous for cherry blossom viewing in spring."], [3, 4])
+        )
+        self.assertIsNone(_season_note([], [12]))
+        self.assertIsNone(
+            _season_note(["Famous for cherry blossom viewing in spring."], [])
+        )
+        self.assertEqual(
+            "autumn_foliage",
+            _season_note(["Renowned for autumn foliage."], [4]),
+        )
+        self.assertIsNone(
+            _season_note(["Renowned for autumn foliage."], [11])
+        )
+        self.assertIsNone(_season_note(["A venerable temple."], [12]))
+
+    def test_season_notes_ride_on_stored_summaries_without_rescoring(self) -> None:
+        owner = build_setup_payload(
+            planning_mode="explore_first",
+            owner_age=40,
+            main_style=["sightseeing"],
+            also_enjoy=[],
+            avoid=[],
+            comfort=[],
+            owner_description="",
+            owner_must_respect=[],
+            travellers=[],
+            start_date="2026-12-15",
+            end_date="2026-12-23",
+            arrival_time=None,
+            departure_time=None,
+            accommodation_status="unknown",
+            confirmed=True,
+        )
+        grove = candidate("grove", "park", 2, icon=True, opening=True)
+        temple = candidate("temple", "place_of_worship", 4, icon=True, opening=True)
+        summaries = {
+            "grove": {"text": {"en": "A hill famous for cherry blossom viewing."}},
+            "temple": {"text": {"en": "A venerable temple."}},
+        }
+        ranked = build_ranking(
+            setup=owner,
+            candidates=[grove, temple],
+            choices=[],
+            discovery_status="verified",
+            summaries=summaries,
+            trip_months=[12],
+        )["cards"]
+        self.assertEqual("cherry_blossom", ranked["grove"]["season_note"])
+        self.assertIsNone(ranked["temple"]["season_note"])
+        plain = build_ranking(
+            setup=owner,
+            candidates=[grove, temple],
+            choices=[],
+            discovery_status="verified",
+        )["cards"]
+        for place_id in ("grove", "temple"):
+            self.assertIsNone(plain[place_id]["season_note"])
+            self.assertEqual(
+                plain[place_id]["total_score"], ranked[place_id]["total_score"]
             )
 
     def test_a_landmark_is_not_buried_by_a_richer_tag_vocabulary(self) -> None:

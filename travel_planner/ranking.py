@@ -175,6 +175,45 @@ ICON_CATEGORIES = frozenset(
 #: the established score contract.
 FAR_FROM_CENTRE_M = 30_000
 
+#: Seasonal phenomena visible in free Wikipedia extracts. Peak months are Kanto
+#: (Northern hemisphere) norms and are stated on the note itself; matching is
+#: keyword-only, a missing summary means no note, and nothing is ever rescored.
+#: The Asukayama case: presented as hanami-viewing on a December plan, with no
+#: signal anywhere saying cherry season is March-April.
+SEASONAL_PHENOMENA = (
+    {
+        "id": "cherry_blossom",
+        "keywords": ("cherry blossom", "cherry-blossom", "hanami", "ซากุระ"),
+        "peak_months": (3, 4),
+    },
+    {
+        "id": "autumn_foliage",
+        "keywords": (
+            "autumn foliage",
+            "autumn leaves",
+            "fall foliage",
+            "momiji",
+            "ใบไม้เปลี่ยนสี",
+            "ใบไม้แดง",
+        ),
+        "peak_months": (11, 12),
+    },
+)
+
+
+def _season_note(texts: list[str], months: list[int]) -> str | None:
+    """The phenomenon id when a summary describes one whose peak the trip misses."""
+
+    blob = " ".join(text for text in texts if text).casefold()
+    if not blob or not months:
+        return None
+    at = set(months)
+    for phenomenon in SEASONAL_PHENOMENA:
+        if any(keyword in blob for keyword in phenomenon["keywords"]):
+            if at.isdisjoint(phenomenon["peak_months"]):
+                return phenomenon["id"]
+    return None
+
 
 def build_ranking(
     *,
@@ -183,6 +222,8 @@ def build_ranking(
     choices: list[dict[str, Any]],
     discovery_status: str,
     centre: dict[str, Any] | None = None,
+    summaries: dict[str, Any] | None = None,
+    trip_months: list[int] | None = None,
 ) -> dict[str, Any]:
     choice_by_id = {choice["place_id"]: choice for choice in choices}
     base_weights, effective_weights = _group_weights(setup)
@@ -221,6 +262,17 @@ def build_ranking(
             distance = int(_distance_metres(candidate, centre))
         card["distance_from_centre_metres"] = distance
         card["far_from_centre"] = distance is not None and distance > FAR_FROM_CENTRE_M
+    # Display only, never scored: a cherry-blossom spot on a December trip says
+    # so on the card. Summaries arrive free with discovery and stay stored, so
+    # this reads what is already held and flags nothing where nothing is held.
+    for place_id, card in cards.items():
+        row = (summaries or {}).get(place_id) or {}
+        text = row.get("text", "")
+        texts = list(text.values()) if isinstance(text, dict) else [text]
+        card["season_note"] = _season_note(
+            [item for item in texts if isinstance(item, str)],
+            list(trip_months or []),
+        )
     # `total_score` is an evidence-aware planning priority, not a calibrated chance that
     # the owner will like a place. Unknown route/hour evidence deliberately gives many
     # cards similar middle scores. The percentile answers the card's actual question --

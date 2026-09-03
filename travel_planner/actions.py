@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 import os
 from pathlib import Path
 import re
@@ -972,12 +972,23 @@ class PlannerActions:
             if isinstance(boundary, list) and len(boundary) == 4
             else None
         )
+        basics = setup.snapshot.as_dict().get("trip_basics", {})
+        trip_months: list[int] = []
+        if basics.get("start_date") and basics.get("end_date"):
+            trip_months = sorted(
+                {
+                    date.fromisoformat(day).month
+                    for day in date_range(basics["start_date"], basics["end_date"])
+                }
+            )
         return build_ranking(
             setup=setup.snapshot.as_dict(),
             candidates=candidates,
             choices=choices,
             discovery_status=discovery.status,
             centre=centre,
+            summaries=self.list_place_summaries(trip_id),
+            trip_months=trip_months,
         )
 
     def rank_candidates(self, trip_id: str) -> dict[str, Any]:

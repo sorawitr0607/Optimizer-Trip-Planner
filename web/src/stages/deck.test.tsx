@@ -362,6 +362,23 @@ describe("PlaceDeck", () => {
     expect(near).not.toContain("Far from the centre");
   });
 
+  it("says so on the card when the season is wrong for the place", () => {
+    // Asukayama as hanami-viewing in December. The server names the
+    // phenomenon; the card maps it to its sentence, and an unknown id renders
+    // nothing rather than a raw code.
+    const seasonal = {
+      ...RANKING,
+      cards: {
+        first: { ...RANKING.cards.first, season_note: "cherry_blossom" },
+      },
+    } as unknown as Ranking;
+    const html = render(SUMMARY, [], RANKING.lanes.main_queue, [], false, seasonal, {});
+    expect(html).toContain("Cherry blossoms · best Mar–Apr");
+
+    const plain = render(SUMMARY);
+    expect(plain).not.toContain("Cherry blossoms");
+  });
+
   it("shows a placeholder outside the card it stands in for", () => {
     // The skeleton was rendered *inside* `.place-deck-drag`, which is hidden while the
     // first photograph loads — so it was hidden along with the card and a loading card
