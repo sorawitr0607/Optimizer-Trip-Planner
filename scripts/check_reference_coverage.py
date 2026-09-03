@@ -34,16 +34,23 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from io import BytesIO
-# A verification script builds throwaway trips, so it must never be pointed at a
-# hosted database. See the same guard in `scripts/check.py` and `tests/__init__.py`.
-import os as _os
-
-_os.environ.pop("TOURIST_DB_URL", None)
-
 import json
 from pathlib import Path
 import sys
 from tempfile import TemporaryDirectory
+
+# A verification script builds throwaway trips, so it must never be pointed at a
+# hosted database. See the same guard in `scripts/check.py` and `tests/__init__.py`.
+#
+# The path insertion has to come first: this file only added `ROOT` to `sys.path`
+# further down, inside the function that needs `scripts` importable, so a top-level
+# `travel_planner` import fails without it. Cleared through the store's own list rather
+# than by popping one name, because a guard that covers fewer variables than
+# `open_store` reads is how a suite reaches a live database.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from travel_planner.store import forget_hosted_database as _forget  # noqa: E402
+
+_forget()
 
 
 ROOT = Path(__file__).resolve().parents[1]

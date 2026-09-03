@@ -759,8 +759,12 @@ class AcceptedRouteEstimateTest(unittest.TestCase):
         directory = TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         actions = PlannerActions(Path(directory.name) / "estimates.sqlite3")
+        # Walkable on purpose. These were ~5 km apart, which the walk ceiling now
+        # refuses outright — see `test_a_walk_no_one_would_take_is_not_estimated_at_all`
+        # below. What this test is about is the *direction* of the error, so the pair only
+        # has to be one the app would still offer.
         left = {"id": "a", "latitude": 25.0330, "longitude": 121.5654}
-        right = {"id": "b", "latitude": 25.0478, "longitude": 121.5170}
+        right = {"id": "b", "latitude": 25.0400, "longitude": 121.5600}
         made = actions._accepted_route_estimates([left, right], [])
 
         straight = _distance_metres(left, right)
@@ -778,12 +782,57 @@ class AcceptedRouteEstimateTest(unittest.TestCase):
         self.assertEqual({("a", "b"), ("b", "a")},
                          {(leg["origin_id"], leg["destination_id"]) for leg in made})
 
+    def test_a_walk_no_one_would_take_is_not_estimated_at_all(self) -> None:
+        """The leg the owner reported as "definitely wrong".
+
+        Their itinerary carried "walk 19,951 metres, 240 minutes" from Shinjuku to a house
+        in Shibamata that is reachable by rail. This path generated it: with no router
+        answer for the pair, it fabricated a pessimistic straight line of any length, and
+        the owner had agreed to *a pessimistic estimate where no router would answer* —
+        not to walking across a city.
+
+        `optimizer._routes_between` would drop it now anyway, but generating it is worse
+        than useless: it lands in the frozen snapshot, in the exports, and in front of the
+        owner as though it were a choice they had made. Leaving the pair unrouted is the
+        honest result — the place stays `ROUTE_UNVERIFIED` and the screen recommends
+        removing it, which is true where a four-hour walk is not.
+        """
+
+        from travel_planner.actions import MAX_USABLE_WALK_MINUTES
+
+        directory = TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        actions = PlannerActions(Path(directory.name) / "far.sqlite3")
+        # Shinjuku to Shibamata, the pair from the report: about 19 km apart.
+        near = {"id": "shinjuku", "latitude": 35.6896, "longitude": 139.7006}
+        far = {"id": "shibamata", "latitude": 35.7566, "longitude": 139.8697}
+
+        self.assertEqual([], actions._accepted_route_estimates([near, far], []))
+
+        # And the boundary is the ceiling rather than an arbitrary distance: a pair just
+        # inside it is still offered.
+        from travel_planner.transit import WALK_METRES_PER_MINUTE
+
+        close = {
+            "id": "close",
+            "latitude": 35.6896,
+            # Roughly half the ceiling's walking distance away, before the detour factor.
+            "longitude": 139.7006 + 0.012,
+        }
+        offered = actions._accepted_route_estimates([near, close], [])
+        self.assertTrue(offered)
+        for leg in offered:
+            self.assertLessEqual(
+                leg["duration_minutes"], MAX_USABLE_WALK_MINUTES,
+                "an offered estimate must be inside the ceiling",
+            )
+
     def test_a_pair_that_already_has_a_route_is_left_alone(self) -> None:
         directory = TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         actions = PlannerActions(Path(directory.name) / "estimates.sqlite3")
         left = {"id": "a", "latitude": 25.03, "longitude": 121.56}
-        right = {"id": "b", "latitude": 25.04, "longitude": 121.51}
+        right = {"id": "b", "latitude": 25.04, "longitude": 121.555}
         held = [{"origin_id": "a", "destination_id": "b"}]
 
         made = actions._accepted_route_estimates([left, right], held)

@@ -2055,6 +2055,38 @@ def _usable_route_statuses(snapshot: dict[str, Any]) -> set[str]:
     )
 
 
+#: The longest walk that counts as a way to get between two places, in minutes.
+#:
+#: **Derived, not chosen.** `_comfort_thresholds` sets `plain_walking_minutes_per_day` to
+#: at most 60 on the most permissive pace, so a *single leg* longer than the most generous
+#: whole-day plain-walking budget cannot be a leg a plan should use. That is the argument;
+#: 60 is where it lands.
+#:
+#: Why a hard ceiling at all, when `walking_minutes_per_leg` already exists. That one is a
+#: **comfort** threshold: it caps at 25 minutes, `_best_route` treats it as a sort
+#: preference rather than a filter, and the owner can agree to exceed it — which the
+#: "make this plan work" flow actively encourages. So accepting a tradeoff to get a plan
+#: built could bless a walk of any length. Measured on the live database: 656 stored
+#: walking legs, **the longest 274 minutes and 41% of them over an hour**. One of them
+#: reached the owner's itinerary as "walk 19,951 metres, 240 minutes" and was reported as
+#: "definitely wrong".
+#:
+#: Whether to walk four hours is not a preference. Refusing the leg is honest even though
+#: it can leave a place `ROUTE_UNVERIFIED` and recommended for removal: "we cannot get you
+#: there" is a true answer, and a four-hour walk is not.
+#:
+#: Measured on `walking_minutes`, not on the mode, so a long *ride* is unaffected — a
+#: transit leg reports only its access and egress walk there, which is the whole reason
+#: that field exists. The 27 historic fixtures peak at 42 minutes and are untouched.
+MAX_USABLE_WALK_MINUTES = 60
+
+
+def _walkable(route: dict[str, Any]) -> bool:
+    """Whether this leg's own walking is short enough to be a way of getting there."""
+
+    return int(route.get("walking_minutes", 0) or 0) <= MAX_USABLE_WALK_MINUTES
+
+
 def _routes_between(
     snapshot: dict[str, Any], origin: str, destination: str, *, symmetric: bool = False
 ) -> list[dict[str, Any]]:
@@ -2063,6 +2095,12 @@ def _routes_between(
         route
         for route in snapshot.get("routes", [])
         if route.get("status") in usable
+        # Here rather than in `_best_route`, because this is the one function every
+        # route reader goes through — `_has_usable_route_between`, `_missing_route_edges`
+        # and `_best_route` all call it. A leg excluded from planning but still counted
+        # as "this pair is reachable" is how a place gets scheduled behind a walk nobody
+        # will take.
+        and _walkable(route)
         and (
             (route.get("origin_id") == origin and route.get("destination_id") == destination)
             or (

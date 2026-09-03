@@ -23,6 +23,29 @@ class ProviderUnavailable(RuntimeError):
     pass
 
 
+#: The `tourism` values that make a place a sightseeing candidate.
+#:
+#: One set, read twice: `OpenStreetMapProvider.FAMILY_SELECTORS` asks Overpass for these,
+#: and `_category` will only accept one of these as an answer. As two literals they
+#: drifted, and `_category`'s docstring records what that cost.
+#:
+#: Lodging is deliberately absent. Where to sleep is its own stage of the app with its own
+#: ranking; a hotel is not a stop on a day.
+TOURISM_FAMILIES = frozenset({
+    "attraction", "museum", "gallery", "viewpoint",
+    "artwork", "theme_park", "zoo", "aquarium",
+})
+
+#: Categories that describe a bed rather than a visit. A candidate that resolves to one of
+#: these is dropped from the catalogue.
+#:
+#: After the `_category` fix this should be unreachable through the query — none of the
+#: family selectors matches a lodging tag — so this is the guard rather than the mechanism.
+#: It stays because the failure it prevents reached a real itinerary, and because a future
+#: selector or a second provider could reintroduce it silently.
+LODGING_CATEGORIES = frozenset({"hotel", "hostel", "guest_house", "apartment", "motel"})
+
+
 class ProviderNoMatch(ProviderUnavailable):
     """The provider answered, and has nothing about this place.
 
@@ -660,8 +683,14 @@ class OpenStreetMapProvider:
 
     # The seven attraction families, as Overpass tag selectors. One list, so the
     # indexed and unindexed blocks cannot drift apart.
+    #
+    # The `tourism` values are built from `TOURISM_FAMILIES` rather than written out, so
+    # the set this asks Overpass for and the set `_category` will accept as an answer are
+    # the same set. They were two literals, and the drift had a visible cost: a candidate
+    # matched for being `historic` was labelled `hotel` because it also carried
+    # `tourism=hotel`, a value this query never asks for.
     FAMILY_SELECTORS = (
-        '["tourism"~"^(attraction|museum|gallery|viewpoint|artwork|theme_park|zoo|aquarium)$"]',
+        '["tourism"~"^(' + "|".join(sorted(TOURISM_FAMILIES)) + ')$"]',
         '["historic"]',
         '["amenity"~"^(place_of_worship|marketplace|theatre|arts_centre)$"]',
         '["leisure"~"^(park|garden|nature_reserve|water_park|sports_centre|spa)$"]',
@@ -735,6 +764,21 @@ class OpenStreetMapProvider:
         except (KeyError, TypeError, ValueError):
             return None
 
+        # A bed is not a stop. Dropped here rather than filtered later, because a
+        # candidate in the catalogue is a candidate the deck offers, the ranking scores
+        # and the optimizer can schedule — which is how a hotel came to hold an 82-minute
+        # sightseeing slot on the owner's Tokyo plan.
+        #
+        # Keyed on the tags, not on `_category`'s answer: a place whose *only*
+        # classification is lodging now falls through to "landmark", so checking the label
+        # would miss exactly the case this exists for. A hotel that is also something the
+        # query asked for — a palace converted into one, say — keeps that family and
+        # stays, which is right: it is in the catalogue for the palace.
+        if str(tags.get("tourism") or "") in LODGING_CATEGORIES and not any(
+            tags.get(family) for family in ("historic", "amenity", "leisure", "natural", "shop", "man_made")
+        ):
+            return None
+
         local_name = str(tags.get("name") or "").strip()
         names = {
             key: value
@@ -790,8 +834,22 @@ class OpenStreetMapProvider:
 
 
 def _category(tags: dict[str, Any]) -> str:
-    if tags.get("tourism"):
-        return str(tags["tourism"])
+    """The family this place belongs to, from the tag that actually put it here.
+
+    **`tourism` is only accepted when it is one of the families the query asked for.**
+    It used to be returned unconditionally and first, so a place matched for being
+    `historic` — or a market, or a park — came back labelled with whatever `tourism`
+    value it happened to also carry. `tourism=hotel` is the one that reached the owner:
+    a hotel appeared in the catalogue and was scheduled as an 82-minute attraction,
+    reported as "the hotel as an 82-min attraction looks suspicious".
+
+    Falling through to the next tag names the reason the place is in the catalogue at
+    all, which is both more useful and more honest.
+    """
+
+    tourism = str(tags.get("tourism") or "")
+    if tourism in TOURISM_FAMILIES:
+        return tourism
     if tags.get("historic"):
         return "historic"
     if tags.get("amenity"):

@@ -6123,3 +6123,99 @@ for the load only. Stage 9 still cannot run.
 Still open from the same report and not touched here: NHK Studio Park (permanently closed
 2020) and Yoshimoto ∞ Hall (closed March 2025) are in the catalogue and were scheduled, the
 19.95 km / 240-minute walking leg, and a hotel appearing as an 82-minute attraction.
+## The variable that rotates itself, a walk nobody would take, and a hotel, 2026-09-03
+
+Three things after the Neon move: make the deployment read Vercel's own managed variable
+instead of a hand-copied one, refuse the 19.95 km walking leg, and stop a hotel being
+scheduled as an attraction.
+
+### Following the rotation instead of copying it
+
+The Neon integration writes `STORAGE_2_POSTGRES_URL` into Vercel and **rotates it**. A
+hand-copied `TOURIST_DB_URL` is correct exactly until the next credential change, and the
+credential had already changed once. So `store.HOSTED_URL_VARIABLES` is the list, tried in
+order: `TOURIST_DB_URL` first because it is the deliberate one the worker and `deploy/`
+set, then the integration's.
+
+Specific names rather than a `*_POSTGRES_URL` glob, because a glob would also match a
+`STORAGE_1_POSTGRES_URL` left behind by Supabase, and reaching the wrong database is a
+worse failure than finding none.
+
+**The part that mattered more than the feature.** `open_store` ignores the path it is
+handed whenever one of these is set, and `tests/__init__.py`, `scripts/check.py` and
+`scripts/check_reference_coverage.py` each popped `TOURIST_DB_URL` by name to keep a suite
+off a live database. Adding a second name would have left all three covering less than the
+resolver reads — and the comments in those files record what that costs: 96 test trips
+written into the owner's hosted database during the port, and a "Coverage probe" trip on
+the run that found the same hole in the gate. There is one `forget_hosted_database()` now,
+`tests.test_store_selection` asserts the guard clears everything the resolver reads, and
+the guard was checked by exporting the new variable and watching `check.py` clear it.
+
+Two incidental fixes fell out. `check_reference_coverage.py` put `ROOT` on `sys.path` only
+further down the file, inside the function that needed `scripts` importable, so the new
+top-level import failed until the insertion moved up. And the `os` import it no longer used
+went with it.
+
+### 41% of the stored walking legs were over an hour
+
+`walking_minutes_per_leg` looks like the limit and is not: it caps at 25 minutes,
+`_best_route` treats it as a *sort preference* rather than a filter, and the owner can
+agree to exceed it — which the "make this plan work" flow actively encourages. So accepting
+a tradeoff to get a plan built could bless a walk of any length.
+
+Measured on the live database: **656 stored walking legs, the longest 274 minutes, and 270
+of them — 41% — over an hour.** One reached the itinerary as "walk 19,951 metres, 240
+minutes from the Shinjuku area to Yamamoto-tei", a house in Shibamata that trains serve.
+
+`MAX_USABLE_WALK_MINUTES = 60` is derived rather than picked:
+`plain_walking_minutes_per_day` is at most 60 on the most permissive pace, so a single leg
+longer than the most generous *whole-day* plain-walking budget cannot be a leg a plan
+should use. Whether to walk four hours is not a preference.
+
+Filtered in `_routes_between` — the one function `_best_route`,
+`_has_usable_route_between` and `_missing_route_edges` all go through — because a leg
+excluded from planning but still counted as making a pair reachable is how a place gets
+scheduled behind a walk nobody will take. And `_accepted_route_estimates` no longer
+fabricates one past the ceiling: generating it puts a four-hour walk in the frozen
+snapshot, in the exports and in front of the owner as though it were a choice they made.
+Leaving the pair unrouted means `ROUTE_UNVERIFIED` and a recommendation to drop the place,
+which is a true answer where the walk is not.
+
+The 27 fixtures peak at 42 minutes — `jp-teamlab-odaiba-long-walk`, which is the point of
+that fixture — so all of them are untouched, with eighteen minutes of margin. Two tests in
+`test_opening` did fail: their fixture pairs were about 5 km apart, which the ceiling now
+refuses. Their subject is the *direction* of the estimate's error, so they got a walkable
+pair, and the far pair became its own test using the coordinates from the report.
+
+### The hotel had two ways in
+
+`Toyoko Inn Shinjuku Kabukicho` was in the catalogue with `category: "hotel"` and the
+optimizer gave it an 82-minute sightseeing slot.
+
+`FAMILY_SELECTORS` never asks Overpass for a lodging tag. But `_category` returned
+`tags["tourism"]` unconditionally and **first**, so a place matched for being `historic`, or
+a marketplace, or a park, came back labelled with whatever `tourism` value it also carried.
+The set the query asks for and the set the resolver accepts were two literals; they are one
+now, and `FAMILY_SELECTORS` is built from it. A place matched for `historic` reports
+`historic`, which is both more useful and more honest — it names the reason the place is in
+the catalogue.
+
+That alone leaves a pure hotel falling through to `landmark`, so `_item` also drops an
+element whose only classification is lodging. Keyed on the **tags**, not on `_category`'s
+answer, precisely because the label no longer says "hotel". A palace converted into a hotel
+keeps `historic` and stays: `Pousada do Porto Freixo Palace Hotel` is a real candidate with
+a Commons category for the palace it occupies, and dropping anything whose category was
+lodging would have lost it.
+
+### Release evidence
+
+**12 of 13** stages: 737 Python tests, 218 web tests, the 20 atomic and 7 interaction
+optimizer regressions. The migrated database was verified before any of this — 19,099 rows,
+every table's count equal to the dump — and the app was run against Neon with only
+`STORAGE_2_POSTGRES_URL` set, returning the owner's Tokyo trip.
+
+Still open from the same report: **NHK Studio Park** (permanently closed 2020) and
+**Yoshimoto ∞ Hall** (closed March 2025) are in the catalogue and were scheduled. That is
+an OpenStreetMap freshness problem rather than a filter bug — both are still tagged as
+attractions upstream — so it needs a different kind of answer, and guessing one here would
+have been worse than saying so.

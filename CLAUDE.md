@@ -981,6 +981,33 @@ Each stage is gated on the previous one having a matching hash (`_current_choice
    documented default and shows it as a visible assumption; where the value is the point of the request
    it asks one clarification instead. GenAI is off by default and everything else works without it.
 
+### What may enter the catalogue, and how far a walk counts
+
+**A bed is not a stop.** `tourism=hotel` reached the catalogue and the optimizer gave it an
+82-minute sightseeing slot. Two causes, both fixed. `_category` returned `tags["tourism"]`
+unconditionally and *first*, so a place matched for being `historic` was labelled with
+whatever `tourism` value it also carried — it now accepts only a value in
+`TOURISM_FAMILIES`, the same set `FAMILY_SELECTORS` is built from, so the label names the
+tag that actually put the place there. And `_item` drops an element whose only
+classification is lodging, keyed on the **tags** rather than on `_category`'s answer,
+because a pure hotel now falls through to `landmark` and a label check would miss it. A
+palace converted into a hotel keeps `historic` and stays: it is in the catalogue for the
+palace.
+
+**`MAX_USABLE_WALK_MINUTES = 60` is a hard ceiling, and `walking_minutes_per_leg` is not.**
+That one is a comfort threshold: it caps at 25, `_best_route` treats it as a sort
+preference rather than a filter, and the owner may agree to exceed it — which the "make
+this plan work" flow encourages. So an accepted tradeoff could bless a walk of any length.
+Measured on the live database: **656 stored walking legs, the longest 274 minutes, 41% over
+an hour**, and one reached an itinerary as "walk 19,951 metres, 240 minutes". The ceiling is
+derived rather than chosen — `plain_walking_minutes_per_day` is at most 60 on the most
+permissive pace, so a single leg longer than the most generous *whole-day* budget cannot be
+one a plan should use. Filtered in `_routes_between`, the one function every route reader
+goes through, so a leg excluded from planning is not still counted as making a pair
+reachable. `_accepted_route_estimates` stops fabricating one past the ceiling too: leaving
+the pair unrouted means the place is `ROUTE_UNVERIFIED` and recommended for removal, which
+is true where a four-hour walk is not. The 27 fixtures peak at 42 minutes and are untouched.
+
 ### Transit routing (`WF-038`)
 
 `travel_planner/transit.py` holds `TransitGraph`, the walking constants and **one** Dijkstra;
@@ -1412,6 +1439,23 @@ is global, so any visitor can spend the owner's keys.**
 it from tickets rather than copying its checklist; retain run evidence under `artifacts/validation/<run-id>/`.
 
 ## Configuration
+
+**The hosted database can be named by more than one variable, and `store.HOSTED_URL_VARIABLES`
+is the list.** `TOURIST_DB_URL` is first because it is the deliberate one — the worker's
+command line and `deploy/` set it. `STORAGE_2_POSTGRES_URL` is Vercel's, written **and
+rotated** by the Neon integration, which is the reason it is there: a hand-copied URL breaks
+silently on the next credential change. The prefix is Vercel's own numbering, so the name is
+specific rather than a `*_POSTGRES_URL` glob — a glob would also match a `STORAGE_1_` left
+behind by the previous provider, and reaching the wrong database is worse than finding none.
+
+`hosted_database_url()` is the one resolver, used by `open_store` and by `api/rpc.py`'s
+guard, so a deployment cannot report itself misconfigured while working. And
+`forget_hosted_database()` is the guard used by `tests/__init__.py`, `scripts/check.py` and
+`scripts/check_reference_coverage.py` — **clear the list, never one name by hand.** Popping
+`TOURIST_DB_URL` alone is how a suite comes to be redirected at production by an exported
+variable, and that has happened twice: 96 test trips written into the live database during
+the port, and a "Coverage probe" trip on the run that found the same hole in the gate.
+`tests.test_store_selection` asserts the guard clears everything the resolver reads.
 
 Paid usage is capped at **US$10/month** by decision (warn at $8). `usage.py` is that ledger: `PRICES_USD`
 holds the estimated unit price per `provider:operation`, and `actions._spend()` refuses a call that would

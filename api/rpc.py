@@ -45,6 +45,7 @@ from localserver import (
 )
 from travel_planner.actions import PlannerActions
 from travel_planner.jobs import HANDLERS, JobQueue
+from travel_planner.store import HOSTED_URL_VARIABLES, hosted_database_url
 
 class ConfigurationError(RuntimeError):
     """The deployment is missing something it cannot run without.
@@ -69,12 +70,17 @@ _queue: JobQueue | None = None
 def _planner() -> tuple[PlannerActions, JobQueue]:
     global _actions, _queue
     if _actions is None:
-        if not os.environ.get("TOURIST_DB_URL", "").strip():
+        # The same resolver `open_store` uses, so this cannot report a deployment
+        # misconfigured while it works, or the reverse. `STORAGE_2_POSTGRES_URL` is
+        # Vercel's own, rotated by the Neon integration, which is why it is preferred
+        # over a hand-copied value that goes stale on the next credential change.
+        if not hosted_database_url():
             # Failing loudly beats writing a trip to a disk that is about to be
             # discarded, which looks like success and loses the data.
             raise ConfigurationError(
-                "TOURIST_DB_URL is not set. A serverless function has no durable "
-                "disk, so the planner needs a Postgres URL to reach its data."
+                "No database URL is set. A serverless function has no durable disk, "
+                "so the planner needs a Postgres URL to reach its data. Set any of: "
+                + ", ".join(HOSTED_URL_VARIABLES)
             )
         try:
             _actions = PlannerActions(os.environ.get("TOURIST_DB_PATH", "unused-on-postgres"))
@@ -87,7 +93,7 @@ def _planner() -> tuple[PlannerActions, JobQueue]:
             _actions = None
             raise ConfigurationError(
                 f"the database could not be reached ({type(error).__name__}); "
-                "check TOURIST_DB_URL"
+                "check " + " / ".join(HOSTED_URL_VARIABLES)
             ) from error
     assert _queue is not None
     return _actions, _queue

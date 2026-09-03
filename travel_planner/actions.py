@@ -35,6 +35,7 @@ from .discovery import build_candidate_catalog
 from .optimizer import (
     COMFORT_RULES,
     DEPARTURE_LOGISTICS_MINUTES,
+    MAX_USABLE_WALK_MINUTES,
     date_range,
     optimize_trip,
     usable_route_statuses,
@@ -325,6 +326,20 @@ class PlannerActions:
                 if (origin["id"], destination["id"]) in held:
                     continue
                 metres = _distance_metres(origin, destination) * self.ACCEPTED_ROUTE_DETOUR
+                walking = round(metres / WALK_METRES_PER_MINUTE, 1)
+                # Not fabricated at all beyond the ceiling. `optimizer._routes_between`
+                # would drop it anyway, but generating it is worse than useless: it puts
+                # a four-hour walk in the frozen snapshot, in the exports and in front of
+                # the owner as though it were an option they had agreed to. The owner
+                # agreed to *a pessimistic estimate where no router would answer*, not to
+                # walking across a city — a 19,951 metre leg reached their itinerary and
+                # was reported as "definitely wrong".
+                #
+                # Leaving the pair unrouted is the honest result: the place stays
+                # `ROUTE_UNVERIFIED` and the screen recommends removing it, which is a
+                # true answer where a 240-minute walk is not.
+                if walking > MAX_USABLE_WALK_MINUTES:
+                    continue
                 made.append(
                     {
                         "origin_id": origin["id"],
@@ -332,7 +347,7 @@ class PlannerActions:
                         "mode": "walk",
                         "status": "accepted_estimate",
                         "basis": "owner_accepted_straight_line",
-                        "duration_minutes": round(metres / WALK_METRES_PER_MINUTE, 1),
+                        "duration_minutes": walking,
                         "distance_metres": round(metres),
                     }
                 )

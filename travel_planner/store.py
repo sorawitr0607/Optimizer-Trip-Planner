@@ -348,19 +348,76 @@ END;
 """
 
 
+#: Every variable that can name the hosted database, in the order they are tried.
+#:
+#: `TOURIST_DB_URL` is first because it is the deliberate one: set it and it wins, which
+#: is what the worker's own command line and `deploy/` rely on.
+#:
+#: `STORAGE_2_POSTGRES_URL` is Vercel's, written by the Neon integration and **rotated by
+#: it**. That is the whole reason it is here: the credential changed once already, and a
+#: hand-copied URL means the deployment breaks silently every time it changes again. The
+#: integration keeps this one current, so the app follows the rotation instead of waiting
+#: for someone to notice.
+#:
+#: The prefix is Vercel's own numbering for storage integrations, so it is *specific* on
+#: purpose rather than a `*_POSTGRES_URL` pattern: a glob would also match a
+#: `STORAGE_1_POSTGRES_URL` left behind by the previous provider, and picking the wrong
+#: database is a worse failure than not finding one. Add the next integration's name here
+#: explicitly, and `forget_hosted_database` will cover it without further thought.
+HOSTED_URL_VARIABLES: tuple[str, ...] = (
+    "TOURIST_DB_URL",
+    "STORAGE_2_POSTGRES_URL",
+)
+
+
+def hosted_database_url() -> str:
+    """The hosted database URL from the environment, or "" for none.
+
+    One resolver, because the guard in `api/rpc.py` and the selection in `open_store` have
+    to agree about what counts as configured — a guard that checks a different variable
+    from the one the store reads is a deployment that reports itself misconfigured while
+    working, or the reverse.
+    """
+
+    for name in HOSTED_URL_VARIABLES:
+        url = os.environ.get(name, "").strip()
+        if url:
+            return url
+    return ""
+
+
+def forget_hosted_database() -> None:
+    """Clear every variable that could point a store at a real database.
+
+    **This is a safety mechanism with a history.** `open_store` ignores the path it is
+    handed whenever one of these is set, so a shell that happens to export one silently
+    redirects a test suite away from its temp file. That is not hypothetical: it happened
+    while building the hosted port, and 96 test trips plus their setups, choices,
+    discovery runs and split rows were written into the owner's live database before
+    anyone noticed.
+
+    It exists as a function rather than a `pop` at each call site so that adding a name to
+    `HOSTED_URL_VARIABLES` cannot leave a suite reachable. `tests.test_store` asserts the
+    two lists are the same list.
+    """
+
+    for name in HOSTED_URL_VARIABLES:
+        os.environ.pop(name, None)
+
+
 def open_store(database_path: str | Path) -> "SQLiteStore":
     """Pick the backend from the environment, defaulting to the file on disk.
 
-    `TOURIST_DB_URL` selects Postgres and nothing else does, so every existing
-    caller, every test and every script keeps the SQLite path it already had. The
-    hosted database is opt-in by presence of a URL rather than by a flag, because
-    a flag can be set without a destination and then fails somewhere less obvious.
+    A URL in `HOSTED_URL_VARIABLES` selects Postgres and nothing else does, so every
+    existing caller, every test and every script keeps the SQLite path it already had. The
+    hosted database is opt-in by presence of a URL rather than by a flag, because a flag
+    can be set without a destination and then fails somewhere less obvious.
 
     Imported lazily: `psycopg` is not a runtime dependency of the local app, and
     importing it at module scope would make the whole planner refuse to start on a
     machine that has never needed it.
     """
-    url = os.environ.get("TOURIST_DB_URL", "").strip()
+    url = hosted_database_url()
     if not url:
         return SQLiteStore(database_path)
     from .pgstore import PostgresStore

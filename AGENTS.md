@@ -60,6 +60,16 @@
   `travel_minutes` doubled travel and sent days across the city. When two goals trade
   against each other rather than rank, put them in one weighted term and measure the weight
   — see `EMPTY_DAY_MINUTES`.
+- The hosted database URL is resolved by `store.hosted_database_url()` and cleared by
+  `store.forget_hosted_database()`. **Never pop `TOURIST_DB_URL` by hand** — a guard that
+  covers fewer variables than `open_store` reads is how a suite reaches production, which
+  has happened twice.
+- A tag the Overpass query never asked for must not decide a candidate's category, and a
+  candidate whose only classification is lodging is not a candidate. Both let a hotel be
+  scheduled as an 82-minute attraction.
+- A comfort threshold can be consented past; some limits must not be. `walking_minutes_per_leg`
+  is the former, `MAX_USABLE_WALK_MINUTES` the latter — accepting a tradeoff to get a plan
+  built once blessed a 240-minute walk.
 - Row dumps of the hosted database are gitignored and must stay so: they carry trips, owner
   tokens, addresses and ages, and this repository is public. Structure-only dumps in
   `supabase/backups/` are safe and are the committable kind.

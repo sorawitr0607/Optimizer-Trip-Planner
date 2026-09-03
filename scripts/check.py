@@ -5,14 +5,23 @@ from __future__ import annotations
 
 from pathlib import Path
 # No stage of this gate may touch a hosted database. `open_store` selects Postgres
-# from `TOURIST_DB_URL` and ignores the path it was handed, so a shell that
-# happens to export it silently redirects every stage that builds a store. That is
-# not hypothetical: it put a "Coverage probe" trip into the owner's hosted database
+# from any of `HOSTED_URL_VARIABLES` and ignores the path it was handed, so a shell
+# that happens to export one silently redirects every stage that builds a store. That
+# is not hypothetical: it put a "Coverage probe" trip into the owner's hosted database
 # on the run that found this. The suite has the same guard in `tests/__init__.py`;
 # this covers the stages that are plain scripts and never import that package.
+#
+# Cleared through the store's own list. Popping one name by hand is how this guard
+# comes to cover fewer variables than `open_store` reads — which is exactly what
+# adding `STORAGE_2_POSTGRES_URL` would have done to it.
 import os as _os
+import sys as _sys
+from pathlib import Path as _Path
 
-_os.environ.pop("TOURIST_DB_URL", None)
+_sys.path.insert(0, str(_Path(__file__).resolve().parents[1]))
+from travel_planner.store import forget_hosted_database as _forget  # noqa: E402
+
+_forget()
 
 
 def _drop_dead_node_preloads() -> str | None:
