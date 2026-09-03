@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from copy import deepcopy
 from datetime import date, timedelta
+from functools import lru_cache
 from hashlib import sha256
 import json
 from math import ceil
@@ -500,6 +501,7 @@ def _solve_variant(
 def _prepare_candidates(
     snapshot: dict[str, Any], config: dict[str, Any]
 ) -> dict[str, Any]:
+    route_index = _route_index(snapshot)
     candidates = { _candidate_id(item): deepcopy(item) for item in snapshot["candidates"] }
     active = [deepcopy(item) for item in _selected_candidates(snapshot)]
     reconciliation: dict[str, dict[str, Any]] = {}
@@ -531,7 +533,9 @@ def _prepare_candidates(
                     if _candidate_id(item) != place_id
                     if item.get("weather_exposure") == "indoor"
                     and _opening_overlaps_trip(snapshot, item, config)
-                    and _fallback_route_compatible(snapshot, place_id, _candidate_id(item))
+                    and _fallback_route_compatible(
+                        snapshot, place_id, _candidate_id(item), route_index=route_index
+                    )
                 ),
                 None,
             )
@@ -704,7 +708,9 @@ def _prepare_candidates(
 
         allowed = _verified_fact(snapshot, place_id, "allowed_transport_modes")
         if allowed:
-            route = _activity_route(snapshot, candidate, allowed["value"])
+            route = _activity_route(
+                snapshot, candidate, allowed["value"], route_index=route_index
+            )
             if not route:
                 reconciliation[place_id] = _reconciliation(
                     candidate,
@@ -723,7 +729,9 @@ def _prepare_candidates(
                 continue
             candidate["_activity_route"] = route
         elif len(active) == 1:
-            standalone = _standalone_activity_route(snapshot, place_id)
+            standalone = _standalone_activity_route(
+                snapshot, place_id, route_index=route_index
+            )
             if standalone:
                 if _route_breaks_heat_or_cycling(snapshot, standalone):
                     reconciliation[place_id] = _reconciliation(
@@ -736,7 +744,7 @@ def _prepare_candidates(
                 candidate["_activity_route"] = standalone
 
         if candidate.get("requires_route_evidence") and not _has_incident_usable_route(
-            snapshot, place_id
+            snapshot, place_id, route_index=route_index
         ):
             reconciliation[place_id] = _reconciliation(
                 candidate,
@@ -766,6 +774,9 @@ def _insertion_search(
     deadline: float,
 ) -> tuple[list[dict[str, Any]], set[str], bool]:
     dates = [window["date"] for window in snapshot["trip"]["usable_windows"]]
+    # One pass for the whole search: every segment below used to scan the full
+    # route list, which is where Tokyo-scale time went (a billion `dict.get`).
+    route_index = _route_index(snapshot)
     states: list[tuple[dict[str, list[dict[str, Any]]], set[str]]] = [
         ({day: [] for day in dates}, set())
     ]
@@ -782,10 +793,14 @@ def _insertion_search(
             # the pilot, against a greedy pass that placed all 13. Greedy sweeps every
             # candidate and has no time limit, so it is a floor we can always afford.
             # Returning worse than a schedule already in hand is never right.
-            greedy = _greedy_sequences(snapshot, ordered, config)
+            greedy = _greedy_sequences(
+                snapshot, ordered, config, route_index=route_index
+            )
             if _search_objective(
-                snapshot, greedy[0], greedy[1], ordered, config
-            ) < _search_objective(snapshot, sequences, skipped, ordered, config):
+                snapshot, greedy[0], greedy[1], ordered, config, route_index=route_index
+            ) < _search_objective(
+                snapshot, sequences, skipped, ordered, config, route_index=route_index
+            ):
                 sequences, skipped = greedy
             states = [(sequences, skipped)]
             break
@@ -799,7 +814,9 @@ def _insertion_search(
                 for position in range(len(sequences[day]) + 1):
                     proposal = {key: list(value) for key, value in sequences.items()}
                     proposal[day].insert(position, candidate)
-                    built = _build_schedules(snapshot, proposal, config)
+                    built = _build_schedules(
+                        snapshot, proposal, config, route_index=route_index
+                    )
                     if not built["hard_errors"]:
                         generated.append((proposal, set(skipped)))
             if candidate.get("priority", "interested") != "must_do":
@@ -818,12 +835,12 @@ def _insertion_search(
         states = sorted(
             unique.values(),
             key=lambda state: _search_objective(
-                snapshot, state[0], state[1], processed, config
+                snapshot, state[0], state[1], processed, config, route_index=route_index
             ),
         )[:64]
 
     sequences, skipped = states[0]
-    built = _build_schedules(snapshot, sequences, config)
+    built = _build_schedules(snapshot, sequences, config, route_index=route_index)
     return built["days"], skipped, stopped
 
 
@@ -831,13 +848,15 @@ def _build_schedules(
     snapshot: dict[str, Any],
     sequences: dict[str, list[dict[str, Any]]],
     config: dict[str, Any],
+    *,
+    route_index: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     days = []
     hard_errors: list[dict[str, Any]] = []
     if snapshot["trip"].get("include_operational_timeline"):
         days.append(_pre_trip_day(snapshot))
     for day, sequence in sequences.items():
-        built = _build_day(snapshot, day, sequence, config)
+        built = _build_day(snapshot, day, sequence, config, route_index=route_index)
         hard_errors.extend(built["hard_errors"])
         days.append(built["day"])
     return {"days": days, "hard_errors": hard_errors}
@@ -848,6 +867,8 @@ def _build_day(
     day: str,
     sequence: list[dict[str, Any]],
     config: dict[str, Any],
+    *,
+    route_index: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     window = _window_for(snapshot, day)
     current = _minutes(window["start"])
@@ -888,6 +909,7 @@ def _build_day(
                 previous,
                 config,
                 current,
+                route_index=route_index,
             )
             if segment["error"]:
                 hard_errors.append(segment["error"])
@@ -952,6 +974,8 @@ def _candidate_segment(
     previous: str | None,
     config: dict[str, Any],
     current: int,
+    *,
+    route_index: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build one candidate off to the side so a due meal can precede it."""
 
@@ -959,9 +983,9 @@ def _candidate_segment(
     cursor = current
     segment: list[dict[str, Any]] = []
     route = (
-        _best_inbound_route(snapshot, place_id)
+        _best_inbound_route(snapshot, place_id, route_index=route_index)
         if previous is None
-        else _best_route(snapshot, previous, place_id)
+        else _best_route(snapshot, previous, place_id, route_index=route_index)
     )
     if route:
         departure = _minutes(route["departure_time"]) if route.get("departure_time") else cursor
@@ -974,13 +998,13 @@ def _candidate_segment(
         cursor = _append_wait(segment, day, cursor, departure, "route_departure")
         route_end = cursor + int(route.get("duration_minutes", 0))
         travel_item = _travel_item(
-            day, cursor, route_end, previous, place_id, route, snapshot
+            day, cursor, route_end, previous, place_id, route, snapshot, route_index
         )
         segment.append(travel_item)
         cursor = route_end
         boarding = max(
             int(route.get("boarding_buffer_minutes", 0)),
-            _required_boarding_buffer(snapshot, place_id),
+            _required_boarding_buffer(snapshot, place_id, route_index),
         )
         travel_item["boarding_buffer_minutes"] = boarding
         if boarding:
@@ -1007,12 +1031,23 @@ def _candidate_segment(
     if activity_route:
         route_end = cursor + int(activity_route.get("duration_minutes", 0))
         segment.append(
-            _travel_item(day, cursor, route_end, place_id, place_id, activity_route, snapshot)
+            _travel_item(
+                day,
+                cursor,
+                route_end,
+                place_id,
+                place_id,
+                activity_route,
+                snapshot,
+                route_index,
+            )
         )
         cursor = route_end
 
     duration = _duration(candidate, config["duration"])
-    start = _earliest_visit_start(snapshot, candidate, day, cursor, duration)
+    start = _earliest_visit_start(
+        snapshot, candidate, day, cursor, duration, route_index
+    )
     if start is None:
         return {
             "items": [],
@@ -1350,6 +1385,8 @@ def _greedy_sequences(
     snapshot: dict[str, Any],
     candidates: list[dict[str, Any]],
     config: dict[str, Any],
+    *,
+    route_index: dict[str, Any] | None = None,
 ) -> tuple[dict[str, list[dict[str, Any]]], set[str]]:
     """First-fit over every candidate: one cheap deterministic sweep, no time limit.
 
@@ -1377,7 +1414,9 @@ def _greedy_sequences(
                 continue
             proposal = {key: list(value) for key, value in sequences.items()}
             proposal[day].append(candidate)
-            if not _build_schedules(snapshot, proposal, config)["hard_errors"]:
+            if not _build_schedules(
+                snapshot, proposal, config, route_index=route_index
+            )["hard_errors"]:
                 sequences = proposal
                 placed = True
                 break
@@ -1392,8 +1431,11 @@ def _greedy_baseline(
     selected: list[dict[str, Any]],
     config: dict[str, Any],
 ) -> dict[str, Any]:
-    sequences, skipped = _greedy_sequences(snapshot, candidates, config)
-    built = _build_schedules(snapshot, sequences, config)
+    route_index = _route_index(snapshot)
+    sequences, skipped = _greedy_sequences(
+        snapshot, candidates, config, route_index=route_index
+    )
+    built = _build_schedules(snapshot, sequences, config, route_index=route_index)
     metrics = _schedule_metrics(snapshot, built["days"])
     scheduled = {
         item["subject_id"]
@@ -1403,7 +1445,7 @@ def _greedy_baseline(
     }
     objective = _objective(snapshot, selected, scheduled, metrics, [])
     objective["hard_violations"] = len(built["hard_errors"]) + _missing_route_edges(
-        snapshot, sequences
+        snapshot, sequences, route_index=route_index
     )
     objective_tuple = [
         objective["hard_violations"],
@@ -1464,10 +1506,14 @@ def _search_objective(
     skipped: set[str],
     processed: list[dict[str, Any]],
     config: dict[str, Any],
+    *,
+    route_index: dict[str, Any] | None = None,
 ) -> tuple[Any, ...]:
-    built = _build_schedules(snapshot, sequences, config)
+    built = _build_schedules(snapshot, sequences, config, route_index=route_index)
     metrics = _schedule_metrics(snapshot, built["days"])
-    missing_route_edges = _missing_route_edges(snapshot, sequences)
+    missing_route_edges = _missing_route_edges(
+        snapshot, sequences, route_index=route_index
+    )
     scheduled = {
         item["subject_id"]
         for day in built["days"]
@@ -1718,18 +1764,22 @@ def _earliest_visit_start(
     day: str,
     current: int,
     duration: int,
+    route_index: dict[str, Any] | None = None,
 ) -> int | None:
+    facts = route_index.get("facts") if route_index else None
+    thresholds = route_index.get("thresholds") if route_index else None
+    windows = route_index.get("windows") if route_index else None
     place_id = _candidate_id(candidate)
-    window = _window_for(snapshot, day)
+    window = _window_for(snapshot, day, windows)
     latest = _minutes(window["end"])
     start = current
-    opening = _planning_fact(snapshot, place_id, "opening_interval")
+    opening = _planning_fact(snapshot, place_id, "opening_interval", facts)
     if not _open_on(opening, day):
         return None
     if opening:
         start = max(start, _minutes(opening["value"]["start"]))
         latest = min(latest, _minutes(opening["value"]["end"]))
-    show = _verified_fact(snapshot, place_id, "show_intervals")
+    show = _verified_fact(snapshot, place_id, "show_intervals", facts)
     if show:
         starts = [
             _minutes(item["start"])
@@ -1738,13 +1788,15 @@ def _earliest_visit_start(
             and _minutes(item["end"]) <= _minutes(window["end"])
         ]
         return min(starts) if starts else None
-    best = _verified_fact(snapshot, place_id, "best_time_interval")
+    best = _verified_fact(snapshot, place_id, "best_time_interval", facts)
     if best and max(start, _minutes(best["value"]["start"])) + duration <= min(
         latest, _minutes(best["value"]["end"])
     ):
         start = max(start, _minutes(best["value"]["start"]))
         latest = min(latest, _minutes(best["value"]["end"]))
-    meal = _meal_window(snapshot) if candidate.get("kind") == "meal" else None
+    meal = (
+        _meal_window(snapshot, thresholds) if candidate.get("kind") == "meal" else None
+    )
     if meal:
         start = max(start, _minutes(meal["start"]))
         latest = min(latest, _minutes(meal["end"]))
@@ -1762,9 +1814,36 @@ def _earliest_visit_start(
     return start if start + duration <= latest else None
 
 
+def _fact_index(snapshot: dict[str, Any]) -> dict[tuple[Any, Any], dict[str, Any]]:
+    """First verified/assumed fact per `(subject_id, fact_type)`, snapshot order.
+
+    The same `next(...)` scan `_verified_fact` and `_planning_fact` perform,
+    run once per solve instead of tens of millions of times. First-wins per
+    status keeps the indexed answer identical to the scan's.
+    """
+
+    index: dict[tuple[Any, Any], dict[str, Any]] = {}
+    for fact in snapshot.get("facts", []):
+        if fact.get("value") is None:
+            continue
+        slot = index.setdefault((fact.get("subject_id"), fact.get("fact_type")), {})
+        status = fact.get("status")
+        if status == "verified" and "verified" not in slot:
+            slot["verified"] = fact
+        elif status == "assumed" and "assumed" not in slot:
+            slot["assumed"] = fact
+    return index
+
+
 def _verified_fact(
-    snapshot: dict[str, Any], subject_id: str, fact_type: str
+    snapshot: dict[str, Any],
+    subject_id: str,
+    fact_type: str,
+    fact_index: dict[tuple[Any, Any], dict[str, Any]] | None = None,
 ) -> dict[str, Any] | None:
+    if fact_index is not None:
+        slot = fact_index.get((subject_id, fact_type))
+        return slot.get("verified") if slot else None
     return next(
         (
             fact
@@ -1797,13 +1876,19 @@ def _open_on(fact: dict[str, Any] | None, day: str) -> bool:
 
 
 def _planning_fact(
-    snapshot: dict[str, Any], subject_id: str, fact_type: str
+    snapshot: dict[str, Any],
+    subject_id: str,
+    fact_type: str,
+    fact_index: dict[tuple[Any, Any], dict[str, Any]] | None = None,
 ) -> dict[str, Any] | None:
     """Verified fact, or a visible assumption allowed only for an Explore preview."""
 
-    verified = _verified_fact(snapshot, subject_id, fact_type)
+    verified = _verified_fact(snapshot, subject_id, fact_type, fact_index)
     if verified or not snapshot.get("trip", {}).get("allow_provisional_assumptions"):
         return verified
+    if fact_index is not None:
+        slot = fact_index.get((subject_id, fact_type))
+        return slot.get("assumed") if slot else None
     return next(
         (
             fact
@@ -1881,12 +1966,18 @@ def _queue_breaks_meal_window(
 
 
 def _activity_route(
-    snapshot: dict[str, Any], candidate: dict[str, Any], allowed_modes: list[str]
+    snapshot: dict[str, Any],
+    candidate: dict[str, Any],
+    allowed_modes: list[str],
+    *,
+    route_index: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     usable = _usable_route_statuses(snapshot)
+    if route_index is None:
+        route_index = _route_index(snapshot)
     routes = [
         route
-        for route in snapshot.get("routes", [])
+        for _, route in route_index["ordered"]
         if route.get("status") in usable and route.get("mode") in set(allowed_modes)
         # Same hard cap as `_routes_between`: a leg nobody will walk must not be
         # plannable here either. Verified 87/103/237-minute walks reached real
@@ -1911,18 +2002,31 @@ def _activity_route(
             thresholds.get("walking_minutes_per_leg", 10**9)
         )
         return cycling_over, heat_penalty, walk_over, int(route.get("duration_minutes", 0)), str(route.get("mode"))
-    return deepcopy(min(routes, key=key))
+    # Memoized pick, like `_best_route`: the modes alone decide it.
+    memo = route_index.setdefault("memo", {})
+    memo_key = ("activity", tuple(allowed_modes))
+    if memo_key not in memo:
+        # A shallow copy: every consumer only reads the leg (`_travel_item`
+        # copies the fields it schedules), and a grep for `route["…"] =`
+        # finds no writer.
+        memo[memo_key] = min(routes, key=key)
+    return dict(memo[memo_key])
 
 
 def _standalone_activity_route(
-    snapshot: dict[str, Any], place_id: str
+    snapshot: dict[str, Any],
+    place_id: str,
+    *,
+    route_index: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
-    if _has_incident_usable_route(snapshot, place_id):
+    if route_index is None:
+        route_index = _route_index(snapshot)
+    if _has_incident_usable_route(snapshot, place_id, route_index=route_index):
         return None
     usable = _usable_route_statuses(snapshot)
     routes = [
         route
-        for route in snapshot.get("routes", [])
+        for _, route in route_index["ordered"]
         if route.get("status") in usable and _walkable(route)
     ]
     if not routes:
@@ -1947,8 +2051,34 @@ def _route_breaks_heat_or_cycling(snapshot: dict[str, Any], route: dict[str, Any
     return bool(heat_high and heat_limit in {"low", "medium"} and route.get("mode") in {"walk", "bike"})
 
 
-def _best_route(snapshot: dict[str, Any], origin: str, destination: str) -> dict[str, Any] | None:
-    routes = _routes_between(snapshot, origin, destination)
+def _best_route(
+    snapshot: dict[str, Any],
+    origin: str,
+    destination: str,
+    *,
+    route_index: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    if route_index is None:
+        route_index = _route_index(snapshot)
+    # Memo first, like `_best_inbound_route`: the pick for a pair never changes
+    # within a solve, and rebuilding the filtered list per segment evaluation
+    # dominated the profile (12M `_routes_between` calls at Tokyo scale).
+    memo = route_index.setdefault("memo", {})
+    key = ("route", origin, destination)
+    found = memo.get(key, _ABSENT)
+    if found is _ABSENT:
+        found = _best_route_uncached(snapshot, origin, destination, route_index)
+        memo[key] = found
+    return dict(found) if found is not None else None
+
+
+def _best_route_uncached(
+    snapshot: dict[str, Any],
+    origin: str,
+    destination: str,
+    route_index: dict[str, Any],
+) -> dict[str, Any] | None:
+    routes = _routes_between(snapshot, origin, destination, route_index=route_index)
     if not routes:
         hotel_ids = {
             _candidate_id(item)
@@ -1956,8 +2086,8 @@ def _best_route(snapshot: dict[str, Any], origin: str, destination: str) -> dict
             if item.get("kind") == "hotel_area"
         }
         for hotel_id in sorted(hotel_ids):
-            first = _routes_between(snapshot, origin, hotel_id)
-            second = _routes_between(snapshot, hotel_id, destination)
+            first = _routes_between(snapshot, origin, hotel_id, route_index=route_index)
+            second = _routes_between(snapshot, hotel_id, destination, route_index=route_index)
             if first and second:
                 left = min(first, key=lambda item: int(item.get("duration_minutes", 0)))
                 right = min(second, key=lambda item: int(item.get("duration_minutes", 0)))
@@ -1982,8 +2112,14 @@ def _best_route(snapshot: dict[str, Any], origin: str, destination: str) -> dict
     if not routes:
         return None
     walk_limit = int(_thresholds(snapshot).get("walking_minutes_per_leg", 10**9))
-    return deepcopy(
-        min(
+    # A shallow copy of the memoized pick: consumers read the leg, nobody writes
+    # it, and the memo lives in the per-snapshot bundle so it cannot leak across
+    # trips. The pick depends only on the pair, not on the day or the sequence,
+    # so the millionth segment evaluation reuses the first one's answer.
+    memo = route_index.setdefault("memo", {})
+    key = ("route", origin, destination)
+    if key not in memo:
+        memo[key] = min(
             routes,
             key=lambda item: (
                 int(item.get("walking_minutes", 0)) > walk_limit,
@@ -1992,33 +2128,44 @@ def _best_route(snapshot: dict[str, Any], origin: str, destination: str) -> dict
                 str(item.get("mode")),
             ),
         )
-    )
+    return dict(memo[key])
 
 
-def _best_inbound_route(snapshot: dict[str, Any], destination: str) -> dict[str, Any] | None:
-    usable = _usable_route_statuses(snapshot)
-    candidate_ids = {_candidate_id(candidate) for candidate in snapshot.get("candidates", [])}
-    base_ids = {
-        _candidate_id(candidate)
-        for candidate in snapshot.get("candidates", [])
-        if candidate.get("kind") == "hotel_area"
-    }
-    if not base_ids:
-        base_ids = {
-            str(route.get("origin_id"))
-            for route in snapshot.get("routes", [])
-            if route.get("origin_id") not in candidate_ids
-        }
-    routes = [
-        route
-        for route in snapshot.get("routes", [])
-        if route.get("status") in usable
-        and route.get("destination_id") == destination
-        and route.get("origin_id") in base_ids
-        # Same hard cap as `_routes_between`: the day's first leg is still a leg.
-        and _walkable(route)
-    ]
-    return deepcopy(min(routes, key=lambda item: int(item.get("duration_minutes", 0)))) if routes else None
+def _best_inbound_route(
+    snapshot: dict[str, Any],
+    destination: str,
+    *,
+    route_index: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    if route_index is None:
+        route_index = _route_index(snapshot)
+    # Memo first: the inbound leg for a place never changes within a solve, and
+    # rebuilding the candidate list on each of a million segment evaluations is
+    # what Tokyo-scale time was. Absence is memoized too, under a sentinel.
+    memo = route_index.setdefault("memo", {})
+    key = ("inbound", destination)
+    found = memo.get(key, _ABSENT)
+    if found is _ABSENT:
+        usable = _usable_route_statuses(snapshot)
+        base_ids = route_index["base_ids"]
+        # `by_destination` lists are built in snapshot order, so no sort: the
+        # old scan order -- and with it every tie-break -- is preserved.
+        routes = [
+            route
+            for _, route in route_index["by_destination"].get(destination, ())
+            if route.get("status") in usable
+            and route.get("origin_id") in base_ids
+            # Same hard cap as `_routes_between`: the day's first leg is still a leg.
+            and _walkable(route)
+        ]
+        found = (
+            min(routes, key=lambda item: int(item.get("duration_minutes", 0)))
+            if routes
+            else None
+        )
+        memo[key] = found
+    # Shallow copy: consumers read the leg, nobody writes it.
+    return dict(found) if found is not None else None
 
 
 def usable_route_statuses(*, allow_provisional_assumptions: bool) -> set[str]:
@@ -2114,82 +2261,194 @@ def _walkable(route: dict[str, Any]) -> bool:
     return int(route.get("walking_minutes", 0) or 0) <= MAX_USABLE_WALK_MINUTES
 
 
+#: Memo sentinel: `None` is a real answer (no usable leg), so absence needs its own.
+_ABSENT: Any = object()
+
+
+def _route_index(snapshot: dict[str, Any]) -> dict[str, Any]:
+    """Insertion-ordered route lookups plus the sets readers derive from them.
+
+    The search evaluates tens of thousands of segments and every one scanned
+    the whole route list: measured at Tokyo scale, over a billion `dict.get`
+    calls and 200+ seconds for three variants. One pass here turns every reader
+    into a lookup. `pairs`/`by_destination` keep snapshot positions so merged
+    results come out in exactly the order the old scans produced; `incident`
+    precomputes the usable-endpoint set `_missing_route_edges` rebuilt per call;
+    `base_ids` hoists the derivation `_best_inbound_route` repeated per call.
+    """
+
+    usable = _usable_route_statuses(snapshot)
+    pairs: dict[tuple[Any, Any], list[tuple[int, dict[str, Any]]]] = {}
+    by_destination: dict[Any, list[tuple[int, dict[str, Any]]]] = {}
+    by_origin: dict[Any, list[tuple[int, dict[str, Any]]]] = {}
+    incident: set[str] = set()
+    for position, route in enumerate(snapshot.get("routes", [])):
+        origin, destination = route.get("origin_id"), route.get("destination_id")
+        pairs.setdefault((origin, destination), []).append((position, route))
+        by_destination.setdefault(destination, []).append((position, route))
+        by_origin.setdefault(origin, []).append((position, route))
+        if route.get("status") in usable:
+            if origin:
+                incident.add(str(origin))
+            if destination:
+                incident.add(str(destination))
+    ordered = sorted(
+        (
+            (position, route)
+            for entries in pairs.values()
+            for position, route in entries
+        ),
+        key=lambda item: item[0],
+    )
+    candidate_ids = {_candidate_id(item) for item in snapshot.get("candidates", [])}
+    base_ids = {
+        _candidate_id(item)
+        for item in snapshot.get("candidates", [])
+        if item.get("kind") == "hotel_area"
+    }
+    if not base_ids:
+        base_ids = {
+            str(route.get("origin_id"))
+            for _, route in ordered
+            if route.get("origin_id") not in candidate_ids
+        }
+    return {
+        "pairs": pairs,
+        "by_destination": by_destination,
+        "by_origin": by_origin,
+        "ordered": ordered,
+        "incident": frozenset(incident),
+        "candidate_ids": candidate_ids,
+        "base_ids": base_ids,
+        "usable": usable,
+        # Per-solve derived lookups beyond routes: the search evaluates millions
+        # of segments at Tokyo scale and every fact/threshold/window scan showed
+        # up hot (45M `_verified_fact` calls, 13M `_thresholds` + `_window_for`
+        # each). Built once here; helpers take them as optional `route_index`
+        # entries and fall back to the old scans when absent, so direct unit
+        # calls without an index behave exactly as before.
+        "facts": _fact_index(snapshot),
+        "thresholds": _thresholds(snapshot),
+        "windows": {
+            str(item.get("date")): item
+            for item in snapshot.get("trip", {}).get("usable_windows", [])
+        },
+    }
+
+
+def _indexed_pair_routes(
+    route_index: dict[str, Any], origin: str, destination: str, *, symmetric: bool = False
+) -> list[dict[str, Any]]:
+    """The pair's routes in snapshot order -- exactly what the old scan yielded."""
+
+    hits = list(route_index["pairs"].get((origin, destination), ()))
+    # Not `if symmetric` alone: with origin == destination the reverse key is
+    # the same list, and the old scan yielded each route once, not twice.
+    if symmetric and (destination, origin) != (origin, destination):
+        hits.extend(route_index["pairs"].get((destination, origin), ()))
+    hits.sort(key=lambda item: item[0])
+    return [route for _, route in hits]
+
+
 def _routes_between(
-    snapshot: dict[str, Any], origin: str, destination: str, *, symmetric: bool = False
+    snapshot: dict[str, Any],
+    origin: str,
+    destination: str,
+    *,
+    symmetric: bool = False,
+    route_index: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     usable = _usable_route_statuses(snapshot)
+    if route_index is None:
+        route_index = _route_index(snapshot)
     return [
         route
-        for route in snapshot.get("routes", [])
-        if route.get("status") in usable
-        # Here rather than in `_best_route`, because this is the one function every
-        # route reader goes through — `_has_usable_route_between`, `_missing_route_edges`
-        # and `_best_route` all call it. A leg excluded from planning but still counted
-        # as "this pair is reachable" is how a place gets scheduled behind a walk nobody
-        # will take.
-        and _walkable(route)
-        and (
-            (route.get("origin_id") == origin and route.get("destination_id") == destination)
-            or (
-                symmetric
-                and route.get("origin_id") == destination
-                and route.get("destination_id") == origin
-            )
+        for route in _indexed_pair_routes(
+            route_index, origin, destination, symmetric=symmetric
         )
+        if route.get("status") in usable
+        # Here rather than in `_best_route`, so a leg excluded from planning is
+        # also excluded from "this pair is reachable": a place scheduled behind
+        # a walk nobody will take is how the old reads disagreed. Every reader
+        # shares this predicate -- `_best_inbound_route`, `_activity_route` and
+        # `_standalone_activity_route` carry the same `_walkable` term, and the
+        # pair order below is the old scan order, so decisions do not move.
+        and _walkable(route)
     ]
 
 
-def _has_usable_route_between(snapshot: dict[str, Any], left: str, right: str) -> bool:
-    return bool(_routes_between(snapshot, left, right, symmetric=True))
+def _has_usable_route_between(
+    snapshot: dict[str, Any],
+    left: str,
+    right: str,
+    *,
+    route_index: dict[str, Any] | None = None,
+) -> bool:
+    return bool(
+        _routes_between(snapshot, left, right, symmetric=True, route_index=route_index)
+    )
 
 
-def _fallback_route_compatible(snapshot: dict[str, Any], left: str, right: str) -> bool:
+def _fallback_route_compatible(
+    snapshot: dict[str, Any],
+    left: str,
+    right: str,
+    *,
+    route_index: dict[str, Any] | None = None,
+) -> bool:
     if _has_usable_route_between(snapshot, left, right):
         return True
     # The same statuses the line above already allows, through `_routes_between`. These
     # two sets read `"verified"` literally, so on an Explore trip the function contradicted
     # its own first line: a pair joined by a shared transit origin was called incompatible.
     usable = _usable_route_statuses(snapshot)
+    if route_index is None:
+        route_index = _route_index(snapshot)
     left_origins = {
         route.get("origin_id")
-        for route in snapshot.get("routes", [])
-        if route.get("status") in usable and route.get("destination_id") == left
+        for _, route in route_index["by_destination"].get(left, ())
+        if route.get("status") in usable
     }
     right_origins = {
         route.get("origin_id")
-        for route in snapshot.get("routes", [])
-        if route.get("status") in usable and route.get("destination_id") == right
+        for _, route in route_index["by_destination"].get(right, ())
+        if route.get("status") in usable
     }
     return bool(left_origins & right_origins)
 
 
 def _missing_route_edges(
-    snapshot: dict[str, Any], sequences: dict[str, list[dict[str, Any]]]
+    snapshot: dict[str, Any],
+    sequences: dict[str, list[dict[str, Any]]],
+    *,
+    route_index: dict[str, Any] | None = None,
 ) -> int:
     if not snapshot.get("routes"):
         return 0
     # `_best_route` below already reads through `_routes_between`, so building the
     # incident set on a literal `"verified"` counted a transit-only pair as having no
     # edge to miss — the metric and the scheduler disagreeing about the same snapshot.
-    usable = _usable_route_statuses(snapshot)
-    incident = {
-        str(endpoint)
-        for route in snapshot["routes"]
-        if route.get("status") in usable
-        for endpoint in (route.get("origin_id"), route.get("destination_id"))
-        if endpoint
-    }
+    if route_index is None:
+        route_index = _route_index(snapshot)
+    incident = route_index["incident"]
     return sum(
         1
         for sequence in sequences.values()
         for left, right in zip(sequence, sequence[1:])
         if _candidate_id(left) in incident
         and _candidate_id(right) in incident
-        and not _best_route(snapshot, _candidate_id(left), _candidate_id(right))
+        and not _best_route(
+            snapshot, _candidate_id(left), _candidate_id(right), route_index=route_index
+        )
     )
 
 
-def _has_incident_usable_route(snapshot: dict[str, Any], place_id: str) -> bool:
+def _has_incident_usable_route(
+    snapshot: dict[str, Any],
+    place_id: str,
+    *,
+    route_index: dict[str, Any] | None = None,
+) -> bool:
     """Is there any route this snapshot may plan with that touches this place?
 
     Through `_usable_route_statuses` rather than a literal `"verified"`, which is the
@@ -2207,10 +2466,14 @@ def _has_incident_usable_route(snapshot: dict[str, Any], place_id: str) -> bool:
     """
 
     usable = _usable_route_statuses(snapshot)
+    if route_index is None:
+        route_index = _route_index(snapshot)
     return any(
         route.get("status") in usable
-        and place_id in {route.get("origin_id"), route.get("destination_id")}
-        for route in snapshot.get("routes", [])
+        for _, route in route_index["by_destination"].get(place_id, ())
+    ) or any(
+        route.get("status") in usable
+        for _, route in route_index["by_origin"].get(place_id, ())
     )
 
 
@@ -2222,9 +2485,13 @@ def _travel_item(
     destination: str,
     route: dict[str, Any],
     snapshot: dict[str, Any],
+    route_index: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     claimed = route.get("claimed_experience")
-    supported = _route_experience_supported(snapshot, claimed, start) if claimed else False
+    facts = route_index.get("facts") if route_index else None
+    supported = (
+        _route_experience_supported(snapshot, claimed, start, facts) if claimed else False
+    )
     return {
         "type": "travel",
         "subject_id": f"{origin or 'start'}->{destination}",
@@ -2247,11 +2514,14 @@ def _travel_item(
 
 
 def _route_experience_supported(
-    snapshot: dict[str, Any], claimed: str | None, departure: int
+    snapshot: dict[str, Any],
+    claimed: str | None,
+    departure: int,
+    fact_index: dict[tuple[Any, Any], dict[str, Any]] | None = None,
 ) -> bool:
     if not claimed:
         return False
-    fact = _verified_fact(snapshot, claimed, "supported_view_interval")
+    fact = _verified_fact(snapshot, claimed, "supported_view_interval", fact_index)
     return bool(
         fact
         and fact["value"]
@@ -2259,19 +2529,37 @@ def _route_experience_supported(
     )
 
 
-def _required_boarding_buffer(snapshot: dict[str, Any], place_id: str) -> int:
-    if _crowd_risk(snapshot, place_id) != "high":
+def _required_boarding_buffer(
+    snapshot: dict[str, Any],
+    place_id: str,
+    route_index: dict[str, Any] | None = None,
+) -> int:
+    facts = route_index.get("facts") if route_index else None
+    if _crowd_risk(snapshot, place_id, facts) != "high":
         return 0
-    return int(_thresholds(snapshot).get("minimum_boarding_buffer_minutes", 0))
+    thresholds = route_index.get("thresholds") if route_index else None
+    return int(
+        (thresholds if thresholds is not None else _thresholds(snapshot)).get(
+            "minimum_boarding_buffer_minutes", 0
+        )
+    )
 
 
-def _crowd_risk(snapshot: dict[str, Any], place_id: str) -> str | None:
-    fact = _verified_fact(snapshot, place_id, "crowd_risk")
+def _crowd_risk(
+    snapshot: dict[str, Any],
+    place_id: str,
+    fact_index: dict[tuple[Any, Any], dict[str, Any]] | None = None,
+) -> str | None:
+    fact = _verified_fact(snapshot, place_id, "crowd_risk", fact_index)
     return str(fact["value"]) if fact else None
 
 
-def _meal_window(snapshot: dict[str, Any]) -> dict[str, str] | None:
-    value = _thresholds(snapshot).get("meal_window")
+def _meal_window(
+    snapshot: dict[str, Any], thresholds: dict[str, Any] | None = None
+) -> dict[str, str] | None:
+    value = (thresholds if thresholds is not None else _thresholds(snapshot)).get(
+        "meal_window"
+    )
     return value if isinstance(value, dict) and value.get("start") and value.get("end") else None
 
 
@@ -2297,11 +2585,16 @@ def _lock_for(snapshot: dict[str, Any], place_id: str) -> dict[str, Any] | None:
     )
 
 
-def _window_for(snapshot: dict[str, Any], day: str) -> dict[str, Any]:
-    match = next(
-        (item for item in snapshot["trip"]["usable_windows"] if item["date"] == day),
-        None,
-    )
+def _window_for(
+    snapshot: dict[str, Any], day: str, windows: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    if windows is not None:
+        match = windows.get(day)
+    else:
+        match = next(
+            (item for item in snapshot["trip"]["usable_windows"] if item["date"] == day),
+            None,
+        )
     if match:
         return match
     if snapshot["trip"].get("include_operational_timeline"):
@@ -2459,7 +2752,11 @@ def _inside(item: dict[str, Any], interval: dict[str, Any]) -> bool:
     ) <= _minutes(interval["end"])
 
 
+@lru_cache(maxsize=4096)
 def _minutes(value: str) -> int:
+    # Cached: "09:00" parses identically every time and the search formats the
+    # same few dozen clock strings millions of times. Pure, so the cache cannot
+    # change an answer -- and it does not cache the ValueError for bad input.
     try:
         hour, minute = value.split(":", 1)
         result = int(hour) * 60 + int(minute)
@@ -2470,7 +2767,9 @@ def _minutes(value: str) -> int:
     return result
 
 
+@lru_cache(maxsize=4096)
 def _clock(value: int) -> str:
+    # Cached like `_minutes`: the same minute counts format thousands of times.
     return f"{value // 60:02d}:{value % 60:02d}"
 
 
