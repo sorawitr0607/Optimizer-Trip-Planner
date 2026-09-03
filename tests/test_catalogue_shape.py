@@ -81,6 +81,25 @@ class LodgingTest(unittest.TestCase):
         self.assertIsNotNone(kept)
         self.assertEqual("historic", kept["category"])
 
+    def test_a_hotel_wearing_another_tag_s_clothes_is_still_a_hotel(self) -> None:
+        """The December Tokyo plan gave `Toyoko Inn Shinjuku Kabukicho` a must-do
+        sightseeing slot. A hotel with a ground-floor shop or bar passed the old
+        guard — which only dropped lodging with no other family tag — and was
+        scheduled as a convenience store or a theatre. Only `historic` keeps a
+        lodging record now: a palace is in the catalogue for the palace.
+        """
+
+        for extra in (
+            {"shop": "convenience"},
+            {"amenity": "theatre"},
+            {"amenity": "restaurant"},
+            {"leisure": "spa"},
+        ):
+            self.assertIsNone(
+                self.provider._item(element(name="Toyoko Inn", tourism="hotel", **extra)),
+                f"tourism=hotel with {extra} still became a candidate",
+            )
+
     def test_an_ordinary_attraction_is_untouched(self) -> None:
         kept = self.provider._item(element(name="Tokyo National Museum", tourism="museum"))
         self.assertIsNotNone(kept)

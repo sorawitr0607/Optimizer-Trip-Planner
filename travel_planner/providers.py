@@ -771,12 +771,12 @@ class OpenStreetMapProvider:
         #
         # Keyed on the tags, not on `_category`'s answer: a place whose *only*
         # classification is lodging now falls through to "landmark", so checking the label
-        # would miss exactly the case this exists for. A hotel that is also something the
-        # query asked for — a palace converted into one, say — keeps that family and
-        # stays, which is right: it is in the catalogue for the palace.
-        if str(tags.get("tourism") or "") in LODGING_CATEGORIES and not any(
-            tags.get(family) for family in ("historic", "amenity", "leisure", "natural", "shop", "man_made")
-        ):
+        # would miss exactly the case this exists for. And a secondary tag is not
+        # enough to keep it: a hotel with a ground-floor shop or bar walks in wearing
+        # that tag's clothes and is scheduled as a convenience store or a theatre.
+        # The one exception is `historic` — a palace converted into a hotel is in the
+        # catalogue for the palace.
+        if str(tags.get("tourism") or "") in LODGING_CATEGORIES and not tags.get("historic"):
             return None
 
         local_name = str(tags.get("name") or "").strip()
