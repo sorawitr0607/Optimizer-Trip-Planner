@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The token half of the visual parity gate. Free, no browser, no network.
 
-`WF-025` asks for three things this can check without a screenshot harness:
+`WF-025` asks for four things this can check without a screenshot harness:
 
 - **All 13 country accent triples resolve** (§2c). The accent is one custom
   property, so it can recolour a pixel but never move one; imaging it 13 times
@@ -12,6 +12,8 @@
 - **Every new element declares an ancestor.** An element with no Auto-Bill
   counterpart passes on token conformance plus a declared ancestor, so a
   `derives-from:` note is required rather than optional.
+- **No bare `var(--x)` without a definition** (an undefined custom property
+  silently falls back instead of erroring).
 
 It also reports the contrast of every accent against both theme backgrounds,
 because an accent chosen on a light background is not automatically legible on
@@ -41,6 +43,16 @@ COLOUR_LITERAL = re.compile(
 )
 # Tailwind's own at-rules and the theme block legitimately name colours.
 ALLOWED_LITERAL_CONTEXT = re.compile(r"^\s*(/\*|\*|@import|@theme|@custom-variant)")
+
+# A var() carrying a fallback never goes guaranteed-invalid: `var(--x, fallback)`
+# resolves to the fallback when --x is undefined. Only the bare form is a silent
+# no-op under a misspelt name, so only it is checked.
+VAR_USE_BARE = re.compile(r"var\(\s*(--[\w-]+)\s*\)")
+VAR_DEFINED = re.compile(r"(--[\w-]+)\s*:")
+# A component may set a property at runtime through a style object
+# (`style={{ "--map-zoom": view.zoom }}`), which no stylesheet declares.
+TSX_SET_PROPERTY = re.compile(r"""["'](--[\w-]+)["']\s*:""")
+CSS_COMMENT = re.compile(r"/\*.*?\*/", re.S)
 
 REQUIRED_TRIPLE = ("--color-accent", "--color-accent-hover", "--color-accent-light")
 
@@ -442,6 +454,49 @@ def audit_deviations(tokens_text: str) -> list[tuple[str, str, str, str]]:
     return results
 
 
+def without_comments(text: str) -> str:
+    """Strip block comments, keeping line numbers for failure messages."""
+
+    return CSS_COMMENT.sub(
+        lambda match: "\n" * match.group(0).count("\n"), text
+    )
+
+
+def undefined_var_uses() -> list[str]:
+    """Every bare `var(--x)` whose property is declared nowhere.
+
+    An undefined custom property is not an error: the declaration using it
+    becomes guaranteed-invalid and silently falls back. That is how
+    `--weight-primary` made a button lighter than its neighbours while claiming
+    to make it heavier, with the token gate green throughout. Definitions are
+    collected from tokens.css and the stylesheets, plus the properties
+    components set at runtime, so the component-set pattern this file already
+    requires (the pin number dividing by `var(--map-zoom)`) is not flagged as
+    the bug it guards against.
+    """
+
+    defined: set[str] = set()
+    scoped: dict[Path, list[tuple[int, str]]] = {}
+    for path in (TOKENS, *WEB_CSS):
+        lines = without_comments(path.read_text(encoding="utf-8")).splitlines()
+        scoped[path] = list(enumerate(lines, 1))
+        for _, line in scoped[path]:
+            defined.update(VAR_DEFINED.findall(line))
+    for path in WEB_TSX:
+        defined.update(TSX_SET_PROPERTY.findall(path.read_text(encoding="utf-8")))
+    problems: list[str] = []
+    for path, lines in scoped.items():
+        for number, line in lines:
+            for name in VAR_USE_BARE.findall(line):
+                if name not in defined:
+                    problems.append(
+                        f"{path.relative_to(ROOT)}:{number} uses var({name}) with no "
+                        "definition in tokens.css, the stylesheets, or a component "
+                        "style object; a misspelt property silently falls back"
+                    )
+    return problems
+
+
 def main() -> int:
     failures: list[str] = []
     notes: list[str] = []
@@ -476,6 +531,9 @@ def main() -> int:
                     f"{path.relative_to(ROOT)}:{number} holds a colour literal; "
                     f"use a token from tokens.css: {line.strip()[:70]}"
                 )
+
+    # 2b. No bare var(--x) without a definition.
+    failures.extend(undefined_var_uses())
 
     # 3a. Every declared ancestor is the right one.
     failures.extend(validate_ancestors())

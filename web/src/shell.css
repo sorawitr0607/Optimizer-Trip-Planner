@@ -1812,7 +1812,7 @@
 .place-alt-name {
   color: var(--text-secondary);
   font-size: var(--text-xs);
-  font-weight: var(--weight-body);
+  font-weight: var(--weight-unselected);
   margin-left: 8px;
 }
 
@@ -1862,7 +1862,7 @@
   background: var(--bg-card);
   border: 1px solid var(--bg-card-border);
   border-radius: var(--radius-house);
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--shadow-sm);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1906,7 +1906,7 @@
   background: var(--bg-card);
   border: 1px solid var(--bg-card-border);
   border-radius: var(--radius-house);
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--shadow-sm);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -8846,7 +8846,7 @@
    component divides by the zoom instead, which is the same trick the pin radii use. */
 .places-map-street {
   fill: var(--map-label);
-  font-family: var(--font-body);
+  font-family: var(--font-sans);
   paint-order: stroke;
   stroke: var(--map-label-halo);
   stroke-linejoin: round;
@@ -9547,7 +9547,7 @@
 
 .setup-counter-btn:hover:not(:disabled) {
   background: var(--bg-hover, var(--bg-secondary));
-  border-color: var(--accent);
+  border-color: var(--color-accent);
 }
 
 /* Not `opacity`, which greys the glyph into the border and reads as broken rather
@@ -9570,7 +9570,7 @@
 .deck-reconsider-view {
   background: none;
   border: 0;
-  color: var(--accent);
+  color: var(--color-accent);
   cursor: pointer;
   font-size: var(--text-xs);
   padding: 0;
