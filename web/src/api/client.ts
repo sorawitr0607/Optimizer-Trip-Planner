@@ -282,6 +282,10 @@ export interface RankingCard {
   /** Which effort evidence backs the score. Cards currently know estimated visit time;
    *  walking, transfers, cost and fatigue belong to the optimizer. */
   effort_state?: string;
+  /** Metres from the discovery centre; null where the centre is unknown. */
+  distance_from_centre_metres?: number | null;
+  /** True past FAR_FROM_CENTRE_M — an hour-out place in a local evening. */
+  far_from_centre?: boolean;
   choice_action: string | null;
 }
 

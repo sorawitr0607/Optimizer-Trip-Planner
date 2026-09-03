@@ -341,6 +341,27 @@ describe("PlaceDeck", () => {
     expect(html).toContain("35% match");
   });
 
+  it("says so on the card when the place is far from the centre", () => {
+    // The Bell of Time case: a Kawagoe place offered in a Tokyo evening. The
+    // score cannot say how far is too far, so the card carries the distance as
+    // a muted hint — and a nearby card carries nothing.
+    const far = {
+      ...RANKING,
+      cards: {
+        first: {
+          ...RANKING.cards.first,
+          distance_from_centre_metres: 59932,
+          far_from_centre: true,
+        },
+      },
+    } as unknown as Ranking;
+    const html = render(SUMMARY, [], RANKING.lanes.main_queue, [], false, far, {});
+    expect(html).toContain("Far from the centre · 60 km");
+
+    const near = render(SUMMARY);
+    expect(near).not.toContain("Far from the centre");
+  });
+
   it("shows a placeholder outside the card it stands in for", () => {
     // The skeleton was rendered *inside* `.place-deck-drag`, which is hidden while the
     // first photograph loads — so it was hidden along with the card and a loading card

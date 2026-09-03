@@ -963,6 +963,16 @@ export function PlaceDeck({
           {name}
           {altName ? <small className="place-alt-name">{altName}</small> : null}
         </h3>
+        {/* A Kawagoe place in a Tokyo evening: the score cannot say how far is
+            too far past 15 km, so the card says it. Muted hint, not a warning —
+            far is a fact for the owner to weigh, not a refusal. */}
+        {card?.far_from_centre ? (
+          <p className="setup-hint">
+            {copyFormat("far_from_centre", language, {
+              km: Math.round((card.distance_from_centre_metres ?? 0) / 1000),
+            })}
+          </p>
+        ) : null}
         {entry.role === "protected_exploration" ? (
           <p className="setup-hint">{copy("deck_exploration_note", language)}</p>
         ) : null}
