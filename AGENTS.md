@@ -52,6 +52,17 @@
   both the stylesheet and the components.
 - A screen that looks wrong is worth *rendering*. Two regressions this week were invisible
   to a green suite and obvious in one screenshot.
+- Before adding a field to a stored snapshot, find the reader. Candidate `evidence` carried
+  eleven fields and no reader at all, which was 43% of a 3 MB catalogue transferred on every
+  read. `grep` for the key, and if the only hit is the writer and a test of the writer, it
+  is not data — it is weight.
+- **A lexicographic objective term wins by any margin.** Putting day-spread above
+  `travel_minutes` doubled travel and sent days across the city. When two goals trade
+  against each other rather than rank, put them in one weighted term and measure the weight
+  — see `EMPTY_DAY_MINUTES`.
+- Row dumps of the hosted database are gitignored and must stay so: they carry trips, owner
+  tokens, addresses and ages, and this repository is public. Structure-only dumps in
+  `supabase/backups/` are safe and are the committable kind.
 
 ## Graphify cadence
 

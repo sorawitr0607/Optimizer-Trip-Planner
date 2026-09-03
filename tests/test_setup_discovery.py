@@ -182,6 +182,36 @@ class SetupDiscoveryTest(unittest.TestCase):
         self.assertIn("temporary test outage", stale.report.as_dict()["provider_error"])
         self.assertEqual(setup, self.actions.get_setup(self.trip.trip_id))
 
+    def test_a_candidate_evidence_record_carries_only_what_is_read(self) -> None:
+        """The catalogue is transferred on every read, so a constant per candidate costs.
+
+        This record had eleven fields and **nothing in the planner read any of them** —
+        `_evidence_score` scores `operational_evidence`, `names`, `website`,
+        `provider_aliases` and `signals`, the optimizer never sees it, and it is not in
+        the browser's `DiscoveryCandidate` type. Eight of the eleven were also derivable
+        or duplicated: `field`, `authority_type`, `language` and `export_permission` were
+        one constant each, `license` follows from `provider`, `confidence` from `status`,
+        and `provider_place_id` and `source_url` sit in `provider_aliases` beside it. On a
+        3,073-candidate catalogue that was 43% of the blob.
+
+        Pinned by the *set of keys*, not by a size: a byte count would drift with the
+        fixture, and what matters is that a field cannot be added back without a reader.
+        """
+
+        self._confirmed_setup()
+        self.actions.discover_places(trip_id=self.trip.trip_id)
+        candidates = self.actions.get_latest_discovery(
+            self.trip.trip_id
+        ).candidates.as_dict()["candidates"]
+        self.assertTrue(candidates)
+        for candidate in candidates:
+            for record in candidate["evidence"]:
+                self.assertEqual(
+                    {"provider", "status", "retrieved_at"},
+                    set(record),
+                    "add a field here only when something reads it",
+                )
+
     def test_unavailable_provider_is_recorded_without_a_fake_catalog(self) -> None:
         self._confirmed_setup()
         self.provider.fail = True

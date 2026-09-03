@@ -90,6 +90,16 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   reads require an explicit limit of at most 1,000 rows; and a zero-price `_spend()` must never read the
   ledger before recording the call. Do not replace any of those with a Python-side total.
 
+  **A field nothing reads still costs on every read.** Candidate-level `evidence` had eleven fields and
+  no reader in the planner: `_evidence_score` — the function named for it — scores
+  `operational_evidence`, `names`, `website`, `provider_aliases` and `signals` and never touches it, and
+  it is not in the browser's `DiscoveryCandidate` type. Eight of the eleven were constants or duplicates
+  besides: four were one value on every candidate, `license` follows from `provider`, `confidence` from
+  `status`, and `provider_place_id`/`source_url` sit in `provider_aliases` beside it. On a
+  3,073-candidate catalogue that was **43% of the blob**. Trimmed to `provider`, `status` and
+  `retrieved_at`, the mean stored catalogue went **807 KB to 598 KB**; `tests.test_setup_discovery` pins
+  the key *set*, not a size, so a field cannot come back without a reader.
+
   **Measure the wire, not the disk.** `pg_total_relation_size / n_live_tup` reports *compressed TOAST*
   and understated the catalogue about fivefold. Quote `octet_length`, because that is what crosses the
   wire: `candidates_json` is **630 KB median, 3.23 MB largest** across 19 live runs, and
@@ -104,7 +114,6 @@ Each of these was learned by breaking it. The journal entry behind each is in `d
   `opening_evidence_options()` is deliberately narrower still: confirmed setup, selected choice snapshots
   and opening evidence are enough to price the two build paths, where `_optimizer_input()` would reload
   and rescore the whole catalogue before the choice box can appear.
-
   **The catalogue is read once per run, not once per caller.** `PlannerActions.get_latest_discovery`
   memoises the `DiscoveryRun` on the run id and validates it with the 111-byte header on every call.
   That is sound *only* because `discovery_runs` is append-only — enforced by the
@@ -1119,10 +1128,11 @@ misread: `deterministic_signature` hashes the **input**, so it cannot detect a l
 an expired budget legitimately yields 0 visits where greedy's only schedule carries a comfort violation,
 because `comfort_violations` outranks `experience_value` in the objective tuple.
 
-**The objective spreads places across the days.** `_search_objective` is
-`(hard_errors, missing_route_edges, must_missing, soft, -experience, _day_crowding, travel_minutes,
--lower, len(skipped), ids)`, and `_day_crowding` — the **sum of the squares** of each day's visit count —
-is the sixth term. Nothing had preferred using a day and `travel_minutes` actively preferred not to, since
+**The objective spreads places across the days, weighed against the travel it costs.**
+`_search_objective` is `(hard_errors, missing_route_edges, must_missing, soft, -experience,
+travel_minutes + EMPTY_DAY_MINUTES * empty_days, -lower, len(skipped), ids)`. The sixth term is travel and
+spread **together**, and that is a correction to how it first shipped. Nothing had preferred using a day
+and `travel_minutes` actively preferred not to, since
 every day a plan opens costs another base-to-place-and-back journey, so the cheapest arrangement was to
 pile everything onto as few days as possible. Measured on twelve ordinary places over seven ordinary days
 with nothing in the way, all three variants scheduled all twelve and still left most of the trip blank:
@@ -1130,13 +1140,29 @@ with nothing in the way, all three variants scheduled all twelve and still left 
 a lot of days that have only free times". **No rule was broken by any of those and the reconciliation was
 empty**, which is why nothing in the suite could have caught it.
 
-Two things about it. Squares rather than a count of empty days, because a count is indifferent between
-`[6,6]` and `[11,1]` while squares fall as the load levels out — one number for "use the days" and "do not
-cram one". And **its position is the design**: after `-experience` so a smoother trip can never cost a
-chosen place, after `soft` so it cannot buy spread by breaking a threshold, before `travel_minutes`
-because a second hotel round trip is the honest price of not spending a day indoors. A one-day trip has
-one arrangement and the term is constant for it, which is why none of the 27 historic single-day
-regressions move. `_greedy_sequences` was separately plain first-fit over the dates in order — filling day
+**It first shipped as the sum of the squares of each day's visit count, placed before `travel_minutes`,
+and that was wrong.** A lexicographic term wins by any margin, so any spread improvement outranked any
+travel saving. Measured on three tight neighbourhoods 75 minutes apart, nine places over four days:
+travel went from **120 to 260 minutes** and two of the four days crossed the city — reported as "bad
+clustering, crosses Tokyo unnecessarily" and "zigzag".
+
+An empty day is worth avoiding but not at any price, which no ordering of separate terms can express, so
+the two share one term at `EMPTY_DAY_MINUTES = 60`. The metric is the **count of empty days**, not
+squares: the report was days with *nothing* on them, and squares answered a question nobody asked while
+forcing `[2,2,2,3]` over `[0,3,3,3]` even when the latter keeps each day in one neighbourhood. The weight
+was measured, not chosen — below about 20 the empty day never earns its detour, and from 20 up the outcome
+stops changing at all (identical at 20, 30, 40, 60, 90, 180), so 60 sits well inside the flat region.
+After the fix: travel 195, one mixed day, no empty days.
+
+Two failed attempts are worth not repeating. Counting empty days while still placing the term *before*
+travel helped but not enough. And applying the penalty only when choosing between **finished** plans did
+nothing at all: a beam ranked purely on travel never keeps a spread state, so there is nothing spread left
+at the end to prefer — the term has to be inside the search.
+
+What still outranks it is the design: `-experience` above, so a smoother trip can never cost a chosen
+place, and `soft` above, so it cannot buy spread by breaking a comfort threshold. A one-day trip has one
+arrangement and the term is constant for it, which is why none of the 27 historic single-day regressions
+move. `_greedy_sequences` was separately plain first-fit over the dates in order — filling day
 one to its ceiling before day two was offered anything — and now takes the emptiest day first, ties broken
 on date, so the fallback the search lands on under a real catalogue does not reintroduce the crammed
 shape. This is also what removed the repeated "add a day" loop: extending the trip used not to help,

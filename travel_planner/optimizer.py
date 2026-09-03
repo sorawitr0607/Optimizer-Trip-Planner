@@ -1404,42 +1404,40 @@ def _greedy_baseline(
     }
 
 
-def _day_crowding(days: list[dict[str, Any]]) -> int:
-    """The sum of the squares of each day's visit count. Lower is better spread.
+#: What a day carrying nothing is worth, in minutes of extra travel.
+#:
+#: The number is the whole design. `_day_crowding` used to be the sum of the squares of
+#: each day's visit count, placed **before** `travel_minutes` in the objective tuple — so
+#: any spread improvement, however small, outranked any travel saving, however large.
+#: Measured on three tight clusters of places 75 minutes apart, nine places over four
+#: days: travel went from **120 to 260 minutes** and two of the four days crossed the
+#: city. Reported as "bad clustering, crosses Tokyo unnecessarily" and "zigzag".
+#:
+#: An empty day is worth avoiding, but not at any price, and a lexicographic tuple cannot
+#: say that — whichever term comes first wins by any margin. So the two share one term and
+#: this is the exchange rate. Measured on the same two inputs: below about 20 the empty
+#: day is never worth its detour, and from 20 upwards the outcome stops changing at all
+#: (identical at 20, 30, 40, 60, 90 and 180). 60 sits well inside the flat region — a day
+#: of the trip is worth an hour of walking, and not three.
+EMPTY_DAY_MINUTES = 60
 
-    **What it exists to stop.** Nothing in the objective preferred using a day, and
-    `travel_minutes` actively preferred not to: every day the plan opens costs another
-    base-to-place-and-back journey, so the cheapest arrangement of twelve places over
-    seven days is to pile them onto as few days as possible. Measured on exactly that
-    input before this existed -- twelve ordinary places, seven ordinary days, every pair
-    fifteen minutes apart, nothing closed and no threshold set -- and all three variants
-    scheduled all twelve places onto the last two days:
 
-        best_balance     [0, 0, 0, 0, 0, 6, 6]
-        relaxed          [0, 0, 0, 0, 4, 4, 4]
-        more_highlights  [0, 0, 0, 0, 0, 3, 9]
+def _empty_day_count(days: list[dict[str, Any]]) -> int:
+    """Days the plan opens and puts nothing on.
 
-    Five days of a seven-day trip carrying nothing but free time, reported as "the
-    output trip is so weird, it has a lot of days that have only free times". Not one of
-    those was a scheduling failure -- every place fitted, no rule was broken, and the
-    reconciliation was empty. It was the plan the objective asked for.
+    The original report was **"a lot of days that have only free times"** — days carrying
+    nothing at all, not days carrying uneven amounts. Sum-of-squares answered a question
+    nobody asked and paid for it in travel: it forces `[2, 2, 2, 3]` over `[0, 3, 3, 3]`
+    even when the second keeps each day inside one neighbourhood and the first sends the
+    owner across the city twice.
 
-    **Squares, not a count of empty days.** Both would fill the blank days, but a count
-    is indifferent between `[6, 6]` and `[11, 1]` once neither day is empty, and squares
-    are not: they fall as the load levels out, so one number expresses "use the days"
-    and "do not cram one of them" together. On the input above it prefers
-    `[2, 2, 2, 2, 2, 1, 1]` at 22 over `[0, 0, 0, 0, 0, 6, 6]` at 72.
-
-    **Where it sits in the tuple is the whole design.** After `-experience`, so a
-    smoother trip can never cost a place the owner chose; after the comfort count, so it
-    cannot buy spread by breaking a threshold; and before `travel_minutes`, because a
-    second hotel round trip is exactly the price of not spending a day indoors, and it
-    is worth paying. A one-day trip has one arrangement and this is constant for it,
-    which is why none of the 27 historic single-day regressions move.
+    Counting only the empty ones is the narrower claim and the one that was made: once
+    every day carries something the term is zero, and travel decides everything after
+    that. That is what puts the days back into geographic order.
     """
 
     return sum(
-        sum(1 for item in day["items"] if item["type"] == "visit") ** 2 for day in days
+        1 for day in days if not any(item["type"] == "visit" for item in day["items"])
     )
 
 
@@ -1477,9 +1475,12 @@ def _search_objective(
         must_missing,
         soft,
         -experience,
-        # Before travel, and deliberately. See `_day_crowding`.
-        _day_crowding(built["days"]),
-        metrics["travel_minutes"],
+        # One term, not two, because an empty day is worth *some* travel and not any
+        # amount of it — see `EMPTY_DAY_MINUTES`. Ranked above this are the things no
+        # amount of convenience may buy: a broken rule, a missing route, a must-do left
+        # out, an unapproved comfort overage, a place dropped.
+        metrics["travel_minutes"]
+        + EMPTY_DAY_MINUTES * _empty_day_count(built["days"]),
         -lower,
         len(skipped),
         tuple(tuple(_candidate_id(item) for item in sequences[day]) for day in sequences),

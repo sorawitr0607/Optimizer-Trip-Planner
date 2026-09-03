@@ -6015,3 +6015,111 @@ Eight Python tests fail on this Windows machine and did before any of this — p
 separators in the baseline gate, the source scan and one rpc test, plus two optimizer
 timing tests that collapse under a coarse clock. They pass on the owner's other platform.
 Worth fixing, and not fixed here.
+## The quota ran out, and two of the reasons were mine, 2026-09-03
+
+Supabase restricted the project: **20.2 GB of egress against a 5.5 GB allowance**, requests
+dropped until 19 September. The owner asked whether Cloudflare R2 could stand in for a
+while, and separately reported that the plans it had been producing were badly clustered —
+days crossing Tokyo, zigzags between Shibuya and north Tokyo.
+
+Those turned out to be connected: both are about what this app moves and why.
+
+### R2 is the wrong shape
+
+Object storage has no SQL, no transactions and no indexes. `store.py` is ~65 statements,
+the ledger and catalogue are protected by immutability *triggers*, and `enqueue` takes a
+Postgres advisory lock. R2 is right for the 217 KB basemap or a photo, and cannot hold the
+planner's data. The answer was Neon in `ap-southeast-1`.
+
+The region table in `supabase/MIGRATION.md` looks like an argument against Neon — 278 ms a
+round trip against Supabase's 42 ms — and it is not. That measurement is Bangkok to
+**`us-east-1`**. It is distance, and Neon sells Singapore now. The table now says so above
+itself, because the next person to read it would otherwise conclude the wrong thing.
+
+### Where 20.2 GB went, attributed by bytes rather than rows
+
+Ranking `pg_stat_statements` by `rows` hides the queries that matter: one row of `jobs` can
+be 3.6 MB. Weighted by measured `octet_length`, the modelled total is **22.65 GB** against
+Supabase's counted 20.2:
+
+| GB | path |
+|---|---|
+| 13.79 | `SELECT * FROM paid_usage` — dead since 28 August |
+| 4.73 | `SELECT * FROM discovery_runs` — 5,600 rows at 844 KB |
+| 3.63 | `SELECT * FROM jobs` — narrowed 2 September |
+
+Two thirds was the ledger bug already fixed. The catalogue is what remains, and the memo
+added on 2 September had visibly worked — `discovery_runs` reads rose by 124 in a day of
+testing against roughly 400 a day before it.
+
+### 43% of the catalogue was a field nothing reads
+
+The blob is `evidence` 43.1%, `operational_evidence` 19.1%, `provider_aliases` 15.3%,
+`signals` 6.2%. The last three are read by the ranking. **Candidate-level `evidence` is not
+read anywhere in the planner**: `_evidence_score`, the function named after it, scores
+`operational_evidence`, `names`, `website`, `provider_aliases` and `signals` and never
+touches it; the optimizer never sees it; it is not in the browser's `DiscoveryCandidate`
+type. Its only reader was a test asserting the writer.
+
+Eight of its eleven fields were also constants or duplicates — `field`, `authority_type`,
+`language` and `export_permission` the same value on every candidate, `license` a function
+of `provider`, `confidence` of `status`, and `provider_place_id`/`source_url` already in
+`provider_aliases` beside it. On the Tokyo catalogue that was 3,073 copies of the same
+handful of strings.
+
+Trimmed to `provider`, `status` and `retrieved_at`: **807 KB mean to 598 KB, −26%**, worth
+1.29 GB across the reads counted since 19 August. The test pins the key *set* rather than a
+size, so a field cannot come back without a reader.
+
+Deleting the key outright would give 43% instead of 26%. It was kept because it is the only
+per-candidate record of which provider said what, and a test pins that; the extra 17% is
+available if provenance stops mattering.
+
+### The bad clustering was mine, and the fix is a weight
+
+`_day_crowding` was the sum of the squares of each day's visit count, sitting **before**
+`travel_minutes`. A lexicographic tuple means the earlier term wins by any margin, so any
+spread improvement outranked any travel saving. Measured on three tight neighbourhoods 75
+minutes apart, nine places over four days:
+
+    sum of squares (shipped)   travel 260 min, 2 of 4 days crossing the city
+    travel first (before)      travel 120 min, 0 crossing, 1 day left empty
+
+So the report — "bad clustering, crosses Tokyo unnecessarily", "zigzag" — was the objective
+doing exactly what it had been told.
+
+Three attempts, and the first two failed usefully. Counting empty days instead of squares
+helped but not enough (195 min, one mixed day) while still outranking travel. Applying the
+penalty only when choosing between *finished* plans did nothing at all, and the reason is
+worth writing down: a beam ranked purely on travel never **keeps** a spread state, so there
+is nothing spread left at the end to prefer. The term has to be inside the search.
+
+What works is one term instead of two: `travel_minutes + EMPTY_DAY_MINUTES * empty_days`.
+An empty day is worth avoiding but not at any price, and no ordering of separate terms can
+say that. The weight was measured rather than picked — below about 20 the empty day never
+earns its detour, and from 20 upwards the outcome stops changing at all (identical at 20,
+30, 40, 60, 90 and 180), so 60 sits well inside the flat region. Result: travel 195, one
+mixed day, no empty days, and the twelve-places-over-seven-days case still fills every day.
+
+### Two operational notes
+
+The row dump taken while access still worked — 41.65 MB gzipped, all 11 trips, 18 discovery
+runs, 6 plan versions — was **not gitignored**. It sat untracked in a public repository
+holding owner tokens, addresses and ages. `supabase/backups/README.md` had already drawn
+the line ("a private data dump remains a separate decision and must never be committed");
+`.gitignore` now enforces it.
+
+And the app was still answering when the restriction email arrived — `list_trips` returned
+200 — so "dropped until 19 September" is not immediate. Borrowed time rather than an
+outage, which is worth knowing before making decisions in a hurry.
+
+### Release evidence
+
+**12 of 13** stages: 717 Python tests, 218 web tests, the 20 atomic and 7 interaction
+optimizer regressions across all three variants. `scripts/restore_hosted_database.py` is
+new and dry-run against the dump: 17 tables, parents first, immutability triggers held off
+for the load only. Stage 9 still cannot run.
+
+Still open from the same report and not touched here: NHK Studio Park (permanently closed
+2020) and Yoshimoto ∞ Hall (closed March 2025) are in the catalogue and were scheduled, the
+19.95 km / 240-minute walking leg, and a hotel appearing as an 82-minute attraction.

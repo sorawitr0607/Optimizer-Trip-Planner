@@ -19,6 +19,15 @@ web/dist/
 *.sqlite3
 *.sqlite3-*
 
+# Row dumps of the hosted database. `supabase/backups/README.md` is explicit that
+# structure is committable and rows are not: a dump carries trips, owner tokens,
+# addresses, ages and cached provider responses, and this repository is public.
+# Schema-only recovery lives in `supabase/backups/` and is safe; this is not.
+data/*.sql
+data/*.sql.gz
+*-rows-*.sql
+*-rows-*.sql.gz
+
 # Screen captures awaiting comparison. Only the approved baseline set is
 # committed; the comparison set is regenerated on every capture run.
 artifacts/parity/screen-current/

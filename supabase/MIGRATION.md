@@ -33,6 +33,32 @@ This discharges **structure recovery only**. It does not preserve trips, cached 
 responses, or any other row data; a private data dump remains a separate decision and
 must never be committed to this public repository.
 
+## The quota ran out, 2026-09-03 — and what that means for the region table below
+
+Supabase restricted the project: **20.2 GB of egress against a 5.5 GB allowance**, requests
+dropped until 19 September. Two thirds of that was the `paid_usage` full-table read fixed on
+28 August; the rest was the candidate catalogue, at 807 KB a read.
+
+**Read the region table below carefully before concluding anything about vendors.** It
+compares Supabase `ap-southeast-1` with Neon **`us-east-1`** — the 278 ms round trip is
+Bangkok-to-Virginia distance, not Neon. Neon offers `ap-southeast-1` now, so a like-for-like
+move is a different measurement that has not been taken. Take it before believing either
+number.
+
+The migration path is short because structure comes from code:
+
+1. `scripts/restore_hosted_database.py --url … --rows data/…sql.gz` applies
+   `postgres_schema()` and loads the rows, parents first, with the immutability triggers
+   held off for the load only.
+2. Point `TOURIST_DB_URL` at the new host.
+
+The database is **79 MB**, which fits every free tier. Row dumps are gitignored and must
+stay that way: they carry trips, owner tokens, addresses and ages, and this repository is
+public. `backups/` holds structure only, which is why it is committable.
+
+**Moving host without shrinking the catalogue only moves the problem** — Neon's free tier
+is also 5 GB of egress a month.
+
 ### Region is a performance decision, not a default
 
 Measured from the owner's machine, same code, same pool, only the region differs:

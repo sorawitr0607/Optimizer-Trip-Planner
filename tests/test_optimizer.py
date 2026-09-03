@@ -678,7 +678,7 @@ class OptimizerCoreTest(unittest.TestCase):
         Nothing preferred using a day and `travel_minutes` preferred not to: each day a
         plan opens costs another base-to-place-and-back journey, so the cheapest layout
         of twelve places over seven days was to pile them onto as few days as possible.
-        Measured on this exact input before `_day_crowding` existed, all three variants
+        Measured on this exact input before the empty-day term existed, all three variants
         scheduled all twelve places and still left most of the trip blank --
         `[0, 0, 0, 0, 0, 6, 6]`, `[0, 0, 0, 0, 4, 4, 4]`, `[0, 0, 0, 0, 0, 3, 9]`.
 
@@ -829,6 +829,95 @@ class OptimizerCoreTest(unittest.TestCase):
             ],
             "four days should hold what one could not",
         )
+
+    @staticmethod
+    def _three_clusters() -> dict:
+        """Nine places in three tight neighbourhoods, 75 minutes apart. Four days.
+
+        The shape of a real city trip, and the input that caught the regression: a good
+        plan spends each day inside one neighbourhood.
+        """
+
+        groups = {name: [f"{name}_{i}" for i in range(3)] for name in ("west", "north", "south")}
+        of = {place: name for name, places in groups.items() for place in places}
+        dates = [f"2030-03-{day:02d}" for day in range(2, 6)]
+        candidates = [{"id": "base", "kind": "hotel_area"}]
+        for place_id in of:
+            candidates.append({
+                "id": place_id,
+                "kind": "culture",
+                "name": place_id,
+                "priority": "interested",
+                "score": 60,
+                "duration_bounds": {
+                    "minimum_minutes": 60, "ideal_minutes": 90, "maximum_minutes": 120,
+                },
+            })
+
+        def minutes(origin: str, destination: str) -> int:
+            if "base" in (origin, destination):
+                return 20
+            return 10 if of[origin] == of[destination] else 75
+
+        nodes = ["base", *of]
+        return {
+            "trip": {
+                "timezone": "Asia/Tokyo",
+                "local_dates": dates,
+                "usable_windows": [
+                    {"date": date, "start": "09:00", "end": "21:00"} for date in dates
+                ],
+                "accommodation_status": "booked",
+            },
+            "travellers": [],
+            "candidates": candidates,
+            "facts": [],
+            "routes": [
+                {
+                    "origin_id": origin,
+                    "destination_id": destination,
+                    "mode": "walk",
+                    "duration_minutes": minutes(origin, destination),
+                    "walking_minutes": min(minutes(origin, destination), 25),
+                    "status": "verified",
+                }
+                for origin in nodes
+                for destination in nodes
+                if origin != destination
+            ],
+            "locks": [],
+            "weights": {},
+            "thresholds": {},
+        }
+
+    def test_filling_a_day_does_not_cost_the_trip_its_geography(self) -> None:
+        """The regression the day-spread term shipped with, and the reason for its weight.
+
+        `_day_crowding` was the sum of the squares of each day's visit count and sat
+        **before** `travel_minutes`, so any spread improvement outranked any travel
+        saving. On this input that took travel from 120 to **260 minutes** and sent two
+        of four days across the city — reported as "bad clustering, crosses Tokyo
+        unnecessarily" and "zigzag".
+
+        An empty day is worth avoiding but not at any price, which a lexicographic tuple
+        cannot express, so the two now share one term at `EMPTY_DAY_MINUTES`. What is
+        asserted is the residual rather than an exact layout: no day left empty, and the
+        travel bill nowhere near what pure spreading cost.
+        """
+
+        result = optimize_trip(self._three_clusters())
+        self.assertTrue(result["variants"])
+        for variant in result["variants"]:
+            per_day = self._visits_per_day(variant)
+            self.assertEqual(9, sum(per_day), f"{variant['variant_id']} lost a place")
+            self.assertNotIn(0, per_day, f"{variant['variant_id']} left a day empty")
+            # 260 was sum-of-squares, 120 was travel with a day left empty. Anything
+            # near the former means the spread is outranking travel again.
+            self.assertLess(
+                variant["metrics"]["travel_minutes"], 240,
+                f"{variant['variant_id']} paid {variant['metrics']['travel_minutes']} "
+                "minutes of travel to spread the days",
+            )
 
     def test_the_greedy_floor_spreads_too(self) -> None:
         """The fallback is where a real city's catalogue actually lands.
