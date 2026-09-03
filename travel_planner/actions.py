@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 import os
 from pathlib import Path
 import re
@@ -431,13 +431,12 @@ class PlannerActions:
                 (candidate.get("operational_evidence") or {})
                 .get("opening_hours", {})
                 .get("state")
-                in {"official_confirmed", "current_provider", "regular_schedule_only"}
-                and _osm_opening_hours(
+                in {"official_confirmed", "current_provider"}
+                and _simple_interval(
                     (candidate.get("operational_evidence") or {})
                     .get("opening_hours", {})
-                    .get("value"),
-                    local_dates,
-                )[0]
+                    .get("value")
+                )
             )
             for choice, candidate in zip(choices, selected, strict=True)
         )
@@ -1868,28 +1867,17 @@ class PlannerActions:
                 continue
             operational = current.get("operational_evidence", {})
             hours = operational.get("opening_hours", {})
-            # OSM regular hours count too: the values are community data, but so
-            # is everything else in the catalogue, the ranking already scores
-            # them, and the source stays on the fact for the evidence screen.
-            # Verified on live data: the Daimyo Clock Museum carries correct
-            # `Tu-Su 10:00-16:00` hours that the old gate ignored, and the plan
-            # arrived 22 minutes before closing.
-            interval, open_dates = _osm_opening_hours(hours.get("value"), local_dates)
-            if (
-                hours.get("state")
-                in {"official_confirmed", "current_provider", "regular_schedule_only"}
-                and interval
-            ):
-                fact: dict[str, Any] = {
-                    "subject_id": choice.place_id,
-                    "fact_type": "opening_interval",
-                    "value": interval,
-                    "status": "verified",
-                    "source": "normalized_discovery",
-                }
-                if open_dates != local_dates:
-                    fact["applies_to_dates"] = open_dates
-                facts.append(fact)
+            interval = _simple_interval(hours.get("value"))
+            if hours.get("state") in {"official_confirmed", "current_provider"} and interval:
+                facts.append(
+                    {
+                        "subject_id": choice.place_id,
+                        "fact_type": "opening_interval",
+                        "value": interval,
+                        "status": "verified",
+                        "source": "normalized_discovery",
+                    }
+                )
                 continue
             if local_dates:
                 opening_missing = True
@@ -5162,54 +5150,6 @@ def _simple_interval(value: Any) -> dict[str, str] | None:
     if not match or match.group(1) >= match.group(2):
         return None
     return {"start": match.group(1), "end": match.group(2)}
-
-
-_OSM_WEEKDAYS = {"mo": 0, "tu": 1, "we": 2, "th": 3, "fr": 4, "sa": 5, "su": 6}
-
-
-def _osm_opening_hours(
-    value: Any, local_dates: list[str]
-) -> tuple[dict[str, str] | None, list[str] | None]:
-    """Parse OSM `opening_hours`' common subset: an optional weekday list or range
-    plus one `HH:MM-HH:MM` interval, e.g. `Tu-Su 10:00-16:00`.
-
-    Returns the interval and the trip dates it covers, or `(None, None)` for
-    anything fancier (multiple segments, months, holidays) -- the same refusal
-    `_simple_interval` already gives, never a guess. A bare interval with no day
-    part covers every trip date, exactly as before.
-    """
-
-    if not isinstance(value, str):
-        return None, None
-    text = value.strip()
-    if ";" in text:
-        return None, None
-    days: set[int] | None = None
-    rest = text
-    head = re.split(r"\s+(?=\d{1,2}:\d{2})", text, maxsplit=1)
-    if len(head) == 2:
-        day_part, rest = head
-        days = set()
-        for token in day_part.split(","):
-            bounds = [part.strip().lower()[:2] for part in token.split("-", 1)]
-            if any(part not in _OSM_WEEKDAYS for part in bounds):
-                return None, None
-            if len(bounds) == 1:
-                days.add(_OSM_WEEKDAYS[bounds[0]])
-            else:
-                first, last = _OSM_WEEKDAYS[bounds[0]], _OSM_WEEKDAYS[bounds[1]]
-                span = (last - first) % 7 + 1
-                days.update((first + offset) % 7 for offset in range(span))
-        if not days:
-            return None, None
-    interval = _simple_interval(rest.strip())
-    if interval is None:
-        return None, None
-    if days is None:
-        return interval, list(local_dates)
-    return interval, [
-        day for day in local_dates if date.fromisoformat(day).weekday() in days
-    ]
 
 
 #: Provenance, not substance. These say where a fact came from and when, and none of
