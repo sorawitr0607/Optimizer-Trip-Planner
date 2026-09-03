@@ -10888,3 +10888,49 @@
 .timeline-day > .money-table-scroll {
   padding: 4px 12px 12px;
 }
+
+/* What a free source says about a place still existing.
+
+   Warned rather than acted on. Wikidata knows `NHK Studio Park` closed in 2020 and knows
+   nothing about `Yoshimoto ∞ Hall`, which closed in March 2025, and OpenStreetMap still
+   tags both as attractions — so the app states the record and leaves the decision. Styled
+   as a caution rather than an error: the source is out of date in both directions, and
+   reading its `P576` instead would have deleted Edo Castle. */
+.place-closed,
+.day-stop-notice {
+  align-items: baseline;
+  /* The tokens the rest of the app's warnings use — `--color-amber` and `--bg-warn` do
+     not exist, and an undefined custom property fails silently rather than loudly. */
+  background: var(--color-warning-light);
+  border-inline-start: 3px solid var(--color-warning);
+  border-radius: var(--radius-house);
+  color: var(--text-primary);
+  display: flex;
+  font-size: var(--text-2xs);
+  gap: 6px;
+  margin: 6px 0;
+  padding: 7px 10px;
+}
+
+/* The stop's own warning sits above its head row, so it reads before the name. */
+.day-stop-notice {
+  margin-block-end: 4px;
+}
+
+/* One press for "this place is gone", rather than opening the reason picker. Not styled
+   as a primary action: it is the honest answer for a place that no longer exists, not the
+   thing the screen wants you to do. */
+.place-gone {
+  background: none;
+  border: 1px solid var(--bg-card-border);
+  border-radius: var(--radius-house);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: var(--text-2xs);
+  padding: 5px 10px;
+}
+
+.place-gone:hover {
+  border-color: var(--color-warning);
+  color: var(--text-primary);
+}

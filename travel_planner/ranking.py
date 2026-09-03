@@ -20,8 +20,21 @@ FORMULA_WEIGHTS = {
     "evidence_quality": 5,
 }
 CHOICE_ACTIONS = frozenset({"must_do", "interested", "maybe", "not_for_trip"})
+#: `permanently_closed` is the owner's own answer to a place that no longer exists, and it
+#: is a *reason* rather than a new kind of state on purpose. A closed place needs exactly
+#: what `not_for_trip` already does — kept out of the plan, remembered across rebuilds,
+#: recorded with why — so a separate store would be a second way to say the same thing.
+#:
+#: It exists because the free sources cannot always tell us. Wikidata records
+#: `NHK Studio Park` as closed in 2020 and says nothing about `Yoshimoto ∞ Hall`, which
+#: closed in March 2025; OpenStreetMap still tags both as attractions. The signal is shown
+#: where it exists and this is the way past it where it does not.
 REJECTION_REASONS = frozenset(
-    {"too_crowded", "too_expensive", "too_tiring", "wrong_vibe", "weak_value", "already_seen"}
+    {
+        "too_crowded", "too_expensive", "too_tiring",
+        "wrong_vibe", "weak_value", "already_seen",
+        "permanently_closed",
+    }
 )
 
 # An official designation, worth the same whether national or claimed as UNESCO.

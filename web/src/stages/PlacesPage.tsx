@@ -28,6 +28,7 @@ import { useLanguage } from "../i18n/LanguageProvider";
 import { mergeNames, placeAltName, placeName } from "../shared/names";
 import { distinguishingCons, evaluatedFeasibility } from "../shared/cards";
 import { PHOTO_THIN_AT, galleryFor } from "../shared/photos";
+import { closedYear } from "../shared/closure";
 import { laneAlreadyChosen, rememberLaneChoice } from "../shared/laneChoice";
 import { LaneChooser } from "./LaneChooser";
 import { mapPlaces, shortlistNumber } from "../shared/map";
@@ -44,6 +45,9 @@ const REJECTION_REASONS = [
   "wrong_vibe",
   "weak_value",
   "already_seen",
+  // The owner's own answer where no free source knows. `travel_planner.ranking`
+  // holds the same list and validates against it.
+  "permanently_closed",
 ] as const;
 const CONSIDERED = new Set<string>(CHOICES);
 const PHOTO_LIMIT = 5;
@@ -1339,10 +1343,44 @@ export function PlacesPage() {
               )
               ))}
 
+              {/* What a free source says about this place still existing, and the way
+                  past it when no source knows.
+
+                  `NHK Studio Park` closed in 2020 and was given four and a half hours on
+                  a 2026 plan; `Yoshimoto ∞ Hall` closed in March 2025 and Wikidata has
+                  never heard of that. So this states the signal where there is one and
+                  offers the owner's own answer either way — the button is always here,
+                  because the case the source misses is the case that needs it most.
+
+                  Worded as a record rather than a fact, and the caveat is not padding:
+                  the source is out of date in *both* directions, which is why nothing in
+                  the app drops a place for this on its own. */}
+              {(() => {
+                const year = closedYear(summaries.data?.[selectedId]);
+                if (!year) return null;
+                return (
+                  <p className="place-closed" role="status">
+                    <b aria-hidden="true">⚠</b>{" "}
+                    {copyFormat("closed_signal", language, { year })}{" "}
+                    <span className="setup-hint">{copy("closed_signal_source", language)}</span>
+                  </p>
+                );
+              })()}
               {choice ? <p className="setup-hint">{copy("current_choice", language)}: {copy(choice.action, language)}{choice.reason ? ` · ${copyFrom("REJECTION_TEXT", choice.reason, language)}` : ""}</p> : null}
               <div className="place-choice-actions" hidden={mode === "deck"}>
                 {CHOICES.map((action) => <button className={`choice-${action}`} key={action} onClick={() => saveChoice.mutate({ action })} type="button">{copy(action, language)}</button>)}
                 <details><summary>{copy("not_for_trip", language)}</summary><label>{copy("rejection_reason", language)}<select value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)}>{REJECTION_REASONS.map((reason) => <option key={reason} value={reason}>{copyFrom("REJECTION_TEXT", reason, language)}</option>)}</select></label><button onClick={() => saveChoice.mutate({ action: "not_for_trip", reason: rejectionReason === "null" ? null : rejectionReason })} type="button">{copy("not_for_trip", language)}</button></details>
+                {/* One press for "this place is gone", rather than opening the reason
+                    picker and choosing. `permanently_closed` is an ordinary rejection
+                    reason, so this needs no new state: the place stays out of the plan,
+                    survives a rebuild, and records why. */}
+                <button
+                  className="place-gone"
+                  onClick={() => saveChoice.mutate({ action: "not_for_trip", reason: "permanently_closed" })}
+                  type="button"
+                >
+                  {copy("mark_permanently_closed", language)}
+                </button>
                 {choice ? <button onClick={() => clearChoice.mutate(undefined)} type="button">{copy("clear_choice", language)}</button> : null}
               </div>
 

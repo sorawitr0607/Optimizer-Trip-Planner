@@ -76,6 +76,14 @@ export interface DayStopsProps {
    * is of somewhere *near* the place, and every surface that shows one has to say so.
    */
   photoOf: (item: TimedItem) => { src: string; nearby: boolean } | null;
+  /** A warning to print on a stop, or null. Supplied by the caller because the closure
+   *  signal lives in the place summaries, which `/itinerary` already loads.
+   *
+   *  This is the moment the reported failure was caught: `NHK Studio Park` closed in 2020
+   *  and held a four-and-a-half-hour slot on a 2026 plan, and the owner only found it by
+   *  reading the finished itinerary. Said on the stop rather than in a panel further down,
+   *  because the stop is the thing being read. */
+  noticeOf?: (item: TimedItem) => string | null;
   /** Empty means the day itself is empty; a search with no hits says so differently. */
   emptyText: string;
 }
@@ -91,6 +99,7 @@ export function DayStops({
   nameOf,
   coordsOf,
   photoOf,
+  noticeOf,
   emptyText,
 }: DayStopsProps) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
@@ -134,6 +143,7 @@ export function DayStops({
             item.reason ? ["reason", copyFrom("OPTIMIZER_CODE_TEXT", item.reason, language)] : null,
           ].filter(Boolean) as [string, string][];
           const expanded = Boolean(open[item.key]);
+          const notice = noticeOf?.(item) ?? null;
 
           return (
             <li
@@ -147,6 +157,11 @@ export function DayStops({
               }
               key={item.key}
             >
+              {notice ? (
+                <p className="day-stop-notice" role="status">
+                  <b aria-hidden="true">⚠</b> {notice}
+                </p>
+              ) : null}
               <div className="day-stop-head">
                 {(() => {
                   const Icon = KIND_ICON[item.type] ?? MapPin;

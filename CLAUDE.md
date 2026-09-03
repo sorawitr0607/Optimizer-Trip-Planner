@@ -981,6 +981,38 @@ Each stage is gated on the previous one having a matching hash (`_current_choice
    documented default and shows it as a visible assumption; where the value is the point of the request
    it asks one clarification instead. GenAI is off by default and everything else works without it.
 
+### Whether a place still exists
+
+**The signal is shown, never obeyed.** `WikidataSummaryProvider.CLOSURE_PROPERTIES` is
+`("P3999", "P582")` — "date of official closure" and item-level "end time" — read from
+claims the `wbgetentities` call already fetches for photographs, so a closure check costs
+no request, no key and no second provider. `NHK Studio Park` carries `P582 = 2020` and was
+given four and a half hours on a 2026 plan.
+
+**What is absent is the load-bearing part, and both absences were measured over 500
+candidate QIDs from a real catalogue.** `P576` (dissolved, abolished, demolished) flagged
+four places and three were places anyone would go: `Edo Castle` — whose site is the
+Imperial Palace East Gardens — an open museum, and a party headquarters whose QID is the
+*party* rather than the building. Historic sites are visited *because* the original
+structure is gone. `P5817` "state of use" is worse: its common value is `Q55654238`, which
+is literally "in use", and `Tokyo Skytree` carries it, so a presence check would have
+dropped the most visited place in the city. `tests.test_closure_signal` asserts both
+absences, because the temptation to add them is the hazard.
+
+Because the source is wrong in both directions, **nothing filters on it**. The card states
+the record with its caveat, `/itinerary` warns on a scheduled stop — which is the moment
+the reported failure was found, by reading the finished plan — and the owner's own answer
+is `permanently_closed`, an ordinary rejection reason rather than a new kind of state: a
+closed place needs exactly what `not_for_trip` already does.
+
+Coverage is honest and partial: **66% of candidates carry a QID at all**, and
+`Yoshimoto ∞ Hall` has one with no closure property, because Wikidata does not record its
+March 2025 closure and OpenStreetMap still tags it as a theatre. That case is why the
+manual answer exists.
+
+`cache_version` was bumped to `wikidata-summary-v13` so stored summaries are refetched
+once; without it a place would keep a silent card for the 60-day TTL.
+
 ### What may enter the catalogue, and how far a walk counts
 
 **A bed is not a stop.** `tourism=hotel` reached the catalogue and the optimizer gave it an

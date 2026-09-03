@@ -447,7 +447,8 @@
       "too_expensive": "Too expensive",
       "too_tiring": "Too tiring",
       "weak_value": "Weak value",
-      "wrong_vibe": "Wrong vibe"
+      "wrong_vibe": "Wrong vibe",
+      "permanently_closed": "Permanently closed"
     },
     "th": {
       "already_seen": "เคยไปแล้ว",
@@ -456,7 +457,8 @@
       "too_expensive": "แพงเกินไป",
       "too_tiring": "เหนื่อยเกินไป",
       "weak_value": "ไม่คุ้ม",
-      "wrong_vibe": "บรรยากาศไม่ตรง"
+      "wrong_vibe": "บรรยากาศไม่ตรง",
+      "permanently_closed": "ปิดถาวร"
     }
   },
   "TAG_TEXT": {
@@ -1806,7 +1808,11 @@
       "unfit_impossible": "{count} place(s) cannot fit any single day of this trip, however long the trip is. Adding days will not change that.",
       "unfit_drop_impossible": "Remove {count} place(s) and rebuild once",
       "timeline_day_summary": "{places} place(s) · {start}–{end}",
-      "unfit_days_did_not_help": "{count} place(s) still do not fit after the days were added. Removing them is the way forward."
+      "unfit_days_did_not_help": "{count} place(s) still do not fit after the days were added. Removing them is the way forward.",
+      "closed_signal": "Recorded as closed in {year}",
+      "closed_signal_source": "From Wikidata, which is sometimes out of date in both directions — check before you drop it.",
+      "mark_permanently_closed": "This place is gone",
+      "closed_on_the_plan": "{name} is recorded as closed in {year}. Check it before you travel, and remove it on Places if it is gone."
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -3080,7 +3086,11 @@
       "unfit_impossible": "มี {count} ที่ ที่ไม่พอดีกับวันใดเลยในทริปนี้ ไม่ว่าทริปจะยาวแค่ไหน การเพิ่มวันจะไม่ช่วย",
       "unfit_drop_impossible": "นำ {count} ที่ออก แล้วสร้างใหม่ครั้งเดียว",
       "timeline_day_summary": "{places} ที่ · {start}–{end}",
-      "unfit_days_did_not_help": "ยังมี {count} ที่ ที่ไม่พอดีแม้เพิ่มวันแล้ว การนำออกคือทางไปต่อ"
+      "unfit_days_did_not_help": "ยังมี {count} ที่ ที่ไม่พอดีแม้เพิ่มวันแล้ว การนำออกคือทางไปต่อ",
+      "closed_signal": "มีบันทึกว่าปิดเมื่อ {year}",
+      "closed_signal_source": "ข้อมูลจาก Wikidata ซึ่งอาจไม่อัปเดตทั้งสองทาง ตรวจสอบก่อนตัดออก",
+      "mark_permanently_closed": "ที่นี่ไม่มีแล้ว",
+      "closed_on_the_plan": "{name} มีบันทึกว่าปิดเมื่อ {year} ตรวจสอบก่อนเดินทาง และนำออกที่หน้าสถานที่ถ้าปิดจริง"
     }
   }
 }

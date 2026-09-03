@@ -2228,6 +2228,22 @@ class WikidataSummaryProvider:
     against 12 `en`, so the article you reach is Chinese. Wikidata is the bridge.
     """
 
+    #: The claims that make this place closed. Two, and the shortlist is the design.
+    #:
+    #: `P3999` is literally "date of official closure". Item-level `P582` is "end time",
+    #: which on a place means the place ended — `NHK Studio Park` carries `P582 = 2020`
+    #: and was given four and a half hours on a 2026 plan.
+    #:
+    #: **What is absent matters more, and both absences were measured over 500 candidate
+    #: QIDs from a real catalogue.** `P576` (dissolved, abolished or demolished) flagged
+    #: four places and three were places anyone would go: `Edo Castle` — whose site is the
+    #: Imperial Palace East Gardens — an open museum, and a party headquarters whose QID is
+    #: the party rather than the building. Historic sites are visited *because* the
+    #: original structure is gone. And `P5817` "state of use" is not a closure signal at
+    #: all: its common value is `Q55654238`, which is "in use", and `Tokyo Skytree` carries
+    #: it, so presence would have dropped the most visited place in the city.
+    CLOSURE_PROPERTIES: tuple[str, ...] = ("P3999", "P582")
+
     name = "wikidata"
     operation = "wikidata:summary"
     kind = "place_summary"
@@ -2243,7 +2259,11 @@ class WikidataSummaryProvider:
     # storing a blank, and the blank is cached for 60 days — so they must be asked again.
     # v11: the venue's own `og:` preview as a last resort, so places every free
     # encyclopedic source is silent about get asked once more.
-    cache_version = "wikidata-summary-v12"
+    # v13: `closed_on`, read from claims this call already fetches. Every stored summary
+    # predates the field, and a summary sits for 60 days — so without the bump a place
+    # Wikidata knows is closed keeps a silent card until November. `NHK Studio Park` is
+    # the case: closed 2020, four and a half hours on a 2026 plan.
+    cache_version = "wikidata-summary-v13"
     # An encyclopedia article changes slowly and a description is not a fact the
     # planner schedules against, so this can sit for a long time.
     cache_ttl_days = 60
@@ -2644,6 +2664,41 @@ class WikidataSummaryProvider:
         if image is None and category_files:
             image = category_files[0]
 
+        # Whether Wikidata records this place as gone, from claims **already in this
+        # response** — `props` asks for `claims` for the photograph properties above, so
+        # this costs no request, no key and no second source.
+        #
+        # Two properties, and the shortlist is the whole design. `P3999` is literally
+        # "date of official closure". Item-level `P582` is "end time", which on a place
+        # means the place ended: `NHK Studio Park` carries `P582 = 2020` and was given
+        # four and a half hours on the owner's plan six years later.
+        #
+        # **`P576` is deliberately not read, and that is the finding worth keeping.**
+        # It means dissolved, abolished or demolished, and historic sites are visited
+        # precisely *because* the original structure is gone. Measured over 500 candidate
+        # QIDs from a real catalogue, it hit four places and three of them were places
+        # anyone would go: `Edo Castle` (P576 1869 — the site is the Imperial Palace East
+        # Gardens), `Pavillon Le Corbusier` (P576 2016 — an open museum), and a party
+        # headquarters whose QID is the *party* rather than the building. Reading it would
+        # have deleted the Imperial Palace gardens from a Tokyo trip.
+        #
+        # `P5817` "state of use" is not read either. Its common value is `Q55654238`,
+        # which is literally "in use" — `Tokyo Skytree` carries it — so presence says
+        # nothing and only a small set of values would, none of which appeared here.
+        closed_on = None
+        for prop in self.CLOSURE_PROPERTIES:
+            for claim in claims.get(prop) or []:
+                value = (claim.get("mainsnak") or {}).get("datavalue", {}).get("value")
+                stamp = value.get("time") if isinstance(value, dict) else None
+                if stamp:
+                    # Wikidata times are `+2020-00-00T00:00:00Z`, with zeroed month and
+                    # day where only the year is known. Kept as the date it states rather
+                    # than parsed into something more precise than the source.
+                    closed_on = str(stamp).lstrip("+")[:10]
+                    break
+            if closed_on:
+                break
+
         gallery: list[str] = []
         if image:
             gallery.append(image)
@@ -2708,6 +2763,10 @@ class WikidataSummaryProvider:
         return {
             "qid": str(qid),
             "names": names,
+            # A date string where Wikidata records the place as closed, else None. A
+            # *signal*, never a filter: nothing downstream drops a place for it, because
+            # the source is wrong often enough that it must be shown rather than obeyed.
+            "closed_on": closed_on,
             "text": text,
             "description": description,
             "image_url": image or (gallery[0] if gallery else None),

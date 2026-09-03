@@ -67,6 +67,10 @@
 - A tag the Overpass query never asked for must not decide a candidate's category, and a
   candidate whose only classification is lodging is not a candidate. Both let a hotel be
   scheduled as an 82-minute attraction.
+- A signal from a free source is shown, not obeyed. `CLOSURE_PROPERTIES` is two
+  properties and the *absences* are deliberate: `P576` would have deleted Edo Castle and
+  `P5817` would have deleted Tokyo Skytree. Measure over a real catalogue before trusting
+  a property, and add the manual answer for what the source cannot know.
 - A comfort threshold can be consented past; some limits must not be. `walking_minutes_per_leg`
   is the former, `MAX_USABLE_WALK_MINUTES` the latter — accepting a tradeoff to get a plan
   built once blessed a 240-minute walk.

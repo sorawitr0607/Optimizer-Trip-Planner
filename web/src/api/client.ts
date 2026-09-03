@@ -25,6 +25,16 @@ export interface PlaceSummary {
    *  for — 27 of the owner's 64 stored summaries were a photograph with no words. Kept
    *  apart from `text` because it is CC0 rather than CC BY-SA, so the credit differs. */
   description?: Partial<Record<Language, string>>;
+  /** The date Wikidata records this place as closed, or absent when it records none.
+   *
+   *  A signal, never a filter. Read from `P3999` ("date of official closure") and
+   *  item-level `P582` ("end time") — claims the app already fetches for photographs, so
+   *  it costs no request. `P576` is deliberately not read: measured over 500 candidate
+   *  QIDs it flagged Edo Castle, an open museum and a monument, because historic sites
+   *  are visited precisely because the original structure is gone.
+   *
+   *  Wikidata's own precision, so `2020-00-00` means "2020, month unknown". */
+  closed_on?: string | null;
   image_url: string | null;
   /** The curated image first, then article photographs. Free, capped at six. */
   image_urls?: string[];

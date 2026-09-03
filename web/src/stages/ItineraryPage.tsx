@@ -24,6 +24,7 @@ import { useLanguage } from "../i18n/LanguageProvider";
 import { loadBasemap } from "../shared/basemap";
 import { mapsLink, type MapPlace } from "../shared/map";
 import { galleryFor } from "../shared/photos";
+import { closedYear } from "../shared/closure";
 import { DayStops } from "./DayStops";
 import { PlanReady } from "./PlanReady";
 import { TripNow } from "./TripNow";
@@ -897,6 +898,16 @@ export function ItineraryPage() {
             nameOf={nameOf}
             onPin={pinTo}
             onToggle={ticks.toggle}
+            noticeOf={(item) => {
+              // Only for a visit: a travel leg or a buffer has no place to be closed.
+              if (item.type !== "visit") return null;
+              const year = closedYear(summaries.data?.[item.subject_id]);
+              if (!year) return null;
+              return copyFormat("closed_on_the_plan", language, {
+                name: nameOf(item),
+                year,
+              });
+            }}
             photoOf={(item) => {
               const summary = summaries.data?.[item.subject_id];
               const gallery = galleryFor(summary, {

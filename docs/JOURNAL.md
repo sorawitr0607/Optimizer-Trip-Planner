@@ -6219,3 +6219,80 @@ Still open from the same report: **NHK Studio Park** (permanently closed 2020) a
 an OpenStreetMap freshness problem rather than a filter bug — both are still tagged as
 attractions upstream — so it needs a different kind of answer, and guessing one here would
 have been worse than saying so.
+
+## Asking a free source whether a place still exists, 2026-09-03
+
+Two places on the owner's Tokyo plan no longer exist. `NHK Studio Park` closed in 2020 and
+was given four and a half hours on 27 November; `Yoshimoto ∞ Hall` closed in March 2025.
+OpenStreetMap still tags both as attractions, so the catalogue is doing what it is told.
+The research question was whether a second free source knows better.
+
+### The source was already being called
+
+`WikidataSummaryProvider` fetches `props=sitelinks|claims|labels|descriptions` for
+photographs and names, so **every closure claim is already in a response the app makes**.
+No new provider, no key, no extra request. `NHK Studio Park` is `Q10854719` and carries
+`P582 = +2020-00-00`, and the candidate in the owner's catalogue has that QID.
+
+### The properties not to read, which is most of the work
+
+The obvious ones are traps, and sampling 500 candidate QIDs from a real catalogue is what
+showed it.
+
+`P576` — dissolved, abolished or demolished — hit four places, and three were places anyone
+would go:
+
+| QID | name | P576 | what it is |
+|---|---|---|---|
+| `Q865913` | Edo Castle | 1869 | the site is the Imperial Palace East Gardens |
+| `Q638236` | Pavillon Le Corbusier | 2016 | "museum in Zurich" — open |
+| `Q700772` | Taiwanese People's Party | 1931 | a *political party*; the place is its former HQ |
+
+Historic sites are visited **because** the original structure is gone. Reading `P576` would
+have deleted the Imperial Palace gardens from a Tokyo trip. The third row is its own
+finding: some candidates carry a QID for the wrong subject entirely — the party rather
+than the building.
+
+`P5817` "state of use" is worse. Its common value is `Q55654238`, which is literally **"in
+use"**, and `Tokyo Skytree` carries it — so a presence check would have dropped the most
+visited place in the city.
+
+So `CLOSURE_PROPERTIES` is `("P3999", "P582")` and the two absences are asserted in
+`tests.test_closure_signal`, because the temptation to add them is the hazard. Verified
+live afterwards: NHK Studio Park flags, and Edo Castle, Tokyo Skytree and the NHK Museum of
+Broadcasting all come back clean.
+
+### Shown, not obeyed
+
+Because the source is out of date in both directions, nothing filters on it. The card
+states the record with its caveat, and `/itinerary` warns on a scheduled stop — which is
+the moment the failure was actually found, by reading the finished plan. A four-and-a-half
+hour slot for a closed venue is now impossible to read past.
+
+Coverage is partial and the app says so: **66% of candidates carry a QID at all** (9,606 of
+14,545), and `Yoshimoto ∞ Hall` has one with no closure property. Japanese Wikipedia has no
+intro extract for it either. That case is exactly why the manual answer exists —
+`permanently_closed`, an ordinary rejection reason rather than a new kind of state, because
+a closed place needs precisely what `not_for_trip` already does: kept out of the plan,
+remembered across rebuilds, recorded with why. One press on the card, always available.
+
+A pleasing confirmation: `NHK Museum of Broadcasting` (`Q11235312`) is **already in the
+catalogue** and clean, which is the replacement the owner suggested. Excluding the closed
+park leaves it available to be chosen.
+
+`cache_version` went to `wikidata-summary-v13`. Every stored summary predates the field and
+a summary sits for 60 days, so without the bump a place Wikidata knows is closed would keep
+a silent card until November.
+
+### One mistake, caught by a habit rather than a gate
+
+`--color-amber` and `--bg-warn` do not exist. I wrote both into the new warning styles, and
+an undefined custom property fails silently — the same class of mistake as
+`--weight-primary` a day earlier. The sweep for `var(--x)` with no definition, added to
+`AGENTS.md` after that one, caught it before it shipped. The app's real tokens are
+`--color-warning` and `--color-warning-light`.
+
+### Release evidence
+
+**12 of 13** stages: 744 Python tests, 223 web tests, the 20 atomic and 7 interaction
+optimizer regressions. Stage 9 still cannot run.
