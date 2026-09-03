@@ -11,6 +11,7 @@ from time import monotonic
 from typing import Any
 
 from .core import (
+    CLOSED_BUSINESS_STATUSES,
     PLANNING_MODES,
     CandidateChoice,
     DiscoveryRun,
@@ -981,6 +982,18 @@ class PlannerActions:
                     for day in date_range(basics["start_date"], basics["end_date"])
                 }
             )
+        # Expired rows are not verdicts: a temporary flag older than the
+        # three-day evidence TTL must never badge a card.
+        now_iso = datetime.now(timezone.utc).isoformat()
+        closures = {
+            row["place_id"]: str(row["business_status"])
+            for row in self.store.list_place_evidence(
+                trip_id, GooglePlacesOpeningHoursProvider.kind
+            )
+            if row.get("place_id")
+            and row.get("business_status") in CLOSED_BUSINESS_STATUSES
+            and row.get("expires_at", "") > now_iso
+        }
         return build_ranking(
             setup=setup.snapshot.as_dict(),
             candidates=candidates,
@@ -989,6 +1002,7 @@ class PlannerActions:
             centre=centre,
             summaries=self.list_place_summaries(trip_id),
             trip_months=trip_months,
+            closures=closures,
         )
 
     def rank_candidates(self, trip_id: str) -> dict[str, Any]:
@@ -1858,6 +1872,21 @@ class PlannerActions:
                 }
             )
             provider_hours = opening_evidence.get(choice.place_id) or {}
+            # Google's own verdict, independent of the hours: NHK Studio Park has
+            # no usable weekly periods left to carry a closure, so this cannot
+            # live inside the interval branch above.
+            closure = provider_hours.get("business_status")
+            if closure in CLOSED_BUSINESS_STATUSES:
+                facts.append(
+                    {
+                        "subject_id": choice.place_id,
+                        "fact_type": "closure_status",
+                        "value": closure,
+                        "status": "verified",
+                        "source": provider_hours.get("provider") or "provider_hours",
+                        "retrieved_at": provider_hours.get("retrieved_at"),
+                    }
+                )
             if provider_hours.get("interval"):
                 facts.append(
                     {
@@ -2549,6 +2578,7 @@ class PlannerActions:
                 **reduced,
                 "retrieved_at": evidence["retrieved_at"],
                 "provider": evidence.get("provider"),
+                "business_status": evidence.get("business_status"),
             }
         return result
 

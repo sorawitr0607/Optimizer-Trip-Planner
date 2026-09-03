@@ -23,17 +23,18 @@ from tests.test_routes import FakePlaceProvider, FakeRouteProvider
 TRIP_DATES = ["2030-01-01", "2030-01-02", "2030-01-03"]
 
 
-def google_payload(periods: list[dict], *, name: str = "Tower") -> dict:
-    return {
-        "places": [
-            {
-                "id": "ChIJtest",
-                "displayName": {"text": name},
-                "location": {"latitude": 25.04, "longitude": 121.57},
-                "regularOpeningHours": {"periods": periods, "weekdayDescriptions": []},
-            }
-        ]
+def google_payload(
+    periods: list[dict], *, name: str = "Tower", business_status: str | None = None
+) -> dict:
+    place: dict = {
+        "id": "ChIJtest",
+        "displayName": {"text": name},
+        "location": {"latitude": 25.04, "longitude": 121.57},
+        "regularOpeningHours": {"periods": periods, "weekdayDescriptions": []},
     }
+    if business_status is not None:
+        place["businessStatus"] = business_status
+    return {"places": [place]}
 
 
 def period(day: int, open_hm: tuple[int, int], close_hm: tuple[int, int] | None,
@@ -54,18 +55,24 @@ class FakeHoursProvider:
     cache_ttl_days = 3
     kind = "opening_hours"
 
-    def __init__(self, *, periods=None, fail_for: set[str] | None = None) -> None:
+    def __init__(
+        self, *, periods=None, fail_for: set[str] | None = None,
+        business_status: str | None = None,
+    ) -> None:
         self.calls: list[str] = []
         self.periods = periods if periods is not None else [
             period(day, (9, 0), (18, 0)) for day in range(7)
         ]
         self.fail_for = fail_for or set()
+        self.business_status = business_status
 
     def opening_hours(self, place: dict) -> dict:
         self.calls.append(place["place_id"])
         if place["place_id"] in self.fail_for:
             raise ProviderUnavailable("Places returned no opening hours for this place")
-        payload = google_payload(self.periods, name=place["name"])
+        payload = google_payload(
+            self.periods, name=place["name"], business_status=self.business_status
+        )
         payload["places"][0]["location"] = {
             "latitude": place["latitude"],
             "longitude": place["longitude"],
@@ -92,6 +99,21 @@ class NormalizationTest(unittest.TestCase):
             [{"day": 2, "start": "09:30", "end": "18:00", "all_day": False, "overnight": False}],
             value["weekly_periods"],
         )
+        self.assertIsNone(value["business_status"])
+
+    def test_google_closure_verdict_is_carried_not_guessed(self) -> None:
+        """`businessStatus` rides the same already-paid text-search call: NHK
+        Studio Park (shut 2020) and the Meiji gallery works (to May 2027) are
+        the cases no free source carries."""
+
+        value = self.provider.normalize(
+            google_payload(
+                [period(2, (9, 30), (18, 0))],
+                business_status="CLOSED_PERMANENTLY",
+            ),
+            place=self.place,
+        )
+        self.assertEqual("CLOSED_PERMANENTLY", value["business_status"])
 
     def test_hours_search_uses_local_name_and_destination(self) -> None:
         captured = {}
@@ -276,6 +298,26 @@ class OpeningRefreshTest(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.directory.cleanup()
+
+    def test_a_google_closed_place_reaches_the_optimizer_as_a_closure_fact(self) -> None:
+        """NHK Studio Park (shut 2020): no weekly periods carry a closure, so
+        the verdict travels as its own fact, independent of the hours."""
+
+        actions = PlannerActions(
+            self.path,
+            hours_provider=FakeHoursProvider(business_status="CLOSED_PERMANENTLY"),
+        )
+        actions.refresh_opening_hours(self.trip.trip_id, force=True)
+        facts = [
+            fact
+            for fact in actions._optimizer_input(self.trip.trip_id)["facts"]
+            if fact["fact_type"] == "closure_status"
+        ]
+        self.assertEqual(len(self.places), len(facts))
+        self.assertEqual(
+            {"CLOSED_PERMANENTLY"}, {fact["value"] for fact in facts}
+        )
+        self.assertEqual({"verified"}, {fact["status"] for fact in facts})
 
     def test_hours_become_a_verified_optimizer_fact(self) -> None:
         report = self.actions.refresh_opening_hours(self.trip.trip_id)

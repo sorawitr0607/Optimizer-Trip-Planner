@@ -379,6 +379,22 @@ describe("PlaceDeck", () => {
     expect(plain).not.toContain("Cherry blossoms");
   });
 
+  it("says so on the card when Google reports the place closed", () => {
+    // NHK Studio Park, shut 2020: the free signal is display-only by design,
+    // so the paid verdict gets its own badge. Unknown verdicts render nothing.
+    const shut = {
+      ...RANKING,
+      cards: {
+        first: { ...RANKING.cards.first, closure_status: "CLOSED_PERMANENTLY" },
+      },
+    } as unknown as Ranking;
+    const html = render(SUMMARY, [], RANKING.lanes.main_queue, [], false, shut, {});
+    expect(html).toContain("Google reports permanently closed");
+
+    const plain = render(SUMMARY);
+    expect(plain).not.toContain("Google reports");
+  });
+
   it("shows a placeholder outside the card it stands in for", () => {
     // The skeleton was rendered *inside* `.place-deck-drag`, which is hidden while the
     // first photograph loads — so it was hidden along with the card and a loading card

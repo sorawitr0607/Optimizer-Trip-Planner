@@ -106,6 +106,44 @@ class OptimizerCoreTest(unittest.TestCase):
         self.assertEqual("transit", inbound["mode"])
         self.assertEqual(40, inbound["duration_minutes"])
 
+    def test_a_google_closed_place_is_reconciled_never_scheduled(self) -> None:
+        """NHK Studio Park was given 270 minutes on a 2026 plan, years after it
+        shut. The free closure signal is display-only by design (P576 would take
+        Edo Castle with it), so the paid verdict arrives as a `closure_status`
+        fact and the place is reconciled, with the refresh named that clears it.
+        """
+
+        snapshot = json.loads(
+            json.dumps(fixture("ix-jp-shibuya-hours-view-walk")["planner_input"])
+        )
+        snapshot["facts"] = [
+            *snapshot.get("facts", []),
+            {
+                "subject_id": "harajuku",
+                "fact_type": "closure_status",
+                "value": "CLOSED_PERMANENTLY",
+                "status": "verified",
+                "source": "google_places",
+            },
+        ]
+        variant = optimize_trip(snapshot)["variants"][0]
+        refused = [
+            item
+            for item in variant["reconciliation"]
+            if item["reason"] == "VENUE_CLOSED_PERMANENTLY"
+        ]
+        self.assertEqual(1, len(refused))
+        self.assertEqual("cannot_currently_fit", refused[0]["status"])
+        self.assertNotIn(
+            "harajuku",
+            [
+                item["subject_id"]
+                for day in variant["days"]
+                for item in day["items"]
+                if item["type"] == "visit"
+            ],
+        )
+
     def test_free_time_is_not_counted_as_contingency_buffer(self) -> None:
         days = [
             {

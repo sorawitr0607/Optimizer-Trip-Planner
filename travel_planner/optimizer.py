@@ -591,6 +591,23 @@ def _prepare_candidates(
                 "move_date_or_drop_place",
             )
             continue
+        # Google's own verdict, via a `closure_status` fact. The two strings are
+        # `core.CLOSED_BUSINESS_STATUSES`, matched literally because this module
+        # stays stdlib-only -- the comment there says why. NHK Studio Park (shut
+        # 2020) and the Meiji gallery works (to May 2027) are the cases the free
+        # sources cannot carry.
+        closure = _verified_fact(snapshot, place_id, "closure_status")
+        if closure and str(closure.get("value") or "") in {
+            "CLOSED_PERMANENTLY",
+            "CLOSED_TEMPORARILY",
+        }:
+            reconciliation[place_id] = _reconciliation(
+                candidate,
+                "cannot_currently_fit",
+                "VENUE_" + str(closure["value"]),
+                "refresh_opening_hours_or_drop_place",
+            )
+            continue
         if _verified_fact(snapshot, place_id, "show_intervals") and not _show_fits_trip(
             snapshot, candidate
         ):

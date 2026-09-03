@@ -13,6 +13,12 @@ from uuid import uuid4
 
 PLANNING_MODES = frozenset({"explore_first", "ready_to_schedule"})
 LANGUAGES = frozenset({"en", "th"})
+#: Google `businessStatus` values that keep a place out of the plan. Temporary
+#: counts too: the evidence expires in three days, so a stale temporary flag
+#: cannot haunt a trip, and the reconciliation entry names the refresh that
+#: clears it. Canonical home: `optimizer` reads facts and stays stdlib-only, so
+#: it matches these two strings with a pointer back here rather than importing.
+CLOSED_BUSINESS_STATUSES = frozenset({"CLOSED_PERMANENTLY", "CLOSED_TEMPORARILY"})
 FORBIDDEN_SNAPSHOT_KEYS = frozenset(
     {
         "api_key",

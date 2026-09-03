@@ -1815,7 +1815,9 @@
       "closed_signal": "Recorded as closed in {year}",
       "closed_signal_source": "From Wikidata, which is sometimes out of date in both directions — check before you drop it.",
       "mark_permanently_closed": "This place is gone",
-      "closed_on_the_plan": "{name} is recorded as closed in {year}. Check it before you travel, and remove it on Places if it is gone."
+      "closed_on_the_plan": "{name} is recorded as closed in {year}. Check it before you travel, and remove it on Places if it is gone.",
+      "closed_permanently": "Google reports permanently closed. Remove it on Places.",
+      "closed_temporarily": "Google reports temporarily closed. Check before you travel."
     },
     "th": {
       "24_hours_before": "ก่อนเดินทาง 24 ชั่วโมง",
@@ -3096,7 +3098,9 @@
       "closed_signal": "มีบันทึกว่าปิดเมื่อ {year}",
       "closed_signal_source": "ข้อมูลจาก Wikidata ซึ่งอาจไม่อัปเดตทั้งสองทาง ตรวจสอบก่อนตัดออก",
       "mark_permanently_closed": "ที่นี่ไม่มีแล้ว",
-      "closed_on_the_plan": "{name} มีบันทึกว่าปิดเมื่อ {year} ตรวจสอบก่อนเดินทาง และนำออกที่หน้าสถานที่ถ้าปิดจริง"
+      "closed_on_the_plan": "{name} มีบันทึกว่าปิดเมื่อ {year} ตรวจสอบก่อนเดินทาง และนำออกที่หน้าสถานที่ถ้าปิดจริง",
+      "closed_permanently": "Google รายงานว่าปิดถาวร นำออกที่หน้าสถานที่",
+      "closed_temporarily": "Google รายงานว่าปิดชั่วคราว ตรวจสอบก่อนเดินทาง"
     }
   }
 }

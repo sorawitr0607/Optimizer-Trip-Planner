@@ -286,6 +286,9 @@ export interface RankingCard {
   distance_from_centre_metres?: number | null;
   /** True past FAR_FROM_CENTRE_M — an hour-out place in a local evening. */
   far_from_centre?: boolean;
+  /** Google's paid open/closed verdict. Display only; the optimizer excludes on
+   *  the fact, this keeps the choice from being made in the first place. */
+  closure_status?: string | null;
   /** Seasonal phenomenon whose peak the trip misses, as a copy key suffix —
    *  `cherry_blossom` reads `season_cherry_blossom`. Display only. */
   season_note?: string | null;

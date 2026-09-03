@@ -987,6 +987,20 @@ export function PlaceDeck({
             )}
           </p>
         ) : null}
+        {/* Google's paid verdict, not the free signal above it: a place with no
+            weekly periods left carries no hours to be wrong about, so the badge
+            reads the verdict directly. Unknown ids render nothing. */}
+        {card?.closure_status === "CLOSED_PERMANENTLY" ||
+        card?.closure_status === "CLOSED_TEMPORARILY" ? (
+          <p className="setup-hint">
+            {copy(
+              card.closure_status === "CLOSED_PERMANENTLY"
+                ? "closed_permanently"
+                : "closed_temporarily",
+              language,
+            )}
+          </p>
+        ) : null}
         {entry.role === "protected_exploration" ? (
           <p className="setup-hint">{copy("deck_exploration_note", language)}</p>
         ) : null}

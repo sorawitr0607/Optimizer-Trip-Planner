@@ -305,6 +305,20 @@ class RankingCoreTest(unittest.TestCase):
                 plain[place_id]["total_score"], ranked[place_id]["total_score"]
             )
 
+    def test_a_paid_closed_verdict_rides_the_card_without_rescoring(self) -> None:
+        ranked = build_ranking(
+            setup=setup_payload(),
+            candidates=[
+                candidate("shut", "museum", 2, icon=True, opening=True),
+                candidate("open", "museum", 4, icon=True, opening=True),
+            ],
+            choices=[],
+            discovery_status="verified",
+            closures={"shut": "CLOSED_PERMANENTLY"},
+        )["cards"]
+        self.assertEqual("CLOSED_PERMANENTLY", ranked["shut"]["closure_status"])
+        self.assertIsNone(ranked["open"]["closure_status"])
+
     def test_a_landmark_is_not_buried_by_a_richer_tag_vocabulary(self) -> None:
         """`WF-037`. The ranker's output ordering had no test at all.
 

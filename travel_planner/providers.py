@@ -3225,7 +3225,7 @@ class GooglePlacesOpeningHoursProvider:
     kind = "opening_hours"
     FIELD_MASK = (
         "places.id,places.displayName,places.location,places.primaryType,"
-        "places.regularOpeningHours"
+        "places.regularOpeningHours,places.businessStatus"
     )
 
     def __init__(self) -> None:
@@ -3309,6 +3309,11 @@ class GooglePlacesOpeningHoursProvider:
             "match_distance_metres": round(distance),
             "weekly_periods": _weekly_periods(periods),
             "weekday_descriptions": list(hours.get("weekdayDescriptions") or []),
+            # Google's own open/closed verdict, on the same already-paid call --
+            # no extra request. Absent means unknown, never open: NHK Studio
+            # Park (shut 2020) and the Meiji gallery works (to May 2027) are the
+            # cases the free sources cannot carry.
+            "business_status": str(match.get("businessStatus") or "") or None,
             "provider": self.name,
             "status": "verified",
         }

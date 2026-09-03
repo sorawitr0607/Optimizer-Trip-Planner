@@ -224,6 +224,7 @@ def build_ranking(
     centre: dict[str, Any] | None = None,
     summaries: dict[str, Any] | None = None,
     trip_months: list[int] | None = None,
+    closures: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     choice_by_id = {choice["place_id"]: choice for choice in choices}
     base_weights, effective_weights = _group_weights(setup)
@@ -273,6 +274,11 @@ def build_ranking(
             [item for item in texts if isinstance(item, str)],
             list(trip_months or []),
         )
+    # Display only, never scored: Google's paid open/closed verdict, so the deck
+    # stops offering NHK Studio Park as a normal card. The optimizer excludes on
+    # the fact; this keeps the choice from being made in the first place.
+    for place_id, card in cards.items():
+        card["closure_status"] = (closures or {}).get(place_id)
     # `total_score` is an evidence-aware planning priority, not a calibrated chance that
     # the owner will like a place. Unknown route/hour evidence deliberately gives many
     # cards similar middle scores. The percentile answers the card's actual question --
