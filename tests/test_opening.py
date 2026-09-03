@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 
 from travel_planner import opening
-from travel_planner.actions import PlannerActions
+from travel_planner.actions import PlannerActions, _osm_opening_hours
 from travel_planner.providers import (
     GooglePlacesOpeningHoursProvider,
     ProviderBudgetExceeded,
@@ -427,8 +427,17 @@ class OpeningRefreshTest(unittest.TestCase):
             for f in actions._optimizer_input(self.trip.trip_id)["facts"]
             if f["fact_type"] == "opening_interval"
         ]
-        self.assertEqual(len(self.places) - 1, len(facts))
-        self.assertNotIn(self.places[0], {fact["subject_id"] for fact in facts})
+        # The Google layer is unchanged: the failed place has no Google fact and
+        # every other place does. OSM catalogue hours are an independent second
+        # layer on top, so the total also carries the temple's normalized fact.
+        google = [f for f in facts if f["source"] == "google_places"]
+        self.assertEqual(len(self.places) - 1, len(google))
+        self.assertNotIn(self.places[0], {fact["subject_id"] for fact in google})
+        osm = [f for f in facts if f["source"] == "normalized_discovery"]
+        # OSM hours are the fallback under Google ones: the two places with live
+        # Google intervals keep Google facts, and only the failed place falls
+        # through to its catalogue hours.
+        self.assertEqual([self.places[0]], [f["subject_id"] for f in osm])
 
     def test_owner_can_confirm_a_window_when_the_provider_has_none(self) -> None:
         actions = PlannerActions(
@@ -470,7 +479,16 @@ class OpeningRefreshTest(unittest.TestCase):
             for f in self.actions._optimizer_input(self.trip.trip_id)["facts"]
             if f["fact_type"] == "opening_interval"
         ]
-        self.assertEqual([], facts)
+        # Expired Google evidence stops producing Google facts -- but the OSM
+        # catalogue hours are a separate source with their own life, so the
+        # temple's normalized fact survives the expiry.
+        self.assertEqual(
+            [], [f for f in facts if f["source"] == "google_places"]
+        )
+        self.assertEqual(
+            len(self.places),
+            len([f for f in facts if f["source"] == "normalized_discovery"]),
+        )
 
     def test_pre_fix_evidence_is_not_used_after_the_24_7_parser_upgrade(self) -> None:
         self.actions.refresh_opening_hours(self.trip.trip_id)
@@ -507,6 +525,91 @@ class OpeningRefreshTest(unittest.TestCase):
         with self.assertRaises(ValueError) as raised:
             bare.refresh_opening_hours(trip.trip_id)
         self.assertEqual("no_places_chosen", str(raised.exception))
+
+
+class OsmHoursTest(unittest.TestCase):
+    def test_a_weekday_range_parses_to_covered_dates(self) -> None:
+        """The Daimyo Clock Museum carries `Tu-Su 10:00-16:00` on OSM, and the
+        old path could not read a weekday qualifier at all, so the plan arrived
+        22 minutes before closing."""
+
+        interval, open_dates = _osm_opening_hours("Tu-Su 10:00-16:00", TRIP_DATES)
+        self.assertEqual({"start": "10:00", "end": "16:00"}, interval)
+        # Tue-Thu trip, all inside Tu-Su.
+        self.assertEqual(TRIP_DATES, open_dates)
+
+    def test_a_closed_weekday_is_excluded_from_the_dates(self) -> None:
+        interval, open_dates = _osm_opening_hours("We-Su 10:00-16:00", TRIP_DATES)
+        self.assertEqual({"start": "10:00", "end": "16:00"}, interval)
+        # 2030-01-01 is the Tuesday the place is shut.
+        self.assertEqual(["2030-01-02", "2030-01-03"], open_dates)
+
+    def test_a_bare_interval_covers_every_trip_date(self) -> None:
+        interval, open_dates = _osm_opening_hours("09:00-17:00", TRIP_DATES)
+        self.assertEqual({"start": "09:00", "end": "17:00"}, interval)
+        self.assertEqual(TRIP_DATES, open_dates)
+
+    def test_anything_fancier_is_refused_never_guessed(self) -> None:
+        for value in (
+            "Tu-Sa 12:00-18:00; Su 12:00-17:00",
+            "Apr-Oct 09:00-18:00",
+            "sunrise-sunset",
+            "24/7",
+            "",
+            None,
+        ):
+            self.assertEqual(
+                (None, None), _osm_opening_hours(value, TRIP_DATES), value
+            )
+
+    def test_osm_regular_hours_become_a_verified_optimizer_fact(self) -> None:
+        """The fake catalogue's Culture Temple carries bare `08:00-20:00` OSM
+        hours. The old trust gate ignored every OSM state but official ones, so
+        no fact constrained it; now it schedules inside 08:00-20:00."""
+
+        from tests.test_setup_discovery import FakePlaceProvider as DiscoveryFake
+
+        directory = TemporaryDirectory()
+        try:
+            actions = PlannerActions(
+                Path(directory.name) / "osm.sqlite3",
+                place_provider=DiscoveryFake(),
+            )
+            trip = actions.create_trip(
+                name="Taipei", destination="Taipei", planning_mode="ready_to_schedule"
+            )
+            actions.save_setup(
+                trip_id=trip.trip_id,
+                main_style=["sightseeing"],
+                start_date=TRIP_DATES[0],
+                end_date=TRIP_DATES[-1],
+                accommodation_status="booked",
+                confirmed=True,
+            )
+            actions.discover_places(trip_id=trip.trip_id)
+            temple = next(
+                item["place_id"]
+                for item in actions.get_latest_discovery(
+                    trip.trip_id
+                ).candidates.as_dict()["candidates"]
+                if item["name"] == "Culture Temple"
+            )
+            actions.save_candidate_choice(
+                trip_id=trip.trip_id, place_id=temple, action="must_do"
+            )
+            snapshot = actions._optimizer_input(trip.trip_id)
+            facts = [
+                fact
+                for fact in snapshot["facts"]
+                if fact["fact_type"] == "opening_interval"
+                and fact["subject_id"] == temple
+            ]
+            self.assertEqual(1, len(facts))
+            self.assertEqual("verified", facts[0]["status"])
+            self.assertEqual("normalized_discovery", facts[0]["source"])
+            self.assertEqual({"start": "08:00", "end": "20:00"}, facts[0]["value"])
+        finally:
+            directory.cleanup()
 
 
 class ExploreFirstEvidenceTest(unittest.TestCase):
