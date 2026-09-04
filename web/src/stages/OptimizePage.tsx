@@ -167,6 +167,11 @@ export function OptimizePage() {
   // take this plan with the gaps it has", which is one button and not a choice.
   const [hoursChoice, setHoursChoice] = useState<"assume" | "verified">("assume");
   const [excludedComfort, setExcludedComfort] = useState<Set<string>>(() => new Set());
+  // Places ticked in the unfit list for one shared drop-and-rebuild. Held as an
+  // array of place ids; every use intersects it with the current unfit list, so
+  // a rebuild that changes the list cannot carry a stale tick into the next one.
+  // Cleared whenever `cutUnfitAndRebuild` succeeds, whichever branch ran it.
+  const [checkedDrops, setCheckedDrops] = useState<string[]>([]);
 
   const trips = useQuery({ queryKey: ["trips"], queryFn: () => rpc<Trip[]>("list_trips") });
   const choices = useQuery({
@@ -461,8 +466,13 @@ export function OptimizePage() {
     },
     onSuccess: async () => {
       setRefusal(null);
+      setCheckedDrops([]);
       await Promise.all([
         invalidatePlan(),
+        // The same write the deck makes, so the deck's choice list is stale too.
+        // `dropAndRebuild` beside it has always invalidated this; this was the odd
+        // one out.
+        queryClient.invalidateQueries({ queryKey: ["candidate_choices", tripId] }),
         queryClient.invalidateQueries({ queryKey: ["journey", tripId] }),
       ]);
     },
@@ -607,6 +617,20 @@ export function OptimizePage() {
     // step by hand. `localStorage` also survives the reload a long build invites.
     placesDaysWereAddedFor(tripId),
   );
+
+  // More than one place to drop means checkboxes and one shared button rather
+  // than a rebuild per row. The tick list is intersected with the live unfit
+  // list on every render, so ticks cannot outlive the rows they were made on.
+  const multiDrop = unfit.length > 1;
+  const selectedDrops = unfit
+    .map((item) => item.place_id ?? "")
+    .filter((id) => id !== "" && checkedDrops.includes(id));
+  const toggleDrop = (placeId: string) =>
+    setCheckedDrops((prev) =>
+      prev.includes(placeId)
+        ? prev.filter((id) => id !== placeId)
+        : [...prev, placeId],
+    );
 
   const area = optimizerInput?.candidates?.find(
     (candidate) => candidate.id === variant?.hotel_recommendation?.default_area_id,
@@ -1260,23 +1284,52 @@ export function OptimizePage() {
                     </button>
                   </>
                 ) : null}
+                {/* One place to drop keeps its own button. More than one becomes
+                    tick-boxes and a single shared rebuild: the per-row rebuilds
+                    were the complaint, one press per place with a full build
+                    behind each. */}
                 <ul className="optimize-unfit-list" hidden={acceptRoutes.isPending}>
                   {unfit.map((item) => (
                     <li key={item.place_id}>
+                      {multiDrop ? (
+                        <input
+                          checked={checkedDrops.includes(item.place_id ?? "")}
+                          disabled={cutUnfitAndRebuild.isPending}
+                          onChange={() => toggleDrop(item.place_id ?? "")}
+                          type="checkbox"
+                          aria-label={placeName(item, language, item.name)}
+                        />
+                      ) : null}
                       <span className="optimize-unfit-name">
                         {placeName(item, language, item.name)}
                       </span>
                       <small>{copyFrom("OPTIMIZER_CODE_TEXT", item.reason, language)}</small>
-                      <button
-                        disabled={dropAndRebuild.isPending}
-                        onClick={() => dropAndRebuild.mutate(item.place_id)}
-                        type="button"
-                      >
-                        {copy("unfit_drop", language)}
-                      </button>
+                      {multiDrop ? null : (
+                        <button
+                          disabled={dropAndRebuild.isPending}
+                          onClick={() => dropAndRebuild.mutate(item.place_id)}
+                          type="button"
+                        >
+                          {copy("unfit_drop", language)}
+                        </button>
+                      )}
                     </li>
                   ))}
                 </ul>
+                {multiDrop ? (
+                  <div className="optimize-actions">
+                    <button
+                      className="setup-primary"
+                      disabled={building || selectedDrops.length === 0}
+                      onClick={() => cutUnfitAndRebuild.mutate(selectedDrops)}
+                      type="button"
+                    >
+                      {copyFormat("unfit_drop_selected", language, {
+                        count: selectedDrops.length,
+                      })}
+                    </button>
+                  </div>
+                ) : null}
               </section>
             );
           })()}

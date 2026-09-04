@@ -402,6 +402,48 @@ describe("OptimizePage", () => {
     expect(html).not.toContain("cannot fit any single day");
   });
 
+  /** Two places that do not fit, neither for want of days. */
+  function withTwoUnfit() {
+    const plan = structuredClone(PREVIEW);
+    const first = plan.proposal.data.variants![0].reconciliation[0];
+    const unfit = {
+      ...first,
+      status: "cannot_currently_fit",
+      reason: "CLOSED_AT_AVAILABLE_TIME",
+      consequence: "kept_in_unscheduled_shortlist",
+    };
+    plan.proposal.data.variants![0].reconciliation = [
+      unfit,
+      {
+        ...unfit,
+        place_id: "night_market",
+        name: "Night Market",
+        names: { en: "Night Market", th: "ตลาดกลางคืน" },
+      },
+    ];
+    return plan;
+  }
+
+  it("offers checkboxes and one shared rebuild when two places do not fit", () => {
+    // Reported as a rebuild per row: dropping three places meant three full
+    // builds. More than one unfit row becomes tick-boxes and a single button
+    // running the same multi-drop mutation the capacity branch already used.
+    const html = render(<OptimizePage />, "en", withTwoUnfit());
+
+    expect(html.match(/type="checkbox"/g) ?? []).toHaveLength(2);
+    expect(html).toContain("Drop selected and rebuild (0)");
+    expect(html).not.toContain(">Drop and rebuild<");
+    expectNoMissingCopy(html);
+  });
+
+  it("keeps the single drop button when only one place does not fit", () => {
+    const html = render(<OptimizePage />, "en", withReason("CLOSED_AT_AVAILABLE_TIME"));
+
+    expect(html).toContain(">Drop and rebuild<");
+    expect(html).not.toContain('type="checkbox"');
+    expectNoMissingCopy(html);
+  });
+
   /**
    * The wasted rebuild, and why it happened.
    *
