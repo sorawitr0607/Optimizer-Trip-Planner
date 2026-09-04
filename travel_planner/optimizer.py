@@ -855,8 +855,30 @@ def _build_schedules(
     hard_errors: list[dict[str, Any]] = []
     if snapshot["trip"].get("include_operational_timeline"):
         days.append(_pre_trip_day(snapshot))
-    for day, sequence in sequences.items():
-        built = _build_day(snapshot, day, sequence, config, route_index=route_index)
+    # Nights spent at a confirmed base, one per date: the night after day D-1
+    # is where day D starts, and the night after day D is where it must end.
+    # Absent by default, in which case every day builds exactly as before.
+    stays = snapshot.get("overnight_stays") or {}
+    dates = list(sequences)
+    for position, (day, sequence) in enumerate(sequences.items()):
+        start_base = stays.get(dates[position - 1]) if position else None
+        if (
+            start_base is not None
+            and route_index is not None
+            and start_base not in route_index["incident"]
+        ):
+            # An unrouted base cannot start the day: fall back to the derived
+            # inbound rather than failing every placement at once.
+            start_base = None
+        built = _build_day(
+            snapshot,
+            day,
+            sequence,
+            config,
+            route_index=route_index,
+            start_base=start_base,
+            end_base=stays.get(day),
+        )
         hard_errors.extend(built["hard_errors"])
         days.append(built["day"])
     return {"days": days, "hard_errors": hard_errors}
@@ -869,13 +891,23 @@ def _build_day(
     config: dict[str, Any],
     *,
     route_index: dict[str, Any] | None = None,
+    start_base: str | None = None,
+    end_base: str | None = None,
 ) -> dict[str, Any]:
+    """Build one day, optionally anchored at the overnight stay.
+
+    `start_base` replaces the derived inbound origin for the first leg;
+    `end_base` appends a travel leg home after the last visit and the meals.
+    Both default to `None`, which is exactly the old behaviour: days start
+    where the base derivation says and end wherever the last visit is.
+    """
+
     window = _window_for(snapshot, day)
     current = _minutes(window["start"])
     window_end = _minutes(window["end"])
     items: list[dict[str, Any]] = []
     hard_errors: list[dict[str, Any]] = []
-    previous: str | None = None
+    previous: str | None = start_base
 
     operational = _operational_layout(snapshot, day, window, sequence)
     for block in operational["prefix"]:
@@ -946,6 +978,20 @@ def _build_day(
             continue
         current = _append_wait(items, day, current, start, "meal_window")
         current = _append_operational(items, day, current, meal)
+
+    # The night after this day is spent at `end_base`: the day is not over
+    # until the owner is home. Without a stay the day ends wherever the last
+    # visit is, exactly as before -- and an empty day stays empty.
+    if end_base is not None and previous is not None and previous != end_base:
+        home = _return_to_base(
+            snapshot, day, previous, end_base, config, cursor=current,
+            body_end=body_end, route_index=route_index,
+        )
+        if home["error"]:
+            hard_errors.append(home["error"])
+        else:
+            items.extend(home["items"])
+            current = home["end"]
 
     if snapshot["trip"].get("include_operational_timeline"):
         # The trailing gap gets its own reason. It is the *evening*, not a hole the
@@ -1073,6 +1119,73 @@ def _candidate_segment(
         }
     )
     return {"items": segment, "end": end, "error": None}
+
+
+def _return_to_base(
+    snapshot: dict[str, Any],
+    day: str,
+    previous: str,
+    end_base: str,
+    config: dict[str, Any],
+    *,
+    cursor: int,
+    body_end: int,
+    route_index: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Close the day with a travel leg back to the overnight stay.
+
+    The same leg `_candidate_segment` builds, without the visit: a day that
+    cannot get its owner home is infeasible, so the existing route, departure
+    and window errors apply unchanged rather than stranding the night in
+    silence.
+    """
+
+    route = _best_route(snapshot, previous, end_base, route_index=route_index)
+    if route is None:
+        if snapshot["trip"].get("requires_route_evidence"):
+            return {
+                "items": [],
+                "end": cursor,
+                "error": {"code": "ROUTE_UNVERIFIED", "subject_id": end_base},
+            }
+        return {"items": [], "end": cursor, "error": None}
+    segment: list[dict[str, Any]] = []
+    departure = _minutes(route["departure_time"]) if route.get("departure_time") else cursor
+    if departure < cursor:
+        return {
+            "items": [],
+            "end": cursor,
+            "error": {"code": "MISSED_ROUTE_DEPARTURE", "subject_id": end_base},
+        }
+    cursor = _append_wait(segment, day, cursor, departure, "route_departure")
+    route_end = cursor + int(route.get("duration_minutes", 0))
+    if route_end > body_end:
+        return {
+            "items": [],
+            "end": cursor,
+            "error": {"code": "DAY_WINDOW_EXCEEDED", "subject_id": end_base},
+        }
+    travel_item = _travel_item(
+        day, cursor, route_end, previous, end_base, route, snapshot, route_index
+    )
+    segment.append(travel_item)
+    cursor = route_end
+    boarding = max(
+        int(route.get("boarding_buffer_minutes", 0)),
+        _required_boarding_buffer(snapshot, end_base, route_index),
+    )
+    travel_item["boarding_buffer_minutes"] = boarding
+    if boarding:
+        segment.append(_buffer_item(day, cursor, cursor + boarding, "boarding"))
+        cursor += boarding
+    if config["buffer_minutes"]:
+        segment.append(
+            _buffer_item(
+                day, cursor, cursor + config["buffer_minutes"], "transfer_contingency"
+            )
+        )
+        cursor += config["buffer_minutes"]
+    return {"items": segment, "end": cursor, "error": None}
 
 
 def _pre_trip_day(snapshot: dict[str, Any]) -> dict[str, Any]:
@@ -1311,6 +1424,25 @@ def _schedule_metrics(
         default=0,
     )
     warnings = []
+    daily_walking = [
+        sum(
+            item.get("walking_minutes", 0)
+            for item in day["items"]
+            if item["type"] == "travel"
+        )
+        for day in days
+    ]
+    walked_days = [total for total in daily_walking if total > 0]
+    # One day holding at least half of all the trip's walking is the Nov-17
+    # shape (181 of 323 minutes): the day is walkable on paper and miserable
+    # on foot, and the per-day comfort budget alone does not say which day is
+    # the outlier. Single-day trips and quiet totals cannot skew by definition.
+    if (
+        len(walked_days) > 1
+        and sum(walked_days) >= SKEW_WALKING_FLOOR_MINUTES
+        and max(walked_days) * 2 >= sum(walked_days)
+    ):
+        warnings.append("UNEVEN_WALKING_DAY")
     if meals or preparation or logistics:
         warnings.append("OPERATIONAL_DETAILS_REQUIRE_CONFIRMATION")
     for item in travel:
@@ -2248,6 +2380,12 @@ def _usable_route_statuses(snapshot: dict[str, Any]) -> set[str]:
         )
     )
 
+
+#: Trip walking minutes below which no day can hold a skew worth naming.
+#: 60 is the most generous whole-day plain-walking budget (the walk cap below
+#: derives from the same figure): a trip that walks less than one generous day
+#: in total is not an uneven trip however it splits.
+SKEW_WALKING_FLOOR_MINUTES = 60
 
 #: The longest walk that counts as a way to get between two places, in minutes.
 #:

@@ -136,6 +136,193 @@ class OptimizerCoreTest(unittest.TestCase):
         )
         self.assertIsNone(optimizer_module._best_inbound_route(snapshot, "visit"))
 
+    def _stay_snapshot(self) -> dict:
+        """One day, two visits, every leg a verified 10-minute transit ride."""
+
+        def leg(origin: str, destination: str) -> dict:
+            return {
+                "origin_id": origin,
+                "destination_id": destination,
+                "mode": "transit",
+                "status": "verified",
+                "duration_minutes": 10,
+                "walking_minutes": 2,
+            }
+
+        places = ["base", "a", "b"]
+        routes = [leg(a, b) for a in places for b in places if a != b]
+        return {
+            "candidates": [
+                {
+                    "id": place,
+                    "kind": "hotel_area" if place == "base" else "museum",
+                    "priority": "alternative" if place == "base" else "must_do",
+                    "duration_minutes": 60,
+                    "requires_opening_evidence": False,
+                    "requires_route_evidence": True,
+                }
+                for place in places
+            ],
+            "routes": routes,
+            "facts": [],
+            "locks": [],
+            "thresholds": {},
+            "travellers": [],
+            "trip": {
+                "usable_windows": [
+                    {"date": "2030-01-05", "start": "09:00", "end": "20:00"}
+                ],
+                "requires_route_evidence": True,
+            },
+        }
+
+    def _stay_day(self, snapshot: dict, **bases) -> dict:
+        ordered = [
+            item for item in snapshot["candidates"] if item["id"] in {"a", "b"}
+        ]
+        return optimizer_module._build_day(
+            snapshot,
+            "2030-01-05",
+            ordered,
+            optimizer_module.VARIANT_CONFIGS[0],
+            route_index=optimizer_module._route_index(snapshot),
+            **bases,
+        )
+
+    def test_an_anchored_day_starts_and_ends_at_the_base(self) -> None:
+        """Nights at a confirmed base anchor the days around them.
+
+        Days used to start at the base but end wherever the last visit was,
+        stranding the night. With stays, the first leg leaves the base and a
+        travel leg returns there after the last visit.
+        """
+
+        built = self._stay_day(
+            self._stay_snapshot(), start_base="base", end_base="base"
+        )
+
+        self.assertEqual([], built["hard_errors"])
+        kinds = [
+            (item["type"], item.get("origin_id"), item.get("destination_id"))
+            for item in built["day"]["items"]
+            if item["type"] == "travel"
+        ]
+        self.assertEqual(("base", "a"), (kinds[0][1], kinds[0][2]))
+        self.assertEqual(("b", "base"), (kinds[-1][1], kinds[-1][2]))
+        visits = [
+            item["subject_id"]
+            for item in built["day"]["items"]
+            if item["type"] == "visit"
+        ]
+        self.assertEqual(["a", "b"], visits)
+
+    def test_stays_thread_across_days_through_build_schedules(self) -> None:
+        """The night after day one is where day two starts.
+
+        `_build_schedules` derives both bases from `overnight_stays`, so days
+        chain through the base instead of each starting from scratch: day one
+        ends at home and day two leaves from there.
+        """
+
+        snapshot = self._stay_snapshot()
+        second = "2030-01-06"
+        snapshot["trip"]["usable_windows"].append(
+            {"date": second, "start": "09:00", "end": "20:00"}
+        )
+        snapshot["overnight_stays"] = {
+            "2030-01-05": "base",
+            second: "base",
+        }
+        by_id = {item["id"]: item for item in snapshot["candidates"]}
+        built = optimizer_module._build_schedules(
+            snapshot,
+            {"2030-01-05": [by_id["a"]], second: [by_id["b"]]},
+            optimizer_module.VARIANT_CONFIGS[0],
+            route_index=optimizer_module._route_index(snapshot),
+        )
+
+        self.assertEqual([], built["hard_errors"])
+        first, last = built["days"]
+        homeward = [
+            item for item in first["items"] if item["type"] == "travel"
+        ][-1]
+        outward = [
+            item for item in last["items"] if item["type"] == "travel"
+        ][0]
+        self.assertEqual("base", homeward["destination_id"])
+        self.assertEqual("base", outward["origin_id"])
+
+    def test_an_unanchored_day_ends_where_the_visits_end(self) -> None:
+        """No stays, no return leg: exactly the old behaviour."""
+
+        built = self._stay_day(self._stay_snapshot())
+
+        self.assertEqual([], built["hard_errors"])
+        last = built["day"]["items"][-1]
+        self.assertEqual("visit", last["type"])
+        self.assertEqual("b", last["subject_id"])
+
+    def test_a_day_that_cannot_get_home_is_infeasible_not_silent(self) -> None:
+        """An unroutable return is a hard error, not a stranded night."""
+
+        snapshot = self._stay_snapshot()
+        snapshot["routes"] = [
+            route
+            for route in snapshot["routes"]
+            if not (
+                route["origin_id"] == "b" and route["destination_id"] == "base"
+            )
+        ]
+        built = self._stay_day(
+            snapshot, start_base="base", end_base="base"
+        )
+
+        codes = [error["code"] for error in built["hard_errors"]]
+        self.assertIn("ROUTE_UNVERIFIED", codes)
+
+    def test_a_day_holding_half_the_trips_walking_warns(self) -> None:
+        """The Nov-17 shape: 181 of 323 walking minutes on one day."""
+
+        def day(walking: int) -> dict:
+            return {
+                "date": "2030-01-05",
+                "items": [
+                    {
+                        "type": "travel",
+                        "subject_id": "x->y",
+                        "origin_id": "x",
+                        "destination_id": "y",
+                        "date": "2030-01-05",
+                        "start": "09:00",
+                        "end": "10:00",
+                        "duration_minutes": walking,
+                        "walking_minutes": walking,
+                    },
+                    {
+                        "type": "visit",
+                        "subject_id": "y",
+                        "date": "2030-01-05",
+                        "start": "10:00",
+                        "end": "11:00",
+                        "duration_minutes": 60,
+                    },
+                ],
+            }
+
+        snapshot = {"facts": [], "thresholds": {}, "travellers": []}
+        skewed = optimizer_module._schedule_metrics(
+            snapshot, [day(181), day(70), day(72)]
+        )
+        self.assertIn("UNEVEN_WALKING_DAY", skewed["warnings"])
+        spread = optimizer_module._schedule_metrics(
+            snapshot, [day(100), day(100), day(100)]
+        )
+        self.assertNotIn("UNEVEN_WALKING_DAY", spread["warnings"])
+        single = optimizer_module._schedule_metrics(snapshot, [day(70)])
+        self.assertNotIn("UNEVEN_WALKING_DAY", single["warnings"])
+        quiet = optimizer_module._schedule_metrics(snapshot, [day(20), day(20)])
+        self.assertNotIn("UNEVEN_WALKING_DAY", quiet["warnings"])
+
     def test_a_google_closed_place_is_reconciled_never_scheduled(self) -> None:
         """NHK Studio Park was given 270 minutes on a 2026 plan, years after it
         shut. The free closure signal is display-only by design (P576 would take

@@ -2155,6 +2155,20 @@ class PlannerActions:
             "facts": facts,
             "routes": routes,
             "locks": [],
+            # Nights spent at the booked base, one per date: days start there
+            # and must return there. Only a confirmed base anchors days -- a
+            # provisional centroid stays the inbound fallback it already is,
+            # and ending days at a guess would invent an obligation. Omitted
+            # entirely when empty so unanchored snapshots stay byte-identical.
+            **(
+                {
+                    "overnight_stays": {
+                        day: "booked_accommodation_base" for day in local_dates
+                    }
+                }
+                if accommodation_base and local_dates
+                else {}
+            ),
             "weights": setup_payload.get("group_preference_weights", {}),
             "thresholds": _comfort_thresholds(owner),
             # `WF-039`. Each carries the measurement it was agreed at, so the optimizer

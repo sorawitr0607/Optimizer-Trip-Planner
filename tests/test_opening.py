@@ -642,6 +642,26 @@ class ExploreFirstEvidenceTest(unittest.TestCase):
         self.assertNotIn("booked_accommodation_base", ids)
         self.assertIn("provisional_accommodation_base", ids)
 
+    def test_a_confirmed_base_anchors_every_night(self) -> None:
+        """Days start at the booked base and must return there.
+
+        `overnight_stays` maps each date to the booked base, which is what
+        tells the scheduler to open and close days at the hotel instead of
+        stranding the night. Without a confirmed base the key is absent
+        entirely, so unanchored snapshots stay byte-identical.
+        """
+
+        bare = self.actions._optimizer_input(self.trip.trip_id)
+        self.assertNotIn("overnight_stays", bare)
+
+        self.actions.confirm_accommodation_base(self.trip.trip_id, "Test Hotel")
+        snapshot = self.actions._optimizer_input(self.trip.trip_id)
+
+        self.assertEqual(
+            {day: "booked_accommodation_base" for day in TRIP_DATES},
+            snapshot.get("overnight_stays"),
+        )
+
     def test_a_base_inside_the_city_is_left_alone(self) -> None:
         """The negative case: the guard must not drop a real hotel."""
 
