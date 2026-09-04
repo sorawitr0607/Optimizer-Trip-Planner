@@ -298,4 +298,17 @@ describe("RevisePage", () => {
     expect(html).toContain("never sets an opening time, route, fare or closure");
     expectNoMissingCopy(html);
   });
+
+  it("offers a proactive review behind the same paid opt-in, applying nothing itself", () => {
+    // Suggestions only: the review proposes nothing and applies nothing. Each
+    // suggestion goes through the normal draft flow if picked, so the static
+    // render carries the button and the promise, never a result.
+    const html = render(<RevisePage />, "en");
+
+    expect(html).toContain("Review this plan");
+    expect(html).toContain("Nothing is proposed or applied until you pick one");
+    expect(html).toContain("About US$0.005 per review");
+    expect(html).not.toContain("revise-review");
+    expectNoMissingCopy(html);
+  });
 });

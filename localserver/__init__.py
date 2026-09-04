@@ -153,6 +153,7 @@ ACTIONS = (
     "quick_actions",
     "propose_revision",
     "interpret_revision",
+    "review_plan",
     "get_revision_draft",
     "discard_revision_draft",
     "apply_revision",

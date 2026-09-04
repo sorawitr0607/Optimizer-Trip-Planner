@@ -16,7 +16,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode, urljoin, urlsplit
 from urllib.request import Request, urlopen
 
-from . import interpret
+from . import interpret, review
 
 
 class ProviderUnavailable(RuntimeError):
@@ -3661,6 +3661,7 @@ class OpenAIRevisionInterpreter:
     name = "openai"
     operation = "openai:interpret_revision"
     schema_version = 1
+    schema_name = "revision_operation"
     SYSTEM_PROMPT = (
         "You convert a traveller's revision request into exactly one supported "
         "operation. Understand English, Thai and mixed text. Choose only from "
@@ -3670,6 +3671,9 @@ class OpenAIRevisionInterpreter:
         "'unsupported' and a short reason. Ask for clarification only when two "
         "readings would change different days, locks or bookings."
     )
+
+    def request_schema(self) -> dict[str, Any]:
+        return interpret.response_schema()
 
     def __init__(self) -> None:
         self.url = os.environ.get(
@@ -3695,9 +3699,9 @@ class OpenAIRevisionInterpreter:
                 "text": {
                     "format": {
                         "type": "json_schema",
-                        "name": "revision_operation",
+                        "name": self.schema_name,
                         "strict": True,
-                        "schema": interpret.response_schema(),
+                        "schema": self.request_schema(),
                     }
                 },
             }
@@ -3771,3 +3775,34 @@ class OpenAIRevisionInterpreter:
         raise RevisionInterpretationUnavailable(
             "Interpretation returned no content", cause="invalid_reply"
         )
+
+
+class OpenAIPlanReviewer(OpenAIRevisionInterpreter):
+    """One structured-output call that reviews the active plan into suggestions.
+
+    The transport, key handling, retries and reply extraction are the
+    interpreter's; only the instruction, the schema and the priced operation
+    differ. The reply is a *list* of typed operations validated by
+    `review.validate_reply` before it is returned -- nothing here applies
+    anything, and the schema carries no time, date, route, hour, fare or
+    closure for the model to fill in.
+    """
+
+    operation = "openai:plan_review"
+    schema_version = 1
+    schema_name = "plan_review"
+    SYSTEM_PROMPT = (
+        "You review a traveller's itinerary and suggest up to six concrete "
+        "improvements. Understand English, Thai and mixed text. Choose only "
+        "from supported_operations and use only place_id values present in the "
+        "plan. Prefer real problems you can see in the slice: a venue whose "
+        "scheduled duration fits a full visit but reads like a brief stop, a "
+        "place that wastes a day's shape, a good placement worth pinning with "
+        "a lock. Give adjust_duration a concrete minutes value or skip it. "
+        "Never state an opening time, route, fare, closure or crowd level. "
+        "One sentence of rationale per suggestion. An already-good plan gets "
+        "an empty list, never filler."
+    )
+
+    def request_schema(self) -> dict[str, Any]:
+        return review.response_schema()

@@ -82,16 +82,9 @@ def response_schema() -> dict[str, Any]:
     }
 
 
-def build_payload(
-    *, plan: dict[str, Any], request_text: str, language: str
-) -> dict[str, Any]:
-    """The smallest slice that can answer the request, and nothing else."""
+def plan_slice(plan: dict[str, Any]) -> dict[str, Any]:
+    """The smallest plan slice a model may see, shared by interpret and review."""
 
-    text = str(request_text or "").strip()
-    if not text:
-        raise ValueError("A revision request needs some text")
-    if language not in LANGUAGES:
-        raise ValueError(f"Unsupported language: {language}")
     variant = plan.get("variant") or {}
     planner_input = plan.get("optimizer_input") or {}
     days = []
@@ -112,26 +105,38 @@ def build_payload(
                 ],
             }
         )
+    return {
+        "variant_id": variant.get("variant_id"),
+        "days": days,
+        "thresholds": dict(planner_input.get("thresholds") or {}),
+        "locks": [
+            str(lock.get("subject_id")) for lock in planner_input.get("locks") or []
+        ],
+        "warnings": sorted(set(variant.get("warnings") or [])),
+        "unscheduled": [
+            {"place_id": item["place_id"], "reason": item["reason"]}
+            for item in variant.get("reconciliation") or []
+            if item.get("status") == "cannot_currently_fit"
+        ],
+    }
+
+
+def build_payload(
+    *, plan: dict[str, Any], request_text: str, language: str
+) -> dict[str, Any]:
+    """The smallest slice that can answer the request, and nothing else."""
+
+    text = str(request_text or "").strip()
+    if not text:
+        raise ValueError("A revision request needs some text")
+    if language not in LANGUAGES:
+        raise ValueError(f"Unsupported language: {language}")
     payload = {
         "schema_version": SCHEMA_VERSION,
         "request": text,
         "app_language": language,
         "supported_operations": sorted(revision.OPERATIONS),
-        "plan": {
-            "variant_id": variant.get("variant_id"),
-            "days": days,
-            "thresholds": dict(planner_input.get("thresholds") or {}),
-            "locks": [
-                str(lock.get("subject_id"))
-                for lock in planner_input.get("locks") or []
-            ],
-            "warnings": sorted(set(variant.get("warnings") or [])),
-            "unscheduled": [
-                {"place_id": item["place_id"], "reason": item["reason"]}
-                for item in variant.get("reconciliation") or []
-                if item.get("status") == "cannot_currently_fit"
-            ],
-        },
+        "plan": plan_slice(plan),
     }
     _assert_clean(payload)
     return payload

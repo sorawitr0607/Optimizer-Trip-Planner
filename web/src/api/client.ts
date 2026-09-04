@@ -820,6 +820,18 @@ export interface RevisionInterpretationResult {
   draft: RevisionDraft | null;
 }
 
+export interface PlanReviewSuggestion {
+  operation: string;
+  arguments: { place_id: string; minutes?: number };
+  rationale: string | null;
+}
+
+export interface PlanReviewResult {
+  suggestions: PlanReviewSuggestion[];
+  dropped: number;
+  model?: string | null;
+}
+
 export interface RevisionRecord {
   created_at: string;
   operation: string;

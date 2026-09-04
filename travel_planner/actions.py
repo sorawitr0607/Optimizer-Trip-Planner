@@ -30,7 +30,7 @@ from .core import (
     new_setup_draft,
     new_trip,
 )
-from . import areas, checklist, climate, costs, destinations, exports, interpret, opening, revision, split, usage
+from . import areas, checklist, climate, costs, destinations, exports, interpret, opening, review, revision, split, usage
 from . import setup as setup_module
 from .discovery import build_candidate_catalog
 from .optimizer import (
@@ -49,6 +49,7 @@ from .providers import (
     GooglePlacesCardProvider,
     GooglePlacesOpeningHoursProvider,
     OpenAIOpeningWindowProvider,
+    OpenAIPlanReviewer,
     OpenAIRevisionInterpreter,
     OpenMeteoClimateProvider,
     RevisionInterpretationUnavailable,
@@ -206,6 +207,7 @@ class PlannerActions:
         hours_provider: Any = None,
         card_provider: Any = None,
         interpreter: Any = None,
+        reviewer: Any = None,
     ) -> None:
         self.store = open_store(database_path)
         # Additive and outside SCHEMA_VERSION, so a hosted database is not asked to
@@ -231,6 +233,7 @@ class PlannerActions:
         self.hours_provider = hours_provider
         self.card_provider = card_provider
         self.interpreter = interpreter
+        self.reviewer = reviewer
         self._job_queue: Any = None
         #: The candidate catalogue, kept by run id. See `get_latest_discovery`.
         self._discovery_memo: dict[str, DiscoveryRun] = {}
@@ -5036,6 +5039,61 @@ class PlannerActions:
             "unsupported_reason": None,
             "model": result.get("model"),
             "draft": draft,
+        }
+
+    def review_plan(
+        self, *, trip_id: str, language: str = "en"
+    ) -> dict[str, Any]:
+        """Ask the model to review the active plan into typed suggestions.
+
+        Suggestions only: every item is validated before it is returned, and
+        nothing here proposes, previews or applies anything. Each suggestion
+        goes through `propose_revision` if the owner wants it, so the draft,
+        consequence and validation gates all still stand between a model and
+        the plan. Every failure path leaves the active plan untouched.
+        """
+
+        active = self.store.get_active_plan(trip_id)
+        if active is None:
+            raise PlannerRefusal("no_active_plan")
+        payload = review.build_payload(
+            plan=active.snapshot.as_dict(), language=language
+        )
+        provider = self.reviewer or OpenAIPlanReviewer()
+        decision = self.check_paid_call(operation=provider.operation, count=1)
+        if not decision["allowed"]:
+            raise ProviderBudgetExceeded(decision["reason"])
+
+        try:
+            result = provider.interpret(payload)
+        except RevisionInterpretationUnavailable as error:
+            # Record the attempt so the ledger reconciles, then report the cause.
+            self.record_paid_call(
+                operation=provider.operation,
+                count=1,
+                trip_id=trip_id,
+                outcome="error",
+                detail={"cause": error.cause},
+            )
+            raise
+        self.record_paid_call(
+            operation=provider.operation,
+            count=1,
+            trip_id=trip_id,
+            detail={"model": str(result.get("model") or "")},
+        )
+
+        try:
+            validated = review.validate_reply(result["response"], payload=payload)
+        except ValueError as error:
+            raise RevisionInterpretationUnavailable(
+                str(error), cause="invalid_reply"
+            ) from None
+        return {
+            "suggestions": validated["suggestions"],
+            "dropped": validated["dropped"],
+            "model": result.get("model"),
+            "schema_version": result.get("schema_version"),
         }
 
     def get_revision_draft(self, trip_id: str) -> dict[str, Any] | None:

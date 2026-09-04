@@ -88,6 +88,11 @@ PRICES_USD = {
     "openai:interpret_revision": 0.0020,
     # Same basis, double the output allowance: this one returns prose, not one enum.
     "openai:explain_revision": 0.0040,
+    # One plan-review call. Same model and rate as the three above; the payload
+    # is the same plan slice `interpret` sends (~2k input tokens, US$0.0004) and
+    # the reply is a short list, but reasoning output dominates and varies --
+    # priced at several times the likely cost, like its neighbours.
+    "openai:plan_review": 0.0050,
 }
 
 

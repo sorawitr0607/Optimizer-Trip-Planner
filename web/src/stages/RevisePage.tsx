@@ -6,13 +6,15 @@ import {
   ApiError,
   rpc,
   type CandidateChoice,
+  type PlanReviewResult,
+  type PlanReviewSuggestion,
   type PlanVersionRecord,
   type QuickAction,
   type RevisionDraft,
   type RevisionInterpretationResult,
   type RevisionRecord,
 } from "../api/client";
-import { copy, copyFrom, type Language } from "../i18n/copy";
+import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
 import { placeNameFrom } from "../shared/names";
 
@@ -36,6 +38,7 @@ export function RevisePage() {
   const [requestText, setRequestText] = useState("");
   const [interpretation, setInterpretation] =
     useState<RevisionInterpretationResult | null>(null);
+  const [review, setReview] = useState<PlanReviewResult | null>(null);
 
   const offered = useQuery({
     queryKey: ["quick_actions", tripId],
@@ -148,6 +151,19 @@ export function RevisePage() {
     onError: failInterpretation,
   });
 
+  // Proactive review: suggestions only, each proposed one at a time through
+  // the normal draft flow, so consequences and the validation gate stand
+  // between the model and the plan exactly as for a typed request.
+  const reviewPlan = useMutation({
+    mutationFn: () =>
+      rpc<PlanReviewResult>("review_plan", { trip_id: tripId, language }),
+    onSuccess: (result) => {
+      setReview(result);
+      setFlash(null);
+    },
+    onError: failInterpretation,
+  });
+
   if (offered.isPending || draft.isPending) return <p>{copy("loading", language)}</p>;
   if (offered.isError) return <p className="field-error">⚠ {offered.error.message}</p>;
 
@@ -158,6 +174,18 @@ export function RevisePage() {
     ]),
   );
   const place = (placeId: string) => names.get(placeId) ?? placeId.slice(0, 16);
+
+  // A suggestion's validated arguments fit `propose_revision` as they are;
+  // only the wire shape needs building, never new semantics.
+  const proposeSuggestion = (item: PlanReviewSuggestion) => {
+    const args: Record<string, string | number> = {
+      place_id: item.arguments.place_id,
+    };
+    if (typeof item.arguments.minutes === "number") {
+      args.minutes = item.arguments.minutes;
+    }
+    propose.mutate({ operation: item.operation, arguments: args });
+  };
 
   const actions = offered.data;
   const pending = draft.data;
@@ -289,7 +317,55 @@ export function RevisePage() {
           >
             {copy("interpret", language)}
           </button>
+          {/* Proactive review, behind the same paid opt-in: one model call
+              returns typed suggestions, and each is proposed -- previewed with
+              consequences, then applied -- only if picked below. */}
+          <p className="setup-hint">{copy("plan_review_help", language)}</p>
+          <p className="setup-hint">{copy("plan_review_cost", language)}</p>
+          <button
+            className="setup-primary"
+            disabled={reviewPlan.isPending}
+            onClick={() => reviewPlan.mutate()}
+            type="button"
+          >
+            {copy("plan_review", language)}
+          </button>
         </fieldset>
+        {review ? (
+          <div aria-live="polite" className="revise-review">
+            {review.suggestions.length ? (
+              <ul className="revise-list">
+                {review.suggestions.map((item, index) => (
+                  <li key={`${item.operation}-${item.arguments.place_id}-${index}`}>
+                    <strong>{operationLabel(item.operation, language)}</strong>
+                    {` · ${place(item.arguments.place_id)}`}
+                    {item.operation === "adjust_duration" &&
+                    typeof item.arguments.minutes === "number"
+                      ? ` · ${item.arguments.minutes} ${copy("minutes", language)}`
+                      : null}
+                    {item.rationale ? <span> — {item.rationale}</span> : null}{" "}
+                    <button
+                      disabled={propose.isPending}
+                      onClick={() => proposeSuggestion(item)}
+                      type="button"
+                    >
+                      {copy("plan_review_propose", language)}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="setup-hint">{copy("plan_review_empty", language)}</p>
+            )}
+            {review.dropped > 0 ? (
+              <p className="setup-hint">
+                {copyFormat("plan_review_dropped", language, {
+                  count: review.dropped,
+                })}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         {interpretation && !interpretation.supported ? (
           <div aria-live="polite" className="revise-interpretation">
             <p className="money-note money-note-warn">
