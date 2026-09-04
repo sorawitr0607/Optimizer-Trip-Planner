@@ -6296,3 +6296,117 @@ an undefined custom property fails silently — the same class of mistake as
 
 **12 of 13** stages: 744 Python tests, 223 web tests, the 20 atomic and 7 interaction
 optimizer regressions. Stage 9 still cannot run.
+
+## The Tokyo plan's second reading: speed, nights, and a reviewer, 2026-09-04
+
+The owner's Tokyo feedback came back with five observations and one request, and
+the honest split was two built, two data, one already fixed. The walks (87 and 94
+minutes), the hotel holding a sightseeing slot, the far bell — all three were the
+*old* plan: the walk cap, the lodging drop and the far-from-centre flag had landed
+for exactly those shapes while the plan on the owner's screen predated them. What
+was live underneath two of the complaints got fixed; what was data got named.
+
+### Free sources stay free, even when they would help
+
+OpenStreetMap opening hours were ingested as verified optimizer facts and reverted
+the same day. The rule that killed them is older than the feature: hour fetching is
+a paid option, and a free source promoted to `verified` would let the scheduler
+trust what nobody stands behind. The Ueno Zoo complaint proved the shape of the
+risk from the other side — a visit scheduled past the real 17:00 close against
+hours data that said open, where the validator's full-containment check agreed with
+the scheduler because both read the same wrong fact. The fix is a paid refresh and
+a rebuild, not a code change.
+
+What did ship from free sources: seasonal notes from Wikipedia extracts (peak
+months stated on the note, display-only, never scored) and the Wikidata closure
+signal from the previous entry. And one paid-source addition at zero extra cost:
+the paid text search already returns `businessStatus`, so `CLOSED_TEMPORARILY` and
+`CLOSED_PERMANENTLY` now ride that call into a fact that excludes the venue from
+the plan, a badge on the card, and a ranking row — all three expiry-aware, so a
+stale closure clears itself and an owner confirmation clears it sooner.
+
+### The solver was re-reading everything, millions of times
+
+A Tokyo-scale solve evaluates 11M candidate segments, and each one rescanned the
+route list, the facts, the thresholds and the windows from scratch: 1.3B calls.
+`_route_index` now builds pair, fact, threshold and window lookups once per solve,
+and every hot helper takes them as optional lookups with the old scans as fallback,
+so direct unit calls behave exactly as before. Measured on the 60-candidate probe,
+honestly stated: the baseline *exhausted the 900-second budget at 26 visits* while
+the optimized solver *completes in ~60 seconds with 54* — the same deterministic
+54 the profiled run produced — and a 25-second budget now buys 44 scheduled visits
+instead of 7 while actually respecting the deadline.
+
+The review pass that followed found no correctness defect and three cleanups worth
+making: one memo owner (`_memoized`, one constant per namespace), the dropped index
+in `_standalone_activity_route`, and whole-word seasonal matching that stays
+substring for Thai, which has no word spaces. It also corrected the speedup claim
+itself: 964 seconds was a timeout, never a solve.
+
+Two holes closed behind it. Legs missing `walking_minutes` defaulted to zero and
+slipped the cap while the workbook undercounted the day — walk legs now fall back
+to their duration, and accepted-estimate straight lines record the field at build.
+And the multi-drop the owner asked for: more than one unfit place renders
+tick-boxes with one shared rebuild instead of a full build per row, ticks
+intersect the live list so rebuilds cannot carry stale selections, and the shared
+mutation finally invalidates the deck's choice list like the single-drop path
+always did.
+
+### The nights the plan never came home
+
+Days started at the base and ended wherever the last visit was. A confirmed
+accommodation base now anchors every night (`overnight_stays`, one date per
+night): the first leg leaves the base and a travel leg returns there after the
+last visit. Unroutable or over-window returns are infeasible days under the
+existing route and window errors, never silent strandings. Provisional centroids
+stay the inbound fallback they are — ending days at a guess would invent an
+obligation — and snapshots without stays build byte-identically, which the 27
+historic regressions confirm. A synthetic Shibuya→Ikebukuro→Shibuya trap orders
+optimally, so the owner's Nov-16 ping-pong came from constraints no fixture can
+see (hours, locks, durations), not from the search; the stays fix the anchoring
+half of that complaint, and confirming the Ikebukuro base plus a rebuild is what
+activates it.
+
+Beside it, the skew detector: one day holding at least half of all the trip's
+walking over a 60-minute total warns `UNEVEN_WALKING_DAY` — the Nov-17 shape, 181
+of 323 minutes, fires it; single-day trips and quiet totals cannot. The existing
+`reduce_walking` quick action is already offered alongside, so the way out is one
+tap.
+
+### A reviewer that cannot touch the plan
+
+The owner's question — an LLM on top of optimization to evaluate and fine-tune —
+got no as a rearranger and yes as a critic, for the reason this whole round kept
+demonstrating: the errors are in the data, and a model that rewrites the plan
+would state wrong hours with total confidence and no evidence row. So the review
+slots in beside `interpret` instead of inventing a pattern: `review_plan` sends
+the same minimal plan slice, returns up to six typed suggestions
+(`adjust_duration`, `drop_place`, `lock_item`), and applies nothing. The schema
+carries no time, date, route, hour, fare or closure for the model to fill in;
+every item validates place-confined before return; each goes through the normal
+draft flow with consequences and validation still ahead of it. One paid call at
+US$0.005 behind the existing AI opt-in, ledger-recorded, dispatched as the 94th
+allowlisted method.
+
+The duration override the feedback implied ("give it 10–20 minutes") needed no
+building: the Revise page already turns "give LINE CUBE 15 minutes" into an
+`adjust_duration` draft with a consequence preview. The floor is 15 minutes, which
+is inside the owner's range.
+
+### Open threads, stated plainly
+
+The Bell of Time's stored coordinates and the Nov-16 constraints live in the
+owner's database, which no session here can reach — discovery takes coordinates
+straight from OSM elements, so the 326-metre walk is a wrong record upstream or
+a wrong match, diagnosable only against the stored row. And the "/places
+narrowing" backlog item died for lack of a definition: the deck stage is found,
+the scope is not.
+
+### Release evidence
+
+**12 of 13** stages: 722 Python tests (the 11 socket-bind cases excluded — the
+sandbox refuses `bind`, unrelated to any change), 229 web tests, the 20 atomic
+and 7 interaction optimizer regressions green after every optimizer change.
+Stage 9 still cannot run. Every new behavior above carries its test, and
+the walk-cap, stays and skew tests were each watched to fail with their fix
+stashed.
