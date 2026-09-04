@@ -823,6 +823,11 @@ class AcceptedRouteEstimateTest(unittest.TestCase):
         # Both directions, because the optimizer asks for ordered pairs.
         self.assertEqual({("a", "b"), ("b", "a")},
                          {(leg["origin_id"], leg["destination_id"]) for leg in made})
+        # The whole leg is walking: without the field it reads as zero walking
+        # minutes downstream, exempting it from the walk cap and undercounting
+        # the day in the workbook.
+        for leg in made:
+            self.assertEqual(leg["duration_minutes"], leg["walking_minutes"])
 
     def test_a_walk_no_one_would_take_is_not_estimated_at_all(self) -> None:
         """The leg the owner reported as "definitely wrong".

@@ -2278,7 +2278,13 @@ MAX_USABLE_WALK_MINUTES = 60
 def _walkable(route: dict[str, Any]) -> bool:
     """Whether this leg's own walking is short enough to be a way of getting there."""
 
-    return int(route.get("walking_minutes", 0) or 0) <= MAX_USABLE_WALK_MINUTES
+    walking = route.get("walking_minutes")
+    if walking is None and str(route.get("mode")) == "walk":
+        # Owner-accepted straight lines and old snapshots predate the field;
+        # a walk leg's whole duration is walking, and defaulting it to zero
+        # would exempt any length from the cap.
+        walking = route.get("duration_minutes", 0)
+    return int(walking or 0) <= MAX_USABLE_WALK_MINUTES
 
 
 #: Memo sentinel: `None` is a real answer (no usable leg), so absence needs its own.

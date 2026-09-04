@@ -106,6 +106,36 @@ class OptimizerCoreTest(unittest.TestCase):
         self.assertEqual("transit", inbound["mode"])
         self.assertEqual(40, inbound["duration_minutes"])
 
+    def test_a_walk_leg_missing_its_walking_field_is_still_capped(self) -> None:
+        """Owner-accepted straight lines and old snapshots predate the field.
+
+        `_walkable` defaulted a missing `walking_minutes` to zero, exempting
+        any length from the cap. A walk leg's whole duration is walking, so a
+        field-less 87-minute walk -- the Tokyo plan's shape -- reaches no
+        reader, while a field-less transit leg is still judged on riding time.
+        """
+
+        field_less_walk = {
+            "origin_id": "base",
+            "destination_id": "visit",
+            "mode": "walk",
+            "status": "accepted_estimate",
+            "duration_minutes": 87,
+            "distance_m": 7200,
+        }
+        snapshot = {
+            "candidates": [{"id": "visit", "kind": "museum"}],
+            "routes": [field_less_walk],
+            # Explore preview: the only mode that admits `accepted_estimate`,
+            # so a `None` here means the cap refused it, not the status rule.
+            "trip": {"allow_provisional_assumptions": True},
+        }
+
+        self.assertIsNone(
+            optimizer_module._best_route(snapshot, "base", "visit")
+        )
+        self.assertIsNone(optimizer_module._best_inbound_route(snapshot, "visit"))
+
     def test_a_google_closed_place_is_reconciled_never_scheduled(self) -> None:
         """NHK Studio Park was given 270 minutes on a 2026 plan, years after it
         shut. The free closure signal is display-only by design (P576 would take

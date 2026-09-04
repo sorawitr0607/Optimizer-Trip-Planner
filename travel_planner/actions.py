@@ -363,6 +363,10 @@ class PlannerActions:
                         "status": "accepted_estimate",
                         "basis": "owner_accepted_straight_line",
                         "duration_minutes": walking,
+                        # The whole leg is walking. Without the field the leg
+                        # reads as zero walking minutes downstream: the walk
+                        # cap exempts it and the workbook undercounts the day.
+                        "walking_minutes": walking,
                         "distance_metres": round(metres),
                     }
                 )
