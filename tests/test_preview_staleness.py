@@ -105,7 +105,7 @@ class ProvisionalActivationTest(unittest.TestCase):
     preview.
     """
 
-    def _trip(self, directory, *, terminal: bool):
+    def _trip(self, directory, *, terminal: bool, comfort=()):
         from tests.test_setup_discovery import FakePlaceProvider
         from tests.test_opening import TRIP_DATES, FakeHoursProvider
         from tests.test_routes import FakeRouteProvider, FakeTimeZoneProvider
@@ -141,6 +141,7 @@ class ProvisionalActivationTest(unittest.TestCase):
             start_date=TRIP_DATES[0],
             end_date=TRIP_DATES[-1],
             accommodation_status="not_booked",
+            comfort=comfort,
             confirmed=True,
         )
         actions.discover_places(trip_id=trip.trip_id)
@@ -226,6 +227,44 @@ class ProvisionalActivationTest(unittest.TestCase):
             actions.generate_plan_preview(trip.trip_id)
 
             version = self._activate(actions, trip)
+            self.assertEqual(version, actions.get_active_plan(trip.trip_id))
+
+    def test_re_accepting_the_same_value_does_not_stale_the_preview(self):
+        """`updated_at` is provenance, not plan content.
+
+        The defect: `comfort_acceptances` rows carry `updated_at`, and the plan
+        digest hashed it. Every acceptance write -- including re-stamping the
+        identical agreement, which the resolve-all flow does on every press --
+        moved the digest with nothing material changed, so activation refused
+        `preview_stale` with `changed=['comfort_acceptances']` no matter how
+        often the owner optimized again. What is asserted is the residual: a
+        same-value re-accept after the last build still activates.
+        """
+
+        with TemporaryDirectory() as directory:
+            actions, trip = self._trip(
+                directory, terminal=True, comfort=["balanced_pace"]
+            )
+            actions.generate_plan_preview(trip.trip_id)
+            actions.accept_comfort_tradeoff(
+                trip_id=trip.trip_id, code="PLAIN_WALK_THRESHOLD", value=99
+            )
+            actions.generate_plan_preview(trip.trip_id)
+            # The identical agreement, re-stamped: `updated_at` moves, the
+            # agreement does not.
+            actions.accept_comfort_tradeoff(
+                trip_id=trip.trip_id, code="PLAIN_WALK_THRESHOLD", value=99
+            )
+            preview = actions.get_plan_preview(trip.trip_id)
+            activatable = [
+                item
+                for item in preview.proposal.as_dict()["variants"]
+                if item["status"] in {"provisional", "ready"}
+            ]
+            self.assertTrue(activatable, "no activatable variant to activate")
+            version = actions.activate_plan_preview(
+                trip_id=trip.trip_id, variant_id=activatable[0]["variant_id"]
+            )
             self.assertEqual(version, actions.get_active_plan(trip.trip_id))
 
     def test_the_guard_still_refuses_when_the_owner_changes_the_plan(self):

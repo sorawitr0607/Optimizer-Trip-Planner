@@ -5355,7 +5355,16 @@ def _simple_interval(value: Any) -> dict[str, str] | None:
 #: a preview built seconds earlier refused as stale: the free build path refreshes
 #: opening hours and routes, each write stamps a new `retrieved_at`, and the guard read
 #: a new timestamp as a changed plan.
-_VOLATILE_KEYS = frozenset({"retrieved_at", "expires_at", "fetched_at", "cached_at"})
+#: Provenance stamps, excluded from the plan digest at every depth. `updated_at`
+#: joined for `comfort_acceptances`: re-stamping the identical agreement -- which
+#: the resolve-all flow does on every press, unconditionally -- moved the digest
+#: with nothing material changed, so activation refused `preview_stale` with
+#: `changed=['comfort_acceptances']` no matter how often the owner optimized
+#: again. The agreement itself (`code`, `accepted_value`, `threshold_value`) is
+#: still digested, so a genuinely changed acceptance still invalidates a preview.
+_VOLATILE_KEYS = frozenset(
+    {"retrieved_at", "expires_at", "fetched_at", "cached_at", "updated_at"}
+)
 
 
 def _without_volatile(value: Any) -> Any:

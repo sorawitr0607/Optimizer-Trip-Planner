@@ -6501,3 +6501,33 @@ local gain, a hosted-deployment question, not this one. The per-build full
 re-rank is pure per-candidate arithmetic (milliseconds). Deck-card variance past
 the 4-worker fetch is provider latency tails; removing it needs caching (a
 staleness hazard) or money.
+
+## The acceptance that staled every preview after it, 2026-09-08
+
+Reported as "still can't click 'use this itinerary', still preview_stale" after
+the accept rounds. Reproduced the full owner loop green twice -- same process
+and cross-process digests identical, activation succeeding -- so the trigger was
+in the trip's data, not the mechanism. The card's section detail said
+`comfort_acceptances`, which selected it exactly.
+
+`comfort_acceptances` rows carry `updated_at`, and the plan digest hashed it.
+Every acceptance write re-stamps `now`, including re-stamping the identical
+agreement -- which the resolve-all flow does on every press, unconditionally, with
+no same-value early-out. So each accept moved the digest with nothing material
+changed, and no amount of optimizing again could get ahead of the next accept.
+
+`updated_at` is now the fifth volatile key: provenance, excluded from the digest
+at every depth like the other four. The agreement itself (`code`,
+`accepted_value`, `threshold_value`) is still digested, and
+`test_the_guard_still_refuses_when_the_owner_changes_the_plan` still passes, so
+a genuinely changed acceptance still invalidates a preview. Pinned by
+`test_re_accepting_the_same_value_does_not_stale_the_preview`, which failed
+first with exactly `changed=['comfort_acceptances']`.
+
+Audited alongside and cleared: candidate/route row ordering (`ORDER BY`
+everywhere, single writer per table), freeze round-trip (canonical JSON, neutral),
+cross-process determinism (digests identical under different `PYTHONHASHSEED`),
+`discovery.status` in scores (stable across the flow), route-estimate legs (no
+timestamps embedded), and the accept UI (single accept site, always rebuilds
+after). The wire carries the refusal detail on both local and hosted paths, so a
+future report's section name routes the same way this one did.
