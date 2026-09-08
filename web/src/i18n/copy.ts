@@ -24,6 +24,12 @@ export function copyFrom(table: CopyTable, code: string, language: Language): st
   return tables[table]?.[language]?.[code] ?? `⚠ ${code}`;
 }
 
+/** Whether a code has catalogue copy, so a screen can fall back to raw output
+ *  rather than the missing-copy marker for values the server may extend. */
+export function hasCopy(table: CopyTable, code: string, language: Language): boolean {
+  return tables[table]?.[language]?.[code] !== undefined;
+}
+
 export function copy(code: string, language: Language): string {
   return textTable[language][code] ?? `⚠ ${code}`;
 }

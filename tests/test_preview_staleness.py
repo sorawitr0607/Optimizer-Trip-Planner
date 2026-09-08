@@ -200,6 +200,34 @@ class ProvisionalActivationTest(unittest.TestCase):
             version = self._activate(actions, trip)
             self.assertEqual(version, actions.get_active_plan(trip.trip_id))
 
+    def test_accept_rebuild_activate_survives_the_owners_loop(self) -> None:
+        """Accept criteria, extend the dates, rebuild, activate.
+
+        The reported stuck state: "The plan preview is stale; optimize again"
+        with no way on. Each acceptance changes the frozen input honestly, so
+        only a rebuild after the *last* acceptance may activate -- and it must.
+        """
+
+        with TemporaryDirectory() as directory:
+            actions, trip = self._trip(directory, terminal=True)
+            actions.generate_plan_preview(trip.trip_id)
+            actions.accept_route_estimates(trip.trip_id)
+            actions.save_setup(
+                trip_id=trip.trip_id,
+                main_style=["sightseeing"],
+                start_date="2030-01-01",
+                end_date="2030-01-04",
+                accommodation_status="not_booked",
+                confirmed=True,
+            )
+            # Same order as the screen's resolve-all: new dates mean discovery
+            # belongs to an older setup until it runs again.
+            actions.discover_places(trip_id=trip.trip_id, force_refresh=False)
+            actions.generate_plan_preview(trip.trip_id)
+
+            version = self._activate(actions, trip)
+            self.assertEqual(version, actions.get_active_plan(trip.trip_id))
+
     def test_the_guard_still_refuses_when_the_owner_changes_the_plan(self):
         """The fix must not have disarmed the thing it lives inside."""
 

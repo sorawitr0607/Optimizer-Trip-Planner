@@ -25,7 +25,7 @@ import {
   type ComfortTradeoffReport,
   type SetupDraft,
 } from "../api/client";
-import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
+import { copy, copyFormat, copyFrom, hasCopy, type Language } from "../i18n/copy";
 import { Loading } from "../shared/Loading";
 import { useLanguage } from "../i18n/LanguageProvider";
 import { placeName } from "../shared/names";
@@ -147,6 +147,19 @@ export function BuildProgress({
   );
 }
 
+/**
+ * Which input sections the server names in a `preview_stale` refusal's detail,
+ * for display beside the rebuild button. Unknown future sections render under
+ * their own key rather than a missing-copy marker: the screen must name the
+ * change even for a section this client predates.
+ */
+export function changedSections(detail: unknown): string[] {
+  if (typeof detail !== "object" || detail === null) return [];
+  const changed = (detail as { changed?: unknown }).changed;
+  if (!Array.isArray(changed)) return [];
+  return changed.filter((item): item is string => typeof item === "string");
+}
+
 export function OptimizePage() {
   const { tripId = "" } = useParams();
   const { language } = useLanguage();
@@ -154,6 +167,16 @@ export function OptimizePage() {
   const queryClient = useQueryClient();
   const [variantId, setVariantId] = useState<string | null>(null);
   const [refusal, setRefusal] = useState<string | null>(null);
+  // Sections the server names when a preview went stale, so the refusal says
+  // what moved rather than only "optimize again". Written only by the activate
+  // path and read only while its refusal stands, so it cannot go stale itself.
+  const [staleSections, setStaleSections] = useState<string[]>([]);
+  // Days the resolve-all flow added on its own follow-up rounds, told back to
+  // the owner beside the rebuilt draft. Cleared whenever another build path
+  // runs, so it never describes a plan it did not produce.
+  const [autoAdded, setAutoAdded] = useState<{ days: number; places: number } | null>(
+    null,
+  );
   // Free is the default, and stays the default: this app's rule is that a control which
   // spends money says so before it is pressed, never that it is pressed by accident.
   // Once a draft exists the build controls are done asking. Leaving "Before you build"
@@ -251,11 +274,17 @@ export function OptimizePage() {
    * Invalidated together from here so a new build path cannot refresh one and forget the
    * other; that asymmetry is the whole bug.
    */
-  const invalidatePlan = () =>
-    Promise.all([
+  const invalidatePlan = () => {
+    // Any completed build retires the auto-added-days notice: it describes the
+    // resolve-all run that produced it, never a later plan. The resolve-all flow
+    // sets its notice after its last inner build settles, so this clearing runs
+    // first and the notice survives.
+    setAutoAdded(null);
+    return Promise.all([
       queryClient.invalidateQueries({ queryKey: ["plan_preview", tripId] }),
       queryClient.invalidateQueries({ queryKey: ["comfort_tradeoffs", tripId] }),
     ]);
+  };
   const resolveTerminal = () =>
     rpc("resolve_default_terminal", { trip_id: tripId }).catch(() => null);
   const acceptRoutes = useMutation({
@@ -480,13 +509,21 @@ export function OptimizePage() {
   });
 
   /**
-   * Every outstanding decision applied, then **one** rebuild.
+   * Every outstanding decision applied, then rebuilds until the draft settles.
    *
    * The reported journey was "build them again -> accept the criteria -> add the day ->
    * add the day". Each of those was a separate control that wrote its own change and
    * then rebuilt, so the owner paid a full build to discover each next condition -- even
    * though every one of them is already derivable from the draft in hand. `outstanding`
-   * above lists them; this applies them in order and builds once at the end.
+   * above lists them; this applies them in order and builds at the end.
+   *
+   * The follow-up rounds are the second half of that report: a fresh draft can
+   * shortlist *new* places nothing has added days for yet, which used to mean another
+   * manual round per place. So after each build this re-reads the fresh draft, and
+   * while its only remaining need is days for untried places (at most two extra
+   * rounds), it extends the dates and builds again -- then says what it added. Only
+   * days auto-extend: a new comfort overage needs fresh consent to its number, and
+   * anything else stops the loop and shows normally.
    *
    * Order is deliberate. The two acceptances are plain per-trip writes
    * (`comfort_acceptances` and a `trip_evidence` row), so neither is disturbed by the
@@ -501,6 +538,7 @@ export function OptimizePage() {
    */
   const resolveAllAndRebuild = useMutation({
     mutationFn: async () => {
+      setAutoAdded(null);
       for (const rule of selectedComfort) {
         await rpc("accept_comfort_tradeoff", {
           trip_id: tripId,
@@ -509,26 +547,65 @@ export function OptimizePage() {
         });
       }
       if (needsRoutes) await rpc("accept_route_estimates", { trip_id: tripId });
-      if (needsDays.length) {
-        const basics = stored.data?.snapshot.data.trip_basics;
-        const start = basics?.start_date;
-        const end = basics?.end_date;
+      const basics = stored.data?.snapshot.data.trip_basics;
+      const start = basics?.start_date;
+      let end = basics?.end_date;
+      let addedDays = 0;
+      let addedPlaces = 0;
+      const extendFor = async (
+        places: { place_id: string }[],
+        days: number,
+      ): Promise<void> => {
         if (!start || !end) throw new ApiError("setup_missing", {});
         // Written before the rebuild, so a place that comes back unplaced is known to
         // have had its day already and is recommended for removal rather than offered
         // the same button again. See `shared/dayExtension`.
-        rememberDaysAddedFor(tripId, needsDays.map((item) => item.place_id));
+        rememberDaysAddedFor(
+          tripId,
+          places.map((item) => item.place_id),
+        );
+        const newEnd = addDays(end, days);
         await rpc<SetupDraft>("save_setup", {
           trip_id: tripId,
-          ...wholeDraftWithDates(stored.data ?? null, start, addDays(end, extraDays)),
+          ...wholeDraftWithDates(stored.data ?? null, start, newEnd),
         });
         await rpc("discover_places", { trip_id: tripId, force_refresh: false });
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ["setup", tripId] }),
           queryClient.invalidateQueries({ queryKey: ["discovery", tripId] }),
         ]);
+        end = newEnd;
+        addedDays += days;
+        addedPlaces += places.length;
+      };
+      if (needsDays.length) await extendFor(needsDays, extraDays);
+      await autoResolveAndGenerate.mutateAsync();
+      for (let round = 0; round < 2; round++) {
+        const fresh = await rpc<PlanPreview | null>("get_plan_preview", {
+          trip_id: tripId,
+        });
+        const freshVariants = fresh?.proposal.data.variants ?? [];
+        const freshVariant =
+          freshVariants.find((item) => item.variant_id === variantId) ??
+          freshVariants[0];
+        if (!freshVariant) break;
+        const freshTradeoffs = await rpc<ComfortTradeoffReport>("comfort_tradeoffs", {
+          trip_id: tripId,
+          variant_id: freshVariant.variant_id,
+        });
+        const freshDecisions = planDecisions(
+          freshVariant,
+          freshTradeoffs.rules ?? [],
+          excludedComfort,
+          fresh?.optimizer_input.data.candidates,
+          placesDaysWereAddedFor(tripId),
+        );
+        if (!freshDecisions.needsDays.length) break;
+        await extendFor(freshDecisions.needsDays, freshDecisions.extraDays);
+        await autoResolveAndGenerate.mutateAsync();
       }
-      return autoResolveAndGenerate.mutateAsync();
+      if (addedDays > 0) setAutoAdded({ days: addedDays, places: addedPlaces });
+      return null;
     },
     onSuccess: async () => {
       setRefusal(null);
@@ -563,9 +640,19 @@ export function OptimizePage() {
     },
     // A stale input hash or an unready variant refuses with a stable code. It
     // has to be shown: activation is the one action that writes an immutable
-    // plan version, so a silent failure would read as success.
-    onError: (error) =>
-      setRefusal(error instanceof ApiError ? error.code : String(error)),
+    // plan version, so a silent failure would read as success. The stale case
+    // carries which sections moved, and those are shown beside the rebuild
+    // button -- the earlier report was "I don't know happen", which is what a
+    // bare "optimize again" earns.
+    onError: (error) => {
+      const code = error instanceof ApiError ? error.code : String(error);
+      setRefusal(code);
+      setStaleSections(
+        code === "preview_stale" && error instanceof ApiError
+          ? changedSections(error.detail)
+          : [],
+      );
+    },
   });
 
   if (choices.isPending || preview.isPending) return <Loading language={language} />;
@@ -664,6 +751,24 @@ export function OptimizePage() {
           <p className="field-error" aria-live="polite">
             ⚠ {copyFrom("OPTIMIZER_CODE_TEXT", refusal, language)}
           </p>
+          {refusal === "preview_stale" && staleSections.length > 0 ? (
+            <div className="optimizer-stale-sections">
+              <p className="setup-hint">{copy("preview_stale_what_changed", language)}</p>
+              <ul>
+                {staleSections.map((section) => (
+                  <li key={section}>
+                    {hasCopy("OPTIMIZER_CODE_TEXT", `preview_stale_${section}`, language)
+                      ? copyFrom(
+                          "OPTIMIZER_CODE_TEXT",
+                          `preview_stale_${section}`,
+                          language,
+                        )
+                      : section}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           <button
             type="button"
             className="setup-primary auto-resolve-retry-btn"
@@ -674,6 +779,14 @@ export function OptimizePage() {
           </button>
           <small className="setup-hint">{copy("auto_resolve_note", language)}</small>
         </div>
+      ) : null}
+      {autoAdded ? (
+        <p className="setup-flash" role="status">
+          {copyFormat("resolve_auto_added_days", language, {
+            days: autoAdded.days,
+            places: autoAdded.places,
+          })}
+        </p>
       ) : null}
 
       {/* Gone while the optimize runs. The panel asks a question whose answer has already

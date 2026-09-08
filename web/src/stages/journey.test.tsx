@@ -9,7 +9,7 @@ import type { Language } from "../i18n/copy";
 import { LanguageProvider } from "../i18n/LanguageProvider";
 import { AppShell } from "../shared/AppShell";
 import { ThemeProvider } from "../shared/ThemeProvider";
-import { OptimizePage } from "./OptimizePage";
+import { changedSections, OptimizePage } from "./OptimizePage";
 import { SetupPage } from "./SetupPage";
 import { TripsPage } from "./TripsPage";
 
@@ -442,6 +442,19 @@ describe("OptimizePage", () => {
     expect(html).toContain(">Drop and rebuild<");
     expect(html).not.toContain('type="checkbox"');
     expectNoMissingCopy(html);
+  });
+
+  it("reads the moved sections out of a stale refusal", () => {
+    // The server names what moved; the screen lists it beside the rebuild
+    // button instead of a bare "optimize again".
+    expect(changedSections({ changed: ["trip", "comfort_acceptances"] })).toEqual([
+      "trip",
+      "comfort_acceptances",
+    ]);
+    expect(changedSections({ changed: ["trip", 7, null] })).toEqual(["trip"]);
+    expect(changedSections({})).toEqual([]);
+    expect(changedSections(null)).toEqual([]);
+    expect(changedSections("stale")).toEqual([]);
   });
 
   /**

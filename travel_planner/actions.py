@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 import os
 from pathlib import Path
@@ -186,6 +187,109 @@ def _centre_of_boundary(boundary: list[float]) -> dict[str, float]:
         "latitude": round((south + north) / 2, 6),
         "longitude": round((west + east) / 2, 6),
     }
+
+
+#: How many places fetch their free summaries at once. The per-place chain is
+#: up to five sequential HTTP calls (encyclopedia, Commons catalogue, Commons
+#: names, nearby fallback, own-site fallback), so a look-ahead batch of ten
+#: spent the sum of fifty latencies with one slow website hanging the other
+#: nine. Four workers share that wait; wider would burst Wikimedia, which
+#: already answers this screen's bursts with HTTP 429.
+SUMMARY_FETCH_WORKERS = 4
+
+
+def _own_site_preview_with(venue_provider: Any, place: dict[str, Any]) -> dict[str, Any]:
+    """The place's own `og:image` and `og:description`, without touching `self`.
+
+    Split out of `PlannerActions._own_site_preview` so the fetch workers below
+    can call it: the store connection is single-threaded, but this chain is
+    pure network. Behaviour is identical; the method delegates.
+    """
+
+    website = str(place.get("website") or "").strip()
+    if not website.startswith("http"):
+        return {}
+    provider = venue_provider or VenueNoticeProvider()
+    preview = getattr(provider, "preview", None)
+    if preview is None:
+        return {}
+    try:
+        return preview(website) or {}
+    except (ProviderUnavailable, ValueError):
+        return {}
+
+
+def _fetch_summary_materials(
+    provider: Any,
+    venue_provider: Any,
+    place: dict[str, Any],
+    qid: str | None,
+    entity: Any,
+) -> dict[str, Any]:
+    """The network chain for one place. No store, no spend, thread-safe.
+
+    The exact calls the sequential loop made, in the exact order, returning
+    materials the main thread stores and counts. `executor.map` preserves input
+    order, so counts, error lists and store writes come out deterministic.
+    Unexpected exceptions propagate like the sequential loop's did: a place the
+    provider itself breaks on fails the whole fetch rather than vanishing.
+    """
+
+    if not qid:
+        catalogue = PlannerActions._catalogue_photos(provider, place)
+        photos = catalogue or PlannerActions._nearby_photos(provider, place)
+        own = {} if photos else _own_site_preview_with(venue_provider, place)
+        return {"kind": "bare", "catalogue": catalogue, "photos": photos, "own": own}
+    try:
+        value = (
+            provider.summary(qid, entity=entity)
+            if entity
+            else provider.summary(qid)
+        )
+    except ProviderUnavailable as error:
+        return {"kind": "error", "message": str(error)[:160]}
+    held = list(value.get("image_urls") or [])
+    if not held and value.get("image_url"):
+        held = [str(value["image_url"])]
+    catalogue = PlannerActions._catalogue_photos(provider, place)
+    held.extend(url for url in catalogue if url not in held)
+    named = [
+        url for url in PlannerActions._named_photos(provider, place) if url not in held
+    ]
+    if catalogue or named:
+        gallery = [*held, *named]
+        limit = int(getattr(provider, "gallery_limit", len(gallery)))
+        value = {
+            **value,
+            "image_urls": gallery[:limit],
+            "image_url": value.get("image_url") or gallery[0],
+        }
+    photos: list[str] = []
+    own: dict[str, Any] = {}
+    if not value.get("image_urls") and not value.get("image_url"):
+        photos = PlannerActions._nearby_photos(provider, place)
+        if not photos:
+            own = _own_site_preview_with(venue_provider, place)
+            if own.get("image_url"):
+                value = {
+                    **value,
+                    "image_url": own["image_url"],
+                    "image_urls": [own["image_url"]],
+                    "photo_from_own_site": True,
+                }
+            if own.get("text") and not (value.get("text") or {}).get("en"):
+                value = {
+                    **value,
+                    "text": {**(value.get("text") or {}), "en": own["text"]},
+                }
+        if photos:
+            value = {
+                **value,
+                "image_url": photos[0],
+                "image_urls": photos,
+                "photos_are_nearby": True,
+            }
+    return {"kind": "full", "value": value}
 
 
 class PlannerActions:
@@ -3310,6 +3414,12 @@ class PlannerActions:
                     prefetched = batch(qids)
                 except ProviderUnavailable:
                     prefetched = {}
+        # The network per place runs on workers; every write stays here. The store
+        # connection is single-threaded and spend is ledger order, so the pool
+        # returns materials and this loop stores and counts exactly as the
+        # sequential one did -- `map` preserves input order, so the outcome is
+        # deterministic.
+        jobs: list[tuple[dict[str, Any], str | None, Any]] = []
         for place in wanted:
             qid = (place.get("signals") or {}).get("wikidata")
             held = existing.get(place["place_id"])
@@ -3325,18 +3435,42 @@ class PlannerActions:
             if not force and fresh_enough:
                 cached += 1
                 continue
+            jobs.append(
+                (
+                    place,
+                    str(qid) if qid else None,
+                    prefetched.get(str(qid)) if qid else None,
+                )
+            )
+        venue_provider = self.venue_notice_provider or VenueNoticeProvider()
+        materials: list[dict[str, Any]] = []
+        if jobs:
+            with ThreadPoolExecutor(
+                max_workers=SUMMARY_FETCH_WORKERS,
+                thread_name_prefix="summary-fetch",
+            ) as pool:
+                materials = list(
+                    pool.map(
+                        lambda job: _fetch_summary_materials(
+                            provider, venue_provider, job[0], job[1], job[2]
+                        ),
+                        jobs,
+                    )
+                )
+        for (place, qid, _entity), found in zip(jobs, materials):
+            current_version = str(getattr(provider, "cache_version", ""))
             if not qid:
                 # No Wikidata id, which is 61% of the Taipei catalogue. These used to be
                 # skipped outright and so had no picture at all. Commons geosearch works
                 # from the coordinates every candidate has, and answers "what is
                 # photographed here" rather than "photographs of this place" -- stored
                 # flagged as nearby so the screen says which it is showing.
-                catalogue = self._catalogue_photos(provider, place)
-                photos = catalogue or self._nearby_photos(provider, place)
+                catalogue = found["catalogue"]
+                photos = found["photos"]
                 # Nothing on Commons either. These places — a tailor, a mini-golf, a
                 # martial arts club — are exactly the ones with no encyclopedic presence
                 # anywhere, and their own website is the only thing that is about them.
-                own = {} if photos else self._own_site_preview(place)
+                own = found["own"]
                 # Stored even when empty. Without a record the answer is not cached, so
                 # every page load asked Commons again for the same place and got the
                 # same nothing -- against a public service this app's own notice
@@ -3373,70 +3507,23 @@ class PlannerActions:
                     trip_id=trip_id,
                     detail={"place_id": place["place_id"], "qid": str(qid)},
                 )
-                # The prefetched entity is passed **only** when there is one. A provider
-                # with no `entities` never fills `prefetched`, so it is called exactly as
-                # before — which is what keeps every existing provider and every test
-                # fake working against the old one-argument signature.
-                entity = prefetched.get(str(qid))
-                value = (
-                    provider.summary(str(qid), entity=entity)
-                    if entity
-                    else provider.summary(str(qid))
-                )
             except ProviderBudgetExceeded:
                 raise
-            except ProviderUnavailable as error:
+            # The summary itself already ran on a worker, with the prefetched
+            # entity passed only when there is one. A provider with no
+            # `entities` never fills `prefetched`, so it is called exactly as
+            # before — which is what keeps every existing provider and every
+            # test fake working against the old one-argument signature.
+            if found["kind"] == "error":
                 failed += 1
-                message = str(error)[:160]
+                message = found["message"]
                 if message not in errors:
                     errors.append(message)
                 continue
-            # Commons files that name this place, appended to whatever the encyclopedia
-            # had. These are pictures *of* the place — the title names it and the
-            # coordinates agree — so they are gallery, not fallback, and a card with one
-            # P18 photograph stops being a card with one photograph.
-            # Seeded from `image_urls` or, where a provider returned only the one, from
-            # `image_url` — otherwise appending to an empty list quietly drops the
-            # encyclopedia's own photograph out of the gallery it should be leading.
-            held = list(value.get("image_urls") or [])
-            if not held and value.get("image_url"):
-                held = [str(value["image_url"])]
-            catalogue = self._catalogue_photos(provider, place)
-            held.extend(url for url in catalogue if url not in held)
-            named = [url for url in self._named_photos(provider, place) if url not in held]
-            if catalogue or named:
-                gallery = [*held, *named]
-                limit = int(getattr(provider, "gallery_limit", len(gallery)))
-                value = {
-                    **value,
-                    "image_urls": gallery[:limit],
-                    "image_url": value.get("image_url") or gallery[0],
-                }
-            # An article with no photograph is still a place with coordinates, so the
-            # nearby fallback applies here too rather than only where the id is missing.
-            if not value.get("image_urls") and not value.get("image_url"):
-                photos = self._nearby_photos(provider, place)
-                if not photos:
-                    # Every free encyclopedic source has now said nothing. The venue's own
-                    # site is the last one, and the only one that is about this place by
-                    # construction.
-                    own = self._own_site_preview(place)
-                    if own.get("image_url"):
-                        value = {
-                            **value,
-                            "image_url": own["image_url"],
-                            "image_urls": [own["image_url"]],
-                            "photo_from_own_site": True,
-                        }
-                    if own.get("text") and not (value.get("text") or {}).get("en"):
-                        value = {**value, "text": {**(value.get("text") or {}), "en": own["text"]}}
-                if photos:
-                    value = {
-                        **value,
-                        "image_url": photos[0],
-                        "image_urls": photos,
-                        "photos_are_nearby": True,
-                    }
+            value = found["value"]
+            # The gallery merge and the nearby/own-site fallbacks already ran on
+            # the worker inside `_fetch_summary_materials`; here the value is
+            # only stored and counted.
             self._store_summary(
                 trip_id=trip_id,
                 place_id=place["place_id"],
@@ -3510,17 +3597,9 @@ class PlannerActions:
         and a description; the rest were unreachable or had no tags. Never fatal.
         """
 
-        website = str(place.get("website") or "").strip()
-        if not website.startswith("http"):
-            return {}
-        provider = self.venue_notice_provider or VenueNoticeProvider()
-        preview = getattr(provider, "preview", None)
-        if preview is None:
-            return {}
-        try:
-            return preview(website) or {}
-        except (ProviderUnavailable, ValueError):
-            return {}
+        return _own_site_preview_with(
+            self.venue_notice_provider or VenueNoticeProvider(), place
+        )
 
     @staticmethod
     def _named_photos(provider: Any, place: dict[str, Any]) -> list[str]:

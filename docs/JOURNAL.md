@@ -6410,3 +6410,53 @@ and 7 interaction optimizer regressions green after every optimizer change.
 Stage 9 still cannot run. Every new behavior above carries its test, and
 the walk-cap, stays and skew tests were each watched to fail with their fix
 stashed.
+
+## The rounds that never ended, and the cards that hung, 2026-09-04
+
+Four reports in one message: swipe cards loading unevenly, builds still slow,
+criteria acceptance that should add days by itself, and a stale preview with no
+way on. The last two turned out to be one problem.
+
+### The stale preview was honest; the rounds around it were not
+
+A full accept → extend-dates → rebuild → activate round trip passes against the
+real actions, so no silent input mutation strands the owner — the guard fires
+only when something genuinely moved, and the test pins the order (accepts, then
+`save_setup`, then `discover_places`, which the date write stale-mates, then
+generate, then activate). What stranded the owner was the rounds: every build
+can surface *new* places nothing has added days for, each demanding another slow
+build to discover. So resolve-all now loops client-side over fresh server
+state: after each build it re-reads the draft, and while its only remaining
+need is days for untried places (two extra rounds at most), it extends the
+dates and builds again — then says what it added, in a flash note with the day and place
+counts. Only days auto-extend: a fresh comfort overage needs consent to its
+number, and anything else stops the loop and shows normally. The already-tried
+set still bounds it, so a place days did not help is recommended for removal,
+never re-offered.
+
+And the refusal finally says what moved. The server has named the changed
+sections all along; the screen discarded them and showed a bare "optimize
+again", which is what "I don't know happen" reads like. The card now lists each
+moved section in catalogue copy beside the rebuild button, with a raw-key
+fallback for sections a client predates.
+
+### Cards fetch four at a time now
+
+The deck's uneven cards were the summary chain: up to five sequential HTTP calls
+per place (encyclopedia, Commons catalogue, Commons names, nearby, own-site),
+times a look-ahead batch of ten, with one slow website hanging the other nine.
+Places fetch on four workers while the main thread keeps every write — the store
+connection is single-threaded, so the pool returns materials and `map` preserves
+input order, keeping counts, errors and store writes deterministic. The
+concurrency test watches workers overlap; the stored outcome is byte-identical
+either way.
+
+Builds proper are done getting faster without getting worse: three variant
+solves inside per-variant budgets that buy scheduled visits (44 versus 7 at 25
+seconds), plus one-time city measuring that caches. Anything further is a smaller
+budget, which is the owner's call, not an optimization.
+
+### Release evidence
+
+**12 of 13** stages: 724 Python tests (the 11 socket-bind cases excluded), 230
+web tests. Stage 9 still cannot run.

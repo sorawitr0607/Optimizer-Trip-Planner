@@ -1482,6 +1482,41 @@ class PlaceSummaryTest(unittest.TestCase):
             self.assertEqual({}, value["text"])
             self.assertIsNone(value["image_url"])
 
+    def test_places_fetch_concurrently_so_one_slow_place_does_not_hang_the_batch(self) -> None:
+        """The deck's uneven cards: one slow website used to hang the nine behind it.
+
+        Each place's chain ran to completion before the next place started, so a
+        batch cost the sum of its latencies. Workers share that wait while the
+        main thread keeps every write, and `map` preserves input order, so the
+        stored outcome is identical either way.
+        """
+
+        import threading
+        import time
+
+        state = {"live": 0, "peak": 0}
+        lock = threading.Lock()
+        real_summary = self.provider.summary
+
+        def slow_summary(qid: str) -> dict:
+            with lock:
+                state["live"] += 1
+                state["peak"] = max(state["peak"], state["live"])
+            try:
+                time.sleep(0.05)
+                return real_summary(qid)
+            finally:
+                with lock:
+                    state["live"] -= 1
+
+        self.provider.summary = slow_summary  # type: ignore[method-assign]
+        report = self.actions.refresh_place_summaries(self.trip.trip_id)
+
+        self.assertGreater(report["fetched"], 1)
+        self.assertGreaterEqual(state["peak"], 2)
+        stored = self.actions.list_place_summaries(self.trip.trip_id)
+        self.assertEqual(report["fetched"], len(stored))
+
 
 class NearbyPhotoMatchTest(unittest.TestCase):
     """A geosearch photograph is only used when its own file name names the place.
