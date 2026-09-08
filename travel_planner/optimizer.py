@@ -217,10 +217,11 @@ def optimize_trip(
     from the same variants whether it was supplied or not. It imports nothing, so the
     module stays as language-neutral and dependency-free as its docstring says.
 
-    It exists because this is the longest single call in the app — three variants at
-    roughly 21s each — and to anything watching from outside it is one opaque wait. A
-    variant *returning* is a fact, which is the only kind of progress this project
-    reports.
+    It exists because this is the longest single call in the app — three variants,
+    measured at ~1.6s each at Tokyo scale after the beam learned to reuse its own
+    builds (45.1s for the solve before that) — and to anything watching from
+    outside it is one opaque wait. A variant *returning* is a fact, which is the
+    only kind of progress this project reports.
     """
 
     _validate_input(snapshot)
@@ -777,8 +778,44 @@ def _insertion_search(
     # One pass for the whole search: every segment below used to scan the full
     # route list, which is where Tokyo-scale time went (a billion `dict.get`).
     route_index = _route_index(snapshot)
-    states: list[tuple[dict[str, list[dict[str, Any]]], set[str]]] = [
-        ({day: [] for day in dates}, set())
+    # One cache for the whole search: sibling states differ in one day, and every
+    # state is built twice (feasibility, then scoring), so almost every day build
+    # below is a repeat. The skip branch reuses its parent's days, which are in
+    # here from the previous round. Dies with this search; see `_build_schedules`.
+    day_cache: dict[tuple[str, tuple[int, ...]], tuple[Any, Any, Any, Any, Any]] = {}
+    # States carry their build: every scored state was just feasibility-built, so
+    # scoring reuses those days, metrics and edge counts instead of rebuilding.
+    # The triple is (sequences, skipped, built).
+    empty_sequences: dict[str, list[dict[str, Any]]] = {day: [] for day in dates}
+    day_pos = {day: index for index, day in enumerate(dates)}
+    # States carry everything scoring needs: (sequences, skipped, built,
+    # signature, day_keys). The signature is the objective's tiebreak term and
+    # the dedup key, and the day keys are the cache keys -- both derive from the
+    # parent's plus one insertion, so neither is ever rebuilt from scratch.
+    empty_signature = tuple((day, ()) for day in dates)
+    empty_keys = {day: (day, ()) for day in dates}
+    states: list[
+        tuple[
+            dict[str, list[dict[str, Any]]],
+            set[str],
+            dict[str, Any],
+            tuple[tuple[str, tuple[str, ...]], ...],
+            dict[str, tuple[str, tuple[int, ...]]],
+        ]
+    ] = [
+        (
+            empty_sequences,
+            set(),
+            _build_schedules(
+                snapshot,
+                empty_sequences,
+                config,
+                route_index=route_index,
+                day_cache=day_cache,
+            ),
+            empty_signature,
+            empty_keys,
+        )
     ]
     ordered = sorted(candidates, key=lambda item: _candidate_sort_key(snapshot, item))
     stopped = False
@@ -786,7 +823,7 @@ def _insertion_search(
         if monotonic() >= deadline:
             stopped = True
             remaining = {_candidate_id(item) for item in ordered[index:]}
-            sequences, skipped = states[0]
+            sequences, skipped, current_built, current_sig, current_keys = states[0]
             skipped = skipped | remaining
             # `WF-043`. The beam holds only the candidates reached so far, so cutting
             # out early can leave almost nothing scheduled -- measured at 0 of 13 on
@@ -794,53 +831,152 @@ def _insertion_search(
             # candidate and has no time limit, so it is a floor we can always afford.
             # Returning worse than a schedule already in hand is never right.
             greedy = _greedy_sequences(
-                snapshot, ordered, config, route_index=route_index
+                snapshot, ordered, config, route_index=route_index, day_cache=day_cache
+            )
+            full_stats = tuple(
+                (
+                    _candidate_id(item),
+                    item.get("priority", "interested"),
+                    float(item.get("score", 10)),
+                )
+                for item in ordered
+            )
+            greedy_built = _build_schedules(
+                snapshot, greedy[0], config, route_index=route_index, day_cache=day_cache
             )
             if _search_objective(
-                snapshot, greedy[0], greedy[1], ordered, config, route_index=route_index
+                snapshot,
+                greedy[0],
+                greedy[1],
+                ordered,
+                config,
+                route_index=route_index,
+                day_cache=day_cache,
+                processed_stats=full_stats,
+                prebuilt=greedy_built,
             ) < _search_objective(
-                snapshot, sequences, skipped, ordered, config, route_index=route_index
+                snapshot,
+                sequences,
+                skipped,
+                ordered,
+                config,
+                route_index=route_index,
+                day_cache=day_cache,
+                processed_stats=full_stats,
+                prebuilt=current_built,
             ):
-                sequences, skipped = greedy
-            states = [(sequences, skipped)]
+                sequences, skipped, current_built = greedy[0], greedy[1], greedy_built
+                current_sig = tuple(
+                    (day, tuple(_candidate_id(item) for item in sequences[day]))
+                    for day in dates
+                )
+                current_keys = {}
+            states = [(sequences, skipped, current_built, current_sig, current_keys)]
             break
         place_id = _candidate_id(candidate)
-        generated: list[tuple[dict[str, list[dict[str, Any]]], set[str]]] = []
-        for sequences, skipped in states:
+        generated: list[
+            tuple[
+                dict[str, list[dict[str, Any]]],
+                set[str],
+                dict[str, Any],
+                tuple[tuple[str, tuple[str, ...]], ...],
+                dict[str, tuple[str, tuple[int, ...]]],
+            ]
+        ] = []
+        for sequences, skipped, parent_built, parent_sig, parent_keys in states:
+            # Hoisted: the lock depends on the candidate, not the day, so looking
+            # it up per day re-scanned the lock list 7x per state for nothing.
+            lock = _lock_for(snapshot, place_id)
+            lock_date = lock.get("date") if lock else None
             for day in dates:
-                lock = _lock_for(snapshot, place_id)
-                if lock and lock.get("date") and lock["date"] != day:
+                if lock_date and lock_date != day:
                     continue
+                day_index = day_pos[day]
+                old_cids = parent_sig[day_index][1]
                 for position in range(len(sequences[day]) + 1):
                     proposal = {key: list(value) for key, value in sequences.items()}
                     proposal[day].insert(position, candidate)
+                    # The child's signature is the parent's with one id inserted:
+                    # exactly what a from-scratch rebuild would read, since the
+                    # proposal is the parent's lists with the same object inserted
+                    # at the same position. No `_candidate_id` calls at all.
+                    day_cids = old_cids[:position] + (place_id,) + old_cids[position:]
+                    child_sig = (
+                        parent_sig[:day_index]
+                        + ((day, day_cids),)
+                        + parent_sig[day_index + 1 :]
+                    )
+                    child_key = (day, tuple(map(id, proposal[day])))
+                    child_keys = dict(parent_keys)
+                    child_keys[day] = child_key
                     built = _build_schedules(
-                        snapshot, proposal, config, route_index=route_index
+                        snapshot,
+                        proposal,
+                        config,
+                        route_index=route_index,
+                        day_cache=day_cache,
+                        day_keys=child_keys,
                     )
                     if not built["hard_errors"]:
-                        generated.append((proposal, set(skipped)))
+                        generated.append((proposal, set(skipped), built, child_sig, child_keys))
             if candidate.get("priority", "interested") != "must_do":
-                generated.append((sequences, skipped | {place_id}))
+                generated.append(
+                    (sequences, skipped | {place_id}, parent_built, parent_sig, parent_keys)
+                )
         if not generated:
-            sequences, skipped = states[0]
-            generated = [(sequences, skipped | {place_id})]
+            sequences, skipped, parent_built, parent_sig, parent_keys = states[0]
+            generated = [
+                (sequences, skipped | {place_id}, parent_built, parent_sig, parent_keys)
+            ]
 
-        unique: dict[tuple[Any, ...], tuple[dict[str, list[dict[str, Any]]], set[str]]] = {}
+        unique: dict[
+            tuple[Any, ...],
+            tuple[
+                dict[str, list[dict[str, Any]]],
+                set[str],
+                dict[str, Any],
+                tuple[tuple[str, tuple[str, ...]], ...],
+                dict[str, tuple[str, tuple[int, ...]]],
+            ],
+        ] = {}
         for state in generated:
-            signature = tuple(
-                (day, tuple(_candidate_id(item) for item in state[0][day])) for day in dates
-            )
-            unique.setdefault(signature, state)
+            unique.setdefault(state[3], state)
         processed = ordered[: index + 1]
-        states = sorted(
-            unique.values(),
-            key=lambda state: _search_objective(
-                snapshot, state[0], state[1], processed, config, route_index=route_index
-            ),
-        )[:64]
+        # Read once per round, not once per state: the old scoring loops re-read
+        # every processed candidate's id, priority and score per state.
+        processed_stats = tuple(
+            (
+                _candidate_id(item),
+                item.get("priority", "interested"),
+                float(item.get("score", 10)),
+            )
+            for item in processed
+        )
+        # The signature is the objective's tiebreak term verbatim (same day order,
+        # same ids), so it is passed in rather than rebuilt per state -- and the
+        # missing-edge check reads its pairs directly for the same reason.
+        states = [
+            state
+            for _, state in sorted(
+                unique.items(),
+                key=lambda item: _search_objective(
+                    snapshot,
+                    item[1][0],
+                    item[1][1],
+                    processed,
+                    config,
+                    route_index=route_index,
+                    day_cache=day_cache,
+                    processed_stats=processed_stats,
+                    signature=item[0],
+                    prebuilt=item[1][2],
+                ),
+            )[:64]
+        ]
 
-    sequences, skipped = states[0]
-    built = _build_schedules(snapshot, sequences, config, route_index=route_index)
+    # The winner was feasibility-built when generated: return its days directly
+    # rather than rebuilding them a third time.
+    sequences, skipped, built, _, _ = states[0]
     return built["days"], skipped, stopped
 
 
@@ -850,11 +986,41 @@ def _build_schedules(
     config: dict[str, Any],
     *,
     route_index: dict[str, Any] | None = None,
+    day_cache: dict[tuple[str, tuple[int, ...]], tuple[Any, Any, Any, Any, Any]] | None = None,
+    day_keys: dict[str, tuple[str, tuple[int, ...]]] | None = None,
 ) -> dict[str, Any]:
+    """Build every day's schedule, reusing identical days from `day_cache`.
+
+    The beam builds the same day hundreds of times: sibling states differ in one
+    day's sequence, and every state is built once for feasibility and again for
+    scoring. A day's build depends only on its date and its candidate sequence
+    within one search -- snapshot, config, bases and index are fixed -- so the
+    cache key is `(date, tuple(map(id, sequence)))`. `id` is enough because the
+    search only ever moves the same candidate objects around and nothing mutates
+    them mid-search; it is also far cheaper than re-reading every id per lookup.
+
+    Cached entries alias: the same day dict is returned to every state that
+    built it. That is safe because everything downstream only reads built days
+    (metrics, validation, signatures all copy or scan), and the cache dies with
+    the search that owns it. When `day_cache` is None the old path runs exactly
+    as before, including no `day_metrics` key in the result.
+    """
+
     days = []
     hard_errors: list[dict[str, Any]] = []
+    facts = route_index.get("facts") if route_index else None
+    cached_metrics: list[dict[str, Any]] | None = [] if day_cache is not None else None
+    cached_edges: list[int] | None = [] if day_cache is not None else None
+    cached_visits: list[frozenset[str]] | None = [] if day_cache is not None else None
     if snapshot["trip"].get("include_operational_timeline"):
-        days.append(_pre_trip_day(snapshot))
+        prefix = _pre_trip_day(snapshot)
+        days.append(prefix)
+        if cached_metrics is not None:
+            cached_metrics.append(_day_metrics(snapshot, prefix, facts))
+        if cached_edges is not None:
+            cached_edges.append(0)
+        if cached_visits is not None:
+            cached_visits.append(frozenset())
     # Nights spent at a confirmed base, one per date: the night after day D-1
     # is where day D starts, and the night after day D is where it must end.
     # Absent by default, in which case every day builds exactly as before.
@@ -870,18 +1036,68 @@ def _build_schedules(
             # An unrouted base cannot start the day: fall back to the derived
             # inbound rather than failing every placement at once.
             start_base = None
-        built = _build_day(
-            snapshot,
-            day,
-            sequence,
-            config,
-            route_index=route_index,
-            start_base=start_base,
-            end_base=stays.get(day),
-        )
-        hard_errors.extend(built["hard_errors"])
-        days.append(built["day"])
-    return {"days": days, "hard_errors": hard_errors}
+        # Caller-supplied keys (the search carries the parent's and rebuilds only
+        # the changed day) avoid re-hashing every unchanged day per proposal.
+        key = day_keys.get(day) if day_keys is not None else None
+        if key is None and day_cache is not None:
+            key = (day, tuple(map(id, sequence)))
+        entry = day_cache.get(key) if day_cache is not None and key is not None else None
+        if entry is None:
+            built = _build_day(
+                snapshot,
+                day,
+                sequence,
+                config,
+                route_index=route_index,
+                start_base=start_base,
+                end_base=stays.get(day),
+            )
+            # The missing-edge count rides along so scoring never re-walks the
+            # pairs: same `_best_route` answers the old per-state check got, read
+            # once per distinct day instead of once per state.
+            edges = (
+                _day_missing_route_edges(snapshot, sequence, route_index)
+                if day_cache is not None
+                else None
+            )
+            day_object = built["day"]
+            day_share = (
+                _day_metrics(snapshot, day_object, facts)
+                if day_cache is not None
+                else None
+            )
+            entry = (
+                day_object,
+                built["hard_errors"],
+                day_share,
+                edges,
+                frozenset(
+                    item["subject_id"]
+                    for item in day_object["items"]
+                    if item["type"] == "visit"
+                )
+                if day_cache is not None
+                else None,
+            )
+            if day_cache is not None and key is not None:
+                day_cache[key] = entry
+        day_built, day_errors, day_metric, day_edges, day_visits = entry
+        hard_errors.extend(day_errors)
+        days.append(day_built)
+        if cached_metrics is not None and day_metric is not None:
+            cached_metrics.append(day_metric)
+        if cached_edges is not None and day_edges is not None:
+            cached_edges.append(day_edges)
+        if cached_visits is not None and day_visits is not None:
+            cached_visits.append(day_visits)
+    result: dict[str, Any] = {"days": days, "hard_errors": hard_errors}
+    if cached_metrics is not None:
+        result["day_metrics"] = cached_metrics
+    if cached_edges is not None:
+        result["day_edge_counts"] = cached_edges
+    if cached_visits is not None:
+        result["day_visit_sets"] = cached_visits
+    return result
 
 
 def _build_day(
@@ -902,7 +1118,11 @@ def _build_day(
     where the base derivation says and end wherever the last visit is.
     """
 
-    window = _window_for(snapshot, day)
+    # Through the index, not the snapshot scan: this runs per day per build,
+    # millions of times at Tokyo scale, and the windows are the same dict the
+    # index was built from. The miss path (operational timeline) is unchanged.
+    windows = route_index.get("windows") if route_index else None
+    window = _window_for(snapshot, day, windows)
     current = _minutes(window["start"])
     window_end = _minutes(window["end"])
     items: list[dict[str, Any]] = []
@@ -1376,25 +1596,33 @@ def _base_name(snapshot: dict[str, Any]) -> str:
     )
 
 
-def _schedule_metrics(
-    snapshot: dict[str, Any], days: list[dict[str, Any]]
+def _day_metrics(
+    snapshot: dict[str, Any],
+    day: dict[str, Any],
+    facts: dict[tuple[Any, Any], dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    visits = [item for day in days for item in day["items"] if item["type"] == "visit"]
-    travel = [item for day in days for item in day["items"] if item["type"] == "travel"]
+    """One day's additive share of `_schedule_metrics`, for the beam cache.
+
+    The beam scores every surviving state from full built days, and sibling
+    states differ in exactly one day's sequence -- so 6 of 7 days' metrics are
+    recomputed identically per state. Measured at Tokyo scale, the full-trip
+    pass ran 136k times for ~20 profiled seconds. A day's share depends only on
+    that day's built items, so it is computed once per distinct day and combined
+    by `_combine_day_metrics` into exactly what `_schedule_metrics` returns.
+    """
+
+    items = day.get("items", [])
+    travel = [item for item in items if item["type"] == "travel"]
+    visits = [item for item in items if item["type"] == "visit"]
     buffers = [
         item
-        for day in days
-        for item in day["items"]
+        for item in items
         if item["type"] == "buffer"
         and item.get("reason") not in {"free_time_or_rest", "day_ends_free"}
     ]
-    meals = [item for day in days for item in day["items"] if item["type"] == "meal"]
-    preparation = [
-        item for day in days for item in day["items"] if item["type"] == "preparation"
-    ]
-    logistics = [
-        item for day in days for item in day["items"] if item["type"] == "logistics"
-    ]
+    meals = [item for item in items if item["type"] == "meal"]
+    preparation = [item for item in items if item["type"] == "preparation"]
+    logistics = [item for item in items if item["type"] == "logistics"]
     plain_walk = sum(
         item.get("walking_minutes", 0)
         for item in travel
@@ -1405,58 +1633,19 @@ def _schedule_metrics(
         for item in travel
         if item.get("experience_evidence")
     )
-    # The comfort budget `plain_walking_minutes_per_day` is a **daily** figure, so
-    # it needs a daily measurement. `plain_walking_minutes` above is the whole-trip
-    # sum, and comparing that against a per-day budget makes an n-day trip n times
-    # too strict. It went unnoticed because 25 of the 27 historic fixtures are
-    # single-day and 2 are two-day, where the two readings very nearly coincide.
-    # Measured on the real 8-day Taipei trip: 147 minutes of plain walking over the
-    # whole trip -- about 18 a day -- failed a 60-a-day budget.
-    worst_plain_walk = max(
-        (
-            sum(
-                item.get("walking_minutes", 0)
-                for item in day["items"]
-                if item["type"] == "travel" and not item.get("experience_evidence")
-            )
-            for day in days
-        ),
-        default=0,
-    )
-    warnings = []
-    daily_walking = [
-        sum(
-            item.get("walking_minutes", 0)
-            for item in day["items"]
-            if item["type"] == "travel"
-        )
-        for day in days
-    ]
-    walked_days = [total for total in daily_walking if total > 0]
-    # One day holding at least half of all the trip's walking is the Nov-17
-    # shape (181 of 323 minutes): the day is walkable on paper and miserable
-    # on foot, and the per-day comfort budget alone does not say which day is
-    # the outlier. Single-day trips and quiet totals cannot skew by definition.
-    if (
-        len(walked_days) > 1
-        and sum(walked_days) >= SKEW_WALKING_FLOOR_MINUTES
-        and max(walked_days) * 2 >= sum(walked_days)
-    ):
-        warnings.append("UNEVEN_WALKING_DAY")
-    if meals or preparation or logistics:
-        warnings.append("OPERATIONAL_DETAILS_REQUIRE_CONFIRMATION")
+    item_warnings = []
     for item in travel:
         if item.get("claimed_experience") and not item.get("experience_supported_at_time"):
-            warnings.append("ROUTE_EXPERIENCE_NOT_SUPPORTED_AT_SCHEDULED_TIME")
-        if _crowd_risk(snapshot, item["destination_id"]) in {"medium", "high"}:
-            warnings.append("CROWD_CONSEQUENCE_VISIBLE")
+            item_warnings.append("ROUTE_EXPERIENCE_NOT_SUPPORTED_AT_SCHEDULED_TIME")
+        if _crowd_risk(snapshot, item["destination_id"], facts) in {"medium", "high"}:
+            item_warnings.append("CROWD_CONSEQUENCE_VISIBLE")
     return {
         "scheduled_visits": len(visits),
         "visit_minutes": sum(item["duration_minutes"] for item in visits),
         "travel_minutes": sum(item["duration_minutes"] for item in travel),
         "walking_minutes": sum(item.get("walking_minutes", 0) for item in travel),
         "plain_walking_minutes": plain_walk,
-        "maximum_plain_walking_minutes_per_day": worst_plain_walk,
+        "maximum_plain_walking_minutes_for_day": plain_walk,
         "rewarding_walking_minutes": rewarding_walk,
         "cycling_minutes": sum(
             item["duration_minutes"] for item in travel if item.get("mode") == "bike"
@@ -1471,12 +1660,121 @@ def _schedule_metrics(
         "maximum_boarding_buffer_minutes": max(
             (item.get("boarding_buffer_minutes", 0) for item in travel), default=0
         ),
-        "selected_modes": sorted({item.get("mode") for item in travel if item.get("mode")}),
+        "modes": {item.get("mode") for item in travel if item.get("mode")},
         "route_experience_value": sum(
             1 for item in travel if item.get("experience_supported_at_time")
         ),
-        "warnings": warnings,
+        "has_operational_content": bool(meals or preparation or logistics),
+        "has_visit": bool(visits),
+        "item_warnings": item_warnings,
     }
+
+
+def _combine_day_metrics(per_day: list[dict[str, Any]]) -> dict[str, Any]:
+    """Reassemble `_schedule_metrics` output from per-day shares, exactly.
+
+    Sums add, maxima take the maximum, modes union before the one sort, and the
+    warnings assemble in the historical order: the skew reading first, the
+    operational flag second, then each day's per-item fragments in day order --
+    which is the single trip-wide travel-item loop the old code ran, split at
+    day boundaries. Duplicates are kept, not deduplicated: the old loop appended
+    per item and so does this.
+    """
+
+    # One pass, not twenty: the old code ran a `sum`/`max` per metric over the
+    # trip-wide lists, and this runs 136k times per Tokyo-scale solve -- 2.7M
+    # `sum` calls alone. Same arithmetic, accumulated into locals.
+    scheduled_visits = 0
+    visit_minutes = 0
+    travel_minutes = 0
+    walking_minutes = 0
+    plain_walking_minutes = 0
+    worst_plain_walk = 0
+    rewarding_walking_minutes = 0
+    cycling_minutes = 0
+    buffer_minutes = 0
+    meal_minutes = 0
+    preparation_minutes = 0
+    logistics_minutes = 0
+    worst_leg = 0
+    worst_boarding = 0
+    experience_value = 0
+    walking_by_day = []
+    operational = False
+    modes: set[str] = set()
+    warnings = []
+    for entry in per_day:
+        scheduled_visits += entry["scheduled_visits"]
+        visit_minutes += entry["visit_minutes"]
+        travel_minutes += entry["travel_minutes"]
+        walking_minutes += entry["walking_minutes"]
+        plain_walking_minutes += entry["plain_walking_minutes"]
+        day_plain = entry["maximum_plain_walking_minutes_for_day"]
+        if day_plain > worst_plain_walk:
+            worst_plain_walk = day_plain
+        rewarding_walking_minutes += entry["rewarding_walking_minutes"]
+        cycling_minutes += entry["cycling_minutes"]
+        buffer_minutes += entry["buffer_minutes"]
+        meal_minutes += entry["meal_minutes"]
+        preparation_minutes += entry["preparation_minutes"]
+        logistics_minutes += entry["logistics_minutes"]
+        leg = entry["maximum_walking_minutes_per_leg"]
+        if leg > worst_leg:
+            worst_leg = leg
+        boarding = entry["maximum_boarding_buffer_minutes"]
+        if boarding > worst_boarding:
+            worst_boarding = boarding
+        experience_value += entry["route_experience_value"]
+        walking_by_day.append(entry["walking_minutes"])
+        operational = operational or entry["has_operational_content"]
+        modes |= entry["modes"]
+        warnings.extend(entry["item_warnings"])
+    # The comfort budget `plain_walking_minutes_per_day` is a **daily** figure, so
+    # it needs a daily measurement. `plain_walking_minutes` above is the whole-trip
+    # sum, and comparing that against a per-day budget makes an n-day trip n times
+    # too strict. It went unnoticed because 25 of the 27 historic fixtures are
+    # single-day and 2 are two-day, where the two readings very nearly coincide.
+    # Measured on the real 8-day Taipei trip: 147 minutes of plain walking over the
+    # whole trip -- about 18 a day -- failed a 60-a-day budget.
+    walked_days = [total for total in walking_by_day if total > 0]
+    # One day holding at least half of all the trip's walking is the Nov-17
+    # shape (181 of 323 minutes): the day is walkable on paper and miserable
+    # on foot, and the per-day comfort budget alone does not say which day is
+    # the outlier. Single-day trips and quiet totals cannot skew by definition.
+    skewed = (
+        len(walked_days) > 1
+        and sum(walked_days) >= SKEW_WALKING_FLOOR_MINUTES
+        and max(walked_days) * 2 >= sum(walked_days)
+    )
+    return {
+        "scheduled_visits": scheduled_visits,
+        "visit_minutes": visit_minutes,
+        "travel_minutes": travel_minutes,
+        "walking_minutes": walking_minutes,
+        "plain_walking_minutes": plain_walking_minutes,
+        "maximum_plain_walking_minutes_per_day": worst_plain_walk,
+        "rewarding_walking_minutes": rewarding_walking_minutes,
+        "cycling_minutes": cycling_minutes,
+        "buffer_minutes": buffer_minutes,
+        "meal_minutes": meal_minutes,
+        "preparation_minutes": preparation_minutes,
+        "logistics_minutes": logistics_minutes,
+        "maximum_walking_minutes_per_leg": worst_leg,
+        "maximum_boarding_buffer_minutes": worst_boarding,
+        "selected_modes": sorted(modes),
+        "route_experience_value": experience_value,
+        "warnings": (
+            (["UNEVEN_WALKING_DAY"] if skewed else [])
+            + (["OPERATIONAL_DETAILS_REQUIRE_CONFIRMATION"] if operational else [])
+            + warnings
+        ),
+    }
+
+
+def _schedule_metrics(
+    snapshot: dict[str, Any], days: list[dict[str, Any]]
+) -> dict[str, Any]:
+    return _combine_day_metrics([_day_metrics(snapshot, day) for day in days])
 
 
 def _objective(
@@ -1519,6 +1817,7 @@ def _greedy_sequences(
     config: dict[str, Any],
     *,
     route_index: dict[str, Any] | None = None,
+    day_cache: dict[tuple[str, tuple[int, ...]], tuple[Any, Any, Any, Any, Any]] | None = None,
 ) -> tuple[dict[str, list[dict[str, Any]]], set[str]]:
     """First-fit over every candidate: one cheap deterministic sweep, no time limit.
 
@@ -1547,7 +1846,7 @@ def _greedy_sequences(
             proposal = {key: list(value) for key, value in sequences.items()}
             proposal[day].append(candidate)
             if not _build_schedules(
-                snapshot, proposal, config, route_index=route_index
+                snapshot, proposal, config, route_index=route_index, day_cache=day_cache
             )["hard_errors"]:
                 sequences = proposal
                 placed = True
@@ -1564,17 +1863,15 @@ def _greedy_baseline(
     config: dict[str, Any],
 ) -> dict[str, Any]:
     route_index = _route_index(snapshot)
+    day_cache: dict[tuple[str, tuple[int, ...]], tuple[Any, Any, Any, Any, Any]] = {}
     sequences, skipped = _greedy_sequences(
-        snapshot, candidates, config, route_index=route_index
+        snapshot, candidates, config, route_index=route_index, day_cache=day_cache
     )
-    built = _build_schedules(snapshot, sequences, config, route_index=route_index)
-    metrics = _schedule_metrics(snapshot, built["days"])
-    scheduled = {
-        item["subject_id"]
-        for day in built["days"]
-        for item in day["items"]
-        if item["type"] == "visit"
-    }
+    built = _build_schedules(
+        snapshot, sequences, config, route_index=route_index, day_cache=day_cache
+    )
+    metrics = _combine_day_metrics(built["day_metrics"])
+    scheduled = set().union(*built["day_visit_sets"])
     objective = _objective(snapshot, selected, scheduled, metrics, [])
     objective["hard_violations"] = len(built["hard_errors"]) + _missing_route_edges(
         snapshot, sequences, route_index=route_index
@@ -1640,29 +1937,91 @@ def _search_objective(
     config: dict[str, Any],
     *,
     route_index: dict[str, Any] | None = None,
+    day_cache: dict[tuple[str, tuple[int, ...]], tuple[Any, Any, Any, Any, Any]] | None = None,
+    processed_stats: tuple[tuple[str, str, float], ...] | None = None,
+    signature: tuple[tuple[str, tuple[str, ...]], ...] | None = None,
+    prebuilt: dict[str, Any] | None = None,
 ) -> tuple[Any, ...]:
-    built = _build_schedules(snapshot, sequences, config, route_index=route_index)
-    metrics = _schedule_metrics(snapshot, built["days"])
-    missing_route_edges = _missing_route_edges(
-        snapshot, sequences, route_index=route_index
+    """Score one beam state. The optionals are caller-computed reuse.
+
+    `prebuilt` is the feasibility pass's `_build_schedules` result for these
+    exact sequences: the search builds every scored state once already, so
+    scoring reuses its days, per-day metrics and per-day edge counts instead of
+    rebuilding all three. `day_cache` is the fallback when no prebuilt is at
+    hand (all days still hit, since the feasibility pass warmed it).
+    `processed_stats` is `(id, priority, score)` per processed candidate,
+    computed once per insertion round instead of re-read per state -- the old
+    loops re-ran `_candidate_id` over all processed candidates per state (~16M
+    calls at Tokyo scale). `signature` is the state's dedup key, which is
+    exactly the tiebreak term, so it is passed in rather than rebuilt.
+    All default to the old derive-it-here path, so direct callers behave
+    exactly as before.
+    """
+
+    built = (
+        prebuilt
+        if prebuilt is not None
+        else _build_schedules(
+            snapshot, sequences, config, route_index=route_index, day_cache=day_cache
+        )
     )
-    scheduled = {
-        item["subject_id"]
-        for day in built["days"]
-        for item in day["items"]
-        if item["type"] == "visit"
-    }
+    day_metrics = built.get("day_metrics")
+    metrics = (
+        _combine_day_metrics(day_metrics)
+        if day_metrics is not None
+        else _schedule_metrics(snapshot, built["days"])
+    )
+    edge_counts = built.get("day_edge_counts")
+    if edge_counts is not None:
+        missing_route_edges = sum(edge_counts)
+    elif signature is not None:
+        missing_route_edges = _missing_route_edges_by_ids(
+            snapshot, signature, route_index=route_index
+        )
+    else:
+        missing_route_edges = _missing_route_edges(
+            snapshot, sequences, route_index=route_index
+        )
+    empty_days = (
+        sum(1 for entry in day_metrics if not entry["has_visit"])
+        if day_metrics is not None
+        else _empty_day_count(built["days"])
+    )
+    # Union of the cached per-day visit sets: one C-speed call instead of a
+    # comprehension over every item of every day, per scored state.
+    visit_sets = built.get("day_visit_sets")
+    scheduled = (
+        set().union(*visit_sets)
+        if visit_sets
+        else {
+            item["subject_id"]
+            for day in built["days"]
+            for item in day["items"]
+            if item["type"] == "visit"
+        }
+    )
+    if processed_stats is None:
+        processed_stats = tuple(
+            (
+                _candidate_id(item),
+                item.get("priority", "interested"),
+                float(item.get("score", 10)),
+            )
+            for item in processed
+        )
     must_missing = sum(
-        1
-        for item in processed
-        if item.get("priority") == "must_do" and _candidate_id(item) not in scheduled
+        1 for cid, priority, _ in processed_stats if priority == "must_do" and cid not in scheduled
     )
-    soft = _comfort_violation_count(snapshot, metrics)
-    experience = sum(float(item.get("score", 10)) for item in processed if _candidate_id(item) in scheduled)
+    soft = _comfort_violation_count(
+        snapshot,
+        metrics,
+        thresholds=route_index.get("thresholds") if route_index else None,
+    )
+    experience = sum(score for cid, _, score in processed_stats if cid in scheduled)
     lower = sum(
         1
-        for item in processed
-        if _candidate_id(item) in scheduled and item.get("priority", "interested") != "must_do"
+        for cid, priority, _ in processed_stats
+        if cid in scheduled and priority != "must_do"
     )
     return (
         len(built["hard_errors"]),
@@ -1674,15 +2033,20 @@ def _search_objective(
         # amount of it — see `EMPTY_DAY_MINUTES`. Ranked above this are the things no
         # amount of convenience may buy: a broken rule, a missing route, a must-do left
         # out, an unapproved comfort overage, a place dropped.
-        metrics["travel_minutes"]
-        + EMPTY_DAY_MINUTES * _empty_day_count(built["days"]),
+        metrics["travel_minutes"] + EMPTY_DAY_MINUTES * empty_days,
         -lower,
         len(skipped),
-        tuple(tuple(_candidate_id(item) for item in sequences[day]) for day in sequences),
+        tuple(cids for _, cids in signature)
+        if signature is not None
+        else tuple(tuple(_candidate_id(item) for item in sequences[day]) for day in sequences),
     )
 
 
-def _comfort_violation_count(snapshot: dict[str, Any], metrics: dict[str, Any]) -> int:
+def _comfort_violation_count(
+    snapshot: dict[str, Any],
+    metrics: dict[str, Any],
+    thresholds: dict[str, Any] | None = None,
+) -> int:
     """Soft violations, which an acceptance also clears. `WF-039`.
 
     Suppressing only the hard error would leave the objective still counting the
@@ -1692,7 +2056,18 @@ def _comfort_violation_count(snapshot: dict[str, Any], metrics: dict[str, Any]) 
     that reason. Consent has to reach both readings or it only half works.
     """
 
-    thresholds = _thresholds(snapshot)
+    # The search scores 136k states at Tokyo scale and the thresholds never change
+    # within a solve: the caller passes the index's copy instead of rebuilding the
+    # dict (plus the traveller loop) per state. `_route_index["thresholds"]` is
+    # `_thresholds(snapshot)`, so the reading is identical.
+    if thresholds is None:
+        thresholds = _thresholds(snapshot)
+    # No budgets and no acceptances means no rule can fire: every cap defaults to
+    # 10**9 and every reading is minutes or counts, orders of magnitude below it.
+    # The default trip (nothing set) scores 129k beam states at Tokyo scale, so
+    # this one check skips a million rule evaluations per solve.
+    if not thresholds and not snapshot.get("comfort_acceptances"):
+        return 0
     count = 0
     for rule in COMFORT_RULES:
         measured = float(
@@ -2604,6 +2979,57 @@ def _missing_route_edges(
         and not _best_route(
             snapshot, _candidate_id(left), _candidate_id(right), route_index=route_index
         )
+    )
+
+
+def _day_missing_route_edges(
+    snapshot: dict[str, Any],
+    sequence: list[dict[str, Any]],
+    route_index: dict[str, Any] | None = None,
+) -> int:
+    """One day's share of `_missing_route_edges`, computed at build time."""
+
+    if not snapshot.get("routes"):
+        return 0
+    if route_index is None:
+        route_index = _route_index(snapshot)
+    incident = route_index["incident"]
+    cids = [_candidate_id(item) for item in sequence]
+    return sum(
+        1
+        for left, right in zip(cids, cids[1:])
+        if left in incident
+        and right in incident
+        and not _best_route(snapshot, left, right, route_index=route_index)
+    )
+
+
+def _missing_route_edges_by_ids(
+    snapshot: dict[str, Any],
+    signature: tuple[tuple[str, tuple[str, ...]], ...],
+    *,
+    route_index: dict[str, Any] | None = None,
+) -> int:
+    """`_missing_route_edges` over a beam state's dedup signature.
+
+    The signature already holds every day's candidate ids in order, which is all
+    the edge check reads from the sequences -- so scoring reuses it instead of
+    re-reading every candidate id per state (~11M `_candidate_id` calls at Tokyo
+    scale). Identical count: same pairs, same order, same `_best_route` answers.
+    """
+
+    if not snapshot.get("routes"):
+        return 0
+    if route_index is None:
+        route_index = _route_index(snapshot)
+    incident = route_index["incident"]
+    return sum(
+        1
+        for _, cids in signature
+        for left, right in zip(cids, cids[1:])
+        if left in incident
+        and right in incident
+        and not _best_route(snapshot, left, right, route_index=route_index)
     )
 
 

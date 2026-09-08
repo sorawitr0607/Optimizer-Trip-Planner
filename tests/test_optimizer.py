@@ -1000,6 +1000,115 @@ class OptimizerCoreTest(unittest.TestCase):
                 f"{variant['variant_id']} left a day with only free time: {per_day}",
             )
 
+    def test_per_day_metrics_reassemble_the_trip_metrics_exactly(self) -> None:
+        """The beam cache splits metrics per day; the split must be invisible.
+
+        `_combine_day_metrics` over per-day shares has to equal `_schedule_metrics`
+        bit for bit -- sums, maxima, mode order, warning order and duplicates --
+        or the cache changes which state the beam keeps. What is asserted is the
+        residual: on a solved week, the reassembled metrics equal the variant's.
+        """
+
+        result = optimize_trip(self._ordinary_week())
+        for variant in result["variants"]:
+            days = variant["days"]
+            per_day = [
+                optimizer_module._day_metrics(self._ordinary_week(), day)
+                for day in days
+            ]
+            self.assertEqual(
+                variant["metrics"],
+                optimizer_module._combine_day_metrics(per_day),
+                f"{variant['variant_id']} metrics changed under the split",
+            )
+
+    def test_the_day_cache_returns_the_same_build_it_skips(self) -> None:
+        """A cached day is reuse, not a second answer.
+
+        The second `_build_schedules` over the same sequences must return equal
+        days and errors while building nothing new -- otherwise the beam scores a
+        different schedule than the one feasibility approved. What is asserted is
+        the residual: cache on versus cache off agree, and the second cached call
+        adds no entries.
+        """
+
+        snapshot = self._ordinary_week()
+        config = {"id": "best_balance", "duration": "ideal", "buffer_minutes": 10}
+        index = optimizer_module._route_index(snapshot)
+        sequences = {
+            day: [] for day in [window["date"] for window in snapshot["trip"]["usable_windows"]]
+        }
+        plain = optimizer_module._build_schedules(
+            snapshot, sequences, config, route_index=index
+        )
+        self.assertNotIn("day_metrics", plain)
+        cache: dict = {}
+        first = optimizer_module._build_schedules(
+            snapshot, sequences, config, route_index=index, day_cache=cache
+        )
+        self.assertEqual(plain["days"], first["days"])
+        self.assertEqual(plain["hard_errors"], first["hard_errors"])
+        size_after_first = len(cache)
+        self.assertGreater(size_after_first, 0)
+        second = optimizer_module._build_schedules(
+            snapshot, sequences, config, route_index=index, day_cache=cache
+        )
+        self.assertEqual(first["days"], second["days"])
+        self.assertEqual(len(cache), size_after_first)
+
+    def test_scoring_reuse_matches_scoring_from_scratch(self) -> None:
+        """`prebuilt`, stats and signature are shortcuts, not new readings.
+
+        `_search_objective` with every reuse optional set must return exactly the
+        tuple the from-scratch path returns, or the beam sorts by a different
+        order than the one the tests pin. What is asserted is the residual: both
+        paths agree on a real built state.
+        """
+
+        snapshot = self._ordinary_week()
+        config = {"id": "best_balance", "duration": "ideal", "buffer_minutes": 10}
+        index = optimizer_module._route_index(snapshot)
+        dates = [window["date"] for window in snapshot["trip"]["usable_windows"]]
+        ordered = sorted(
+            [item for item in snapshot["candidates"] if item.get("id") != "base"],
+            key=lambda item: optimizer_module._candidate_sort_key(snapshot, item),
+        )
+        sequences = {day: [] for day in dates}
+        sequences[dates[0]] = ordered[:3]
+        cache: dict = {}
+        prebuilt = optimizer_module._build_schedules(
+            snapshot, sequences, config, route_index=index, day_cache=cache
+        )
+        processed = ordered[:3]
+        stats = tuple(
+            (
+                optimizer_module._candidate_id(item),
+                item.get("priority", "interested"),
+                float(item.get("score", 10)),
+            )
+            for item in processed
+        )
+        signature = tuple(
+            (day, tuple(optimizer_module._candidate_id(item) for item in sequences[day]))
+            for day in dates
+        )
+        reused = optimizer_module._search_objective(
+            snapshot,
+            sequences,
+            set(),
+            processed,
+            config,
+            route_index=index,
+            day_cache=cache,
+            processed_stats=stats,
+            signature=signature,
+            prebuilt=prebuilt,
+        )
+        fresh = optimizer_module._search_objective(
+            snapshot, sequences, set(), processed, config, route_index=index
+        )
+        self.assertEqual(fresh, reused)
+
     @staticmethod
     def _week_with(*, impossible_minutes: int | None) -> dict:
         """Four ordinary places, and optionally one that no day could hold."""

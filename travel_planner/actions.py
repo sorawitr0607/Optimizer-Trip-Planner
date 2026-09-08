@@ -1747,9 +1747,10 @@ class PlannerActions:
 
         The same contract as `discover_places`: a count of things that have
         *returned*, supplied only by the worker. This is the longest single call in
-        the app — three variants at roughly 21s each, and the whole of it used to be
-        one silent wait on every build path except `/optimize`'s auto-resolve, which
-        could count its own four calls.
+        the app — three variants, ~1.6s each at Tokyo scale since the beam reuses
+        its builds rather than rebuilding every state twice — and the whole of it
+        used to be one silent wait on every build path except `/optimize`'s
+        auto-resolve, which could count its own four calls.
 
             1-3  that many variants have been solved
             4    the draft is stored

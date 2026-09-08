@@ -6451,12 +6451,53 @@ input order, keeping counts, errors and store writes deterministic. The
 concurrency test watches workers overlap; the stored outcome is byte-identical
 either way.
 
-Builds proper are done getting faster without getting worse: three variant
+Builds proper were called done getting faster without getting worse: three variant
 solves inside per-variant budgets that buy scheduled visits (44 versus 7 at 25
-seconds), plus one-time city measuring that caches. Anything further is a smaller
-budget, which is the owner's call, not an optimization.
+seconds), plus one-time city measuring that caches. That call was wrong --
+see "The search stops rebuilding what it already built", 2026-09-08 -- and the
+retraction matters more than the speedup: "done" was asserted from a profile
+nobody re-ran.
 
 ### Release evidence
 
 **12 of 13** stages: 724 Python tests (the 11 socket-bind cases excluded), 230
 web tests. Stage 9 still cannot run.
+
+## The search stops rebuilding what it already built, 2026-09-08
+
+Challenged on "done getting faster": re-profiled the solver at Tokyo scale (40
+places, 7 days, 6,560 routes) instead of trusting the old profile. It was
+**45.1s**, and three-quarters of it was the beam search building and scoring the
+same days over and over: every state built once for feasibility and again for
+scoring, all 7 days rebuilt when siblings differ in one, metrics recomputed from
+scratch per state (136k full passes), and per-state loops re-reading every
+candidate id, priority and score.
+
+The fix is reuse at four levels, all inside `travel_planner/optimizer.py`, none
+of it a quality knob (beam width 64, rebuild counts and budgets untouched):
+
+- a per-search day cache keyed `(date, tuple(map(id, sequence)))`: same objects,
+  same build, so `id` is both sufficient and far cheaper than re-reading ids;
+- states carry their feasibility build into scoring (`prebuilt`), and the
+  winner's days are returned directly -- no third build;
+- per-day metric shares (`_day_metrics` + one-pass `_combine_day_metrics`),
+  per-day missing-edge counts, per-day visit sets and a has-visit flag ride in
+  the cache entry, so scoring is lookups plus one combining pass;
+- child signatures and cache keys derive from the parent's plus one insertion
+  instead of being rebuilt from scratch; thresholds pass through the index and
+  the empty-thresholds trip short-circuits the comfort count to zero.
+
+Measured on the same synthetic Tokyo snapshot: **45.1s to 4.7s (9.6x)**,
+782M function calls to 44M. The no-worse proof is `deterministic_signature`:
+byte-identical on all 27 historic fixtures and on the scale snapshot, plus three
+committed tests pinning the split, the cache and the scoring shortcuts (each
+verified to fail under runtime sabotage). Suite: 744 pass, 11 socket-bind errors
+pre-existing on the pristine tree (sandbox denies the bind).
+
+Audited and deliberately left alone: the preview fetch ships ~1.1 MB at Tokyo
+scale (full frozen input plus proposal), but on the local server that parses in
+~50ms against seconds of solve -- slimming it is an RPC-shape change with no
+local gain, a hosted-deployment question, not this one. The per-build full
+re-rank is pure per-candidate arithmetic (milliseconds). Deck-card variance past
+the 4-worker fetch is provider latency tails; removing it needs caching (a
+staleness hazard) or money.
