@@ -267,6 +267,47 @@ class ProvisionalActivationTest(unittest.TestCase):
             )
             self.assertEqual(version, actions.get_active_plan(trip.trip_id))
 
+    def test_accept_extend_rebuild_then_activate(self):
+        """The owner's exact shape: accept, add days, rebuild, activate.
+
+        Narrowing the still-open report: the failure happens after the days are
+        added and the plan rebuilt. If this stays green, the trigger is in
+        real-provider evidence the fakes do not carry, and the card's section
+        name is the next fact to collect.
+        """
+
+        with TemporaryDirectory() as directory:
+            actions, trip = self._trip(
+                directory, terminal=True, comfort=["balanced_pace"]
+            )
+            actions.generate_plan_preview(trip.trip_id)
+            actions.accept_comfort_tradeoff(
+                trip_id=trip.trip_id, code="PLAIN_WALK_THRESHOLD", value=99
+            )
+            actions.save_setup(
+                trip_id=trip.trip_id,
+                main_style=["sightseeing"],
+                start_date="2030-01-01",
+                end_date="2030-01-04",
+                accommodation_status="not_booked",
+                comfort=["balanced_pace"],
+                confirmed=True,
+            )
+            actions.discover_places(trip_id=trip.trip_id, force_refresh=False)
+            actions.confirm_default_opening_windows(trip.trip_id)
+            actions.generate_plan_preview(trip.trip_id)
+            preview = actions.get_plan_preview(trip.trip_id)
+            activatable = [
+                item
+                for item in preview.proposal.as_dict()["variants"]
+                if item["status"] in {"provisional", "ready"}
+            ]
+            self.assertTrue(activatable, "no activatable variant to activate")
+            version = actions.activate_plan_preview(
+                trip_id=trip.trip_id, variant_id=activatable[0]["variant_id"]
+            )
+            self.assertEqual(version, actions.get_active_plan(trip.trip_id))
+
     def test_the_guard_still_refuses_when_the_owner_changes_the_plan(self):
         """The fix must not have disarmed the thing it lives inside."""
 
