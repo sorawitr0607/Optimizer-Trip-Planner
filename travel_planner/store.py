@@ -386,6 +386,36 @@ def hosted_database_url() -> str:
     return ""
 
 
+def hosted_database_conflict() -> str | None:
+    """Two different hosted databases named at once, or None when sane.
+
+    `HOSTED_URL_VARIABLES` is first-wins, so when two of them hold *different*
+    URLs every process silently uses the first while the operator believes the
+    second. That is exactly how the queue starved on 2026-09-14: Vercel's
+    `TOURIST_DB_URL` still pointed at the old project while
+    `STORAGE_2_POSTGRES_URL` had moved on, so the deployment enqueued into a
+    database no worker drained. Equal values are a deliberate mirror, and one
+    or none set is the normal case — only disagreement is reported.
+
+    Only variable *names* cross this boundary, never values: a URL carries
+    credentials, and this message is shown to whoever hits the deployment.
+    """
+
+    seen: dict[str, str] = {}
+    for name in HOSTED_URL_VARIABLES:
+        value = os.environ.get(name, "").strip()
+        if value:
+            seen.setdefault(value, name)
+    if len(seen) > 1:
+        names = " and ".join(sorted(seen.values()))
+        return (
+            f"hosted database URLs disagree: {names} point at different"
+            " databases. Remove the stale one so every process enqueues and"
+            " drains the same database."
+        )
+    return None
+
+
 def forget_hosted_database() -> None:
     """Clear every variable that could point a store at a real database.
 

@@ -84,7 +84,14 @@ The migration path is short because structure comes from code:
 1. `scripts/restore_hosted_database.py --url … --rows data/…sql.gz` applies
    `postgres_schema()` and loads the rows, parents first, with the immutability triggers
    held off for the load only.
-2. Point `TOURIST_DB_URL` at the new host.
+2. Point the deployment at the new host through the Neon integration's own
+   variable (`STORAGE_2_POSTGRES_URL`). Do NOT hand-copy the URL into
+   `TOURIST_DB_URL` on Vercel: the resolver prefers `TOURIST_DB_URL`, so a
+   stale copy silently captures every enqueue while the integration variable
+   moves on — that exact shape starved the queue on 2026-09-14, and the
+   deployment now refuses to start while the two disagree. The Mac worker
+   keeps reading the non-pooling URL from local `.env`
+   (`POSTGRES_URL_NON_POOLING`).
 
 The database is **79 MB**, which fits every free tier. Row dumps are gitignored and must
 stay that way: they carry trips, owner tokens, addresses and ages, and this repository is

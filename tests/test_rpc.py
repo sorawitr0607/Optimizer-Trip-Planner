@@ -209,6 +209,50 @@ class RpcOverHttpTest(unittest.TestCase):
         self.assertEqual(body["code"], "not_configured")
         self.assertIn("TOURIST_DB_URL", body["detail"]["message"])
 
+    def test_conflicting_database_urls_fail_before_connecting(self):
+        # The 2026-09-14 queue outage: Vercel's TOURIST_DB_URL still pointed at
+        # the old project while STORAGE_2_POSTGRES_URL had moved on, so every
+        # press enqueued into a database no worker drained. Two different
+        # destinations is a misconfiguration, and it must raise here — before
+        # any connection — rather than route silently by precedence.
+        actions, queue = rpc._actions, rpc._queue
+        rpc._actions = rpc._queue = None
+        env = {
+            "TOURIST_DB_URL": "postgresql://user:pw@old.invalid/db",
+            "STORAGE_2_POSTGRES_URL": "postgresql://user:pw@new.invalid/db",
+        }
+        try:
+            with unittest.mock.patch.dict(os.environ, env):
+                with self.assertRaises(rpc.ConfigurationError) as caught:
+                    rpc._planner()
+        finally:
+            rpc._actions, rpc._queue = actions, queue
+        self.assertTrue(
+            str(caught.exception).startswith("hosted database URLs disagree"),
+            str(caught.exception),
+        )
+
+    def test_conflicting_database_urls_answer_503_without_values(self):
+        # The same conflict over real HTTP: a 503 both names can act on, and
+        # neither URL in the body — a URL carries credentials.
+        actions, queue = rpc._actions, rpc._queue
+        rpc._actions = rpc._queue = None
+        env = {
+            "TOURIST_DB_URL": "postgresql://user:pw@old.invalid/db",
+            "STORAGE_2_POSTGRES_URL": "postgresql://user:pw@new.invalid/db",
+        }
+        try:
+            with unittest.mock.patch.dict(os.environ, env):
+                status, body = self.call("list_trips")
+        finally:
+            rpc._actions, rpc._queue = actions, queue
+        self.assertEqual(status, 503)
+        self.assertEqual(body["code"], "not_configured")
+        self.assertIn("TOURIST_DB_URL", body["detail"]["message"])
+        self.assertIn("STORAGE_2_POSTGRES_URL", body["detail"]["message"])
+        self.assertNotIn("old.invalid", json.dumps(body))
+        self.assertNotIn("new.invalid", json.dumps(body))
+
     def test_an_unexpected_failure_names_its_type_but_not_its_message(self):
         # A driver's error message carries the host, the user and sometimes the
         # password. The class name is enough to debug from and safe to publish.

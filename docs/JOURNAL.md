@@ -6531,3 +6531,28 @@ cross-process determinism (digests identical under different `PYTHONHASHSEED`),
 timestamps embedded), and the accept UI (single accept site, always rebuilds
 after). The wire carries the refusal detail on both local and hosted paths, so a
 future report's section name routes the same way this one did.
+
+## The queue that starved on a stale variable, 2026-09-14
+
+Production presses timed out after 5 silent minutes while the Mac worker sat on
+`draining PostgresStore` printing nothing. The worker's own database held
+`rows=0` against presses that demonstrably existed — one number that ruled out
+both a stray worker and a stranded `RUNNING` row, since either leaves rows
+behind. Vercel Production had both `TOURIST_DB_URL` (old Supabase) and
+`STORAGE_2_POSTGRES_URL` (Neon) set, and first-wins precedence silently
+enqueued everything into the database no worker drained. Deleted the stale
+variable, redeployed, one press claimed in seconds (`done`, first attempt).
+
+Two things now fail loudly instead: the deployment answers 503 naming both
+variables, and the worker exits 2 rather than draining the wrong database
+looking healthy (`store.hosted_database_conflict`, enforced in `api/rpc.py`
+and `travel_planner/worker.py`). Precedence itself is unchanged — the
+`TOURIST_DB_URL` escape-hatch test still passes untouched. Also removed: the
+unused `SUPABASE_*` template block in `.env.example` and the `MIGRATION.md`
+step whose hand-copy advice caused this. Kept on purpose: `supabase/backups/`
+and friends, the only committed structure recovery, vendor-neutral already.
+
+Full story in `.wayfinder/artifacts/036-queue-split-brain-postmortem.md`.
+Suite at the fix: 761 tests, 0 failures (11 socket-bind errors pre-existing
+sandbox denials, enumerated file by file); `tests.test_rpc` confirmed the same
+day on the owner's Mac, 25 tests OK.

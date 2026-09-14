@@ -45,7 +45,11 @@ from localserver import (
 )
 from travel_planner.actions import PlannerActions
 from travel_planner.jobs import HANDLERS, JobQueue
-from travel_planner.store import HOSTED_URL_VARIABLES, hosted_database_url
+from travel_planner.store import (
+    HOSTED_URL_VARIABLES,
+    hosted_database_conflict,
+    hosted_database_url,
+)
 
 class ConfigurationError(RuntimeError):
     """The deployment is missing something it cannot run without.
@@ -82,6 +86,14 @@ def _planner() -> tuple[PlannerActions, JobQueue]:
                 "so the planner needs a Postgres URL to reach its data. Set any of: "
                 + ", ".join(HOSTED_URL_VARIABLES)
             )
+        conflict = hosted_database_conflict()
+        if conflict:
+            # Two different destinations is not a choice the precedence can make:
+            # first-wins would silently enqueue into one database while the
+            # operator — and every worker pointed at the other — believes the
+            # other. That starved the queue on 2026-09-14, so it fails here
+            # with the names of the two variables instead.
+            raise ConfigurationError(conflict)
         try:
             _actions = PlannerActions(os.environ.get("TOURIST_DB_PATH", "unused-on-postgres"))
             _queue = JobQueue(_actions.store)

@@ -22,6 +22,7 @@ from travel_planner.store import (
     HOSTED_URL_VARIABLES,
     SQLiteStore,
     forget_hosted_database,
+    hosted_database_conflict,
     hosted_database_url,
     open_store,
 )
@@ -71,6 +72,40 @@ class HostedUrlResolutionTest(unittest.TestCase):
             forget_hosted_database()
             os.environ[HOSTED_URL_VARIABLES[0]] = value
             self.assertEqual("", hosted_database_url())
+
+    def test_matching_urls_are_not_a_conflict(self) -> None:
+        """The same database under both names is a deliberate mirror."""
+
+        for name in HOSTED_URL_VARIABLES:
+            os.environ[name] = "postgresql://user:pw@example.invalid/db"
+        self.assertIsNone(hosted_database_conflict())
+
+    def test_a_single_url_is_not_a_conflict(self) -> None:
+        os.environ[HOSTED_URL_VARIABLES[0]] = "postgresql://user:pw@example.invalid/db"
+        self.assertIsNone(hosted_database_conflict())
+
+    def test_blank_counts_as_unset_for_conflicts(self) -> None:
+        os.environ[HOSTED_URL_VARIABLES[0]] = "postgresql://user:pw@example.invalid/db"
+        os.environ[HOSTED_URL_VARIABLES[1]] = "   "
+        self.assertIsNone(hosted_database_conflict())
+
+    def test_differing_urls_name_both_variables_and_neither_value(self) -> None:
+        """The 2026-09-14 queue outage: two destinations, one silent precedence.
+
+        The message may carry the variable names but never either URL — a URL
+        carries credentials, and this text is shown to whoever hits the
+        deployment.
+        """
+
+        first, second = HOSTED_URL_VARIABLES[0], HOSTED_URL_VARIABLES[1]
+        os.environ[first] = "postgresql://user:pw@old.invalid/db"
+        os.environ[second] = "postgresql://user:pw@new.invalid/db"
+        conflict = hosted_database_conflict()
+        self.assertIsNotNone(conflict)
+        self.assertIn(first, conflict or "")
+        self.assertIn(second, conflict or "")
+        self.assertNotIn("old.invalid", conflict or "")
+        self.assertNotIn("new.invalid", conflict or "")
 
     def test_the_guard_clears_every_name_the_resolver_reads(self) -> None:
         """The assertion this file exists for.

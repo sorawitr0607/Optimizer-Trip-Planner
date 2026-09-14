@@ -1,6 +1,8 @@
-# Live Supabase structure backups
+# Hosted structure backups
 
-These are schema-only recovery artifacts captured from the live `public` schema. They
+These are schema-only recovery artifacts captured from the hosted `public` schema
+(snapshot below predates the 2026-09-03 move to Neon; refresh it from the live
+host after the next structural change). They
 are not the schema source of truth: application DDL still comes from `store.SCHEMA` via
 `travel_planner.pgstore.postgres_schema()` and generates `supabase/schema.sql`.
 

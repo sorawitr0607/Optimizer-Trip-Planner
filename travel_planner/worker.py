@@ -26,6 +26,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from .actions import PlannerActions
 from .credentials import load_local_credentials
 from .jobs import JobQueue, run_one
+from .store import hosted_database_conflict
 
 #: How soon after finishing a job the queue is asked again. Every poll is one round
 #: trip, and this is the responsive end: a job queued while the worker is busy or
@@ -135,6 +136,14 @@ def main(argv: list[str] | None = None) -> int:
     loaded = load_local_credentials()
     if loaded:
         print(f"loaded {len(loaded)} credential(s) from secrets.local.json", flush=True)
+
+    conflict = hosted_database_conflict()
+    if conflict:
+        # A worker that drains a different database than the deployment
+        # enqueues into looks perfectly healthy while the queue starves, so a
+        # disagreement is a hard failure here, not a silent fallback.
+        print(f"FAILED: {conflict}", flush=True)
+        return 2
 
     actions = PlannerActions(arguments.database)
     queue = JobQueue(actions.store)
