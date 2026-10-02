@@ -1588,6 +1588,12 @@ class SQLiteStore:
             created_at=row["created_at"],
         )
 
+    def has_optimization_preview(self, trip_id: str) -> bool:
+        with self.connect() as connection:
+            return connection.execute(
+                "SELECT 1 FROM optimization_previews WHERE trip_id = ?", (trip_id,)
+            ).fetchone() is not None
+
     def delete_optimization_preview(self, trip_id: str) -> None:
         with self.connect() as connection:
             connection.execute(

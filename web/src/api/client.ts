@@ -635,6 +635,7 @@ export interface OpeningEvidenceOptions {
   places: number;
   with_verified_hours: number;
   needing_hours: number;
+  not_in_provider: number;
   already_assumed: number;
   verified: { calls: number; estimate_usd: number };
   assumed: {

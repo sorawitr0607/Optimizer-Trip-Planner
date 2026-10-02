@@ -27,6 +27,7 @@ const code = (value: string, language: Language) =>
 
 /** Reasons the owner can resolve by confirming a window themselves. */
 const OWNER_FIXABLE = new Set([
+  "PLACE_NOT_IN_PROVIDER",
   "OPENING_NOT_FETCHED",
   "NO_PUBLISHED_HOURS",
   "EVIDENCE_EXPIRED",
@@ -82,6 +83,7 @@ export function EvidencePage() {
   const [windows, setWindows] = useState<Record<string, { start: string; end: string }>>({});
   const [flash, setFlash] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
   const [cap, setCap] = useState<string | null>(null);
+  const [prepareStep, setPrepareStep] = useState<"zone" | "hours" | "routes" | null>(null);
 
   const zone = useQuery({
     queryKey: ["timezone_evidence", tripId],
@@ -119,7 +121,7 @@ export function EvidencePage() {
 
   async function refresh() {
     await Promise.all(
-      ["accommodation_base", "timezone_evidence", "opening_intervals", "routes", "journey"].map(
+      ["accommodation_base", "timezone_evidence", "opening_intervals", "opening_options", "routes", "journey"].map(
         (key) => queryClient.invalidateQueries({ queryKey: [key, tripId] }),
       ),
     );
@@ -143,7 +145,7 @@ export function EvidencePage() {
   });
   const fetchHours = useMutation({
     mutationFn: () =>
-      rpc<{ usable_intervals: number; places: number; provider_errors: string[] }>(
+      rpc<{ usable_intervals: number; places: number; failed: number; provider_errors: string[] }>(
         "refresh_opening_hours",
         { trip_id: tripId },
       ),
@@ -153,25 +155,15 @@ export function EvidencePage() {
         `${copy("hours_usable", language)} ${report.usable_intervals} / ${report.places}`,
       ];
       if (report.provider_errors.length) parts.push(report.provider_errors.join(" · "));
-      setFlash({ tone: report.provider_errors.length ? "bad" : "ok", text: parts.join(" · ") });
+      setFlash({ tone: report.failed ? "bad" : "ok", text: parts.join(" · ") });
       await refresh();
     },
     onError: fail,
   });
   const fetchRoutes = useMutation({
-    mutationFn: () =>
-      rpc<{ routes_available: number; pairs_needed: number; skipped_over_cap: number; failed: number }>(
-        "refresh_routes",
-        { trip_id: tripId },
-      ),
-    onSuccess: async (report) => {
-      const parts = [
-        copy("routes_fetched", language),
-        `${copy("routes_available", language)} ${report.routes_available} / ${copy("routes_needed", language)} ${report.pairs_needed}`,
-      ];
-      if (report.skipped_over_cap) parts.push(`${copy("routes_skipped", language)} ${report.skipped_over_cap}`);
-      if (report.failed) parts.push(`${copy("routes_failed", language)} ${report.failed}`);
-      setFlash({ tone: "ok", text: parts.join(" · ") });
+    mutationFn: () => collectRouteEvidence(tripId),
+    onSuccess: async () => {
+      setFlash({ tone: "ok", text: copy("routes_checked", language) });
       await refresh();
     },
     onError: fail,
@@ -225,31 +217,27 @@ export function EvidencePage() {
     },
   });
 
-  const autoResolveAll = useMutation({
+  const prepare = useMutation({
     mutationFn: async () => {
-      // Free, and it invents no accommodation. `confirm_accommodation_base("")` geocodes
-      // `"{destination} Station"`, which for "New York, United States" returned a station
-      // 286 km upstate; the optimizer's own provisional base is the centre of the chosen
-      // places, which is near them by construction. The paid opening-hours and timezone
-      // lookups are their own buttons on this screen, each stating its price.
-      // Free now: the zone comes from Open-Meteo rather than the paid Google lookup,
-      // so there is no reason to leave the trip permanently unverified.
-      try {
-        await rpc("refresh_timezone", { trip_id: tripId });
-      } catch (err) {
-        void err;
-      }
-      await rpc("confirm_default_opening_windows", { trip_id: tripId, start: "09:00", end: "18:00" });
+      setPrepareStep("zone");
+      if (zone.data?.status !== "verified") await rpc("refresh_timezone", { trip_id: tripId });
+      setPrepareStep("hours");
+      await rpc("refresh_opening_hours", { trip_id: tripId });
+      setPrepareStep("routes");
       await collectRouteEvidence(tripId);
     },
     onSuccess: async () => {
-      setFlash({
-        tone: "ok",
-        text: copy("auto_resolve_note", language),
-      });
       await refresh();
+      const updated = await rpc<Journey>("journey", { trip_id: tripId });
+      queryClient.setQueryData(["journey", tripId], updated);
+      if (updated.capability_gaps.length) {
+        setFlash({ tone: "bad", text: copy("verify_still_missing", language) });
+      } else {
+        navigate(`/trips/${tripId}/optimize`);
+      }
     },
     onError: fail,
+    onSettled: () => setPrepareStep(null),
   });
 
   if (intervals.isPending || usage.isPending) return <Loading language={language} />;
@@ -275,22 +263,6 @@ export function EvidencePage() {
       <header className="money-head">
         <h1>{copy("stage_evidence", language)}</h1>
         <p>{copy("evidence_help", language)}</p>
-        <div className="evidence-auto-bar">
-          <button
-            aria-describedby="auto-resolve-note"
-            type="button"
-            className="setup-primary evidence-auto-btn"
-            disabled={autoResolveAll.isPending}
-            onClick={() => autoResolveAll.mutate()}
-          >
-            {autoResolveAll.isPending
-              ? copy("loading", language)
-              : copy("auto_resolve_free", language)}
-          </button>
-          <small className="setup-hint" id="auto-resolve-note">
-            {copy("auto_resolve_note", language)}
-          </small>
-        </div>
       </header>
 
       {/* derives-from: element 36 .currency-info-box as .evidence-verdict */}
@@ -310,40 +282,38 @@ export function EvidencePage() {
                   },
                 )}
           </p>
-          {options.data.needing_hours ? (
-            <ul className="evidence-verdict-options">
-              <li>
-                <strong>
-                  {copyFormat("option_buy_hours", language, {
-                    calls: options.data.verified.calls,
-                    cost: options.data.verified.estimate_usd.toFixed(3),
-                  })}
-                </strong>
-              </li>
-              <li>
-                <strong>
-                  {copyFormat("option_guess_hours", language, {
-                    cost: options.data.assumed.estimate_usd.toFixed(4),
-                  })}
-                </strong>
-                {options.data.assumed_is_usable ? (
-                  options.data.assumed.measured ? (
-                    <span className="setup-hint">
-                      {" "}
-                      {copyFormat("option_guess_measured", language, {
-                        exact: options.data.assumed.measured.exact_both_ends,
-                        of: options.data.assumed.measured.of,
-                        worst: options.data.assumed.measured.worst_overshoot_minutes,
-                      })}
-                    </span>
-                  ) : null
-                ) : (
-                  <span className="setup-hint"> {copy("option_guess_unusable", language)}</span>
-                )}
-              </li>
-            </ul>
+          {options.data.not_in_provider ? (
+            <p className="field-error">
+              {copyFormat("verify_manual_needed", language, {
+                places: options.data.not_in_provider,
+              })}
+            </p>
           ) : null}
         </section>
+      ) : null}
+
+      {!exploreFirst ? (
+        <div className="evidence-auto-bar">
+          <p className="setup-hint" id="verify-cost">
+            {options.data
+              ? copyFormat("verify_trip_cost", language, {
+                  places: options.data.verified.calls,
+                  cost: options.data.verified.estimate_usd.toFixed(3),
+                })
+              : copy("loading_build_options", language)}
+          </p>
+          <button
+            aria-describedby="verify-cost"
+            className="setup-primary evidence-auto-btn"
+            disabled={prepare.isPending || !options.data || (spend?.state === "stopped" && options.data.verified.calls > 0)}
+            onClick={() => prepare.mutate()}
+            type="button"
+          >
+            {prepare.isPending
+              ? copy(`verify_step_${prepareStep ?? "zone"}`, language)
+              : copy("verify_trip_continue", language)}
+          </button>
+        </div>
       ) : null}
 
       {flash ? (
@@ -390,7 +360,12 @@ export function EvidencePage() {
           the two halves of one decision were never on screen together. Two places to set
           a base would be the duplication this consolidation exists to remove. */}
 
-      {/* Card 2 — time zone. Paid, and it says so immediately before the button. */}
+      <details
+        className="evidence-advanced"
+        open={Boolean(options.data?.not_in_provider || (prepare.isSuccess && gaps.length))}
+      >
+        <summary>{copy("open_evidence_detail", language)}</summary>
+      {/* Card 2 — time zone. */}
       <div className="evidence-card">
         <strong>{copy("timezone_evidence", language)}</strong>
         {zone.data?.status === "verified" ? (
@@ -405,7 +380,7 @@ export function EvidencePage() {
             </span>
             <button
               aria-describedby="timezone-cost"
-              disabled={fetchZone.isPending || spend?.state === "stopped"}
+              disabled={fetchZone.isPending || prepare.isPending}
               onClick={() => fetchZone.mutate()}
               type="button"
             >
@@ -435,7 +410,7 @@ export function EvidencePage() {
             visible but silent, so a screen-reader user met the button with no figure. */}
         <button
           aria-describedby="hours-cost"
-          disabled={fetchHours.isPending || spend?.state === "stopped"}
+          disabled={fetchHours.isPending || prepare.isPending || spend?.state === "stopped"}
           onClick={() => fetchHours.mutate()}
           type="button"
         >
@@ -542,11 +517,11 @@ export function EvidencePage() {
           <span className="setup-hint">{copy("no_routes", language)}</span>
         ) : null}
         <button
-          disabled={fetchRoutes.isPending}
+          disabled={fetchRoutes.isPending || prepare.isPending}
           onClick={() => fetchRoutes.mutate()}
           type="button"
         >
-          {copy("fetch_routes", language)}
+          {copy("check_all_routes", language)}
         </button>
       </div>
 
@@ -565,6 +540,7 @@ export function EvidencePage() {
         <button disabled={saveCap.isPending} onClick={() => saveCap.mutate()} type="button">
           {copy("save_cap", language)}
         </button>
+      </details>
       </details>
 
       {gaps.length ? (
@@ -596,7 +572,12 @@ export function EvidencePage() {
               ));
           })()}
           <div className="setup-actions">
-            {gaps.some((gap) => SETUP_GAPS.has(gap)) ? (
+            {gaps.includes("ACCOMMODATION_BASE_UNCONFIRMED") ? (
+              <button onClick={() => navigate(`/trips/${tripId}/stay`)} type="button">
+                {copy("next_step", language)}: {copy("stage_stay", language)}
+              </button>
+            ) : null}
+            {gaps.includes("FREE_TEXT_HARD_CONSTRAINT_NEEDS_STRUCTURED_CONFIRMATION") ? (
               <button onClick={() => navigate(`/trips/${tripId}/setup`)} type="button">
                 {copy("next_step", language)}: {copy("stage_setup", language)}
               </button>

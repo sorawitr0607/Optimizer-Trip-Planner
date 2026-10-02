@@ -153,10 +153,6 @@ export interface PlaceDeckProps {
   /** Resolves a display name. Passed in so `shared/names.ts` stays the one place
    *  naming happens, per the S5 consolidation. */
   nameOf: (placeId: string) => string;
-  /** The local-script name to show beside it, or null when it would repeat. 61% of the
-   *  Taipei catalogue has no `name:en` at all, so this is often the only readable pair
-   *  the app can offer. */
-  altNameOf: (placeId: string) => string | null;
   /** Records a decision and advances. `null` reason means none was given. */
   onDecide: (placeId: string, action: string, reason: string | null) => void;
   /** True while the card in front is still arriving, so the panel beside it can wait. */
@@ -220,7 +216,6 @@ export function PlaceDeck({
   choices,
   language,
   nameOf,
-  altNameOf,
   onDecide,
   onPendingChange,
   onWantPhotos,
@@ -623,7 +618,6 @@ export function PlaceDeck({
   }
 
   const name = nameOf(entry.place_id);
-  const altName = altNameOf(entry.place_id);
   const intent = leaving ?? intentOf(drag);
 
   function decide(action: string, reason: string | null = null) {
@@ -959,10 +953,7 @@ export function PlaceDeck({
           </button>
         ) : null}
 
-        <h3>
-          {name}
-          {altName ? <small className="place-alt-name">{altName}</small> : null}
-        </h3>
+        <h3>{name}</h3>
         {/* A Kawagoe place in a Tokyo evening: the score cannot say how far is
             too far past 15 km, so the card says it. Muted hint, not a warning —
             far is a fact for the owner to weigh, not a refusal. */}

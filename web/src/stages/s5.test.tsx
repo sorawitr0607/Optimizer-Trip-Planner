@@ -249,8 +249,8 @@ describe("RevisePage", () => {
   it("renders the same panel in Thai", () => {
     const html = render(<RevisePage />, "th");
 
-    expect(html).toContain("ชิบูยะ สกาย");
-    expect(html).toContain("ศาลเจ้าเมจิ");
+    expect(html).toContain("Shibuya Sky");
+    expect(html).toContain("Meiji Shrine");
     expectNoMissingCopy(html);
   });
 

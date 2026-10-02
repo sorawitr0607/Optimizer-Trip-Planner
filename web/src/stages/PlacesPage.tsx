@@ -25,7 +25,7 @@ import {
 import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
 import { Loading } from "../shared/Loading";
 import { useLanguage } from "../i18n/LanguageProvider";
-import { mergeNames, placeAltName, placeName } from "../shared/names";
+import { mergeNames, placeName } from "../shared/names";
 import { distinguishingCons, evaluatedFeasibility } from "../shared/cards";
 import { PHOTO_THIN_AT, galleryFor } from "../shared/photos";
 import { closedYear } from "../shared/closure";
@@ -474,15 +474,20 @@ export function PlacesPage() {
       for (const placeId of places) {
         // Sequential on purpose. The cap is checked inside `_spend` on every call, so
         // running these in parallel would let a burst commit past a limit that each
-        // call individually respected -- and a refusal here stops the remainder
-        // instead of buying the rest of the shortlist first.
-        const value = await rpc<PlaceInsight>("enrich_place_card", {
-          trip_id: tripId,
-          place_id: placeId,
-          language,
-        });
-        setInsights((current) => ({ ...current, [placeId]: value }));
-        done.push(placeId);
+        // call individually respected. A no-match is recorded for that place and
+        // the rest of the shortlist can still be checked.
+        try {
+          const value = await rpc<PlaceInsight>("enrich_place_card", {
+            trip_id: tripId,
+            place_id: placeId,
+            language,
+          });
+          setInsights((current) => ({ ...current, [placeId]: value }));
+          done.push(placeId);
+        } catch (error) {
+          if (!(error instanceof ApiError && error.code === "place_not_in_provider")) throw error;
+          setProviderNoMatch((current) => new Set(current).add(placeId));
+        }
       }
       return done;
     },
@@ -492,28 +497,24 @@ export function PlacesPage() {
   });
 
   const enrich = useMutation({
-    // `placeId` defaults to the list's selection; the deck passes its own, for the
-    // same reason `saveChoice` does — the card in the deck is not the card in the
-    // select. Dropping it meant the deck's "get photographs" button bought pictures
-    // for whichever place the list happened to be on, stored them under *that* id,
-    // and left the card that was tapped exactly as it was. The money was spent and
-    // the visible answer never changed.
-    mutationFn: (placeId?: string) =>
+    // The requested id must travel with the mutation. The owner can move to the next
+    // card while Google responds; reading `selectedId` on completion attached the
+    // previous card's no-match to the new card and left its own control disabled.
+    mutationFn: (placeId: string) =>
       rpc<PlaceInsight>("enrich_place_card", {
         trip_id: tripId,
-        place_id: placeId ?? selectedId,
+        place_id: placeId,
         language,
       }),
     onSuccess: (value, placeId) => {
-      setInsights((current) => ({ ...current, [placeId ?? selectedId]: value }));
+      setInsights((current) => ({ ...current, [placeId]: value }));
       // The deck reads this session overlay directly. The paid provider does not write
       // into the free-summary store, so refetching that query only returns the old blank
       // card and leaves the paid photographs stranded in the detail panel.
     },
     onError: (error, placeId) => {
       if (error instanceof ApiError && error.code === "place_not_in_provider") {
-        const id = placeId ?? selectedId;
-        setProviderNoMatch((current) => new Set(current).add(id));
+        setProviderNoMatch((current) => new Set(current).add(placeId));
       }
     },
   });
@@ -736,7 +737,7 @@ export function PlacesPage() {
   /** Why the last paid ask for one place failed, or null. Per place, so a failure on
    *  one card is not still on screen three cards later. */
   const photoErrorOf = (placeId: string): string | null =>
-    enrich.error && (enrich.variables ?? selectedId) === placeId
+    enrich.error && enrich.variables === placeId
       ? photoFailure(enrich.error)
       : null;
 
@@ -947,14 +948,13 @@ export function PlacesPage() {
               <summary>{copy("catalog_table", language)}</summary>
               <div className="money-table-scroll">
                 <table className="money-table">
-                  <thead><tr><th>{copy("name", language)}</th><th>{copy("local_name", language)}</th><th>{copy("category", language)}</th><th>{copy("opening", language)}</th><th>{copy("source", language)}</th></tr></thead>
+                  <thead><tr><th>{copy("name", language)}</th><th>{copy("category", language)}</th><th>{copy("opening", language)}</th><th>{copy("source", language)}</th></tr></thead>
                   <tbody>
                     {catalog.slice(0, catalogShown).map((item) => {
                       const source = item.provider_aliases[0]?.source_url;
                       return (
                         <tr key={item.place_id}>
-                          <td>{placeName(item, language, item.name)}</td>
-                          <td>{item.names?.local ?? item.name}</td>
+                          <td>{placeName(mergeNames(item, summaries.data?.[item.place_id]?.names), language, item.name)}</td>
                           <td>{categoryName(item.category, language)}</td>
                           <td>{item.operational_evidence.opening_hours.state === "official_confirmed" ? copy("evidence_verified", language) : copy("opening_unverified", language)}</td>
                           <td>{source ? <a href={source} rel="noreferrer" target="_blank">{copy("source", language)}</a> : "—"}</td>
@@ -1145,14 +1145,6 @@ export function PlacesPage() {
                   setCardPending(pending);
                   if (!pending) setFirstCardDone(true);
                 }}
-                altNameOf={(placeId) => {
-                  const found = catalog.find((item) => item.place_id === placeId);
-                  if (!found) return null;
-                  return placeAltName(
-                    mergeNames(found, summaries.data?.[placeId]?.names),
-                    language,
-                  );
-                }}
                 nameOf={nameOf}
                 onDecide={(placeId, action, reason) => {
                   saveChoice.mutate({ action, reason, placeId });
@@ -1187,7 +1179,7 @@ export function PlacesPage() {
             // derives-from: A4 ranked candidate card, reduced to one functional list card for S4.
             <article className="place-card">
               <header className="place-card-head">
-                <div><h3>{placeName(candidate, language, candidate.name)}</h3>{candidate.names?.local && candidate.names.local !== placeName(candidate, language, candidate.name) ? <p>{candidate.names.local}</p> : null}<span className="money-tag">{categoryName(candidate.category, language)}</span></div>
+                <div><h3>{placeName(mergeNames(candidate, summaries.data?.[selectedId]?.names), language, candidate.name)}</h3><span className="money-tag">{categoryName(candidate.category, language)}</span></div>
                 <strong className="place-score">{copyFormat("relative_match", language, { percent: card.relative_match_percent ?? Math.round(card.total_score) })}</strong>
               </header>
               {(() => {
@@ -1327,7 +1319,7 @@ export function PlacesPage() {
               ) : (
                 <div className="place-paid-action">
                   <p className="setup-hint">{detailsCost.isPending || photosCost.isPending ? copy("loading", language) : paidCaption}</p>
-                  <button disabled={!paidAllowed || enrich.isPending} onClick={() => enrich.mutate(undefined)} type="button">{copy("load_live_details", language)}</button>
+                  <button disabled={!paidAllowed || enrich.isPending} onClick={() => enrich.mutate(selectedId)} type="button">{copy("load_live_details", language)}</button>
                   {/* The same call, offered by the case it answers: this card has one
                       photograph or none, and the free sources have nothing more. Only
                       shown when that is true of the card on screen. */}

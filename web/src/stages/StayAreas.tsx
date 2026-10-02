@@ -3,7 +3,7 @@ import { useState } from "react";
 
 import { ApiError, rpc, type StayAreaReport } from "../api/client";
 import { copy, copyFormat, copyFrom, type Language } from "../i18n/copy";
-import { placeAltName, placeName } from "../shared/names";
+import { placeName } from "../shared/names";
 import { AREA_STAGES } from "../shared/buildStages";
 import { BuildStages } from "./BuildStages";
 
@@ -165,10 +165,6 @@ export function StayAreas({ tripId, language, onOutcome, onChosen, onRanking }: 
                 <header>
                   <strong>
                     {placeName(area, language, area.name)}
-                    {placeAltName(area, language) ? (
-                      // The station sign and the taxi driver both use the local name.
-                      <small className="place-alt-name">{placeAltName(area, language)}</small>
-                    ) : null}
                   </strong>
                   <span className="place-score">
                     {area.total_score.toFixed(1)}

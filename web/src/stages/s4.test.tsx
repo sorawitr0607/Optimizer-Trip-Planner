@@ -284,7 +284,7 @@ describe("PlacesPage", () => {
 
   it("renders the same ranked identity in Thai without changing the place id", () => {
     const html = render(<PlacesPage />, "th");
-    expect(html).toContain("ตึกไทเป 101");
+    expect(html).toContain("Taipei 101");
     expect(html).toContain("พิพิธภัณฑ์");
     expect(html).toContain("taipei-101");
     expectNoMissingCopy(html);

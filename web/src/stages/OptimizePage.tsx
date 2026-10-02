@@ -11,12 +11,12 @@ import { addDays } from "../shared/dates";
 import { wholeDraftWithDates } from "../shared/setupDraft";
 import { planDecisions } from "../shared/planDecisions";
 import { placesDaysWereAddedFor, rememberDaysAddedFor } from "../shared/dayExtension";
+import { changedSections } from "../shared/changedSections";
 
 import {
   ApiError,
   rpc,
   type CandidateChoice,
-  type OpeningEvidenceOptions,
   type PlanPreview,
   type PlanProposal,
   type PlanVariant,
@@ -147,19 +147,6 @@ export function BuildProgress({
   );
 }
 
-/**
- * Which input sections the server names in a `preview_stale` refusal's detail,
- * for display beside the rebuild button. Unknown future sections render under
- * their own key rather than a missing-copy marker: the screen must name the
- * change even for a section this client predates.
- */
-export function changedSections(detail: unknown): string[] {
-  if (typeof detail !== "object" || detail === null) return [];
-  const changed = (detail as { changed?: unknown }).changed;
-  if (!Array.isArray(changed)) return [];
-  return changed.filter((item): item is string => typeof item === "string");
-}
-
 export function OptimizePage() {
   const { tripId = "" } = useParams();
   const { language } = useLanguage();
@@ -177,18 +164,12 @@ export function OptimizePage() {
   const [autoAdded, setAutoAdded] = useState<{ days: number; places: number } | null>(
     null,
   );
-  // Free is the default, and stays the default: this app's rule is that a control which
-  // spends money says so before it is pressed, never that it is pressed by accident.
   // Once a draft exists the build controls are done asking. Leaving "Before you build"
   // and "Build three plan options" above a finished proposal put the question and its
   // answer on screen together, so the screen read as still waiting for a press that had
   // already happened — and re-pressing throws away the draft below it. They come back on
   // a deliberate "Build them again", which is the only moment they mean anything.
   const [rebuilding, setRebuilding] = useState(false);
-  // How to fill the missing opening hours, asked only on the **first** build. Once a
-  // plan exists the question is no longer "how should this be paid for" but "will you
-  // take this plan with the gaps it has", which is one button and not a choice.
-  const [hoursChoice, setHoursChoice] = useState<"assume" | "verified">("assume");
   const [excludedComfort, setExcludedComfort] = useState<Set<string>>(() => new Set());
   // Places ticked in the unfit list for one shared drop-and-rebuild. Held as an
   // array of place ids; every use intersects it with the current unfit list, so
@@ -219,17 +200,6 @@ export function OptimizePage() {
     queryFn: () => rpc<PlanVersionRecord | null>("get_active_plan", { trip_id: tripId }),
   });
 
-  // The evidence decision, brought to the moment it matters.
-  //
-  // It lived only on `/evidence`, so building a plan meant leaving this screen, reading
-  // a wall of controls, deciding, and coming back — reported as "back and forth". The
-  // only question that screen asks about opening hours is answerable here, in a
-  // sentence, beside the button it affects; `/evidence` keeps the detail for anyone who
-  // wants it and stops being a required stop.
-  const evidence = useQuery({
-    queryKey: ["opening_options", tripId],
-    queryFn: () => rpc<OpeningEvidenceOptions>("opening_evidence_options", { trip_id: tripId }),
-  });
   /* The variant this screen is actually drawing, which is not always the one selected.
    *
    * `variantId` is null until the owner picks from the plan-option list, and the screen
@@ -287,55 +257,6 @@ export function OptimizePage() {
   };
   const resolveTerminal = () =>
     rpc("resolve_default_terminal", { trip_id: tripId }).catch(() => null);
-  const acceptRoutes = useMutation({
-    mutationFn: async () => {
-      setPreviewStage(undefined);
-      await rpc("accept_route_estimates", { trip_id: tripId });
-      // Rebuilt straight away: the estimates only reach the plan through a new
-      // `_optimizer_input`, so accepting without rebuilding would look like nothing.
-      return rpc<PlanPreview>(
-        "generate_plan_preview",
-        { trip_id: tripId },
-        setPreviewStage,
-      );
-    },
-    onSuccess: async () => {
-      setRefusal(null);
-      await invalidatePlan();
-    },
-    onError: (error) => setRefusal(error instanceof ApiError ? error.code : String(error)),
-  });
-
-  // The paid path is buy-then-build, not buy-and-stop. Buying the hours and leaving the
-  // owner to press again was the "back and forth" report: the purchase is only ever made
-  // *in order to* build, so the two are one press.
-  const buyThenGenerate = useMutation({
-    mutationFn: async () => {
-      if (buildingRef.current) return null;
-      buildingRef.current = true;
-      setPreviewStage(undefined);
-      await Promise.all([
-        rpc<unknown>("refresh_opening_hours", { trip_id: tripId }),
-        resolveTerminal(),
-      ]);
-      await queryClient.invalidateQueries({ queryKey: ["opening_options", tripId] });
-      await queryClient.invalidateQueries({ queryKey: ["paid_usage"] });
-      return rpc<PlanPreview>(
-        "generate_plan_preview",
-        { trip_id: tripId },
-        setPreviewStage,
-      );
-    },
-    onSuccess: async () => {
-      setRefusal(null);
-      await invalidatePlan();
-    },
-    onError: (error) => setRefusal(error instanceof ApiError ? error.code : String(error)),
-    onSettled: () => {
-      buildingRef.current = false;
-    },
-  });
-
   const generate = useMutation({
     mutationFn: async () => {
       setPreviewStage(undefined);
@@ -399,7 +320,9 @@ export function OptimizePage() {
       // there because an unreachable clock is not a reason to abandon the build. Claiming
       // it succeeded would be the dishonest version.
       setBuildStage(1);
-      await rpc("confirm_default_opening_windows", { trip_id: tripId, start: "09:00", end: "18:00" });
+      if (trip?.planning_mode === "explore_first") {
+        await rpc("confirm_default_opening_windows", { trip_id: tripId, start: "09:00", end: "18:00" });
+      }
       setBuildStage(2);
       // Until every pair is measured, not once: one call covers sixty new pairs and
       // eleven places need 110, so a single pass left the rest fatally unverified.
@@ -546,7 +469,9 @@ export function OptimizePage() {
           value: rule.measured,
         });
       }
-      if (needsRoutes) await rpc("accept_route_estimates", { trip_id: tripId });
+      if (needsRoutes && trip?.planning_mode === "explore_first") {
+        await rpc("accept_route_estimates", { trip_id: tripId });
+      }
       const basics = stored.data?.snapshot.data.trip_basics;
       const start = basics?.start_date;
       let end = basics?.end_date;
@@ -622,9 +547,7 @@ export function OptimizePage() {
     generate.isPending ||
     resolveAllAndRebuild.isPending ||
     autoResolveAndGenerate.isPending ||
-    buyThenGenerate.isPending ||
     cutUnfitAndRebuild.isPending ||
-    acceptRoutes.isPending ||
     dropAndRebuild.isPending;
 
   const activate = useMutation({
@@ -704,6 +627,9 @@ export function OptimizePage() {
     // step by hand. `localStorage` also survives the reload a long build invites.
     placesDaysWereAddedFor(tripId),
   );
+  const actionable = outstanding.filter(
+    (item) => item !== "routes" || trip?.planning_mode === "explore_first",
+  );
 
   // More than one place to drop means checkboxes and one shared button rather
   // than a rebuild per row. The tick list is intersected with the live unfit
@@ -729,11 +655,6 @@ export function OptimizePage() {
   const timetableAwaitingConfirmation =
     Boolean(proposal) && proposal?.mode !== "stay_recommendation" && !rebuilding;
   const gaps = optimizerInput?.capability_gaps ?? [];
-  // One label, two dead ends — the refusal card and an unusable variant's warnings.
-  // It says "free" because it now is, and says what it assumes, because a button that
-  // fills a gap has to name the value it filled it with.
-  const autoResolveLabel = copy("auto_resolve_free", language);
-
   return (
     <section className="stage-card optimize-screen">
       {/* Once a timetable is on screen the page is no longer asking to build one, it is
@@ -769,15 +690,6 @@ export function OptimizePage() {
               </ul>
             </div>
           ) : null}
-          <button
-            type="button"
-            className="setup-primary auto-resolve-retry-btn"
-            disabled={autoResolveAndGenerate.isPending}
-            onClick={() => autoResolveAndGenerate.mutate()}
-          >
-            {autoResolveAndGenerate.isPending ? copy("loading", language) : autoResolveLabel}
-          </button>
-          <small className="setup-hint">{copy("auto_resolve_note", language)}</small>
         </div>
       ) : null}
       {autoAdded ? (
@@ -789,103 +701,18 @@ export function OptimizePage() {
         </p>
       ) : null}
 
-      {/* Gone while the optimize runs. The panel asks a question whose answer has already
-          been taken and acted on, and leaving it up during the ~52s wait invites changing
-          an answer that is no longer being read — the radio would move while the run it
-          was meant to configure was already past it. */}
-      {evidence.data && considered.length && !building && showBuildControls ? (
-        <section className={`evidence-verdict${evidence.data.needing_hours ? "" : " settled"}`}>
+      {considered.length > 0 && showBuildControls && !building ? (
+        <section className="evidence-verdict settled">
           <h2>{copy("before_you_build", language)}</h2>
           <p className="evidence-verdict-answer">
-            {evidence.data.needing_hours
-              ? copyFormat("before_hours_gap", language, {
-                  needing: evidence.data.needing_hours,
-                  places: evidence.data.places,
-                })
-              : copy("before_all_covered", language)}
+            {copy(trip?.planning_mode === "ready_to_schedule"
+              ? "build_verified_note" : "build_provisional_note", language)}
           </p>
-          {/* One control, and the warning beside it rather than a choice above it.
-
-              The history here is three shapes. Two buttons were two labels for one
-              action. A radio group made the *payment* the question, which read as
-              though building were blocked on answering it -- and the free option was
-              preselected anyway, so the group asked a question whose answer never
-              changed. Now the button says what pressing it accepts, and the gap it
-              accepts is stated next to it.
-
-              Buying verified hours has not gone anywhere; it lives on Check trip
-              facts, which is the screen about evidence. It was never this screen's
-              question. */}
-          {/* Two different questions, and they were being asked with one control.
-
-              Landing here for the first time, the question is how to fill the missing
-              hours -- assume them free, or buy them confirmed. That is a real choice
-              with a price attached and it belongs here, as a choice.
-
-              Coming back with a plan already built, it is not. The question then is
-              whether to accept the plan with the gaps it has, which is one button and a
-              statement of what those gaps are. Collapsing the first case into the
-              second removed a decision the owner wanted; that was my misreading. */}
-          {/* Whenever the build controls are up -- a first build *or* a rebuild. Gated
-              on `!proposal` this disappeared the moment a plan existed, so pressing
-              "build again" offered the button and not the choice, which is the missing
-              assume-free reported after the last change. "Before building the three
-              variants" includes building them a second time. */}
-          {evidence.data.needing_hours && showBuildControls ? (
-            <fieldset className="evidence-choice">
-              <legend>{copy("before_hours_choice", language)}</legend>
-              <label>
-                <input
-                  checked={hoursChoice === "assume"}
-                  name="hours-choice"
-                  onChange={() => setHoursChoice("assume")}
-                  type="radio"
-                  value="assume"
-                />
-                <span>{copy("auto_resolve_free", language)}</span>
-              </label>
-              <label>
-                <input
-                  checked={hoursChoice === "verified"}
-                  name="hours-choice"
-                  onChange={() => setHoursChoice("verified")}
-                  type="radio"
-                  value="verified"
-                />
-                <span>
-                  {copyFormat("before_buy_hours", language, {
-                    cost: evidence.data.verified.estimate_usd.toFixed(3),
-                  })}
-                </span>
-              </label>
-            </fieldset>
-          ) : null}
-          {/* Rebuilding an existing plan: the gap is stated, not re-negotiated. */}
-          {evidence.data.needing_hours && proposal && !rebuilding ? (
-            <p className="field-error" role="status">
-              ⚠ {copyFormat("missing_criteria_warning", language, {
-                needing: evidence.data.needing_hours,
-                places: evidence.data.places,
-              })}
-            </p>
-          ) : null}
-        </section>
-      ) : showBuildControls && considered.length && !building ? (
-        <section aria-busy={evidence.isPending} className="evidence-verdict">
-          <h2>{copy("before_you_build", language)}</h2>
-          <p className={evidence.isError ? "field-error" : "setup-hint"}>
-            {evidence.isError ? `⚠ ${evidence.error.message}` : copy("loading_build_options", language)}
-          </p>
+          <Link to={`/trips/${tripId}/evidence`}>{copy("open_evidence_detail", language)}</Link>
         </section>
       ) : null}
 
-      {/* The one action on this screen, always present. It used to be hidden whenever the
-          opening-hours question was open, because the two buttons up there built the plan
-          instead — which meant the screen's named action disappeared exactly when the
-          owner was looking for it. The radio above now decides *how* it builds; this
-          decides *that* it builds. */}
-      {/* The rebuild offer, where the build controls used to be. */}
-      {!showBuildControls && !building ? (
+      {!showBuildControls && !building && !outstanding.length && !unfit.length && !comfortOnly.length ? (
         <div className="optimize-actions">
           <button onClick={() => setRebuilding(true)} type="button">
             {copy("build_again", language)}
@@ -895,25 +722,14 @@ export function OptimizePage() {
       <div className="optimize-actions" hidden={!showBuildControls || building}>
         <button
           className="setup-primary"
-          disabled={considered.length === 0 || building || !evidence.data}
+          disabled={considered.length === 0 || building || !trip}
           onClick={() => {
-            if (!evidence.data) return;
-            if (!evidence.data.needing_hours) return generate.mutate();
-            // The paid route only on a first build, where it was offered.
-            if (!proposal && hoursChoice === "verified") return buyThenGenerate.mutate();
-            return autoResolveAndGenerate.mutate();
+            if (trip?.planning_mode === "ready_to_schedule") generate.mutate();
+            else autoResolveAndGenerate.mutate();
           }}
           type="button"
         >
-          {/* Always "build". This borrowed the accept label when a plan existed, which
-              put "Accept all criteria and build the plan — free" here and "Accept
-              criteria and rebuild" in the unfit section below -- the same mutation under
-              two names, on screen together, which is the duplicate that keeps being
-              reported. Accepting belongs where the failure is described; this button
-              only ever builds. */}
-          {building
-            ? copy(buyThenGenerate.isPending ? "before_buying" : "optimizing", language)
-            : copy("generate_plan", language)}
+          {copy("generate_plan", language)}
         </button>
       </div>
       {/* A disabled primary action always says why. */}
@@ -1136,109 +952,60 @@ export function OptimizePage() {
               </span>
             </p>
           ) : null}
-          {/* The accept, here. It was only in the tradeoff panel further up the page and
-              was reported as not being there at all — a control that resolves a refusal
-              belongs beside the refusal. It agrees to the **measured** value, never the
-              rule in general: `_accepts` requires `measured <= accepted_value`, so a
-              later replan that walks further is refused again rather than blessed. */}
-          {/* **The message and a control render on the same condition.** They did not:
-              the note above needed `comfortOnly`, the button needed `comfortOnly` *and*
-              `overBudget`, and the two come from different places — `comfortOnly` from
-              the stored variant's violations, `overBudget` from the live tradeoff report.
-              They diverge whenever the report has no unaccepted figure to offer: the
-              figure was already agreed and the plan not yet rebuilt, or the report is
-              still arriving. The owner met the gap exactly as it reads — "I don't know
-              what to do next, cause it no button anywhere".
-
-              So when there is a figure to agree to, agreeing is the way out; when there
-              is not, the stored variant is simply behind the agreement and rebuilding is.
-              One of the two always renders. */}
-          {!activationAllowed && comfortOnly.length ? (
-            <div className="optimize-actions comfort-acceptance">
-              {overBudget.length ? (
-                <>
-                  {overBudget.length > 1 ? (
-                    <fieldset>
-                      <legend>{copy("accept_criteria_choose", language)}</legend>
-                      {overBudget.map((rule) => (
-                        <label key={rule.code}>
-                          <input
-                            checked={!excludedComfort.has(rule.code)}
-                            onChange={(event) => setExcludedComfort((current) => {
-                              const next = new Set(current);
-                              if (event.target.checked) next.delete(rule.code);
-                              else next.add(rule.code);
-                              return next;
-                            })}
-                            type="checkbox"
-                          />
-                          {copyFormat("accept_criterion", language, {
-                            criterion: copyFrom("OPTIMIZER_CODE_TEXT", rule.code, language),
-                            measured: rule.measured ?? "—",
-                            threshold: rule.threshold ?? "—",
-                          })}
-                        </label>
-                      ))}
-                    </fieldset>
-                  ) : null}
-                  {/* One press, everything outstanding. This used to be `acceptAll`,
-                      which agreed to the figures and rebuilt — and then the rebuild
-                      surfaced the *next* condition, which had its own button and its own
-                      rebuild. `resolveAllAndRebuild` applies the acceptance together with
-                      whatever else this draft is waiting for and builds once; when the
-                      figures are the only thing outstanding it does exactly what
-                      `acceptAll` did. The steps are listed above the button when there is
-                      more than one, so the press is never larger than it looks. */}
-                  {outstanding.length > 1 ? (
-                    <p className="setup-hint">
-                      {outstanding
-                        .map((item) => copy(`resolve_step_${item}`, language))
-                        .join(" · ")}
-                    </p>
-                  ) : null}
-                  <button
-                    className="setup-primary"
-                    disabled={building || selectedComfort.length === 0}
-                    onClick={() => resolveAllAndRebuild.mutate()}
-                    type="button"
-                  >
-                    {building
-                      ? copy("loading", language)
-                      : outstanding.length > 1
-                        ? copy("resolve_all_and_continue", language)
-                        : overBudget.length > 1
-                          ? copy("accept_selected_and_continue", language)
-                          : copyFormat("accept_measured_and_continue", language, {
-                              measured: String(overBudget[0].measured),
-                            })}
-                  </button>
-                </>
-              ) : tradeoffs.isPending ? (
-                /* Waiting, not a button. The report was still arriving and the screen
-                   offered a bare "build them again" — a whole rebuild whose only effect
-                   was that the second pass happened to have the figures loaded. The
-                   owner reported it as the first of three presses to get one plan. */
-                <p aria-busy="true" className="setup-hint">
-                  {copy("loading", language)}
+          {actionable.length > 0 || comfortOnly.length > 0 ? (
+            <section className="optimize-actions comfort-acceptance">
+              <h2 className="money-eyebrow">{copy("repair_plan_title", language)}</h2>
+              {actionable.length ? (
+                <p className="setup-hint">
+                  {actionable.map((item) => item === "days"
+                    ? copyFormat("unfit_add_days", language, { count: extraDays })
+                    : copy(`resolve_step_${item}`, language)).join(" · ")}
                 </p>
+              ) : null}
+              {overBudget.length === 1 ? (
+                <p className="setup-hint">{copyFormat("accept_criterion", language, {
+                  criterion: copyFrom("OPTIMIZER_CODE_TEXT", overBudget[0].code, language),
+                  measured: overBudget[0].measured ?? "—",
+                  threshold: overBudget[0].threshold ?? "—",
+                })}</p>
+              ) : null}
+              {overBudget.length > 1 ? (
+                <fieldset>
+                  <legend>{copy("accept_criteria_choose", language)}</legend>
+                  {overBudget.map((rule) => (
+                    <label key={rule.code}>
+                      <input
+                        checked={!excludedComfort.has(rule.code)}
+                        onChange={(event) => setExcludedComfort((current) => {
+                          const next = new Set(current);
+                          if (event.target.checked) next.delete(rule.code);
+                          else next.add(rule.code);
+                          return next;
+                        })}
+                        type="checkbox"
+                      />
+                      {copyFormat("accept_criterion", language, {
+                        criterion: copyFrom("OPTIMIZER_CODE_TEXT", rule.code, language),
+                        measured: rule.measured ?? "—",
+                        threshold: rule.threshold ?? "—",
+                      })}
+                    </label>
+                  ))}
+                </fieldset>
+              ) : null}
+              {comfortOnly.length && tradeoffs.isPending ? (
+                <p aria-busy="true" className="setup-hint">{copy("loading", language)}</p>
               ) : (
-                /* The report has loaded with nothing to agree to, while the drawn
-                   variant still carries an `UNAPPROVED_` violation: the figures were
-                   already accepted and this draft predates the acceptance. One rebuild
-                   is the way out, and it goes through the same control as everything
-                   else so there is one path that applies whatever is outstanding. */
                 <button
                   className="setup-primary"
-                  disabled={building}
+                  disabled={building || Boolean(comfortOnly.length && overBudget.length && !selectedComfort.length)}
                   onClick={() => resolveAllAndRebuild.mutate()}
                   type="button"
                 >
-                  {building
-                    ? copy("loading", language)
-                    : copy("resolve_all_and_continue", language)}
+                  {copy("resolve_all_and_continue", language)}
                 </button>
               )}
-            </div>
+            </section>
           ) : null}
 
           {/* Every place that did not make it, with the way out beside it. The table
@@ -1260,6 +1027,9 @@ export function OptimizePage() {
               <section className="optimize-unfit">
                 <h2 className="money-eyebrow">{copy("unfit_title", language)}</h2>
                 <p className="setup-hint">{copy("unfit_help", language)}</p>
+                {needsRoutes && trip?.planning_mode === "ready_to_schedule" ? (
+                  <Link to={`/trips/${tripId}/evidence`}>{copy("check_all_routes", language)}</Link>
+                ) : null}
                 {needsDays.length ? (
                   <>
                     <p className="setup-hint">
@@ -1268,34 +1038,7 @@ export function OptimizePage() {
                         days: variant.days.length,
                       })}
                     </p>
-                    {/* Both ways out run the same rebuild as the big button, so both
-                        hide the old draft while it runs. The wizard link is gone on
-                        purpose: it threw away this screen — the refusal, the reasons,
-                        the plan so far — to change one date, and coming back meant
-                        building again from the top.
-
-                        The primary control is `resolveAllAndRebuild`, not the
-                        day-extension on its own: whatever else this draft is waiting for
-                        — an unapproved comfort figure, an unrouted pair — is applied in
-                        the same pass, so the owner is not walked through the refusals one
-                        rebuild at a time. When days are the only thing outstanding the
-                        two are the same action; `outstanding` says which. */}
-                    {outstanding.length > 1 ? (
-                      <p className="setup-hint">
-                        {outstanding
-                          .map((item) => copy(`resolve_step_${item}`, language))
-                          .join(" · ")}
-                      </p>
-                    ) : null}
                     <div className="optimize-actions">
-                      <button
-                        className="setup-primary"
-                        disabled={building || cutUnfitAndRebuild.isPending}
-                        onClick={() => resolveAllAndRebuild.mutate()}
-                        type="button"
-                      >
-                        {copyFormat("unfit_add_days", language, { count: extraDays })}
-                      </button>
                       <button
                         disabled={building || cutUnfitAndRebuild.isPending}
                         onClick={() =>
@@ -1360,48 +1103,11 @@ export function OptimizePage() {
                     </div>
                   </>
                 ) : null}
-                {/* The other way past a route nothing will measure. "Fix routes" asks
-                    the routers again, which is right when they were merely busy and
-                    useless when they will not answer this pair at all — and then the only
-                    remaining control was "drop the place". This accepts a deliberately
-                    **over-stated** straight line instead: the plan gains slack rather
-                    than losing a place, and the estimate is marked so nothing downstream
-                    can mistake it for something a router said. */}
-                {/* The same mutation the primary control runs, so it now carries the
-                    same label and the same note. It used to say "Measure the missing
-                    routes and rebuild", which named one of the three things it does and
-                    read as a second, different action -- two buttons for one behaviour,
-                    reported as redundant and confusing. */}
-                {/* This screen's own words, not the general free-build label. Routes are
-                    *measured*, not assumed -- a router is asked, and when it refuses the
-                    leg stays unverified however the hours were filled. That is why "the
-                    route is not verified" can follow choosing "assume free": the free
-                    choice covers hours, and this covers what the measuring could not
-                    reach. Replacing the label rather than adding a second control, so
-                    one action is never two buttons on one screen. */}
-                {/* The only control that runs this mutation, and it lives here because
-                    here is where the failure is described. It fixes every listed place
-                    at once; the per-place drop below it stays, for the one place that
-                    will not come good however the legs are estimated. */}
-                {needsRoutes && !acceptRoutes.isPending ? (
-                  <>
-                    <p className="field-error" role="status">
-                      ⚠ {copy("routes_unverified_warning", language)}
-                    </p>
-                    <button
-                      className="setup-primary"
-                      onClick={() => acceptRoutes.mutate()}
-                      type="button"
-                    >
-                      {copy("accept_criteria_rebuild", language)}
-                    </button>
-                  </>
-                ) : null}
                 {/* One place to drop keeps its own button. More than one becomes
                     tick-boxes and a single shared rebuild: the per-row rebuilds
                     were the complaint, one press per place with a full build
                     behind each. */}
-                <ul className="optimize-unfit-list" hidden={acceptRoutes.isPending}>
+                <ul className="optimize-unfit-list">
                   {unfit.map((item) => (
                     <li key={item.place_id}>
                       {multiDrop ? (

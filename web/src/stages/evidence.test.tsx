@@ -101,17 +101,15 @@ function expectNoMissingCopy(html: string): void {
 }
 
 describe("EvidencePage", () => {
-  it("states each paid cost immediately before its own button", () => {
+  it("states the free time-zone lookup and paid hours cost beside their buttons", () => {
     const html = render("en");
 
-    // Element 16: one card per paid action, cost then button — never a wall of
-    // stacked buttons with the costs somewhere in between.
-    const zoneCost = html.indexOf("One paid lookup, about US$0.005");
+    const zoneCost = html.indexOf("Free time-zone lookup");
     const zoneButton = html.indexOf("Look up the time zone", zoneCost);
     expect(zoneCost).toBeGreaterThan(-1);
     expect(zoneButton).toBeGreaterThan(zoneCost);
 
-    const hoursCost = html.indexOf("One paid lookup per selected place");
+    const hoursCost = html.indexOf("One paid lookup per place still missing hours");
     expect(hoursCost).toBeGreaterThan(-1);
     expect(html.indexOf("evidence-cost", hoursCost - 200)).toBeLessThan(hoursCost);
     expectNoMissingCopy(html);
@@ -123,7 +121,7 @@ describe("EvidencePage", () => {
     // openrouteservice is priced at 0.0, so a cost line here would be a lie.
     // With a verified route the header reads "Routes stored: 1", so anchor on
     // the button and look back over its own card.
-    const button = html.indexOf("Fetch walking routes");
+    const button = html.indexOf("Check walking and metro routes");
     expect(button).toBeGreaterThan(-1);
     const card = html.slice(html.lastIndexOf('<div class="evidence-card">', button), button);
     expect(card).not.toContain("evidence-cost");
@@ -145,8 +143,9 @@ describe("EvidencePage", () => {
     const html = render("en", { paid_usage: { ...USAGE, state: "stopped", estimated_usd: 10.5 } });
 
     expect(html).toContain("The monthly paid cap is reached");
-    // Both paid buttons refuse; the free route button stays available.
-    expect((html.match(/disabled=""/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    // Hours are paid; time zone and routes remain free.
+    expect((html.match(/disabled=""/g) ?? []).length).toBeGreaterThanOrEqual(1);
+    expect(html).toContain("Check walking and metro routes");
   });
 
   it("offers the owner a free window only where they can resolve it", () => {
@@ -180,7 +179,7 @@ describe("EvidencePage", () => {
     const html = render("th");
 
     expect(html).toContain("เขตเวลา");
-    expect(html).toContain("วัดหลงซาน");
+    expect(html).toContain("Longshan Temple");
     expectNoMissingCopy(html);
   });
 });

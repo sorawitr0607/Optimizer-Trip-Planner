@@ -5,6 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
+from zipfile import ZipFile
 
 
 from travel_planner.actions import MAX_ROUTE_REQUESTS, PlannerActions
@@ -756,6 +757,9 @@ class TransitRouteTest(unittest.TestCase):
         self.assertEqual("estimated", longest["status"])
         self.assertEqual("gtfs", longest["provider"])
 
+    def test_stay_areas_can_use_the_same_tdx_graph(self) -> None:
+        self.assertTrue(self.actions.transit_provider.build_graph().edges)
+
     def test_every_transit_pair_is_swept_because_a_pair_costs_no_request(self) -> None:
         """The Tokyo plan's 8.5, 9.5, 15.7 and 17.6 km walks, at the source.
 
@@ -870,6 +874,52 @@ class TransitRouteTest(unittest.TestCase):
         self.assertEqual(0, report["fetched"])
         self.assertTrue(report["provider_errors"])
         self.assertIn("GTFS feed unusable", report["provider_errors"][0])
+
+    def test_tdx_lines_with_separate_platform_ids_connect_at_a_station(self) -> None:
+        from travel_planner.gtfs import TransitFeed
+
+        path = Path(self.directory.name) / "interchange.zip"
+        with ZipFile(path, "w") as archive:
+            archive.writestr(
+                "stops.txt",
+                "stop_id,stop_name,stop_lat,stop_lon\n"
+                "A1,Start,25.000,121.500\n"
+                "AX,Central,25.010,121.510\n"
+                "BX,Central,25.010,121.510\n"
+                "B2,Finish,25.020,121.520\n"
+                "BUS,Bus stop,25.020,121.520\n",
+            )
+            archive.writestr("trips.txt", "trip_id,route_id\na,A\nb,B\n")
+            archive.writestr(
+                "stop_times.txt",
+                "trip_id,stop_id,arrival_time,departure_time\n"
+                "a,A1,09:00:00,09:00:00\n"
+                "a,AX,09:04:00,09:04:00\n"
+                "b,BX,09:10:00,09:10:00\n"
+                "b,B2,09:14:00,09:14:00\n",
+            )
+        feed = TransitFeed(path)
+        self.assertNotIn("BUS", feed.stops)
+        trip = feed.journey(origin=(25.000, 121.500), destination=(25.020, 121.520))
+        self.assertIsNotNone(trip)
+        self.assertEqual(1, trip.transfers)
+
+    def test_tdx_uses_osm_for_a_missing_line(self) -> None:
+        from travel_planner.providers import GtfsTransitProvider
+
+        class MissingLine:
+            def journey(self, **_kwargs):
+                return None
+
+        class OsmLine:
+            def route(self, origin, destination):
+                return {"origin_id": origin["place_id"], "destination_id": destination["place_id"], "provider": "osm_metro"}
+
+        route = GtfsTransitProvider(feed=MissingLine(), fallback=OsmLine()).route(
+            {"place_id": "a", "latitude": 25.0, "longitude": 121.5},
+            {"place_id": "b", "latitude": 25.1, "longitude": 121.6},
+        )
+        self.assertEqual("osm_metro", route["provider"])
 
 
 class MetroInterchangeTest(unittest.TestCase):

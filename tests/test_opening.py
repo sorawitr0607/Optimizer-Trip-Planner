@@ -14,6 +14,7 @@ from travel_planner.actions import PlannerActions
 from travel_planner.providers import (
     GooglePlacesOpeningHoursProvider,
     ProviderBudgetExceeded,
+    ProviderNoMatch,
     ProviderUnavailable,
 )
 from tests.test_routes import FakePlaceProvider, FakeRouteProvider
@@ -58,16 +59,20 @@ class FakeHoursProvider:
     def __init__(
         self, *, periods=None, fail_for: set[str] | None = None,
         business_status: str | None = None,
+        no_match_for: set[str] | None = None,
     ) -> None:
         self.calls: list[str] = []
         self.periods = periods if periods is not None else [
             period(day, (9, 0), (18, 0)) for day in range(7)
         ]
         self.fail_for = fail_for or set()
+        self.no_match_for = no_match_for or set()
         self.business_status = business_status
 
     def opening_hours(self, place: dict) -> dict:
         self.calls.append(place["place_id"])
+        if place["place_id"] in self.no_match_for:
+            raise ProviderNoMatch("No exact Google Maps match")
         if place["place_id"] in self.fail_for:
             raise ProviderUnavailable("Places returned no opening hours for this place")
         payload = google_payload(
@@ -455,6 +460,19 @@ class OpeningRefreshTest(unittest.TestCase):
         ]
         # Cached reads add no requests and no cost.
         self.assertEqual(len(self.places), bucket["requests"])
+
+    def test_no_match_waits_for_owner_confirmation_without_buying_again(self) -> None:
+        provider = FakeHoursProvider(no_match_for={self.places[0]})
+        actions = PlannerActions(self.path, hours_provider=provider)
+        first = actions.refresh_opening_hours(self.trip.trip_id)
+        self.assertEqual(1, first["failed"])
+        self.assertEqual(1, actions.opening_evidence_options(self.trip.trip_id)["not_in_provider"])
+        self.assertEqual("PLACE_NOT_IN_PROVIDER", actions.opening_intervals(self.trip.trip_id)[self.places[0]]["reason"])
+        calls = len(provider.calls)
+        again = actions.refresh_opening_hours(self.trip.trip_id)
+        self.assertEqual(calls, len(provider.calls))
+        self.assertEqual(0, again["fetched"])
+        self.assertEqual(0, actions.opening_evidence_options(self.trip.trip_id)["verified"]["calls"])
 
     def test_one_place_failing_leaves_the_others_verified(self) -> None:
         actions = PlannerActions(

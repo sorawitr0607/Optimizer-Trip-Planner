@@ -756,41 +756,32 @@ export function SetupPage() {
               ))}
             </fieldset>
           ))}
-          {/* Was its own step, which made a wizard of six for one textarea and asked the
-              same question twice: `avoid` is soft ("rather not"), this is hard ("cannot").
-              Split across two screens the difference was invisible, so it now sits
-              directly under the avoid chips where the contrast is the point. */}
-          <label className="setup-wide">
-            {copy("owner_must", language)}
-            <textarea
-              aria-describedby="owner-must-help"
-              name="owner-requirements"
-              onChange={(event) => edit({ owner_must_respect: event.target.value })}
-              placeholder={copy("owner_must_placeholder", language)}
-              rows={3}
-              value={values.owner_must_respect}
-            />
-          </label>
-          <p className="setup-hint setup-wide" id="owner-must-help">
-            {copy("owner_must_help", language)}
-          </p>
-          {/* The free-text boxes never said what happens to what you type, so they
-              read as a comment field nobody reads. They are parsed for constraints
-              when the plan is built, and an example is worth more than the label. */}
-          <label className="setup-wide">
-            {copy("description", language)}
-            <textarea
-              aria-describedby="owner-words-help"
-              name="owner-description"
-              onChange={(event) => edit({ owner_description: event.target.value })}
-              placeholder={copy("owner_description_placeholder", language)}
-              rows={3}
-              value={values.owner_description}
-            />
-          </label>
-          <p className="setup-hint setup-wide" id="owner-words-help">
-            {copy("own_words_help", language)}
-          </p>
+          <details className="setup-wide" open={Boolean(values.owner_description.trim() || values.owner_must_respect.trim())}>
+            <summary>{copy("extra_requirements", language)}</summary>
+            <p className="setup-hint" id="owner-must-help">{copy("owner_must_help", language)}</p>
+            <label>
+              {copy("owner_must", language)}
+              <textarea
+                aria-describedby="owner-must-help"
+                name="owner-requirements"
+                onChange={(event) => edit({ owner_must_respect: event.target.value })}
+                placeholder={copy("owner_must_placeholder", language)}
+                rows={2}
+                value={values.owner_must_respect}
+              />
+            </label>
+            {values.owner_description.trim() ? (
+              <label>
+                {copy("description", language)}
+                <textarea
+                  name="owner-description"
+                  onChange={(event) => edit({ owner_description: event.target.value })}
+                  rows={2}
+                  value={values.owner_description}
+                />
+              </label>
+            ) : null}
+          </details>
         </div>
       ) : null}
 
@@ -912,28 +903,32 @@ export function SetupPage() {
                   </button>
                 ))}
               </fieldset>
-              <label className="setup-wide">
-                {copy("member_notes", language)}
-                <textarea
-                  name={`member-${index}-notes`}
-                  onChange={(event) => editMember(index, { description: event.target.value })}
-                  placeholder={copy("member_notes_placeholder", language)}
-                  rows={2}
-                  value={member.description}
-                />
-              </label>
-              <label className="setup-wide">
-                {copy("member_must", language)}
-                <textarea
-                  name={`member-${index}-requirements`}
-                  onChange={(event) =>
-                    editMember(index, { must_respect: event.target.value.split("\n") })
-                  }
-                  placeholder={copy("member_must_placeholder", language)}
-                  rows={2}
-                  value={member.must_respect.join("\n")}
-                />
-              </label>
+              <details className="setup-wide" open={Boolean(member.description.trim() || member.must_respect.some((item) => item.trim()))}>
+                <summary>{copy("extra_requirements", language)}</summary>
+                <label>
+                  {copy("member_must", language)}
+                  <textarea
+                    name={`member-${index}-requirements`}
+                    onChange={(event) =>
+                      editMember(index, { must_respect: event.target.value.split("\n") })
+                    }
+                    placeholder={copy("member_must_placeholder", language)}
+                    rows={2}
+                    value={member.must_respect.join("\n")}
+                  />
+                </label>
+                {member.description.trim() ? (
+                  <label>
+                    {copy("member_notes", language)}
+                    <textarea
+                      name={`member-${index}-notes`}
+                      onChange={(event) => editMember(index, { description: event.target.value })}
+                      rows={2}
+                      value={member.description}
+                    />
+                  </label>
+                ) : null}
+              </details>
             </fieldset>
           ))}
         </div>
@@ -1000,6 +995,9 @@ export function SetupPage() {
           ))}
           <dt>{copy("owner_must", language)}</dt>
           <dd>{values.owner_must_respect.trim() || "—"}</dd>
+          {values.owner_description.trim() ? (
+            <><dt>{copy("description", language)}</dt><dd>{values.owner_description}</dd></>
+          ) : null}
         </dl>
       ) : null}
 

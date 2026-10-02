@@ -26,6 +26,12 @@ the buses is the same filter without the agency check.
 Verified end to end: 捷運西門站 → 捷運台北101/世貿站 resolves to a 25-minute journey,
 one transfer, `basis: "timetable"` — the real thing rather than the OSM nominal fallback.
 
+The subset's `stops.txt` still contains national bus stops, and its metro edges omit
+some lines (including the zoo line). Routing now ignores stops without metro edges,
+joins separately identified platforms at the same station, and tries the OSM metro
+graph when TDX has no route for a pair. A Taipei centre → Taipei Zoo check returned
+an OSM metro leg of 48 minutes with 13 minutes of access walking and one transfer.
+
 **The feed only helps a Taiwan trip.** Measured coverage: 636 stops within reach of
 Taipei 101, **zero** for Busan or Fukuoka. Elsewhere the app falls back to OSM metro
 topology, which says so with `basis: "nominal"`.

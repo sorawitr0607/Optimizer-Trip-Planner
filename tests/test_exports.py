@@ -139,7 +139,7 @@ class ExportSnapshotTest(unittest.TestCase):
             ]
 
         self.assertIn("Shibuya Sky", [item["display_name"] for item in visits(english)])
-        self.assertIn("ชิบูยะสกาย", [item["display_name"] for item in visits(thai)])
+        self.assertIn("Shibuya Sky", [item["display_name"] for item in visits(thai)])
         self.assertEqual(
             [(item["subject_id"], item["start"], item["end"]) for item in visits(english)],
             [(item["subject_id"], item["start"], item["end"]) for item in visits(thai)],
@@ -405,17 +405,18 @@ class ArtifactTest(unittest.TestCase):
         ):
             self.assertIn(f"<v>{value}</v>", summary)
 
-    def test_workbook_keeps_english_thai_and_local_names_side_by_side(self) -> None:
+    def test_workbook_uses_one_english_place_name_column(self) -> None:
         archive = zipfile.ZipFile(BytesIO(plan_workbook_xlsx(self.export)))
         strings = archive.read("xl/sharedStrings.xml").decode("utf-8")
         headers = [name for name, _ in exporters.TIMELINE_COLUMNS]
 
+        self.assertIn("Name", headers)
         for column in ("Name (EN)", "Name (TH)", "Local name"):
-            self.assertIn(column, headers)
-        # The snapshot language is Thai, yet English and local script survive.
+            self.assertNotIn(column, headers)
+        # The snapshot language is Thai, but place names remain English.
         self.assertEqual("th", self.export["stamp"]["language"])
-        for name in LOCAL_NAMES["shibuya_sky"].values():
-            self.assertIn(name, strings)
+        self.assertIn("Shibuya Sky", strings)
+        self.assertNotIn("渋谷スカイ", strings)
 
     def test_status_wording_survives_when_its_icon_cannot_be_drawn(self) -> None:
         labels = {"state_confirmed": "✅ Confirmed", "state_locked": "🔒 Locked"}

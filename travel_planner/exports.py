@@ -182,14 +182,13 @@ def build_export_snapshot(
 def display_name(
     names: dict[str, Any] | None, fallback: Any, language: str
 ) -> str:
-    """Selected language, then English, then the local script."""
+    """Use the sourced English name when one exists."""
 
     values = names or {}
     return str(
-        values.get(language)
-        or values.get("en")
-        or values.get("local")
+        values.get("en")
         or fallback
+        or values.get("local")
         or ""
     )
 
@@ -354,8 +353,8 @@ def _item(
             {
                 "stop_number": stop_number,
                 "display_name": display_name(names, item.get("name"), context["language"]),
-                # Every language kept side by side: Excel exports them as
-                # separate columns, so switching the UI cannot rewrite identity.
+                # Keep source names in the snapshot for matching and attribution;
+                # the workbook presents one English name when one is sourced.
                 "names": dict(names or {}),
                 "local_name": (names or {}).get("local"),
                 "kind": item.get("kind"),

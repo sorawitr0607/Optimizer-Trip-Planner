@@ -121,7 +121,6 @@ function render(
       entries={entries}
       insights={insights}
       language="en"
-      altNameOf={(placeId) => (placeId === "first" ? "台北101" : null)}
       nameOf={(placeId) => (placeId === "first" ? "Taipei 101" : "A quiet park")}
       onDecide={() => {}}
       onWantPhotos={() => {}}
@@ -201,9 +200,7 @@ describe("PlaceDeck", () => {
   it("shows the facts WF-005 requires that can actually differ between places", () => {
     const html = render(SUMMARY);
     expect(html).toContain("Taipei 101");
-    // Both names, because 61% of the Taipei catalogue has no `name:en` and the local
-    // string is what the signage and a taxi driver use.
-    expect(html).toContain("台北101");
+    expect(html).not.toContain("台北101");
     // The score reads as fit now, not as an exam mark: same number out of the same 100,
     // rounded, because a tenth of a percent of a heuristic is precision it does not have.
     expect(html).toContain("88% match");

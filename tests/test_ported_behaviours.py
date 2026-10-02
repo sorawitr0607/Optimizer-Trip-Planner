@@ -164,8 +164,11 @@ class SetupConfirmationTest(unittest.TestCase):
 
         stages = {s["key"]: s for s in self.actions.journey(trip_id)["stages"]}
         self.assertIsNone(stages["evidence"]["blocked_by"])
-        self.assertIsNone(stages["optimize"]["blocked_by"])
+        self.assertEqual("evidence", stages["optimize"]["blocked_by"])
         self.assertTrue(stages["places"]["done"])
+        self.assertEqual("stay", self.actions.journey(trip_id)["next"])
+        self.actions.accept_provisional_base(trip_id)
+        self.assertEqual("evidence", self.actions.journey(trip_id)["next"])
 
     def test_a_trip_that_already_has_a_draft_is_not_relocked(self) -> None:
         """Owners mid-flight had no way to press a button that did not exist when they
@@ -541,7 +544,7 @@ class S4PortedBehaviourTest(unittest.TestCase):
                 [item["display_name"] for day in english["days"] for item in day["stops"]],
             )
             self.assertIn(
-                "ชิบูยะสกาย",
+                "Shibuya Sky",
                 [item["display_name"] for day in thai["days"] for item in day["stops"]],
             )
             self.assertEqual(

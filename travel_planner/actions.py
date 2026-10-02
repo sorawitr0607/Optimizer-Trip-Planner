@@ -110,6 +110,7 @@ CHECKLIST_TEMPLATE_FIELDS = (
 #: A fact about the provider's index, not about the trip, and the one kind that exists
 #: to stop a call rather than to inform one.
 PROVIDER_NO_MATCH_KIND = "provider_no_match"
+HOURS_NO_MATCH_KIND = "opening_hours_no_match"
 
 #: How long that refusal stands. Long, because Google's index does not change hourly
 #: and every re-ask is US$0.025; bounded, because it does change eventually and a
@@ -655,6 +656,11 @@ class PlannerActions:
                         if choice.action in {"must_do", "interested", "maybe"}
                     ],
                 )
+        stay_done = bool(active is not None or (chosen and self._stay_decided(trip_id)))
+        evidence_done = bool(
+            active is not None
+            or (kept and (not gaps or trip.planning_mode == "explore_first"))
+        )
         stages = [
             {"key": "setup", "done": bool(setup and setup.confirmed), "blocked_by": None},
             {
@@ -663,11 +669,6 @@ class PlannerActions:
                 # deck deals hundreds of cards; one keep is the start of choosing.
                 "done": bool(discovery is not None and chosen),
                 "blocked_by": None if setup and setup.confirmed else "setup",
-            },
-            {
-                "key": "evidence",
-                "done": bool(kept and (not gaps or trip.planning_mode == "explore_first")),
-                "blocked_by": None if discovery is not None and chosen else "places",
             },
             {
                 # A real step, not a screen off to one side. The route existed and was
@@ -681,13 +682,27 @@ class PlannerActions:
                 # recorded; without the second, an owner who books nothing would have
                 # `next` stuck here for the rest of the trip.
                 "key": "stay",
-                "done": bool(chosen and self._stay_decided(trip_id)),
+                "done": stay_done,
+                "blocked_by": None if chosen else "places",
+            },
+            {
+                "key": "evidence",
+                "done": evidence_done,
                 "blocked_by": None if chosen else "places",
             },
             {
                 "key": "optimize",
                 "done": active is not None,
-                "blocked_by": None if chosen else "places",
+                "blocked_by": (
+                    None if active is not None
+                    else "places" if not chosen
+                    else "evidence" if (
+                        trip.planning_mode == "ready_to_schedule"
+                        and not evidence_done
+                        and not self.store.has_optimization_preview(trip_id)
+                    )
+                    else None
+                ),
             },
             {
                 "key": "itinerary",
@@ -1119,7 +1134,9 @@ class PlannerActions:
     def rank_candidates(self, trip_id: str) -> dict[str, Any]:
         return self._rank_candidates(trip_id)
 
-    def _provider_no_match_ids(self, trip_id: str) -> list[str]:
+    def _provider_no_match_ids(
+        self, trip_id: str, kind: str = PROVIDER_NO_MATCH_KIND
+    ) -> list[str]:
         """Places a paid provider has searched for and not found, **while that stands**.
 
         The bug this exists to close. The refusal is written with an `expires_at` 90 days
@@ -1140,9 +1157,27 @@ class PlannerActions:
         now = datetime.now(timezone.utc).isoformat()
         return [
             str(row["place_id"])
-            for row in self.store.list_place_evidence(trip_id, PROVIDER_NO_MATCH_KIND)
+            for row in self.store.list_place_evidence(trip_id, kind)
             if row.get("place_id") and str(row.get("expires_at") or "") > now
         ]
+
+    def _remember_provider_no_match(
+        self, trip_id: str, place_id: str, kind: str, provider: Any, operation: str
+    ) -> None:
+        now = datetime.now(timezone.utc)
+        self.store.upsert_place_evidence(
+            trip_id=trip_id,
+            place_id=place_id,
+            kind=kind,
+            value={
+                "place_id": place_id,
+                "provider": str(provider.name),
+                "operation": operation,
+            },
+            provider=str(provider.name),
+            retrieved_at=now.isoformat(),
+            expires_at=(now + timedelta(days=PROVIDER_NO_MATCH_DAYS)).isoformat(),
+        )
 
     def get_ranked_discovery(self, trip_id: str) -> dict[str, Any]:
         """The latest discovery and its ranking from one candidate-catalogue read."""
@@ -1201,24 +1236,9 @@ class PlannerActions:
                 language="th" if language == "th" else "en",
             )
         except ProviderNoMatch:
-            # Written with an expiry like any other evidence, so a place Google adds
-            # later becomes askable again rather than being refused for ever.
-            now = datetime.now(timezone.utc)
-            self.store.upsert_place_evidence(
-                trip_id=trip_id,
-                place_id=place_id,
-                kind=PROVIDER_NO_MATCH_KIND,
-                # `place_id` inside the value, not only in the row: `list_place_evidence`
-                # returns the stored snapshot and the row's own columns are not part of
-                # it, which is why `list_venue_notices` reads the id from the payload too.
-                value={
-                    "place_id": place_id,
-                    "provider": str(provider.name),
-                    "operation": provider.details_operation,
-                },
-                provider=str(provider.name),
-                retrieved_at=now.isoformat(),
-                expires_at=(now + timedelta(days=PROVIDER_NO_MATCH_DAYS)).isoformat(),
+            self._remember_provider_no_match(
+                trip_id, place_id, PROVIDER_NO_MATCH_KIND, provider,
+                provider.details_operation,
             )
             raise
         details = {**details, "retrieved_at": datetime.now(timezone.utc).isoformat()}
@@ -1450,6 +1470,8 @@ class PlannerActions:
         held = self.list_assumed_windows(trip_id)
         places = self._selected_places(trip_id)
         needing = [p["place_id"] for p in places if p["place_id"] not in verified]
+        no_match = set(self._provider_no_match_ids(trip_id, HOURS_NO_MATCH_KIND))
+        searchable = [place_id for place_id in needing if place_id not in no_match]
         hours_price = usage.PRICES_USD["google_places:search_text"]
         window_price = usage.PRICES_USD["openai:opening_window"]
         batch_size = int(getattr(OpenAIOpeningWindowProvider, "BATCH_SIZE", 20))
@@ -1458,11 +1480,12 @@ class PlannerActions:
             "places": len(places),
             "with_verified_hours": len(verified),
             "needing_hours": len(needing),
+            "not_in_provider": len(needing) - len(searchable),
             "already_assumed": sum(1 for pid in needing if pid in held),
             "verified": {
                 "operation": "google_places:search_text",
-                "calls": len(needing),
-                "estimate_usd": round(hours_price * len(needing), 6),
+                "calls": len(searchable),
+                "estimate_usd": round(hours_price * len(searchable), 6),
                 "status": "verified",
                 "batchable": False,
             },
@@ -1955,9 +1978,14 @@ class PlannerActions:
         opening_missing = False
         opening_evidence = self.opening_intervals(trip_id)
         assumed_windows = self.list_assumed_windows(trip_id)
+        summaries = self.list_place_summaries(trip_id)
         current_by_id = {item["place_id"]: item for item in current_candidates}
         for choice in choices:
             candidate = choice.candidate.as_dict()
+            names = dict(candidate.get("names") or {})
+            english = names.get("en") or (summaries.get(choice.place_id, {}).get("names") or {}).get("en")
+            if english:
+                names["en"] = english
             current = current_by_id.get(choice.place_id, candidate)
             card = cards.get(choice.place_id)
             duration = (card or {}).get("duration_estimate", {})
@@ -1966,8 +1994,8 @@ class PlannerActions:
             candidates.append(
                 {
                     "id": choice.place_id,
-                    "name": candidate["name"],
-                    "names": candidate.get("names", {}),
+                    "name": english or candidate["name"],
+                    "names": names,
                     "kind": candidate.get("category", "attraction"),
                     "priority": choice.action,
                     "score": float((card or {}).get("total_score", 50)),
@@ -2591,6 +2619,7 @@ class PlannerActions:
             item["place_id"]: item
             for item in self.store.list_place_evidence(trip_id, provider.kind)
         }
+        no_match = set(self._provider_no_match_ids(trip_id, HOURS_NO_MATCH_KIND))
         fetched = cached = failed = 0
         errors: list[str] = []
         for place in places:
@@ -2610,6 +2639,9 @@ class PlannerActions:
                     outcome="cached",
                 )
                 continue
+            if not force and place["place_id"] in no_match:
+                cached += 1
+                continue
             try:
                 self._spend(
                     operation=provider.operation,
@@ -2620,6 +2652,13 @@ class PlannerActions:
                 value = provider.opening_hours(place)
             except ProviderBudgetExceeded:
                 raise
+            except ProviderNoMatch:
+                failed += 1
+                self._remember_provider_no_match(
+                    trip_id, place["place_id"], HOURS_NO_MATCH_KIND, provider,
+                    provider.operation,
+                )
+                continue
             except ProviderUnavailable as error:
                 failed += 1
                 message = str(error)[:160]
@@ -2676,6 +2715,9 @@ class PlannerActions:
             }
             for place in self._selected_places(trip_id)
         }
+        for place_id in self._provider_no_match_ids(trip_id, HOURS_NO_MATCH_KIND):
+            if place_id in result:
+                result[place_id]["reason"] = "PLACE_NOT_IN_PROVIDER"
         for evidence in self.store.list_place_evidence(
             trip_id, GooglePlacesOpeningHoursProvider.kind
         ):
@@ -3906,7 +3948,7 @@ class PlannerActions:
         try:
             centre = self._destination_centre(trip_id)
             stops = gtfs.feed.stops.values()
-        except (PlannerRefusal, GtfsUnavailable, OSError, ValueError):
+        except (PlannerRefusal, ProviderUnavailable, GtfsUnavailable, OSError, ValueError):
             return osm
         nearest = min(
             (
@@ -3920,7 +3962,7 @@ class PlannerActions:
         )
         if nearest is None or nearest > self.GTFS_COVERAGE_KM * 1000:
             return osm
-        return gtfs
+        return GtfsTransitProvider(feed=gtfs.feed, fallback=osm)
 
     # How many areas survive the free travel-time ranking and go on to be counted. One
     # Overpass request whatever this is -- 12 areas is 36 statements.
@@ -4420,7 +4462,7 @@ class PlannerActions:
             self.store.upsert_route_snapshot(
                 trip_id=trip_id,
                 route=route,
-                provider=str(provider.name),
+                provider=str(route.get("provider") or provider.name),
                 retrieved_at=now.isoformat(),
                 expires_at=(
                     now + timedelta(days=int(getattr(provider, "cache_ttl_days", 14)))

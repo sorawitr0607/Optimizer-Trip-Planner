@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { useNavigate, useParams } from "react-router";
 
-import { ApiError, rpc, type AccommodationBase } from "../api/client";
+import { ApiError, rpc, type AccommodationBase, type Journey } from "../api/client";
 import { copy } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
 import { StayAreas } from "./StayAreas";
@@ -41,6 +41,15 @@ export function StayPage() {
     queryKey: ["accommodation_base", tripId],
     queryFn: () => rpc<AccommodationBase | null>("get_accommodation_base", { trip_id: tripId }),
   });
+  const continueToNext = async () => {
+    try {
+      const journey = await rpc<Journey>("journey", { trip_id: tripId });
+      queryClient.setQueryData(["journey", tripId], journey);
+      navigate(`/trips/${tripId}/${journey.next}`);
+    } catch (error) {
+      setFlash(error instanceof ApiError ? error.code : String(error));
+    }
+  };
 
   const saveBase = useMutation({
     // Never the empty query. `confirm_accommodation_base("")` geocodes
@@ -55,15 +64,11 @@ export function StayPage() {
     onSuccess: async () => {
       setFlash("accommodation_base_saved");
       await Promise.all(
-        ["accommodation_base", "journey", "plan_preview"].map((key) =>
+        ["accommodation_base", "plan_preview"].map((key) =>
           queryClient.invalidateQueries({ queryKey: [key, tripId] }),
         ),
       );
-      // Naming an address answers this page as completely as picking an area does, so it
-      // goes the same way. Both were reported as "didn't work" for the same reason:
-      // they succeeded silently and left the owner looking at the form they had just
-      // finished with.
-      navigate(`/trips/${tripId}/optimize`);
+      await continueToNext();
     },
     onError: (error) => setFlash(error instanceof ApiError ? error.code : String(error)),
   });
@@ -72,12 +77,7 @@ export function StayPage() {
     mutationFn: () => rpc("accept_provisional_base", { trip_id: tripId }),
     onSuccess: async () => {
       setFlash("stay_accepted");
-      await queryClient.invalidateQueries({ queryKey: ["journey", tripId] });
-      // On to the plan. This is the terminal answer to the question the page asks — "I
-      // am not booking anything, use the middle of my places" — and leaving the owner on
-      // the screen afterwards was reported as "the build plan not show": the stage was
-      // complete, the sidebar had unlocked, and nothing said where that had happened.
-      navigate(`/trips/${tripId}/optimize`);
+      await continueToNext();
     },
     onError: (error) => setFlash(error instanceof ApiError ? error.code : String(error)),
   });
@@ -182,20 +182,18 @@ export function StayPage() {
 
       <StayAreas
         language={language}
-        onChosen={() => navigate(`/trips/${tripId}/optimize`)}
+        onChosen={() => { void continueToNext(); }}
         onOutcome={setOutcome}
         onRanking={setRanking}
         tripId={tripId}
       />
 
-      {/* Picking an area answers this page too, but unlike accepting the centre it is not
-          obviously terminal — an owner may want to compare two before moving on — so this
-          waits to be pressed rather than navigating under them. */}
+      {/* A saved base on a later visit still has a clear way to continue. */}
       {base.data ? (
         <div className="optimize-actions">
-          <Link className="setup-primary" to={`/trips/${tripId}/optimize`}>
-            {copy("stage_optimize", language)} →
-          </Link>
+          <button className="setup-primary" onClick={() => { void continueToNext(); }} type="button">
+            {copy("next_step", language)} →
+          </button>
         </div>
       ) : null}
     </section>

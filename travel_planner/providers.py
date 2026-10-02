@@ -784,7 +784,7 @@ class OpenStreetMapProvider:
             key: value
             for key, value in {
                 "local": local_name,
-                "en": str(tags.get("name:en") or "").strip(),
+                "en": str(tags.get("name:en") or tags.get("official_name:en") or "").strip(),
                 "th": str(tags.get("name:th") or "").strip(),
             }.items()
             if value
@@ -2977,8 +2977,9 @@ class GtfsTransitProvider:
     #: that sets this and stays bounded by its deadline instead.
     answers_pairs_locally = True
 
-    def __init__(self, feed: Any | None = None) -> None:
+    def __init__(self, feed: Any | None = None, fallback: Any | None = None) -> None:
         self._feed = feed
+        self._fallback = fallback
         self._path = os.environ.get("TOURIST_GTFS_PATH", "data/gtfs/transit.zip")
 
     @property
@@ -2993,6 +2994,11 @@ class GtfsTransitProvider:
             except GtfsUnavailable as error:
                 raise ProviderUnavailable(f"GTFS feed unusable: {error}") from error
         return self._feed
+
+    def build_graph(self) -> Any:
+        """Use the same TDX metro graph for stay areas and trip legs."""
+
+        return self.feed.graph
 
     def cache_descriptor(
         self, origin: dict[str, Any], destination: dict[str, Any]
@@ -3015,6 +3021,10 @@ class GtfsTransitProvider:
             destination=(float(destination["latitude"]), float(destination["longitude"])),
         )
         if journey is None:
+            # TDX's metro subset omits some lines and cannot reach sights far from
+            # its stations. OSM topology can still supply a real metro leg.
+            if self._fallback is not None:
+                return self._fallback.route(origin, destination)
             raise ProviderUnavailable(
                 "no transit connection within walking reach of both places"
             )
@@ -3583,7 +3593,7 @@ def _best_nearby_match(
         ):
             ranked.append((similarity, -distance, match, distance))
     if not ranked:
-        raise ProviderUnavailable(
+        raise ProviderNoMatch(
             "No exact Google Maps match was found nearby; the location map and "
             "open-data source are still available."
         )

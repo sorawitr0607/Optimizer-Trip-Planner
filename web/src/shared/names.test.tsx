@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { mergeNames, placeAltName, placeName } from "./names";
+import { mergeNames, placeName, placeNameFrom } from "./names";
 
 /**
  * `WF-040` measured the reason this exists: 61% of the Taipei catalogue has no
@@ -10,22 +10,19 @@ describe("place naming", () => {
   const osm = { name: "西門紅樓", names: { en: "Red House", local: "西門紅樓" } };
   const chineseOnly = { name: "三玉宮", names: { local: "三玉宮" } };
 
-  it("shows the readable name first and the local one beside it", () => {
+  it("shows the sourced English name in either interface language", () => {
     expect(placeName(osm, "en")).toBe("Red House");
-    expect(placeAltName(osm, "en")).toBe("西門紅樓");
+    expect(placeName({ ...osm, names: { ...osm.names, th: "โรงละครเรดเฮาส์" } }, "th")).toBe("Red House");
   });
 
-  it("never repeats the same name twice", () => {
-    // Nothing to put beside it, so the card must print one name, not two identical ones.
+  it("keeps the sourced literal when no English name exists", () => {
     expect(placeName(chineseOnly, "en")).toBe("三玉宮");
-    expect(placeAltName(chineseOnly, "en")).toBeNull();
   });
 
   it("takes a Wikidata label where OpenStreetMap has no English name", () => {
     const merged = mergeNames(chineseOnly, { en: "SanYu Temple" });
 
     expect(placeName(merged, "en")).toBe("SanYu Temple");
-    expect(placeAltName(merged, "en")).toBe("三玉宮");
   });
 
   it("keeps the OpenStreetMap name when both sources have one", () => {
@@ -39,13 +36,13 @@ describe("place naming", () => {
     const merged = mergeNames(chineseOnly, { en: "" });
 
     expect(placeName(merged, "en")).toBe("三玉宮");
+    expect(placeName(mergeNames({ name: "三玉宮", names: { en: "" } }, { en: "SanYu Temple" }), "en")).toBe("SanYu Temple");
   });
 
-  it("still shows both names in Thai", () => {
+  it("uses English in frozen itinerary rows", () => {
     const merged = mergeNames(chineseOnly, { en: "SanYu Temple" });
 
-    // No Thai label, so English stands in — and the local name is still beside it.
     expect(placeName(merged, "th")).toBe("SanYu Temple");
-    expect(placeAltName(merged, "th")).toBe("三玉宮");
+    expect(placeNameFrom({ name: "西門紅樓", names: { en: "Red House", th: "โรงละครเรดเฮาส์" } }, "th")).toBe("Red House");
   });
 });

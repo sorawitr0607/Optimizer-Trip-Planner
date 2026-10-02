@@ -661,12 +661,12 @@ class CardEnrichmentTest(unittest.TestCase):
         self.assertEqual(5, len(result["photos"]))
 
         payload["places"][0]["location"] = {"latitude": 25.2, "longitude": 121.7}
-        with self.assertRaisesRegex(ProviderUnavailable, "No exact Google Maps match"):
+        with self.assertRaisesRegex(ProviderNoMatch, "No exact Google Maps match"):
             GooglePlacesCardProvider.normalize(payload, place=place)
 
         payload["places"][0]["location"] = {"latitude": 25.0401, "longitude": 121.5701}
         payload["places"][0]["displayName"] = {"text": "Different Library"}
-        with self.assertRaisesRegex(ProviderUnavailable, "No exact Google Maps match"):
+        with self.assertRaisesRegex(ProviderNoMatch, "No exact Google Maps match"):
             GooglePlacesCardProvider.normalize(payload, place=place)
 
     def test_google_match_avoids_a_wrong_subplace_category(self) -> None:

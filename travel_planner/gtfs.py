@@ -38,7 +38,7 @@ from pathlib import Path
 from typing import Any, Iterator
 import zipfile
 
-from .transit import Edge, Journey, Stop, TransitGraph, metres
+from .transit import Edge, Journey, Stop, TransitGraph, _station_of
 
 
 # Headway is trips-per-edge over the span the feed actually covers, and the span is
@@ -134,6 +134,10 @@ class TransitFeed:
             raise GtfsUnavailable(f"{self.path.name} has no stops with coordinates")
         if not self._edges:
             raise GtfsUnavailable(f"{self.path.name} has no usable stop_times")
+        # TDX's metro subset still contains the national stops table. Only stops
+        # on a metro edge can answer a route or establish feed coverage.
+        served = {stop_id for pair in self._edges for stop_id in pair}
+        self.stops = {stop_id: stop for stop_id, stop in self.stops.items() if stop_id in served}
 
     def _load_edges(
         self, archive: zipfile.ZipFile, route_of_trip: dict[str, str]
@@ -185,8 +189,16 @@ class TransitFeed:
         """
 
         if self._graph is None:
-            edges = {
-                key: Edge(
+            # Different lines give the same station different stop IDs (Taipei Main
+            # is TRTC_R10 and TRTC_BL12). Share the station node so a change of line
+            # is reachable; TransitGraph already charges the transfer and next wait.
+            station_of = _station_of(self.stops)
+            edges = {}
+            for (origin, destination), (ride, trips, route_id) in self._edges.items():
+                key = (station_of[origin], station_of[destination])
+                if key[0] == key[1]:
+                    continue
+                edge = Edge(
                     ride_minutes=float(ride),
                     wait_minutes=min(
                         MAX_HEADWAY_WAIT_MINUTES,
@@ -198,9 +210,10 @@ class TransitFeed:
                     route_id=route_id,
                     basis="timetable",
                 )
-                for key, (ride, trips, route_id) in self._edges.items()
-            }
-            self._graph = TransitGraph(self.stops, edges)
+                if key not in edges or edge.ride_minutes < edges[key].ride_minutes:
+                    edges[key] = edge
+            stops = {stop_id: stop for stop_id, stop in self.stops.items() if station_of[stop_id] == stop_id}
+            self._graph = TransitGraph(stops, edges)
         return self._graph
 
     def near(self, latitude: float, longitude: float) -> list[tuple[Stop, float]]:

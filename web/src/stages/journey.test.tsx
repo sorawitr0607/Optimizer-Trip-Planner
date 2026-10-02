@@ -9,7 +9,8 @@ import type { Language } from "../i18n/copy";
 import { LanguageProvider } from "../i18n/LanguageProvider";
 import { AppShell } from "../shared/AppShell";
 import { ThemeProvider } from "../shared/ThemeProvider";
-import { changedSections, OptimizePage } from "./OptimizePage";
+import { changedSections } from "../shared/changedSections";
+import { OptimizePage } from "./OptimizePage";
 import { SetupPage } from "./SetupPage";
 import { TripsPage } from "./TripsPage";
 
@@ -341,7 +342,7 @@ describe("OptimizePage", () => {
   it("renders the same screen in Thai", () => {
     const html = render(<OptimizePage />, "th");
 
-    expect(html).toContain("ตึกไทเป 101");
+    expect(html).toContain("Taipei 101");
     expectNoMissingCopy(html);
   });
 
@@ -546,9 +547,9 @@ describe("OptimizePage", () => {
     const html = render(<OptimizePage />, "en", blocked);
 
     expect(html).toContain("Places that did not make the plan");
-    expect(html).toContain("Accept criteria and rebuild");
+    expect(html).toContain("Apply everything above and rebuild once");
     expect(html).not.toContain("Accept a walking estimate and rebuild");
-    expect(html.match(/Accept criteria and rebuild/g) ?? []).toHaveLength(1);
+    expect(html.match(/Apply everything above and rebuild once/g) ?? []).toHaveLength(1);
   });
 });
 
