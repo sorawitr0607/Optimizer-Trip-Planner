@@ -9,7 +9,7 @@ export interface Trip {
   created_at: string;
 }
 
-export type StageKey = "setup" | "places" | "evidence" | "optimize" | "itinerary";
+export type StageKey = "setup" | "places" | "stay" | "evidence" | "optimize" | "itinerary";
 
 /** A free Wikidata/Wikipedia summary for one place. `text` may be empty: a place
  *  with no encyclopedia entry gets a visible gap, never an invented sentence. */

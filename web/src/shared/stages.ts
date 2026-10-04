@@ -1,7 +1,7 @@
 import type { Journey, StageKey } from "../api/client";
 
 /**
- * The ten stage routes and the five gate keys they resolve to.
+ * The ten stage routes and the six gate keys they resolve to.
  *
  * This table used to exist twice: once as the literal `stage=` on each
  * `<StageGate>` in `routes.tsx`, and nowhere else — so the sidebar could not say
@@ -46,13 +46,9 @@ export const STAGE_GATE: Record<StageRoute, StageKey> = {
   // 2026-08-17: the workflow is places → stay → build the plan, and ranking neighbourhoods
   // against a shortlist that is still being swiped ranks them against the wrong shortlist.
   //
-  // It borrows the `optimize` key rather than `places` because that key carries exactly
-  // this predicate — `blocked_by: None if chosen else "places"`, where `chosen` means kept
-  // *and* confirmed — while the `places` key is unblocked the moment setup is. Both
-  // therefore unlock at the same moment, which is what makes the sidebar order the real
-  // order. It deliberately does not wait on evidence: choosing a neighbourhood is what you
-  // do *before* buying opening hours for the places in it.
-  stay: "optimize",
+  // Its own journey key matters for ready-to-schedule trips: optimize waits on evidence,
+  // while choosing a neighbourhood must remain available before route verification.
+  stay: "stay",
   evidence: "evidence",
   optimize: "optimize",
   itinerary: "itinerary",

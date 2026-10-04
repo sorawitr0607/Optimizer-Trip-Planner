@@ -16,7 +16,7 @@ import { StageGate } from "./shared/StageGate";
  * names. What it asserted was "the app wires up", and that is now this table.
  *
  * Artifact 028 decided 9 stage routes resolving to 5 gate keys; it is **10 routes to
- * 5 keys** since `stay` landed. Both halves
+ * 6 keys** since `stay` landed. Both halves
  * are load-bearing and neither is visible from a screen: a dropped route is a
  * 404 nobody notices until they navigate there, and a gate key drifting to a
  * sixth value silently changes which stage blocks which.
@@ -41,9 +41,9 @@ const STAGE_ROUTES = [
   "revise",
 ];
 
-// Five, not nine. Several USE-section screens share the `setup` gate because
+// Six, not ten. Several USE-section screens share a gate because
 // they need a confirmed setup and nothing more.
-const GATE_KEYS = new Set(["setup", "places", "evidence", "optimize", "itinerary"]);
+const GATE_KEYS = new Set(["setup", "places", "stay", "evidence", "optimize", "itinerary"]);
 
 const shell = routes.find((route) => route.path === "/trips/:tripId");
 const children = shell?.children ?? [];
@@ -87,7 +87,7 @@ describe("entry point", () => {
     for (const child of children) expect(isValidElement(child.element)).toBe(true);
   });
 
-  it("gates every route except setup, and only on the five decided keys", () => {
+  it("lets Ready to schedule choose a stay before checking evidence", () => {
     const gated = new Map<string, string>();
     for (const child of children) {
       const element = child.element;
@@ -97,14 +97,16 @@ describe("entry point", () => {
 
     // Setup is the one ungated route: it is what every gate checks for.
     expect([...gated.keys()]).toEqual(STAGE_ROUTES.filter((path) => path !== "setup"));
+    expect(gated.get("stay")).toBe("stay");
+    expect(gated.get("optimize")).toBe("optimize");
     for (const [path, stage] of gated) {
       expect(GATE_KEYS.has(stage), `${path} gates on unknown stage ${stage}`).toBe(true);
     }
-    // Four distinct gates, not five. `setup` was a gate that never blocked anything —
+    // Five distinct gates, not six. `setup` was a gate that never blocked anything —
     // the journey's setup stage carries no `blocked_by` — so `readiness`, `costs` and
     // `split` gating on it meant "reachable and empty" before a plan existed. They gate
     // on `itinerary` now, which leaves `setup` used by no route. What matters is that
-    // every gate is one of the five decided keys, asserted above.
-    expect(new Set(gated.values()).size).toBeGreaterThanOrEqual(4);
+    // every gate is one of the six decided keys, asserted above.
+    expect(new Set(gated.values()).size).toBeGreaterThanOrEqual(5);
   });
 });
