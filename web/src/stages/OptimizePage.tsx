@@ -169,7 +169,6 @@ export function OptimizePage() {
   // answer on screen together, so the screen read as still waiting for a press that had
   // already happened — and re-pressing throws away the draft below it. They come back on
   // a deliberate "Build them again", which is the only moment they mean anything.
-  const [rebuilding, setRebuilding] = useState(false);
   const [excludedComfort, setExcludedComfort] = useState<Set<string>>(() => new Set());
   // Places ticked in the unfit list for one shared drop-and-rebuild. Held as an
   // array of place ids; every use intersects it with the current unfit list, so
@@ -649,11 +648,15 @@ export function OptimizePage() {
     (candidate) => candidate.id === variant?.hotel_recommendation?.default_area_id,
   );
   const assumptions = assumptionsOf(preview.data ?? null, proposal);
-  const showBuildControls = !proposal || rebuilding;
+  const showBuildControls = !proposal;
+  const buildPlan = () => {
+    if (trip?.planning_mode === "ready_to_schedule") generate.mutate();
+    else autoResolveAndGenerate.mutate();
+  };
   // A timetable exists and has not been activated yet, which is the only state where
   // the owner's next move is to confirm rather than to build.
   const timetableAwaitingConfirmation =
-    Boolean(proposal) && proposal?.mode !== "stay_recommendation" && !rebuilding;
+    Boolean(proposal) && proposal?.mode !== "stay_recommendation";
   const gaps = optimizerInput?.capability_gaps ?? [];
   return (
     <section className="stage-card optimize-screen">
@@ -712,9 +715,9 @@ export function OptimizePage() {
         </section>
       ) : null}
 
-      {!showBuildControls && !building && !outstanding.length && !unfit.length && !comfortOnly.length ? (
+      {!showBuildControls && !building && !tradeoffs.isPending && proposal?.mode !== "stay_recommendation" ? (
         <div className="optimize-actions">
-          <button onClick={() => setRebuilding(true)} type="button">
+          <button onClick={buildPlan} type="button">
             {copy("build_again", language)}
           </button>
         </div>
@@ -723,10 +726,7 @@ export function OptimizePage() {
         <button
           className="setup-primary"
           disabled={considered.length === 0 || building || !trip}
-          onClick={() => {
-            if (trip?.planning_mode === "ready_to_schedule") generate.mutate();
-            else autoResolveAndGenerate.mutate();
-          }}
+          onClick={buildPlan}
           type="button"
         >
           {copy("generate_plan", language)}
