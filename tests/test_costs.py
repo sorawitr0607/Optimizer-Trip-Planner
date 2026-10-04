@@ -335,8 +335,8 @@ class CostPersistenceTest(unittest.TestCase):
         snapshot = self.actions.build_export_snapshot(self.trip.trip_id).as_dict()
         archive = zipfile.ZipFile(BytesIO(plan_workbook_xlsx(snapshot)))
         strings = archive.read("xl/sharedStrings.xml").decode("utf-8")
-        costs_sheet = archive.read("xl/worksheets/sheet5.xml").decode("utf-8")
-        summary = archive.read("xl/worksheets/sheet1.xml").decode("utf-8")
+        costs_sheet = archive.read("xl/worksheets/sheet6.xml").decode("utf-8")
+        summary = archive.read("xl/worksheets/sheet2.xml").decode("utf-8")
 
         self.assertIn("Cable car ticket", strings)
         self.assertIn("Bank of Thailand", strings)

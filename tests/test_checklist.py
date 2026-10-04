@@ -661,8 +661,8 @@ class ChecklistExportTest(unittest.TestCase):
 
     def test_workbook_checklist_sheet_holds_the_agreed_columns_and_rows(self) -> None:
         archive = zipfile.ZipFile(BytesIO(plan_workbook_xlsx(self.export)))
-        # Checklist is the fourth agreed sheet.
-        sheet = archive.read("xl/worksheets/sheet4.xml").decode("utf-8")
+        # Checklist follows the readable itinerary and three plan detail sheets.
+        sheet = archive.read("xl/worksheets/sheet5.xml").decode("utf-8")
         strings = archive.read("xl/sharedStrings.xml").decode("utf-8")
 
         rows = self.export["checklist"]["items"] + self.export["checklist"]["dismissed"]

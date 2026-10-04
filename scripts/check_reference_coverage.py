@@ -90,22 +90,22 @@ ELEMENTS = (
         sheet=TIMETABLE,
         meaning="a clock time against each activity",
         marker="Time",
-        app_sheet="Timeline",
-        app_markers=("Start", "End"),
+        app_sheet="Itinerary",
+        app_markers=("Time", "Plan"),
     ),
     Element(
         sheet=TIMETABLE,
         meaning="activities grouped into numbered days",
         marker="Day 1",
-        app_sheet="Timeline",
-        app_markers=("Date", "Order"),
+        app_sheet="Itinerary",
+        app_markers=("Day 1",),
     ),
     Element(
         sheet=TIMETABLE,
         meaning="what the activity actually is",
         marker="ออกจากบ้านไปสนามบิน",  # "leave home for the airport"
-        app_sheet="Timeline",
-        app_markers=("Name", "Type"),
+        app_sheet="Itinerary",
+        app_markers=("Plan", "Travel"),
     ),
     # --- ค่าใช้จ่าย: the money sheet -------------------------------------
     Element(

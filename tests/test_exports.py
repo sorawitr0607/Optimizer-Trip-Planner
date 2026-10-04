@@ -355,15 +355,47 @@ class ArtifactTest(unittest.TestCase):
             exported_at="2030-01-01T00:00:00+00:00",
         )
 
+    def test_itinerary_reads_as_a_day_by_day_timetable(self) -> None:
+        from openpyxl import load_workbook
 
-    def test_workbook_has_the_six_agreed_sheets_and_working_formulas(self) -> None:
+        book = load_workbook(BytesIO(plan_workbook_xlsx(self.export)), read_only=True)
+        try:
+            self.assertEqual("Itinerary", book.sheetnames[0])
+            sheet = book["Itinerary"]
+            rows = list(sheet.values)
+            self.assertTrue(str(rows[3][0]).startswith("Day 1 ·"))
+            self.assertEqual(("Time", "Plan", "Travel", "From → To", "Notes / check"), rows[4][:5])
+            scheduled = [row for row in rows if isinstance(row[0], str) and re.fullmatch(r"\d\d:\d\d–\d\d:\d\d", row[0])]
+            self.assertEqual(sum(len(day["items"]) for day in self.export["days"]), len(scheduled))
+            self.assertIn("Shibuya Sky", [row[1] for row in scheduled])
+            self.assertTrue(any(row[1].startswith("Travel to ") and "→" in row[3] for row in scheduled))
+        finally:
+            book.close()
+
+    def test_itinerary_marks_route_and_opening_checks_in_plain_language(self) -> None:
+        from openpyxl import load_workbook
+
+        day = self.export["days"][0]
+        next(item for item in day["items"] if item["type"] == "travel")["status"] = "unverified_conflict"
+        next(item for item in day["items"] if item["type"] == "visit")["status"] = "unverified_conflict"
+        book = load_workbook(BytesIO(plan_workbook_xlsx(self.export)), read_only=True)
+        try:
+            notes = [row[4] for row in book["Itinerary"].values if len(row) > 4]
+            self.assertIn("Check boarding and timing", notes)
+            self.assertIn("Check opening hours and timing", notes)
+        finally:
+            book.close()
+
+
+    def test_workbook_has_readable_itinerary_and_working_formulas(self) -> None:
         xlsx = plan_workbook_xlsx(self.export)
         archive = zipfile.ZipFile(BytesIO(xlsx))
         names = archive.read("xl/workbook.xml").decode("utf-8")
-        summary = archive.read("xl/worksheets/sheet1.xml").decode("utf-8")
+        summary = archive.read("xl/worksheets/sheet2.xml").decode("utf-8")
         strings = archive.read("xl/sharedStrings.xml").decode("utf-8")
 
         for sheet in (
+            "Itinerary",
             "Summary",
             "Timeline",
             "Choices &amp; Backups",
@@ -373,7 +405,7 @@ class ArtifactTest(unittest.TestCase):
         ):
             self.assertIn(f'name="{sheet}"', names)
         self.assertEqual(
-            6, sum(1 for item in archive.namelist() if "worksheets/sheet" in item)
+            7, sum(1 for item in archive.namelist() if "worksheets/sheet" in item)
         )
         self.assertTrue(any("chart" in item for item in archive.namelist()))
         self.assertIn("SUMIFS(Timeline!", summary)
@@ -381,7 +413,7 @@ class ArtifactTest(unittest.TestCase):
         self.assertIn(self.export["stamp"]["input_sha256"], strings)
         self.assertIn(self.export["stamp"]["plan_version_id"], strings)
         # Timeline carries one row per exported item plus the header.
-        timeline = archive.read("xl/worksheets/sheet2.xml").decode("utf-8")
+        timeline = archive.read("xl/worksheets/sheet3.xml").decode("utf-8")
         items = sum(len(day["items"]) for day in self.export["days"])
         self.assertEqual(items + 1, timeline.count("<row "))
         self.assertIn("autoFilter", timeline)
@@ -389,7 +421,7 @@ class ArtifactTest(unittest.TestCase):
     def test_summary_formulas_point_at_the_real_timeline_columns(self) -> None:
         xlsx = plan_workbook_xlsx(self.export)
         archive = zipfile.ZipFile(BytesIO(xlsx))
-        summary = archive.read("xl/worksheets/sheet1.xml").decode("utf-8")
+        summary = archive.read("xl/worksheets/sheet2.xml").decode("utf-8")
         headers = [name for name, _ in exporters.TIMELINE_COLUMNS]
 
         duration = chr(ord("A") + headers.index("Duration (min)"))
@@ -497,7 +529,7 @@ class ArtifactTest(unittest.TestCase):
         self.assertIn("Per person THB", strings)
         costs = (
             zipfile.ZipFile(BytesIO(plan_workbook_xlsx(export)))
-            .read("xl/worksheets/sheet5.xml")
+            .read("xl/worksheets/sheet6.xml")
             .decode("utf-8")
         )
         # The figure itself, written as a number rather than a shared string.
@@ -545,8 +577,8 @@ class ArtifactTest(unittest.TestCase):
                 formula_sheets.append(name)
             bare.extend(cell for cell in formulas if "<v>" not in cell)
 
-        # Formulas live only on Summary (sheet1), so no other sheet can error.
-        self.assertEqual(["xl/worksheets/sheet1.xml"], formula_sheets)
+        # Formulas live only on Summary (sheet2), so no other sheet can error.
+        self.assertEqual(["xl/worksheets/sheet2.xml"], formula_sheets)
         self.assertEqual([], bare)
 
     def test_every_directly_indexed_label_has_a_default(self) -> None:

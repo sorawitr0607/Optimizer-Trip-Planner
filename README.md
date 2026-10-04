@@ -141,7 +141,7 @@ Zoom out far enough and the destination country's own outline appears, so a plac
   Neon), including hosted-only queue and ownership structures. It contains
   no row data; see the recovery README before restoring.
 - **Snapshot Exporters**:
-  - **Excel Workbook (`.xlsx`)**: 6-sheet formatted trip workbook (Timetable, Costs, To-Do List, Things to Bring, Transport, etc.).
+  - **Excel Workbook (`.xlsx`)**: a day-by-day itinerary plus six supporting sheets for plan details, choices, readiness, costs, and sources.
   - **Calendar Feed (`.ics`)**: Standard iCalendar feed for import into Apple Calendar, Google Calendar, or Outlook.
 
 ## Repository map
@@ -163,7 +163,7 @@ Zoom out far enough and the destination country's own outline appears, so a plac
 - `web/` — React, TypeScript, Tailwind, route shell, and stage gates.
 - `i18n/copy.json` and `tokens.css` — copy and design truth shared across renderers.
 - `travel_planner/` — planner domain logic, storage, providers, ranking, and optimization.
-- `travel_planner/exporters.py` — snapshot-in, bytes-out writers: the six-sheet Excel workbook and the readiness ICS.
+- `travel_planner/exporters.py` — snapshot-in, bytes-out writers: the seven-sheet Excel workbook and the readiness ICS.
 - `travel_planner/climate.py` and `travel_planner/areas.py` — pure modules for seasonal suitability and station neighbourhoods.
 - `web/src/stages/PlaceMap.tsx` and `web/src/shared/tiles.ts` — the map component and tile arithmetic.
 - `travel_planner/destinations.py` — country/city picker table.

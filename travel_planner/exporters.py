@@ -28,7 +28,7 @@ CHECKLIST_TIMING = (
     "24_hours_before",
     "departure_arrival_day",
 )
-SHEETS = ("Summary", "Timeline", "Choices & Backups", "Checklist", "Costs", "Sources")
+SHEETS = ("Itinerary", "Summary", "Timeline", "Choices & Backups", "Checklist", "Costs", "Sources")
 TIMELINE_COLUMNS = (
     ("Date", 12),
     ("Order", 7),
@@ -178,7 +178,7 @@ def _ics_fold(line: str) -> str:
 def plan_workbook_xlsx(
     snapshot: dict[str, Any], labels: dict[str, str] | None = None
 ) -> bytes:
-    """The six agreed sheets for the active plan only, with working formulas."""
+    """A readable itinerary and six audit sheets for the active plan."""
 
     words = _labels(labels)
     buffer = BytesIO()
@@ -190,6 +190,7 @@ def plan_workbook_xlsx(
     wrap = workbook.add_format({"text_wrap": True, "valign": "top"})
 
     sheets = {name: workbook.add_worksheet(name) for name in SHEETS}
+    _write_itinerary(sheets["Itinerary"], snapshot, workbook)
     timeline_rows = _write_timeline(sheets["Timeline"], snapshot, words, header, wrap)
     _write_summary(sheets["Summary"], snapshot, workbook, header, title, timeline_rows)
     _write_choices(sheets["Choices & Backups"], snapshot, words, header, wrap)
@@ -198,6 +199,110 @@ def plan_workbook_xlsx(
     _write_sources(sheets["Sources"], snapshot, header)
     workbook.close()
     return buffer.getvalue()
+
+
+def _write_itinerary(sheet: Any, snapshot: dict[str, Any], workbook: Any) -> None:
+    """Day-by-day timetable using only details already present in the plan."""
+
+    title = workbook.add_format(
+        {"bold": True, "font_size": 16, "font_color": _design_token("--color-accent")}
+    )
+    day_band = workbook.add_format(
+        {"bold": True, "bg_color": _design_token("--export-header-bg"), "font_size": 12}
+    )
+    heading = workbook.add_format({"bold": True, "bottom": 1, "valign": "top"})
+    body = workbook.add_format(
+        {
+            "text_wrap": True,
+            "valign": "top",
+            "bottom": 1,
+            "bottom_color": _design_token("--export-header-bg"),
+        }
+    )
+    widths = (16, 38, 18, 42, 46)
+    for column, width in enumerate(widths):
+        sheet.set_column(column, column, width)
+    stamp = snapshot["stamp"]
+    sheet.merge_range(0, 0, 0, 4, stamp["trip_name"], title)
+    sheet.merge_range(1, 0, 1, 4, stamp["destination"])
+    sheet.freeze_panes(2, 0)
+    sheet.activate()
+    sheet.set_landscape()
+    sheet.fit_to_pages(1, 0)
+    sheet.set_margins(0.3, 0.3, 0.4, 0.4)
+
+    row = 3
+    for number, day in enumerate(snapshot["days"], start=1):
+        day_date = date.fromisoformat(day["date"]).strftime("%a %d %b %Y")
+        label = (
+            f"Day {number} · {day_date} · "
+            f"{day['totals']['scheduled_visits']} "
+            f"{'stop' if day['totals']['scheduled_visits'] == 1 else 'stops'} · "
+            f"{day['totals']['walking_minutes']} min walking"
+        )
+        sheet.merge_range(row, 0, row, 4, label, day_band)
+        sheet.set_row(row, 26)
+        row += 1
+        for column, name in enumerate(
+            ("Time", "Plan", "Travel", "From → To", "Notes / check")
+        ):
+            sheet.write(row, column, name, heading)
+        row += 1
+        for item in day["items"]:
+            kind = item["type"]
+            if kind == "travel":
+                origin = item.get("origin_name") or ""
+                destination = item.get("destination_name") or ""
+                activity = f"Travel to {destination}" if destination else "Travel"
+                route = " → ".join(part for part in (origin, destination) if part)
+            elif kind == "buffer":
+                reason = item.get("reason") or ""
+                activity = {
+                    "transfer_contingency": "Travel buffer",
+                    "timing_window": "Open time before next stop",
+                    "free_time_or_rest": "Free time or rest",
+                    "day_ends_free": "Free time",
+                }.get(reason, str(reason).replace("_", " ").capitalize() or "Buffer")
+                route = ""
+            else:
+                activity = item.get("display_name") or kind.capitalize()
+                route = " → ".join(
+                    part for part in (item.get("from_name"), item.get("to_name")) if part
+                )
+            mode = item.get("mode") or ""
+            walking = item.get("walking_minutes") or 0
+            travel = " · ".join(
+                part for part in (mode, f"{walking} min walking" if walking else "") if part
+            )
+            notes = [str(item["notes"])] if item.get("notes") else []
+            if item.get("transfers"):
+                notes.append(f"{item['transfers']} transfer(s)")
+            if item.get("boarding_buffer_minutes"):
+                notes.append(f"{item['boarding_buffer_minutes']} min boarding buffer")
+            if item.get("opening_verified"):
+                notes.append("Opening hours verified")
+            if item.get("address"):
+                notes.append(str(item["address"]))
+            status = item["status"]
+            if status == "unverified_conflict":
+                notes.append(
+                    "Check boarding and timing" if kind == "travel"
+                    else "Check opening hours and timing" if kind == "visit"
+                    else "Check schedule"
+                )
+            elif status == "recheck":
+                notes.append("Recheck before travel")
+            elif status != "confirmed":
+                notes.append(f"Status: {status.replace('_', ' ')}")
+            sheet.write_row(
+                row,
+                0,
+                [f"{item['start']}–{item['end']}", activity, travel, route, " · ".join(notes)],
+                body,
+            )
+            row += 1
+        row += 2
+    sheet.print_area(0, 0, max(row - 1, 1), 4)
 
 
 def _timeline_letter(name: str) -> str:
