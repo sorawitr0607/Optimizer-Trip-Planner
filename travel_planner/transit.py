@@ -239,7 +239,10 @@ def _station_name_key(stop: Stop) -> str:
     """What counts as the same station's name. Case and spacing folded; `駅`/`Station`
     dropped, because one operator tags `渋谷` where the next tags `渋谷駅`."""
 
-    name = (stop.name_en or stop.name).strip().lower()
+    # Platform nodes at one station do not always carry the same `name:en` tag.
+    # Group on the shared on-the-ground name so an English-tagged platform can
+    # join the line whose platform has only the local name.
+    name = stop.name.strip().lower()
     for suffix in ("station", "駅", "stn"):
         if name.endswith(suffix):
             name = name[: -len(suffix)].strip()
@@ -283,7 +286,8 @@ def _station_of(stops: dict[str, Stop]) -> dict[str, str]:
             continue
         # Single-linkage within the radius: platforms chain across a long interchange
         # without letting one hop of 400 m become a licence for a kilometre.
-        unassigned = sorted(members, key=lambda stop: stop.stop_id)
+        # Prefer a labelled representative: graph_from_osm keeps only this node.
+        unassigned = sorted(members, key=lambda stop: (not bool(stop.name_en), stop.stop_id))
         while unassigned:
             seed = unassigned.pop(0)
             cluster, frontier = [seed], [seed]

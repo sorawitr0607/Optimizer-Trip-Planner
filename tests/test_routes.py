@@ -968,6 +968,20 @@ class MetroInterchangeTest(unittest.TestCase):
         self.assertEqual(1, journey.transfers)
         self.assertEqual(("A", "B"), journey.boarded_routes)
 
+    def test_one_english_tag_joins_platforms_and_labels_the_station(self) -> None:
+        from travel_planner.transit import graph_from_osm
+
+        elements = [dict(element) for element in self.ELEMENTS]
+        for element in elements:
+            if element.get("id") == 22:
+                element["tags"] = {**element["tags"], "name:en": "Interchange Station"}
+
+        graph = graph_from_osm(elements)
+
+        self.assertEqual(3, len(graph.stops))
+        self.assertEqual("Interchange Station", graph.stops["n22"].name_en)
+        self.assertIsNotNone(graph.journey(origin=self.ALPHA, destination=self.BETA))
+
     def test_without_grouping_the_same_trip_has_no_answer(self) -> None:
         """The negative control, and the exact shape of the Tokyo failure.
 
