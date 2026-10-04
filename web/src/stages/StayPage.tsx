@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router";
 
-import { ApiError, rpc, type AccommodationBase, type Journey } from "../api/client";
+import { ApiError, rpc, type AccommodationBase, type Journey, type Trip } from "../api/client";
 import { copy } from "../i18n/copy";
 import { useLanguage } from "../i18n/LanguageProvider";
 import { StayAreas } from "./StayAreas";
@@ -41,6 +41,8 @@ export function StayPage() {
     queryKey: ["accommodation_base", tripId],
     queryFn: () => rpc<AccommodationBase | null>("get_accommodation_base", { trip_id: tripId }),
   });
+  const trips = useQuery({ queryKey: ["trips"], queryFn: () => rpc<Trip[]>("list_trips") });
+  const trip = trips.data?.find((item) => item.trip_id === tripId);
   const continueToNext = async () => {
     try {
       const journey = await rpc<Journey>("journey", { trip_id: tripId });
@@ -103,7 +105,7 @@ export function StayPage() {
             {base.data.address ? ` · ${base.data.address}` : ""}
           </span>
         ) : (
-          <span className="setup-hint">{copy("stay_using_centroid", language)}</span>
+          <span className="setup-hint">{copy(trip?.planning_mode === "ready_to_schedule" ? "stay_ready_requires_base" : "stay_using_centroid", language)}</span>
         )}
         {/* A stored base the planner has discarded. Printing it as "what the planner is
             using" would be the same untrue statement the guard exists to stop, so the
@@ -167,18 +169,26 @@ export function StayPage() {
           ranking has been tried and come back empty, it is the answer to a question that
           was actually asked. A destination that ranks fine completes this stage by
           picking an area instead. */}
-      <div className="evidence-card" hidden={outcome !== "unrankable"}>
-        <strong>{copy("stay_accept_centre_title", language)}</strong>
-        <span className="setup-hint">{copy("stay_accept_centre_help", language)}</span>
-        <button
-          className={base.data ? undefined : "setup-primary"}
-          disabled={accept.isPending}
-          onClick={() => accept.mutate()}
-          type="button"
-        >
-          {copy("stay_accept_centre", language)}
-        </button>
-      </div>
+      {outcome === "unrankable" && trip ? (
+        <div className="evidence-card">
+          {trip.planning_mode === "ready_to_schedule" ? (
+            <p className="setup-hint">{copy("stay_ready_requires_base", language)}</p>
+          ) : (
+            <>
+              <strong>{copy("stay_accept_centre_title", language)}</strong>
+              <span className="setup-hint">{copy("stay_accept_centre_help", language)}</span>
+              <button
+                className={base.data ? undefined : "setup-primary"}
+                disabled={accept.isPending}
+                onClick={() => accept.mutate()}
+                type="button"
+              >
+                {copy("stay_accept_centre", language)}
+              </button>
+            </>
+          )}
+        </div>
+      ) : null}
 
       <StayAreas
         language={language}

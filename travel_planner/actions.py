@@ -2901,13 +2901,10 @@ class PlannerActions:
         )
         try:
             geocoded = provider.geocode(search)
-        except Exception:
-            centre = self._destination_centre(trip_id)
-            geocoded = {
-                "latitude": centre["latitude"],
-                "longitude": centre["longitude"],
-                "formatted_address": search,
-            }
+            float(geocoded["latitude"])
+            float(geocoded["longitude"])
+        except (ProviderUnavailable, KeyError, TypeError, ValueError) as error:
+            raise PlannerRefusal("accommodation_not_found", query=name) from error
         value = {**geocoded, "name": name}
         now = datetime.now(timezone.utc)
         self.store.upsert_trip_evidence(
@@ -3995,7 +3992,8 @@ class PlannerActions:
             if place.get("latitude") is None or place.get("longitude") is None:
                 continue
             total = 0.0
-            reachable = 0
+            # The proposed base is at this place, so it reaches this one with no walk.
+            reachable = 1
             for other in places:
                 if other.get("latitude") is None or other["place_id"] == place["place_id"]:
                     continue
@@ -4173,7 +4171,13 @@ class PlannerActions:
                 }
             )
         if not candidates:
-            raise PlannerRefusal("no_area_reaches_any_place")
+            # Metro stations cannot reach this shortlist within a reasonable access
+            # walk. Rank the chosen places' own neighbourhoods instead of offering an
+            # empty list to an owner who still needs to pick a base.
+            reached(1)
+            answer = self._walkable_areas(trip_id, places)
+            reached(3)
+            return answer
 
         reached(1)
         candidates.sort(

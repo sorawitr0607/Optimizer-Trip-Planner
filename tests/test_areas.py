@@ -259,6 +259,16 @@ class AreaRecommendationTest(unittest.TestCase):
         self.assertEqual("Zhongshan", graph.stops["n1"].name_en)
         self.assertEqual(tdx.edges, graph.edges)
 
+    def test_outlying_sights_offer_nearby_walkable_stays_when_metro_cannot_reach(self) -> None:
+        far = TransitGraph({"far": Stop("far", "Far Station", 0.0, 0.0)}, {})
+        self.actions.transit_provider = FakeMetroProvider(far)
+
+        report = self.actions.recommend_areas(self.trip.trip_id)
+
+        self.assertEqual("AREA_TIMES_ARE_WALKING_ONLY", report["reason"])
+        self.assertTrue(report["areas"])
+        self.assertEqual(3, report["areas"][0]["reachable_place_count"])
+
     def test_amenity_counts_reach_the_score_and_are_fetched_once(self) -> None:
         first = self.actions.recommend_areas(self.trip.trip_id)
         second = self.actions.recommend_areas(self.trip.trip_id)

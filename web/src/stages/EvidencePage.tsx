@@ -35,7 +35,6 @@ const OWNER_FIXABLE = new Set([
 ]);
 
 const SETUP_GAPS = new Set([
-  "ACCOMMODATION_BASE_UNCONFIRMED",
   "FREE_TEXT_HARD_CONSTRAINT_NEEDS_STRUCTURED_CONFIRMATION",
 ]);
 
@@ -51,6 +50,7 @@ const SETUP_GAPS = new Set([
  * core later still lands somewhere with a heading rather than vanishing.
  */
 const GAP_GROUPS = [
+  { key: "gaps_grouped_stay", gaps: new Set(["ACCOMMODATION_BASE_UNCONFIRMED"]) },
   { key: "gaps_grouped_setup", gaps: SETUP_GAPS },
   {
     key: "gaps_grouped_evidence",
@@ -302,17 +302,23 @@ export function EvidencePage() {
                 })
               : copy("loading_build_options", language)}
           </p>
-          <button
-            aria-describedby="verify-cost"
-            className="setup-primary evidence-auto-btn"
-            disabled={prepare.isPending || !options.data || (spend?.state === "stopped" && options.data.verified.calls > 0)}
-            onClick={() => prepare.mutate()}
-            type="button"
-          >
-            {prepare.isPending
-              ? copy(`verify_step_${prepareStep ?? "zone"}`, language)
-              : copy("verify_trip_continue", language)}
-          </button>
+          {gaps.includes("ACCOMMODATION_BASE_UNCONFIRMED") ? (
+            <button className="setup-primary evidence-auto-btn" onClick={() => navigate(`/trips/${tripId}/stay`)} type="button">
+              {copy("choose_base_before_verify", language)}
+            </button>
+          ) : (
+            <button
+              aria-describedby="verify-cost"
+              className="setup-primary evidence-auto-btn"
+              disabled={prepare.isPending || !options.data || (spend?.state === "stopped" && options.data.verified.calls > 0)}
+              onClick={() => prepare.mutate()}
+              type="button"
+            >
+              {prepare.isPending
+                ? copy(`verify_step_${prepareStep ?? "zone"}`, language)
+                : copy("verify_trip_continue", language)}
+            </button>
+          )}
         </div>
       ) : null}
 
@@ -572,7 +578,7 @@ export function EvidencePage() {
               ));
           })()}
           <div className="setup-actions">
-            {gaps.includes("ACCOMMODATION_BASE_UNCONFIRMED") ? (
+            {exploreFirst && gaps.includes("ACCOMMODATION_BASE_UNCONFIRMED") ? (
               <button onClick={() => navigate(`/trips/${tripId}/stay`)} type="button">
                 {copy("next_step", language)}: {copy("stage_stay", language)}
               </button>

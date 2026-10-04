@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 
 from travel_planner import opening
-from travel_planner.actions import PlannerActions
+from travel_planner.actions import PlannerActions, PlannerRefusal
 from travel_planner.providers import (
     GooglePlacesOpeningHoursProvider,
     ProviderBudgetExceeded,
@@ -595,6 +595,7 @@ class ExploreFirstEvidenceTest(unittest.TestCase):
             place_provider=self.PlaceProvider(),
             route_provider=FakeRouteProvider(),
         )
+
         self.trip = self.actions.create_trip(
             name="Explore Taipei", destination="Taipei", planning_mode="explore_first"
         )
@@ -616,6 +617,18 @@ class ExploreFirstEvidenceTest(unittest.TestCase):
                 action="must_do",
             )
         self.actions.refresh_routes(self.trip.trip_id)
+
+    def test_failed_base_lookup_never_confirms_the_city_centre(self) -> None:
+        class MissingBase(self.PlaceProvider):
+            def geocode(self, query: str) -> dict:
+                raise ProviderUnavailable("place not found")
+
+        self.actions.place_provider = MissingBase()
+        with self.assertRaises(PlannerRefusal) as caught:
+            self.actions.confirm_accommodation_base(self.trip.trip_id, "Unknown Hotel")
+
+        self.assertEqual("accommodation_not_found", caught.exception.code)
+        self.assertIsNone(self.actions.get_accommodation_base(self.trip.trip_id))
 
     def tearDown(self) -> None:
         self.directory.cleanup()
