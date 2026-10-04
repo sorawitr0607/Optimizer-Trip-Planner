@@ -61,6 +61,25 @@ class OptimizerCoreTest(unittest.TestCase):
 
         self.assertEqual("base", route["origin_id"])
 
+    def test_first_and_later_legs_choose_less_walking_when_both_exceed_limit(self) -> None:
+        snapshot = {
+            "trip": {},
+            "thresholds": {"walking_minutes_per_leg": 15},
+            "candidates": [{"id": "base", "kind": "hotel_area"}],
+            "routes": [
+                {"origin_id": "base", "destination_id": "visit", "mode": "walk",
+                 "status": "verified", "duration_minutes": 24, "walking_minutes": 24},
+                {"origin_id": "base", "destination_id": "visit", "mode": "transit",
+                 "status": "estimated", "duration_minutes": 25, "walking_minutes": 16},
+            ],
+        }
+
+        self.assertEqual("transit", optimizer_module._best_inbound_route(snapshot, "visit")["mode"])
+        self.assertEqual("transit", optimizer_module._best_route(snapshot, "base", "visit")["mode"])
+        snapshot["thresholds"]["walking_minutes_per_leg"] = 30
+        self.assertEqual("walk", optimizer_module._best_inbound_route(snapshot, "visit")["mode"])
+        self.assertEqual("walk", optimizer_module._best_route(snapshot, "base", "visit")["mode"])
+
     def test_a_walk_nobody_would_take_reaches_no_reader(self) -> None:
         """Verified 87/103/237-minute walks reached a real Tokyo itinerary.
 

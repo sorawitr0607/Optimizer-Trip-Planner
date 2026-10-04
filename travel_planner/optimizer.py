@@ -2505,8 +2505,10 @@ def _activity_route(
             thresholds.get("cycling_minutes_per_day", 10**9)
         )
         heat_penalty = route.get("mode") in {"bike", "walk"} and heat_high
-        walk_over = int(route.get("walking_minutes", 0)) > int(
-            thresholds.get("walking_minutes_per_leg", 10**9)
+        walk_over = max(
+            0,
+            int(route.get("walking_minutes", 0))
+            - int(thresholds.get("walking_minutes_per_leg", 10**9)),
         )
         return cycling_over, heat_penalty, walk_over, int(route.get("duration_minutes", 0)), str(route.get("mode"))
     # Memoized pick, like `_best_route`: the modes alone decide it.
@@ -2578,6 +2580,16 @@ def _best_route(
     return dict(found) if found is not None else None
 
 
+def _route_choice_key(route: dict[str, Any], walk_limit: int) -> tuple[int, int, int, str]:
+    walking = int(route.get("walking_minutes", 0))
+    return (
+        max(0, walking - walk_limit),
+        int(route.get("duration_minutes", 0)),
+        walking,
+        str(route.get("mode")),
+    )
+
+
 def _best_route_uncached(
     snapshot: dict[str, Any],
     origin: str,
@@ -2622,15 +2634,7 @@ def _best_route_uncached(
     # live in `_best_route`, so this never aliases snapshot-owned dicts outward.
     # The pick depends only on the pair, not on the day or the sequence, so the
     # millionth segment evaluation reuses the first one's answer.
-    return min(
-        routes,
-        key=lambda item: (
-            int(item.get("walking_minutes", 0)) > walk_limit,
-            int(item.get("duration_minutes", 0)),
-            int(item.get("walking_minutes", 0)),
-            str(item.get("mode")),
-        ),
-    )
+    return min(routes, key=lambda item: _route_choice_key(item, walk_limit))
 
 
 def _best_inbound_route(
@@ -2657,11 +2661,8 @@ def _best_inbound_route(
             # Same hard cap as `_routes_between`: the day's first leg is still a leg.
             and _walkable(route)
         ]
-        return (
-            min(routes, key=lambda item: int(item.get("duration_minutes", 0)))
-            if routes
-            else None
-        )
+        walk_limit = int(_thresholds(snapshot).get("walking_minutes_per_leg", 10**9))
+        return min(routes, key=lambda item: _route_choice_key(item, walk_limit)) if routes else None
 
     found = _memoized(route_index, (_MEMO_INBOUND, destination), build)
     # Shallow copy: consumers read the leg, nobody writes it.
