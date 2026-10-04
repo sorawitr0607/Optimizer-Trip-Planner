@@ -24,9 +24,9 @@ from math import asin, cos, radians, sin, sqrt
 # slower than a fit adult's 5 km/h because this trip has a 51-year-old on it.
 WALK_METRES_PER_MINUTE = 80.0
 
-# How far someone will walk to reach transit at either end. Beyond this the walk is
-# the journey and transit is not the answer.
-MAX_ACCESS_METRES = 900.0
+# Search far enough to offer the metro near outlying sights. The owner's per-leg
+# walking limit is checked separately, so a long station walk remains visible.
+MAX_ACCESS_METRES = 1300.0
 
 # Changing line costs more than the arithmetic: finding the platform, reading the
 # sign, the chance of missing one. Charged per change, on top of waiting.

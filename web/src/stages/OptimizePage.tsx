@@ -943,14 +943,17 @@ export function OptimizePage() {
               causing. The tradeoff panel that resolves it was already on the screen,
               above; nothing connected the two. */}
           {!activationAllowed && comfortOnly.length ? (
-            <p className="money-note money-note-warn">
+            <div className="money-note money-note-warn">
               <b aria-hidden="true">⚠</b>
               <span>
                 {copyFormat("blocked_by_comfort_only", language, {
                   visits: String(variant.validation.scheduled_visit_count ?? 0),
-                })}
+                })}{" "}
+                <Link to={`/trips/${tripId}/places`}>{copy("stage_places", language)}</Link>
+                {" · "}
+                <Link to={`/trips/${tripId}/stay`}>{copy("stage_stay", language)}</Link>
               </span>
-            </p>
+            </div>
           ) : null}
           {actionable.length > 0 || comfortOnly.length > 0 ? (
             <section className="optimize-actions comfort-acceptance">

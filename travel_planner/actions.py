@@ -2317,7 +2317,7 @@ class PlannerActions:
             raise PlannerRefusal("unknown_trip", trip_id=trip_id)
         now = datetime.now(timezone.utc)
         held = self.store.get_trip_evidence(trip_id, "default_terminal")
-        if held and held.get("expires_at", "") > now.isoformat():
+        if held and held.get("name_version") == 2 and held.get("expires_at", "") > now.isoformat():
             return {**held, "from_cache": True}
         provider = self.place_provider or OpenStreetMapProvider()
         try:
@@ -2330,12 +2330,13 @@ class PlannerActions:
         if _distance_metres(centre, match) > 200_000:
             return None
         value = {
-            "name": match.get("address") or match.get("name") or f"{trip.destination} airport",
+            "name": match.get("resolved_name") or match.get("name") or f"{trip.destination} airport",
             "latitude": float(match["latitude"]),
             "longitude": float(match["longitude"]),
             "status": "assumed",
             "provider": str(match.get("provider") or provider.name),
             "reason": "nearest_destination_airport_assumption",
+            "name_version": 2,
         }
         self.store.upsert_trip_evidence(
             trip_id=trip_id,

@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
 from travel_planner import areas
 from travel_planner.actions import PlannerActions, PlannerRefusal
 from travel_planner.providers import (
+    GtfsTransitProvider,
     OsmAreaAmenitiesProvider,
     ProviderBudgetExceeded,
     ProviderUnavailable,
@@ -243,6 +245,19 @@ class AreaRecommendationTest(unittest.TestCase):
         # No `name:en` in OSM means no `en` key at all, rather than the local string
         # copied into it — or the screen would print the same name twice.
         self.assertEqual({"local": "Harbour"}, by_local["Harbour"])
+
+    def test_tdx_stations_use_nearby_osm_english_names_without_changing_routes(self) -> None:
+        tdx = two_station_graph()
+        tdx.stops["n1"] = Stop("n1", "中山", 25.0450, 121.5750)
+        osm = TransitGraph({"osm": Stop("osm", "中山", 25.0451, 121.5751, "Zhongshan")}, {})
+        provider = GtfsTransitProvider(
+            feed=SimpleNamespace(graph=tdx), fallback=FakeMetroProvider(osm)
+        )
+
+        graph = provider.build_graph()
+
+        self.assertEqual("Zhongshan", graph.stops["n1"].name_en)
+        self.assertEqual(tdx.edges, graph.edges)
 
     def test_amenity_counts_reach_the_score_and_are_fetched_once(self) -> None:
         first = self.actions.recommend_areas(self.trip.trip_id)

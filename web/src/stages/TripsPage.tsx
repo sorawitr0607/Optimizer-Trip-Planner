@@ -1018,6 +1018,7 @@ export function TripsPage() {
   const [city, setCity] = useState("");
   const [typedCountry, setTypedCountry] = useState("");
   const [typedCity, setTypedCity] = useState("");
+  const [planningMode, setPlanningMode] = useState<Trip["planning_mode"]>("explore_first");
 
   // Interactive Simulator State
   const [activeCityId, setActiveCityId] = useState<"porto" | "taipei" | "tokyo" | "interlaken">("porto");
@@ -1070,6 +1071,7 @@ export function TripsPage() {
       rpc<Trip>("create_trip", {
         name: name.trim() || resolvedCity || destination,
         destination,
+        planning_mode: planningMode,
         language,
       }),
     onSuccess: async (trip) => {
@@ -2035,6 +2037,20 @@ export function TripsPage() {
                   value={name}
                 />
                 <small>{copy("trip_name_help", language)}</small>
+              </label>
+
+              <label htmlFor="planning-mode">
+                {copy("planning_mode_label", language)}
+                <select
+                  id="planning-mode"
+                  name="planning-mode"
+                  onChange={(event) => setPlanningMode(event.target.value as Trip["planning_mode"])}
+                  value={planningMode}
+                >
+                  <option value="explore_first">{copy("explore_first", language)}</option>
+                  <option value="ready_to_schedule">{copy("ready_to_schedule", language)}</option>
+                </select>
+                <small>{copy(planningMode === "explore_first" ? "explore_first_help" : "ready_to_schedule_help", language)}</small>
               </label>
 
               {errorCode && <p className="landing-error">⚠ {copy(errorCode, language)}</p>}

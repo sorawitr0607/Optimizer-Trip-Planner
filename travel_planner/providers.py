@@ -167,6 +167,11 @@ class OpenStreetMapProvider:
         return {
             "name": query.strip(),
             "address": str(location.get("display_name") or query).strip(),
+            "resolved_name": str(
+                (location.get("namedetails") or {}).get("name:en")
+                or (location.get("namedetails") or {}).get("official_name:en")
+                or str(location.get("display_name") or "").split(",", 1)[0]
+            ).strip(),
             "latitude": latitude,
             "longitude": longitude,
             "status": "owner_confirmed",
@@ -650,7 +655,7 @@ class OpenStreetMapProvider:
         }
 
     def _find_destination(self, destination: str) -> dict[str, Any]:
-        query = urlencode({"q": destination, "format": "jsonv2", "limit": 1})
+        query = urlencode({"q": destination, "format": "jsonv2", "limit": 1, "accept-language": "en", "namedetails": 1})
         payload = self._request_json(
             Request(
                 f"{self.nominatim_url}?{query}",
@@ -2980,6 +2985,7 @@ class GtfsTransitProvider:
     def __init__(self, feed: Any | None = None, fallback: Any | None = None) -> None:
         self._feed = feed
         self._fallback = fallback
+        self._area_graph = None
         self._path = os.environ.get("TOURIST_GTFS_PATH", "data/gtfs/transit.zip")
 
     @property
@@ -2996,9 +3002,33 @@ class GtfsTransitProvider:
         return self._feed
 
     def build_graph(self) -> Any:
-        """Use the same TDX metro graph for stay areas and trip legs."""
+        """Keep TDX travel times; use nearby OSM station labels where available."""
 
-        return self.feed.graph
+        if self._area_graph is not None:
+            return self._area_graph
+        graph = self.feed.graph
+        if self._fallback is None:
+            return graph
+        try:
+            named = self._fallback.build_graph()
+        except ProviderUnavailable:
+            return graph
+        from dataclasses import replace
+        from .transit import TransitGraph, metres
+
+        english = [stop for stop in named.stops.values() if stop.name_en]
+        stops = {}
+        for stop_id, stop in graph.stops.items():
+            nearest = min(
+                english,
+                key=lambda other: metres(stop.latitude, stop.longitude, other.latitude, other.longitude),
+                default=None,
+            )
+            if nearest and metres(stop.latitude, stop.longitude, nearest.latitude, nearest.longitude) <= 200:
+                stop = replace(stop, name_en=nearest.name_en)
+            stops[stop_id] = stop
+        self._area_graph = TransitGraph(stops, graph.edges)
+        return self._area_graph
 
     def cache_descriptor(
         self, origin: dict[str, Any], destination: dict[str, Any]

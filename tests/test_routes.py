@@ -11,6 +11,7 @@ from zipfile import ZipFile
 from travel_planner.actions import MAX_ROUTE_REQUESTS, PlannerActions
 from travel_planner.providers import (
     GoogleTimeZoneProvider,
+    OpenStreetMapProvider,
     OpenRouteServiceMatrixProvider,
     OpenRouteServiceProvider,
     ProviderBudgetExceeded,
@@ -1084,6 +1085,30 @@ class OsmMetroTransitTest(unittest.TestCase):
         from travel_planner.transit import graph_from_osm
 
         return graph_from_osm(self.ELEMENTS)
+
+    def test_metro_access_reaches_a_taipei_sight_just_beyond_900_metres(self) -> None:
+        from travel_planner.transit import MAX_ACCESS_METRES, Stop, TransitGraph
+
+        graph = TransitGraph({"station": Stop("station", "Jiantan", 25.0, 121.5)}, {})
+        one_km = graph.near(25.009, 121.5)
+
+        self.assertEqual("station", one_km[0][0].stop_id)
+        self.assertGreater(one_km[0][1], 900)
+        self.assertLess(one_km[0][1], MAX_ACCESS_METRES)
+        self.assertEqual([], graph.near(25.014, 121.5))
+
+    def test_airport_geocode_requests_and_prefers_the_english_name(self) -> None:
+        provider = OpenStreetMapProvider()
+        location = {
+            "lat": "25.0665", "lon": "121.5549",
+            "display_name": "Taipei Songshan Airport, Taipei, Taiwan",
+            "namedetails": {"name:en": "Taipei Songshan Airport"},
+        }
+        with patch.object(provider, "_request_json", return_value=[location]) as request:
+            result = provider.geocode("airport near Taipei, Taiwan")
+
+        self.assertEqual("Taipei Songshan Airport", result["resolved_name"])
+        self.assertIn("accept-language=en", request.call_args.args[0].full_url)
 
     def test_an_english_station_name_is_carried_beside_the_local_one(self) -> None:
         """OSM tags `name:en` on 370 of Taipei's 437 stop nodes and the graph discarded
