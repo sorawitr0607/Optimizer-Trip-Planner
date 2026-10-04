@@ -4288,6 +4288,22 @@ class PlannerActions:
             (route["origin_id"], route["destination_id"], route["mode"]): route
             for route in self.store.list_route_snapshots(trip_id)
         }
+        fresh_now = now.isoformat()
+
+        def already_measured(key: tuple[str, str, str]) -> bool:
+            route = existing.get(key)
+            return bool(
+                route
+                and route["expires_at"] > fresh_now
+                and route.get("provider") != OpenRouteServiceMatrixProvider.name
+                # A prior Vercel run could only save OSM metro. Try the worker's
+                # timetable once; a fallback records that it was checked.
+                and not (
+                    provider.name == "gtfs"
+                    and route.get("provider") == "osm_metro"
+                    and not route.get("gtfs_checked")
+                )
+            )
         pairs = [
             (origin, destination)
             for origin in points
@@ -4387,19 +4403,11 @@ class PlannerActions:
         # for want of route evidence. The names `request_cap` and
         # `skipped_over_cap` in the reply already described a per-run cap.
         if not force:
-            fresh_now = now.isoformat()
             pairs = [
                 pair
                 for pair in pairs
-                if not (
-                    (key := (pair[0]["place_id"], pair[1]["place_id"], provider.mode)) in existing
-                    and existing[key]["expires_at"] > fresh_now
-                    # A matrix row is a time with no path, so it is fresh evidence and
-                    # still worth *upgrading*: this endpoint returns the walked line the
-                    # matrix cannot. Treating it as cached would seed every pair once and
-                    # then leave the map drawing straight lines for ever. Anything the
-                    # directions endpoint already answered is genuinely done.
-                    and existing[key].get("provider") != OpenRouteServiceMatrixProvider.name
+                if not already_measured(
+                    (pair[0]["place_id"], pair[1]["place_id"], provider.mode)
                 )
             ]
         # `MAX_ROUTE_REQUESTS` prices *outbound requests*, so a provider that makes none
@@ -4440,12 +4448,7 @@ class PlannerActions:
             # The same upgrade rule the pair filter above applies, and it has to be said
             # twice because this check is what the *slice* is measured against: a pair
             # dropped here is still counted inside `MAX_ROUTE_REQUESTS`.
-            if (
-                not force
-                and key in existing
-                and existing[key]["expires_at"] > now.isoformat()
-                and existing[key].get("provider") != OpenRouteServiceMatrixProvider.name
-            ):
+            if not force and already_measured(key):
                 cached += 1
                 continue
             try:

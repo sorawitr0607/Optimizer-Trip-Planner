@@ -3054,7 +3054,7 @@ class GtfsTransitProvider:
             # TDX's metro subset omits some lines and cannot reach sights far from
             # its stations. OSM topology can still supply a real metro leg.
             if self._fallback is not None:
-                return self._fallback.route(origin, destination)
+                return {**self._fallback.route(origin, destination), "gtfs_checked": True}
             raise ProviderUnavailable(
                 "no transit connection within walking reach of both places"
             )

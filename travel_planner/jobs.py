@@ -34,6 +34,8 @@ HANDLERS: dict[str, str] = {
     "discover_places": "discover_places",
     "generate_plan_preview": "generate_plan_preview",
     "refresh_routes": "refresh_routes",
+    # Vercel cannot see the private local GTFS feed. The worker can.
+    "refresh_transit_routes": "refresh_transit_routes",
     # `http_504` from a phone, reported with a screenshot. `recommend_areas` asks
     # Overpass for amenity counts around every candidate station neighbourhood --
     # tens of seconds of work -- and it was running inline in a function capped at
@@ -51,6 +53,7 @@ PAYLOAD_KEYS: dict[str, frozenset[str]] = {
     "discover_places": frozenset({"force_refresh"}),
     "generate_plan_preview": frozenset({"time_limit_seconds"}),
     "refresh_routes": frozenset({"max_passes"}),
+    "refresh_transit_routes": frozenset({"force"}),
     "recommend_areas": frozenset(),
 }
 

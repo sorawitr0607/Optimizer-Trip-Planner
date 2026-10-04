@@ -758,6 +758,29 @@ class TransitRouteTest(unittest.TestCase):
         self.assertEqual("estimated", longest["status"])
         self.assertEqual("gtfs", longest["provider"])
 
+    def test_tdx_rechecks_an_existing_osm_transit_leg_once(self) -> None:
+        origin, destination = self.actions._route_points(self.trip.trip_id)[:2]
+        pair = (origin["place_id"], destination["place_id"])
+        self.actions.store.upsert_route_snapshot(
+            trip_id=self.trip.trip_id,
+            route={
+                "origin_id": pair[0], "destination_id": pair[1], "mode": "transit",
+                "duration_minutes": 99, "walking_minutes": 99,
+                "status": "estimated", "provider": "osm_metro",
+            },
+            provider="osm_metro",
+            retrieved_at="2030-01-01T00:00:00+00:00",
+            expires_at="2099-01-01T00:00:00+00:00",
+        )
+
+        self.actions.refresh_transit_routes(self.trip.trip_id)
+        route = next(
+            item for item in self.actions.list_routes(self.trip.trip_id)
+            if (item["origin_id"], item["destination_id"], item["mode"])
+            == (*pair, "transit")
+        )
+        self.assertEqual("gtfs", route["provider"])
+
     def test_stay_areas_can_use_the_same_tdx_graph(self) -> None:
         self.assertTrue(self.actions.transit_provider.build_graph().edges)
 
@@ -921,6 +944,7 @@ class TransitRouteTest(unittest.TestCase):
             {"place_id": "b", "latitude": 25.1, "longitude": 121.6},
         )
         self.assertEqual("osm_metro", route["provider"])
+        self.assertTrue(route["gtfs_checked"])
 
 
 class MetroInterchangeTest(unittest.TestCase):

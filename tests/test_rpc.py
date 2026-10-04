@@ -78,6 +78,14 @@ class RpcOverHttpTest(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(job["status"], "queued")
 
+    def test_transit_refresh_runs_where_the_private_feed_is_installed(self):
+        _, trip = self.call("create_trip", {"name": "Taipei", "destination": "Taipei"})
+        status, body = self.call("refresh_transit_routes", {"trip_id": trip["trip_id"]})
+
+        self.assertEqual(202, status)
+        _, job = self.call("job_status", {"job_id": body["job_id"]})
+        self.assertEqual("refresh_transit_routes", job["kind"])
+
     def test_unknown_job_is_404_not_500(self):
         status, body = self.call("job_status", {"job_id": "nope"})
         self.assertEqual(status, 404)
