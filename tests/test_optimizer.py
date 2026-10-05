@@ -1239,6 +1239,26 @@ class OptimizerCoreTest(unittest.TestCase):
         }
         self.assertEqual("ROUTE_UNVERIFIED", unfit["too_long"])
 
+    def test_distant_airport_does_not_empty_a_trip_with_no_arrival_day_visits(self) -> None:
+        snapshot = self._shortened(self._week_with(impossible_minutes=None), 3)
+        snapshot["trip"].update(
+            include_operational_timeline=True,
+            terminal_transfer_minutes=90,
+            arrival_time="17:20",
+            accommodation_base_id="base",
+            requires_route_evidence=True,
+        )
+        snapshot["trip"]["usable_windows"][0]["start"] = "17:20"
+        snapshot["overnight_stays"] = {
+            day: "base" for day in snapshot["trip"]["local_dates"]
+        }
+
+        variant = optimize_trip(snapshot)["variants"][0]
+
+        self.assertGreater(variant["validation"]["scheduled_visit_count"], 0)
+        arrival = variant["days"][1]
+        self.assertFalse(any(item.get("kind") == "return_to_accommodation" for item in arrival["items"]))
+
     def test_a_trip_genuinely_short_of_time_still_says_so(self) -> None:
         """The other side of the split, or the fix would have deleted a real answer.
 

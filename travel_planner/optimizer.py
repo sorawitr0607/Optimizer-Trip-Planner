@@ -1520,6 +1520,10 @@ def _operational_layout(
                     latitude=terminal.get("latitude"),
                     longitude=terminal.get("longitude"),
                 )
+    elif first and not sequence:
+        # Arrival already ends at the accommodation. An empty arrival evening
+        # cannot owe a second transfer back to the same place.
+        suffix = []
     else:
         suffix = [
             {
