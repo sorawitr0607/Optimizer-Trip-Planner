@@ -39,6 +39,7 @@ from .optimizer import (
     DEPARTURE_LOGISTICS_MINUTES,
     MAX_USABLE_WALK_MINUTES,
     date_range,
+    departure_logistics_minutes,
     optimize_trip,
     usable_route_statuses,
     validate_variant,
@@ -2110,6 +2111,27 @@ class PlannerActions:
         )
         if base_implausible:
             accommodation_base = None
+        terminal = self.store.get_trip_evidence(trip_id, "default_terminal")
+        if terminal and terminal.get("expires_at", "") <= datetime.now(timezone.utc).isoformat():
+            terminal = None
+        # The default 45-minute slot only describes a city airport. A distant
+        # terminal needs a larger provisional allowance on both flight days.
+        transfer_minutes = (
+            90
+            if terminal
+            and accommodation_base
+            and _distance_metres(terminal, accommodation_base) > 25_000
+            else 45
+        )
+        if local_dates and basics.get("departure_time"):
+            last_window = usable_windows[-1]
+            last_window["start"] = min(
+                last_window["start"],
+                _shift_clock(
+                    last_window["end"],
+                    -departure_logistics_minutes({"terminal_transfer_minutes": transfer_minutes}),
+                ),
+            )
         if accommodation_base:
             resolved_name = str(accommodation_base.get("resolved_name") or "").strip()
             english_name = str(accommodation_base.get("name_en") or "").strip() or (
@@ -2250,9 +2272,6 @@ class PlannerActions:
             capability_gaps.append("OPENING_EVIDENCE_MISSING")
         if any(person.get("constraints") for person in travellers):
             capability_gaps.append("FREE_TEXT_HARD_CONSTRAINT_NEEDS_STRUCTURED_CONFIRMATION")
-        terminal = self.store.get_trip_evidence(trip_id, "default_terminal")
-        if terminal and terminal.get("expires_at", "") <= datetime.now(timezone.utc).isoformat():
-            terminal = None
         return {
             "schema_version": 1,
             "source": {
@@ -2268,6 +2287,7 @@ class PlannerActions:
                 "arrival_time": basics.get("arrival_time"),
                 "departure_time": basics.get("departure_time"),
                 **({"terminal": terminal} if terminal else {}),
+                "terminal_transfer_minutes": transfer_minutes,
                 "accommodation_base_id": (
                     "booked_accommodation_base" if accommodation_base else None
                 ),
@@ -2355,6 +2375,45 @@ class PlannerActions:
             expires_at=(now + timedelta(days=365)).isoformat(),
         )
         return {**value, "from_cache": False}
+
+    def confirm_terminal(self, trip_id: str, query: str) -> dict[str, Any]:
+        """Use the owner's actual arrival and departure airport in the plan."""
+
+        trip = self.store.get_trip(trip_id)
+        if trip is None:
+            raise PlannerRefusal("unknown_trip", trip_id=trip_id)
+        name = query.strip()
+        if not name:
+            raise PlannerRefusal("terminal_not_found", query=query)
+        provider = self.place_provider or OpenStreetMapProvider()
+        try:
+            match = provider.geocode(name)
+            centre = self._destination_centre(trip_id)
+            latitude, longitude = float(match["latitude"]), float(match["longitude"])
+            if _distance_metres(centre, match) > 200_000:
+                raise ValueError("terminal outside destination region")
+        except (ProviderUnavailable, PlannerRefusal, AttributeError, KeyError, TypeError, ValueError) as error:
+            raise PlannerRefusal("terminal_not_found", query=name) from error
+        resolved = str(match.get("name_en") or match.get("resolved_name") or "").strip()
+        value = {
+            "name": resolved if resolved and resolved.isascii() else name,
+            "latitude": latitude,
+            "longitude": longitude,
+            "status": "owner_confirmed",
+            "provider": str(match.get("provider") or provider.name),
+            "reason": "owner_selected_terminal",
+            "name_version": 2,
+        }
+        now = datetime.now(timezone.utc)
+        self.store.upsert_trip_evidence(
+            trip_id=trip_id,
+            kind="default_terminal",
+            value=value,
+            provider=value["provider"],
+            retrieved_at=now.isoformat(),
+            expires_at=(now + timedelta(days=3650)).isoformat(),
+        )
+        return value
 
     def save_plan_version(
         self,
@@ -4373,7 +4432,11 @@ class PlannerActions:
         }
         pairs.sort(
             key=lambda pair: (
-                _distance_metres(pair[0], pair[1]),
+                # A partial metro sweep should replace the longest walks first.
+                # Walking directions still start nearby, where one route can help
+                # the most places before its per-request cap is reached.
+                (-1 if provider.mode == "transit" else 1)
+                * _distance_metres(pair[0], pair[1]),
                 pair[0]["place_id"],
                 pair[1]["place_id"],
             )

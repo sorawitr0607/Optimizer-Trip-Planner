@@ -63,6 +63,7 @@ function render(language: Language, overrides: Record<string, unknown> = {}): st
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const seed: Record<string, unknown> = {
     accommodation_base: null,
+    terminal: { name: "Taipei Songshan Airport", status: "assumed" },
     timezone_evidence: null,
     opening_intervals: INTERVALS,
     routes: ROUTES,
@@ -78,9 +79,9 @@ function render(language: Language, overrides: Record<string, unknown> = {}): st
     ],
     ...overrides,
   };
-  client.setQueryData(["trips"], TRIPS);
+  client.setQueryData(["trips"], overrides.trips ?? TRIPS);
   client.setQueryData(["paid_usage"], overrides.paid_usage ?? USAGE);
-  for (const key of ["accommodation_base", "timezone_evidence", "opening_intervals", "routes", "journey", "candidate_choices"]) {
+  for (const key of ["accommodation_base", "terminal", "timezone_evidence", "opening_intervals", "routes", "journey", "candidate_choices"]) {
     client.setQueryData([key, TRIP], seed[key]);
   }
   return renderToStaticMarkup(
@@ -101,6 +102,15 @@ function expectNoMissingCopy(html: string): void {
 }
 
 describe("EvidencePage", () => {
+  it("shows the airport assumption before the build action", () => {
+    const html = render("en", {
+      trips: [{ ...TRIPS[0], planning_mode: "ready_to_schedule" }],
+      journey: { ...JOURNEY, capability_gaps: [] },
+    });
+    expect(html).toContain("Taipei Songshan Airport · Assumed");
+    expect(html.indexOf("Taipei Songshan Airport")).toBeLessThan(html.indexOf("Check facts and continue"));
+    expect(html).toContain("Change airport or station");
+  });
   it("states the free time-zone lookup and paid hours cost beside their buttons", () => {
     const html = render("en");
 

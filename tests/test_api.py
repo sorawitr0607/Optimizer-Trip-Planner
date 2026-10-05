@@ -113,7 +113,7 @@ class DispatchContractTest(unittest.TestCase):
         # ledger rows, so what is reachable over the socket has to be deliberate.
         # The plan review added review_plan: one paid model call returning typed
         # suggestions, applying nothing itself.
-        self.assertEqual(94, len(ACTIONS))  # ... +get_ranked_discovery, resolve_default_terminal, review_plan
+        self.assertEqual(95, len(ACTIONS))  # ... +get_ranked_discovery, resolve_default_terminal, review_plan
         self.assertIn("confirm_default_opening_windows", ACTIONS)
         self.assertIn("refresh_assumed_windows", ACTIONS)
         self.assertIn("active_plan_drift", ACTIONS)
@@ -123,6 +123,7 @@ class DispatchContractTest(unittest.TestCase):
         self.assertIn("refresh_place_summaries", ACTIONS)
         self.assertIn("recommend_areas", ACTIONS)
         self.assertIn("resolve_default_terminal", ACTIONS)
+        self.assertIn("confirm_terminal", ACTIONS)
         self.assertIn("accept_comfort_tradeoff", ACTIONS)
         self.assertIn("withdraw_comfort_tradeoff", ACTIONS)
         self.assertIn("review_plan", ACTIONS)
@@ -133,7 +134,7 @@ class DispatchContractTest(unittest.TestCase):
         self.assertIn("build_export_snapshot", ACTIONS)
         # 40 since `not_your_trip`, which is 403 rather than the default 409;
         # 41 since `not_admin`, same status, for the cap's owner-only gate.
-        self.assertEqual(41, len(REFUSAL_STATUS))
+        self.assertEqual(42, len(REFUSAL_STATUS))
 
     def test_the_split_ledger_is_reachable_but_deletion_is_not(self) -> None:
         for name in (

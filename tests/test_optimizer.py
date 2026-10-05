@@ -1219,6 +1219,26 @@ class OptimizerCoreTest(unittest.TestCase):
                 {"too_long": "NO_DAY_LONG_ENOUGH"}, unfit, f"at {days} days"
             )
 
+    def test_missing_route_is_not_called_a_short_day(self) -> None:
+        snapshot = self._shortened(self._week_with(impossible_minutes=90), 3)
+        snapshot["trip"]["requires_route_evidence"] = True
+        snapshot["trip"]["accommodation_base_id"] = "base"
+        snapshot["overnight_stays"] = {
+            day: "base" for day in snapshot["trip"]["local_dates"]
+        }
+        snapshot["routes"] = [
+            route for route in snapshot["routes"]
+            if "too_long" not in (route["origin_id"], route["destination_id"])
+        ]
+
+        variant = optimize_trip(snapshot)["variants"][0]
+        unfit = {
+            item["place_id"]: item["reason"]
+            for item in variant["reconciliation"]
+            if item["status"] == "cannot_currently_fit"
+        }
+        self.assertEqual("ROUTE_UNVERIFIED", unfit["too_long"])
+
     def test_a_trip_genuinely_short_of_time_still_says_so(self) -> None:
         """The other side of the split, or the fix would have deleted a real answer.
 
@@ -1376,11 +1396,13 @@ class OptimizerActionsTest(unittest.TestCase):
 
             def geocode(self, query: str) -> dict:
                 self.queries.append(query)
+                taoyuan = query == "Taoyuan International Airport"
                 return {
-                    "name": "Taipei Songshan Airport",
-                    "address": "Taipei Songshan Airport",
-                    "latitude": 25.0665,
-                    "longitude": 121.5549,
+                    "name": query,
+                    "resolved_name": query if taoyuan else "Taipei Songshan Airport",
+                    "address": query,
+                    "latitude": 25.0777 if taoyuan else 25.0665,
+                    "longitude": 121.2328 if taoyuan else 121.5549,
                     "provider": self.name,
                 }
 
@@ -1399,11 +1421,17 @@ class OptimizerActionsTest(unittest.TestCase):
 
             first = actions.resolve_default_terminal(trip.trip_id)
             second = actions.resolve_default_terminal(trip.trip_id)
+            with patch.object(actions, "_destination_centre", return_value={"latitude": 25.04, "longitude": 121.5}):
+                confirmed = actions.confirm_terminal(trip.trip_id, "Taoyuan International Airport")
+            third = actions.resolve_default_terminal(trip.trip_id)
 
-        self.assertEqual(["airport near Taipei, Taiwan"], provider.queries)
+        self.assertEqual(["airport near Taipei, Taiwan", "Taoyuan International Airport"], provider.queries)
         self.assertEqual("assumed", first["status"])
         self.assertFalse(first["from_cache"])
         self.assertTrue(second["from_cache"])
+        self.assertEqual("owner_confirmed", confirmed["status"])
+        self.assertEqual("Taoyuan International Airport", third["name"])
+        self.assertTrue(third["from_cache"])
 
     def test_ready_preview_activates_as_an_immutable_plan_version(self) -> None:
         snapshot = fixture("ix-jp-shibuya-hours-view-walk")["planner_input"]
@@ -1462,6 +1490,16 @@ class OptimizerActionsTest(unittest.TestCase):
             )
 
             windows = actions._optimizer_input(trip.trip_id)["trip"]["usable_windows"]
+            actions.confirm_accommodation_base(trip.trip_id, "Ximen", 25.0427, 121.5086)
+            actions.store.upsert_trip_evidence(
+                trip_id=trip.trip_id,
+                kind="default_terminal",
+                value={"name": "Taoyuan International Airport", "latitude": 25.0777, "longitude": 121.2328, "status": "owner_confirmed", "name_version": 2},
+                provider="test",
+                retrieved_at="2030-01-01T00:00:00+00:00",
+                expires_at="2099-01-01T00:00:00+00:00",
+            )
+            distant = actions._optimizer_input(trip.trip_id)["trip"]
 
         # 10:40 minus pack-and-check-out, transfer and airport time.
         self.assertEqual(DEPARTURE_LOGISTICS_MINUTES, 180)
@@ -1470,6 +1508,8 @@ class OptimizerActionsTest(unittest.TestCase):
         # untouched — only the departure day borrows time.
         self.assertEqual("17:40", windows[0]["start"])
         self.assertEqual({"date": "2030-01-02", "start": "08:00", "end": "22:00"}, windows[1])
+        self.assertEqual(90, distant["terminal_transfer_minutes"])
+        self.assertEqual({"date": "2030-01-03", "start": "06:55", "end": "10:40"}, distant["usable_windows"][-1])
 
     def test_missing_dates_returns_stay_length_choices(self) -> None:
         snapshot = fixture("jp-shibuya-sky-morning-view")["planner_input"]
@@ -1495,6 +1535,7 @@ class OptimizerActionsTest(unittest.TestCase):
                 "longitude": 139.7798,
                 "status": "assumed",
             },
+            terminal_transfer_minutes=90,
         )
 
         variant = optimize_trip(snapshot)["variants"][0]
@@ -1508,6 +1549,11 @@ class OptimizerActionsTest(unittest.TestCase):
         self.assertEqual(2, len(airport_rows))
         self.assertEqual({35.5494}, {item["latitude"] for item in airport_rows})
         self.assertEqual({"Haneda Airport"}, {item["name"] for item in airport_rows})
+        transfers = [
+            item for day in variant["days"] for item in day["items"]
+            if item.get("kind") in {"arrival_transfer", "departure_transfer"}
+        ]
+        self.assertEqual([90, 90], [item["duration_minutes"] for item in transfers])
 
 
 if __name__ == "__main__":

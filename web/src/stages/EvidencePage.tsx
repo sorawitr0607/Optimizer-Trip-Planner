@@ -83,11 +83,16 @@ export function EvidencePage() {
   const [windows, setWindows] = useState<Record<string, { start: string; end: string }>>({});
   const [flash, setFlash] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
   const [cap, setCap] = useState<string | null>(null);
+  const [terminalQuery, setTerminalQuery] = useState("");
   const [prepareStep, setPrepareStep] = useState<"zone" | "hours" | "routes" | null>(null);
 
   const zone = useQuery({
     queryKey: ["timezone_evidence", tripId],
     queryFn: () => rpc<TimezoneEvidence | null>("get_timezone_evidence", { trip_id: tripId }),
+  });
+  const terminal = useQuery({
+    queryKey: ["terminal", tripId],
+    queryFn: () => rpc<{ name: string; status: string } | null>("resolve_default_terminal", { trip_id: tripId }),
   });
   // The screen's own question, answered before any of its controls are shown. It was
   // reported as confusing -- "am I need to fetch it or not" -- and the data to answer
@@ -195,6 +200,16 @@ export function EvidencePage() {
     onSuccess: done(copy("hours_confirmed", language)),
     onError: fail,
   });
+  const confirmTerminal = useMutation({
+    mutationFn: () => rpc("confirm_terminal", { trip_id: tripId, query: terminalQuery.trim() }),
+    onSuccess: async () => {
+      setTerminalQuery("");
+      setFlash({ tone: "ok", text: copy("flight_airport_saved", language) });
+      await queryClient.invalidateQueries({ queryKey: ["terminal", tripId] });
+      await queryClient.invalidateQueries({ queryKey: ["plan_preview", tripId] });
+    },
+    onError: fail,
+  });
   const saveCap = useMutation({
     mutationFn: () => rpc<number>("set_paid_cap", { cap_usd: Number(cap ?? 0) }),
     onSuccess: done(copy("cap_saved", language)),
@@ -292,6 +307,26 @@ export function EvidencePage() {
         </section>
       ) : null}
 
+      <div className="evidence-card">
+        <strong>{copy("flight_airport", language)}</strong>
+        <span className="evidence-value">
+          {terminal.data?.name ?? copy("flight_airport_unknown", language)}
+          {terminal.data ? ` · ${copy(terminal.data.status === "owner_confirmed" ? "flight_airport_confirmed" : "flight_airport_assumed", language)}` : ""}
+        </span>
+        <span className="setup-hint">{copy("flight_airport_help", language)}</span>
+        <label htmlFor="flight-airport-query">
+          {copy("flight_airport_input", language)}
+          <input
+            id="flight-airport-query"
+            onChange={(event) => setTerminalQuery(event.target.value)}
+            value={terminalQuery}
+          />
+        </label>
+        <button disabled={!terminalQuery.trim() || confirmTerminal.isPending} onClick={() => confirmTerminal.mutate()} type="button">
+          {copy("flight_airport_confirm", language)}
+        </button>
+      </div>
+
       {!exploreFirst ? (
         <div className="evidence-auto-bar">
           <p className="setup-hint" id="verify-cost">
@@ -310,7 +345,7 @@ export function EvidencePage() {
             <button
               aria-describedby="verify-cost"
               className="setup-primary evidence-auto-btn"
-              disabled={prepare.isPending || !options.data || (spend?.state === "stopped" && options.data.verified.calls > 0)}
+              disabled={prepare.isPending || !!terminalQuery.trim() || !options.data || (spend?.state === "stopped" && options.data.verified.calls > 0)}
               onClick={() => prepare.mutate()}
               type="button"
             >

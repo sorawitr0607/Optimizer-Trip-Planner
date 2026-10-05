@@ -149,6 +149,19 @@ describe("collectRouteEvidence", () => {
 });
 
 describe("collectRouteEvidence transit fallback", () => {
+  it("continues a metro sweep that stopped before reaching distant places", async () => {
+    const rpc = vi.spyOn(client, "rpc").mockImplementation((async (method: string) => {
+      if (method === "refresh_routes") return { fetched: 0, more_pairs: false };
+      const call = rpc.mock.calls.filter((entry) => entry[0] === "refresh_transit_routes").length;
+      return call === 1
+        ? { fetched: 107, skipped_over_cap: 41 }
+        : { fetched: 12, skipped_over_cap: 0 };
+    }) as unknown as typeof client.rpc);
+
+    await expect(collectRouteEvidence("trip_1")).resolves.toBe(119);
+    expect(rpc.mock.calls.filter((entry) => entry[0] === "refresh_transit_routes")).toHaveLength(2);
+  });
+
   it("rescues a trip whose walking router is unreachable", async () => {
     // OpenRouteService went down on the owner's London trip — 60 of 60 attempts — which
     // left every place ROUTE_UNVERIFIED and the plan unbuildable. Transit topology is

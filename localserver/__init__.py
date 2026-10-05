@@ -100,6 +100,7 @@ ACTIONS = (
     "confirm_accommodation_base",
     "refresh_timezone",
     "resolve_default_terminal",
+    "confirm_terminal",
     "get_timezone_evidence",
     "refresh_routes",
     # WF-038. A local file read, so it is free and works offline, but it is a
@@ -192,6 +193,7 @@ REFUSAL_STATUS = {
     "insufficient_geocoded_places": 422,
     "invalid_time_window": 422,
     "accommodation_query_missing": 422,
+    "terminal_not_found": 422,
     "invalid_paid_cap": 422,
     # Editable expense categories. A built-in is never removable and a category
     # still on a row cannot be dropped, or its money silently re-files as `other`.

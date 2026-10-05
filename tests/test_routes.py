@@ -739,6 +739,25 @@ class TransitRouteTest(unittest.TestCase):
     def tearDown(self) -> None:
         self.directory.cleanup()
 
+    def test_partial_transit_sweep_checks_the_longest_walk_first(self) -> None:
+        from travel_planner.transit import metres
+
+        points = self.actions._route_points(self.trip.trip_id)
+        provider = self.actions.transit_provider
+        with patch.object(provider, "route", wraps=provider.route) as routed, patch(
+            "travel_planner.actions.ROUTE_SWEEP_SECONDS", 0.0
+        ):
+            self.actions.refresh_transit_routes(self.trip.trip_id)
+
+        origin, destination = routed.call_args.args
+        distance = lambda left, right: metres(
+            left["latitude"], left["longitude"], right["latitude"], right["longitude"]
+        )
+        self.assertAlmostEqual(
+            max(distance(left, right) for left in points for right in points if left != right),
+            distance(origin, destination),
+        )
+
     def test_a_transit_leg_reports_only_access_walking(self) -> None:
         """The reason this ticket exists: a long ride with a short walk.
 

@@ -11,12 +11,14 @@ interface RouteRefreshReply {
   /** Places still holding no route at all, in any mode. Zero means every place can be
    *  scheduled and whatever pairs remain are refinement. Absent on an older server. */
   places_unserved?: number;
+  skipped_over_cap?: number;
 }
 
 /** A ceiling on passes, not on the trip — and it lives on the server now, as
  *  `actions.MAX_ROUTE_PASSES`. The number is unchanged; only the side of the wire it
  *  runs on moved, because each pass used to cost a whole queued job. */
 const MAX_PASSES = 12;
+const MAX_TRANSIT_PASSES = 3;
 
 /**
  * Ask for walking routes until every pair has one, or until asking stops helping.
@@ -92,9 +94,15 @@ export async function collectRouteEvidence(
   // Measured on London: 0 walking routes, then 24 transit legs, and the plan went from
   // `unavailable` with 0 visits to `provisional` with 5.
   try {
-    const transit = await rpc<RouteRefreshReply>("refresh_transit_routes", { trip_id: tripId });
-    stored += transit.fetched;
-    onProgress?.(stored);
+    for (let call = 0; call < MAX_TRANSIT_PASSES; call += 1) {
+      const transit = await rpc<RouteRefreshReply>("refresh_transit_routes", { trip_id: tripId });
+      stored += transit.fetched;
+      onProgress?.(stored);
+      // The local graph may hit the worker deadline before every pair is checked.
+      // On Taipei, that left Ximen → Beitou as a two-hour walk although the TDX
+      // feed had a 36-minute metro route. A later call resumes the missing pairs.
+      if (!transit.skipped_over_cap || !transit.fetched) break;
+    }
   } catch {
     /* the walking routes, if any, still stand */
   }

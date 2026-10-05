@@ -31,6 +31,24 @@ DEPARTURE_LOGISTICS: tuple[tuple[str, int], ...] = (
     ("airport_departure", 90),
 )
 DEPARTURE_LOGISTICS_MINUTES = sum(minutes for _, minutes in DEPARTURE_LOGISTICS)
+DEFAULT_TERMINAL_TRANSFER_MINUTES = dict(DEPARTURE_LOGISTICS)["departure_transfer"]
+
+
+def terminal_transfer_minutes(trip: dict[str, Any]) -> int:
+    return max(
+        DEFAULT_TERMINAL_TRANSFER_MINUTES,
+        int(trip.get("terminal_transfer_minutes", DEFAULT_TERMINAL_TRANSFER_MINUTES)),
+    )
+
+
+def departure_logistics_minutes(trip: dict[str, Any]) -> int:
+    """Use the same provisional airport transfer in the window and the timetable."""
+
+    return (
+        DEPARTURE_LOGISTICS_MINUTES
+        - DEFAULT_TERMINAL_TRANSFER_MINUTES
+        + terminal_transfer_minutes(trip)
+    )
 
 # The three comfort budgets an owner may agree to exceed, in one table so the validator,
 # the soft-violation count and the screen cannot drift apart on which is which. `WF-039`.
@@ -1443,6 +1461,7 @@ def _operational_layout(
     dates = snapshot["trip"]["local_dates"]
     first, last = day == dates[0], day == dates[-1]
     prefix: list[dict[str, Any]] = []
+    transfer_minutes = terminal_transfer_minutes(snapshot["trip"])
     if first:
         terminal = snapshot["trip"].get("terminal") or {}
         prefix.extend(
@@ -1458,7 +1477,7 @@ def _operational_layout(
                 {
                     "type": "logistics",
                     "kind": "arrival_transfer",
-                    "duration_minutes": 45,
+                    "duration_minutes": transfer_minutes,
                     "mode": "confirm",
                     "from_name": _terminal_name(snapshot, arrival=True),
                     "to_name": _base_name(snapshot),
@@ -1489,7 +1508,7 @@ def _operational_layout(
             {
                 "type": "logistics",
                 "kind": kind,
-                "duration_minutes": minutes,
+                "duration_minutes": transfer_minutes if kind == "departure_transfer" else minutes,
                 **extra.get(kind, {}),
             }
             for kind, minutes in DEPARTURE_LOGISTICS
@@ -3216,9 +3235,9 @@ def _reconciliation(
     }
 
 
-def _fits_an_empty_day(
+def _empty_day_blocker(
     snapshot: dict[str, Any], candidate: dict[str, Any], config: dict[str, Any]
-) -> bool:
+) -> str | None:
     """Could this place be placed on a day with nothing else on it?
 
     **This is the question "would another day help?" asked honestly**, and it is the one
@@ -3241,20 +3260,24 @@ def _fits_an_empty_day(
     drift from the first. Asking `_build_schedules` is the same judgement the solver
     itself makes.
 
-    Cost is one build per usable day per unplaced candidate, on a schedule holding a
-    single place, and only for candidates that already failed to be scheduled.
+    A missing usable route is a different blocker from a short day: adding hours
+    cannot create a train. Cost is one build per usable day per unplaced candidate,
+    on a schedule holding a single place.
     """
 
     dates = [window["date"] for window in snapshot["trip"]["usable_windows"]]
     lock = _lock_for(snapshot, _candidate_id(candidate))
+    route_blocked = []
     for day in dates:
         if lock and lock.get("date") and lock["date"] != day:
             continue
         proposal: dict[str, list[dict[str, Any]]] = {value: [] for value in dates}
         proposal[day] = [candidate]
-        if not _build_schedules(snapshot, proposal, config)["hard_errors"]:
-            return True
-    return False
+        errors = _build_schedules(snapshot, proposal, config)["hard_errors"]
+        if not errors:
+            return None
+        route_blocked.append(any(error["code"] == "ROUTE_UNVERIFIED" for error in errors))
+    return "ROUTE_UNVERIFIED" if route_blocked and all(route_blocked) else "NO_DAY_LONG_ENOUGH"
 
 
 def _skip_reason(
@@ -3282,9 +3305,9 @@ def _skip_reason(
     """
 
     # "No remaining capacity" is a claim that a longer trip would hold this, so it may
-    # only be made when that is true. See `_fits_an_empty_day`.
-    if not _fits_an_empty_day(snapshot, candidate, config):
-        return "NO_DAY_LONG_ENOUGH"
+    # only be made when that is true. See `_empty_day_blocker`.
+    if blocker := _empty_day_blocker(snapshot, candidate, config):
+        return blocker
     if _candidate_id(candidate) not in skipped:
         return "NO_TIME_CAPACITY"
     thresholds = _thresholds(snapshot)
