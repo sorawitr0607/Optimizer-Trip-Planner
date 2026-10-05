@@ -157,6 +157,10 @@ class OpenStreetMapProvider:
         """Resolve one owner-entered accommodation name or address."""
 
         location = self._find_destination(query)
+        details = location.get("namedetails") or {}
+        english_name = str(
+            details.get("name:en") or details.get("official_name:en") or ""
+        ).strip()
         try:
             latitude = float(location["lat"])
             longitude = float(location["lon"])
@@ -168,10 +172,10 @@ class OpenStreetMapProvider:
             "name": query.strip(),
             "address": str(location.get("display_name") or query).strip(),
             "resolved_name": str(
-                (location.get("namedetails") or {}).get("name:en")
-                or (location.get("namedetails") or {}).get("official_name:en")
+                english_name
                 or str(location.get("display_name") or "").split(",", 1)[0]
             ).strip(),
+            "name_en": english_name,
             "latitude": latitude,
             "longitude": longitude,
             "status": "owner_confirmed",
@@ -2789,6 +2793,31 @@ class WikidataSummaryProvider:
         }
 
 
+def _journey_wayfinding(graph: Any, journey: Any) -> dict[str, Any]:
+    """Expose sourced station names and route codes already in the chosen path."""
+
+    if graph is None:
+        return {"boarding_station": "", "alighting_station": "", "route_codes": []}
+
+    def english_stop(stop_id: str) -> str:
+        stop = graph.stops.get(stop_id)
+        if stop is None:
+            return ""
+        return stop.name_en or (stop.name if stop.name.isascii() else "")
+
+    return {
+        "boarding_station": english_stop(journey.origin_stop),
+        "alighting_station": english_stop(journey.destination_stop),
+        "route_codes": list(journey.boarded_routes),
+    }
+
+
+def _gtfs_line_code(route_id: str) -> str:
+    """TDX route IDs put the public line code after the operator prefix."""
+
+    return route_id.split("_")[1] if route_id.count("_") == 3 else route_id
+
+
 class OsmMetroProvider:
     """Transit legs from OpenStreetMap metro topology, when no timetable exists.
 
@@ -2921,7 +2950,8 @@ out body qt;
     def route(
         self, origin: dict[str, Any], destination: dict[str, Any]
     ) -> dict[str, Any]:
-        journey = self.build_graph().journey(
+        graph = self.build_graph()
+        journey = graph.journey(
             origin=(float(origin["latitude"]), float(origin["longitude"])),
             destination=(float(destination["latitude"]), float(destination["longitude"])),
         )
@@ -2940,6 +2970,7 @@ out body qt;
             "distance_m": None,
             "transfers": journey.transfers,
             "boarding_buffer_minutes": journey.waiting_minutes,
+            **_journey_wayfinding(graph, journey),
             "experience_evidence": [],
             # Topology plus assumed speed and headway. Never "verified".
             "status": "estimated",
@@ -3070,6 +3101,10 @@ class GtfsTransitProvider:
             "distance_m": None,
             "transfers": journey.transfers,
             "boarding_buffer_minutes": journey.waiting_minutes,
+            **_journey_wayfinding(self._area_graph or getattr(self.feed, "graph", None), journey),
+            # TDX route IDs encode the public line code in their second field:
+            # TRTC_BL_BL-2_0 is the BL line, not a traveller-facing route name.
+            "route_codes": [_gtfs_line_code(route) for route in journey.boarded_routes],
             # A ride between two stops is a transfer, not an experience.
             "experience_evidence": [],
             # Derived from the timetable, not looked up in it.

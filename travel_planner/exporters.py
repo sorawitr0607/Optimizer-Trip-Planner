@@ -53,6 +53,9 @@ TIMELINE_COLUMNS = (
     ("To", 30),
     ("Operational notes", 52),
     ("Confirm / assumption", 24),
+    ("Board at", 28),
+    ("Alight at", 28),
+    ("Route codes", 24),
 )
 
 # Latin + Thai + local-script coverage is required; a personal machine may have
@@ -279,6 +282,12 @@ def _write_itinerary(sheet: Any, snapshot: dict[str, Any], workbook: Any) -> Non
                 notes.append(f"{item['transfers']} transfer(s)")
             if item.get("boarding_buffer_minutes"):
                 notes.append(f"{item['boarding_buffer_minutes']} min boarding buffer")
+            if item.get("boarding_station"):
+                notes.append(f"Board at {item['boarding_station']}")
+            if item.get("alighting_station"):
+                notes.append(f"Alight at {item['alighting_station']}")
+            if item.get("route_codes"):
+                notes.append("Route codes: " + " → ".join(item["route_codes"]))
             if item.get("opening_verified"):
                 notes.append("Opening hours verified")
             if item.get("address"):
@@ -356,6 +365,9 @@ def _write_timeline(
                     item.get("to_name") or item.get("destination_name") or "",
                     item.get("notes") or "",
                     _code(words, item.get("reason")),
+                    item.get("boarding_station") or "",
+                    item.get("alighting_station") or "",
+                    " → ".join(item.get("route_codes") or []),
                 ],
                 wrap,
             )
@@ -373,6 +385,11 @@ def _write_summary(
     timeline_rows: int,
 ) -> None:
     stamp = snapshot["stamp"]
+    rows_to_recheck = sum(
+        item["status"] in {"recheck", "unverified_conflict"}
+        for day in snapshot["days"]
+        for item in day["items"]
+    )
     sheet.set_column(0, 0, 26)
     sheet.set_column(1, 6, 18)
     sheet.write(0, 0, stamp["destination"], title)
@@ -380,9 +397,10 @@ def _write_summary(
         ("Trip", stamp["trip_name"]),
         ("Plan version", stamp["plan_version_id"]),
         ("Variant", stamp["variant_id"]),
-        ("Variant status", stamp["variant_status"]),
+        ("Plan status", stamp["variant_status"]),
         ("Active plan", "yes" if stamp["is_active_plan"] else "no"),
-        ("Readiness", snapshot["readiness"]["state"]),
+        ("Schedule validation", snapshot["readiness"]["state"]),
+        ("Timetable rows to recheck", rows_to_recheck),
         ("Optimizer", stamp["optimizer_version"]),
         ("Input sha256", stamp["input_sha256"]),
         ("Language", stamp["language"]),

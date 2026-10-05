@@ -698,6 +698,12 @@ class TransitRouteTest(unittest.TestCase):
 
     FEED = Path(__file__).resolve().parent / "fixtures" / "synthetic_transit_gtfs.zip"
 
+    def test_tdx_route_id_uses_the_public_line_code(self) -> None:
+        from travel_planner.providers import _gtfs_line_code
+
+        self.assertEqual("BL", _gtfs_line_code("TRTC_BL_BL-2_0"))
+        self.assertEqual("A", _gtfs_line_code("A"))
+
     def setUp(self) -> None:
         from travel_planner.providers import GtfsTransitProvider
 
@@ -757,6 +763,9 @@ class TransitRouteTest(unittest.TestCase):
         # Derived from a timetable, not looked up in one.
         self.assertEqual("estimated", longest["status"])
         self.assertEqual("gtfs", longest["provider"])
+        self.assertTrue(longest["boarding_station"])
+        self.assertTrue(longest["alighting_station"])
+        self.assertTrue(longest["route_codes"])
 
     def test_tdx_rechecks_an_existing_osm_transit_leg_once(self) -> None:
         origin, destination = self.actions._route_points(self.trip.trip_id)[:2]
@@ -780,6 +789,30 @@ class TransitRouteTest(unittest.TestCase):
             == (*pair, "transit")
         )
         self.assertEqual("gtfs", route["provider"])
+
+    def test_refresh_upgrades_an_old_transit_row_without_wayfinding(self) -> None:
+        origin, destination = self.actions._route_points(self.trip.trip_id)[:2]
+        pair = (origin["place_id"], destination["place_id"])
+        self.actions.store.upsert_route_snapshot(
+            trip_id=self.trip.trip_id,
+            route={
+                "origin_id": pair[0], "destination_id": pair[1], "mode": "transit",
+                "duration_minutes": 99, "walking_minutes": 5,
+                "status": "estimated", "provider": "gtfs",
+            },
+            provider="gtfs",
+            retrieved_at="2030-01-01T00:00:00+00:00",
+            expires_at="2099-01-01T00:00:00+00:00",
+        )
+
+        self.actions.refresh_transit_routes(self.trip.trip_id)
+        route = next(
+            item for item in self.actions.list_routes(self.trip.trip_id)
+            if (item["origin_id"], item["destination_id"], item["mode"])
+            == (*pair, "transit")
+        )
+        self.assertTrue(route["route_codes"])
+        self.assertTrue(route["boarding_station"])
 
     def test_stay_areas_can_use_the_same_tdx_graph(self) -> None:
         self.assertTrue(self.actions.transit_provider.build_graph().edges)
@@ -1124,6 +1157,18 @@ class OsmMetroTransitTest(unittest.TestCase):
 
         return graph_from_osm(self.ELEMENTS)
 
+    def test_route_keeps_english_boarding_station_and_line_code(self) -> None:
+        from travel_planner.providers import OsmMetroProvider
+
+        provider = OsmMetroProvider(graph=self.graph())
+        route = provider.route(
+            {"place_id": "tower", "latitude": 25.0405, "longitude": 121.5705},
+            {"place_id": "market", "latitude": 25.0603, "longitude": 121.5903},
+        )
+        self.assertEqual("Tower Station", route["boarding_station"])
+        self.assertEqual("Market", route["alighting_station"])
+        self.assertEqual(["BR"], route["route_codes"])
+
     def test_metro_access_reaches_a_taipei_sight_just_beyond_900_metres(self) -> None:
         from travel_planner.transit import MAX_ACCESS_METRES, Stop, TransitGraph
 
@@ -1146,6 +1191,7 @@ class OsmMetroTransitTest(unittest.TestCase):
             result = provider.geocode("airport near Taipei, Taiwan")
 
         self.assertEqual("Taipei Songshan Airport", result["resolved_name"])
+        self.assertEqual("Taipei Songshan Airport", result["name_en"])
         self.assertIn("accept-language=en", request.call_args.args[0].full_url)
 
     def test_an_english_station_name_is_carried_beside_the_local_one(self) -> None:

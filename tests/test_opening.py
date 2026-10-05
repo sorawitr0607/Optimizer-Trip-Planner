@@ -747,6 +747,41 @@ class ExploreFirstEvidenceTest(unittest.TestCase):
             proposal["variants"][0]["hotel_recommendation"]["basis"],
         )
 
+    def test_a_saved_base_only_claims_a_sourced_english_name(self) -> None:
+        base = {
+            "name": "劍潭",
+            "resolved_name": "Jiantan Station",
+            "name_en": "Jiantan Station",
+            "latitude": 25.045,
+            "longitude": 121.515,
+            "status": "owner_confirmed",
+            "provider": "openstreetmap",
+        }
+        with patch.object(self.actions.place_provider, "geocode", return_value=base):
+            self.actions.confirm_accommodation_base(self.trip.trip_id, "劍潭")
+        candidate = next(
+            item for item in self.actions._optimizer_input(self.trip.trip_id)["candidates"]
+            if item["id"] == "booked_accommodation_base"
+        )
+        self.assertEqual("Jiantan Station", candidate["name"])
+        self.assertEqual({"en": "Jiantan Station", "local": "劍潭"}, candidate["names"])
+
+        with patch.object(self.actions.place_provider, "geocode", return_value={**base, "name_en": ""}):
+            self.actions.confirm_accommodation_base(self.trip.trip_id, "劍潭")
+        candidate = next(
+            item for item in self.actions._optimizer_input(self.trip.trip_id)["candidates"]
+            if item["id"] == "booked_accommodation_base"
+        )
+        self.assertEqual({"en": "Jiantan Station", "local": "劍潭"}, candidate["names"])
+
+        with patch.object(self.actions.place_provider, "geocode", return_value={**base, "name_en": "", "resolved_name": "劍潭"}):
+            self.actions.confirm_accommodation_base(self.trip.trip_id, "劍潭")
+        candidate = next(
+            item for item in self.actions._optimizer_input(self.trip.trip_id)["candidates"]
+            if item["id"] == "booked_accommodation_base"
+        )
+        self.assertEqual({"local": "劍潭"}, candidate["names"])
+
 
 if __name__ == "__main__":
     unittest.main()

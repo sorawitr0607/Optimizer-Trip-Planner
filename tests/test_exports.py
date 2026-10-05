@@ -386,6 +386,52 @@ class ArtifactTest(unittest.TestCase):
         finally:
             book.close()
 
+    def test_summary_distinguishes_schedule_validation_from_travel_checks(self) -> None:
+        from openpyxl import load_workbook
+
+        book = load_workbook(BytesIO(plan_workbook_xlsx(self.export)), read_only=True)
+        try:
+            facts = {row[0]: row[1] for row in book["Summary"].values if row[0]}
+            self.assertEqual(self.export["stamp"]["variant_status"], facts["Plan status"])
+            self.assertEqual(self.export["readiness"]["state"], facts["Schedule validation"])
+            self.assertEqual(
+                sum(
+                    item["status"] in {"recheck", "unverified_conflict"}
+                    for day in self.export["days"]
+                    for item in day["items"]
+                ),
+                facts["Timetable rows to recheck"],
+            )
+        finally:
+            book.close()
+
+    def test_transit_wayfinding_reaches_the_readable_and_audit_sheets(self) -> None:
+        from openpyxl import load_workbook
+
+        source = planner_input(with_names=True)
+        for route in source["routes"]:
+            route.update(
+                boarding_station="Board Station",
+                alighting_station="Alight Station",
+                route_codes=["BL"],
+            )
+        export = build_export_snapshot(
+            trip={"trip_id": "t1", "name": "Tokyo day", "destination": "Tokyo"},
+            plan=plan_payload(source),
+            version_id="plan_abcdef123456",
+            active_version_id="plan_abcdef123456",
+            language="en",
+            exported_at="2030-01-01T00:00:00+00:00",
+        )
+        travel = [item for day in export["days"] for item in day["items"] if item["type"] == "travel"]
+        self.assertTrue(any(item["boarding_station"] == "Board Station" for item in travel))
+        book = load_workbook(BytesIO(plan_workbook_xlsx(export)), read_only=True)
+        try:
+            self.assertTrue(any("Board at Board Station" in (row[4] or "") for row in book["Itinerary"].values))
+            self.assertIn("Board at", next(book["Timeline"].values))
+        finally:
+            book.close()
+
 
     def test_workbook_has_readable_itinerary_and_working_formulas(self) -> None:
         xlsx = plan_workbook_xlsx(self.export)

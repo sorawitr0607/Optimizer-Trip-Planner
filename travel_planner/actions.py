@@ -2111,11 +2111,19 @@ class PlannerActions:
         if base_implausible:
             accommodation_base = None
         if accommodation_base:
+            resolved_name = str(accommodation_base.get("resolved_name") or "").strip()
+            english_name = str(accommodation_base.get("name_en") or "").strip() or (
+                resolved_name if resolved_name.isascii() else ""
+            )
+            base_name = english_name or accommodation_base["name"]
             candidates.append(
                 {
                     "id": "booked_accommodation_base",
-                    "name": accommodation_base["name"],
-                    "names": {"en": accommodation_base["name"]},
+                    "name": base_name,
+                    "names": (
+                        {"en": english_name, "local": accommodation_base["name"]}
+                        if english_name else {"local": accommodation_base["name"]}
+                    ),
                     "kind": "hotel_area",
                     "priority": "alternative",
                     "score": 0,
@@ -4303,6 +4311,9 @@ class PlannerActions:
                     and route.get("provider") == "osm_metro"
                     and not route.get("gtfs_checked")
                 )
+                # Older metro rows have only totals. Re-read the local graph once
+                # so the saved route can name boarding and alighting stations.
+                and not (provider.mode == "transit" and "route_codes" not in route)
             )
         pairs = [
             (origin, destination)

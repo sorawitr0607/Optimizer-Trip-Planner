@@ -661,7 +661,7 @@ export function ItineraryPage() {
         pinned={pinned}
       />
       <div className="plan-stamp">
-        <strong>{copy(plan.stamp.variant_id, language)} · {copy("readiness", language)}: {copy(plan.readiness.state, language)}</strong>
+        <strong>{copy(plan.stamp.variant_id, language)} · {copy("schedule_validation", language)}: {copy(plan.readiness.state, language)}</strong>
         <span>{copy("active_plan", language)} <code>{versionTag}</code> · {copy("exported_at", language)}{" "}
           {/* Moves with the clock, not the code: re-exporting the same plan a minute
               later changed this and failed the screen gate. Marked so capture mode can
