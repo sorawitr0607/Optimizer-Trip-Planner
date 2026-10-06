@@ -228,6 +228,18 @@ def _write_itinerary(sheet: Any, snapshot: dict[str, Any], workbook: Any) -> Non
     stamp = snapshot["stamp"]
     sheet.merge_range(0, 0, 0, 4, stamp["trip_name"], title)
     sheet.merge_range(1, 0, 1, 4, stamp["destination"])
+    missing_must_see = [
+        item["display_name"]
+        for item in snapshot["unscheduled"]
+        if item["priority"] == "must_do"
+    ]
+    if missing_must_see:
+        sheet.merge_range(
+            2, 0, 2, 4,
+            "Must-see places not scheduled: " + ", ".join(missing_must_see)
+            + ". Check Choices & Backups for the reason.",
+            body,
+        )
     sheet.freeze_panes(2, 0)
     sheet.activate()
     sheet.set_landscape()
@@ -289,7 +301,7 @@ def _write_itinerary(sheet: Any, snapshot: dict[str, Any], workbook: Any) -> Non
             if item.get("route_codes"):
                 notes.append("Route codes: " + " → ".join(item["route_codes"]))
             if item.get("opening_verified"):
-                notes.append("Opening hours verified")
+                notes.append("Published hours checked; reconfirm for the travel date")
             if item.get("address"):
                 notes.append(str(item["address"]))
             status = item["status"]
@@ -401,6 +413,10 @@ def _write_summary(
         ("Active plan", "yes" if stamp["is_active_plan"] else "no"),
         ("Schedule validation", snapshot["readiness"]["state"]),
         ("Timetable rows to recheck", rows_to_recheck),
+        (
+            "Must-see places not scheduled",
+            sum(item["priority"] == "must_do" for item in snapshot["unscheduled"]),
+        ),
         ("Optimizer", stamp["optimizer_version"]),
         ("Input sha256", stamp["input_sha256"]),
         ("Language", stamp["language"]),
@@ -414,7 +430,7 @@ def _write_summary(
         ("Exported at", stamp["exported_at"]),
         ("Timezone", stamp["timezone"] or "unverified"),
         ("Discovery status", stamp["discovery_status"]),
-        ("Evidence gaps", ", ".join(stamp["capability_gaps"]) or "none"),
+        ("Capability gaps", ", ".join(stamp["capability_gaps"]) or "none"),
     )
     for offset, (name, value) in enumerate(facts, start=2):
         sheet.write(offset, 0, name, header)

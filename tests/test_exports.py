@@ -389,11 +389,16 @@ class ArtifactTest(unittest.TestCase):
     def test_summary_distinguishes_schedule_validation_from_travel_checks(self) -> None:
         from openpyxl import load_workbook
 
+        self.export["unscheduled"] = [
+            {"priority": "must_do", "display_name": "National Palace Museum"}
+        ]
         book = load_workbook(BytesIO(plan_workbook_xlsx(self.export)), read_only=True)
         try:
             facts = {row[0]: row[1] for row in book["Summary"].values if row[0]}
             self.assertEqual(self.export["stamp"]["variant_status"], facts["Plan status"])
             self.assertEqual(self.export["readiness"]["state"], facts["Schedule validation"])
+            self.assertEqual(1, facts["Must-see places not scheduled"])
+            self.assertIn("National Palace Museum", book["Itinerary"]["A3"].value)
             self.assertEqual(
                 sum(
                     item["status"] in {"recheck", "unverified_conflict"}
