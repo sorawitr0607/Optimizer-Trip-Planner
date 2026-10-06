@@ -122,7 +122,7 @@ export function DayStops({
           const name = nameOf(item);
           const kindLabel = item.type === "buffer"
             && (item.reason === "free_time_or_rest" || item.reason === "day_ends_free")
-            ? copyFrom("OPTIMIZER_CODE_TEXT", item.reason, language)
+            ? copyFrom("OPTIMIZER_CODE_TEXT", "day_ends_free", language)
             : copy(`type_${item.type}`, language);
           const done = isDone(item.key);
           const isNow = moment >= item.startAt && moment < item.endAt;
