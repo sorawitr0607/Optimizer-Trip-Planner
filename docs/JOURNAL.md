@@ -6556,3 +6556,26 @@ Full story in `.wayfinder/artifacts/036-queue-split-brain-postmortem.md`.
 Suite at the fix: 761 tests, 0 failures (11 socket-bind errors pre-existing
 sandbox denials, enumerated file by file); `tests.test_rpc` confirmed the same
 day on the owner's Mac, 25 tests OK.
+
+## Taipei production timetable: free time versus buffers, 2026-10-06
+
+The 29 December 2026 to 4 January 2027 Taipei QA workbook showed several two- to
+three-hour `buffer` rows. They were unfilled time in a plan with 11 selected visits,
+not contingency needed for travel. The optimizer also held the return to the
+accommodation until the end of the day, creating artificial evening waits. On a day
+without visits it could schedule a return despite there being nowhere to return from.
+
+The optimizer now labels waits longer than 90 minutes before a visit or meal as
+`free_time_or_rest`, places the return immediately after the last planned activity,
+and omits it on an empty day. Time remaining after a return is `day_ends_free`.
+The itinerary displays these rows as **Free time**; the workbook Timeline types
+them `free_time`, so recalculated Summary buffer formulas agree with their cached
+values. Existing `whole-trip-v2` plans retain their original buffer accounting.
+
+The revised production trip kept its 11 visits and reduced counted buffer minutes
+from 455 to 275. On 30 December, 13:00–16:00 is free time, the return runs
+19:07–19:52, and 19:52–21:00 is free time at the accommodation. The downloaded
+workbook's cached and formula-based buffer totals matched on every day. Remaining
+free periods are still real gaps: filling them requires more selected places or a
+shorter day window. The full project check passed 12 of 13 stages (812 Python and
+232 web tests); screen baselines were skipped because captures were absent.

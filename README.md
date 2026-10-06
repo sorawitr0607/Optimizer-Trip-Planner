@@ -116,6 +116,12 @@ Every trip flows through ten real, interactive screens:
 9. **Split (`/trips/:id/split`)**: Multi-currency group bill splitting ledger calculating exact settlement transactions.
 10. **Revise (`/trips/:id/revise`)**: In-trip live adjustments, stop reordering, weather adaptations, and schedule rescheduling.
 
+The timetable labels unfilled hours as **Free time**, including waits longer than
+90 minutes before a meal or visit. Shorter waits before those activities remain
+buffers. On sightseeing days, the return to the accommodation follows the last
+planned activity; an empty day has no return trip. The planner leaves
+unscheduled time visible rather than adding places that were not selected.
+
 A long wait says where it has got to rather than only that it is running. Discovery and
 the draft build are queued jobs, so the worker reports the stages it has finished — the
 two Overpass blocks, each plan variant — and the screen draws them. A stage is marked
@@ -141,7 +147,9 @@ Zoom out far enough and the destination country's own outline appears, so a plac
   Neon), including hosted-only queue and ownership structures. It contains
   no row data; see the recovery README before restoring.
 - **Snapshot Exporters**:
-  - **Excel Workbook (`.xlsx`)**: a day-by-day itinerary plus six supporting sheets for plan details, choices, readiness, costs, and sources.
+  - **Excel Workbook (`.xlsx`)**: a day-by-day itinerary plus six supporting
+    sheets for plan details, choices, readiness, costs, and sources. The Timeline
+    marks unfilled hours as `free_time`, outside the Summary's buffer totals.
   - **Calendar Feed (`.ics`)**: Standard iCalendar feed for import into Apple Calendar, Google Calendar, or Outlook.
 
 ## Repository map
