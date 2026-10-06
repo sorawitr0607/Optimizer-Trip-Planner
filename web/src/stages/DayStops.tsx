@@ -120,6 +120,10 @@ export function DayStops({
       <ol className="day-stops">
         {items.map((item) => {
           const name = nameOf(item);
+          const kindLabel = item.type === "buffer"
+            && (item.reason === "free_time_or_rest" || item.reason === "day_ends_free")
+            ? copyFrom("OPTIMIZER_CODE_TEXT", item.reason, language)
+            : copy(`type_${item.type}`, language);
           const done = isDone(item.key);
           const isNow = moment >= item.startAt && moment < item.endAt;
           const isPinned = pinned !== null && +pinned === +item.startAt;
@@ -205,7 +209,7 @@ export function DayStops({
                     <span className="day-stop-name">{name}</span>
                     <span className="day-stop-meta">
                       <span className={`plan-row-kind ${item.type}`}>
-                        {copy(`type_${item.type}`, language)}
+                        {kindLabel}
                       </span>
                       <span className="day-stop-dur">
                         {durationText(item.startAt, item.endAt, language)}

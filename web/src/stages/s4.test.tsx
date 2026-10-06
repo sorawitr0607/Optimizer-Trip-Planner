@@ -442,6 +442,7 @@ describe("ItineraryPage", () => {
     expect(html).toContain("No places are scheduled on this day");
     // The rows themselves are right and stay: this is a sentence, not a suppression.
     expect(html).toContain("Breakfast near the base or first stop");
+    expect(html).toContain('plan-row-kind buffer">Free time or rest');
 
     // And the day that does have places says nothing of the kind.
     const busy = render(<ItineraryPage />, "en", seedTwoDays, "?view=timeline&date=2030-01-01");
