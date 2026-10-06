@@ -3271,7 +3271,7 @@ def _empty_day_blocker(
 
     dates = [window["date"] for window in snapshot["trip"]["usable_windows"]]
     lock = _lock_for(snapshot, _candidate_id(candidate))
-    route_blocked = []
+    route_only_day = False
     for day in dates:
         if lock and lock.get("date") and lock["date"] != day:
             continue
@@ -3280,8 +3280,10 @@ def _empty_day_blocker(
         errors = _build_schedules(snapshot, proposal, config)["hard_errors"]
         if not errors:
             return None
-        route_blocked.append(any(error["code"] == "ROUTE_UNVERIFIED" for error in errors))
-    return "ROUTE_UNVERIFIED" if route_blocked and all(route_blocked) else "NO_DAY_LONG_ENOUGH"
+        # Arrival or departure may be too short for sightseeing. One ordinary day
+        # blocked solely by a missing route is enough to name the actionable cause.
+        route_only_day |= all(error["code"] == "ROUTE_UNVERIFIED" for error in errors)
+    return "ROUTE_UNVERIFIED" if route_only_day else "NO_DAY_LONG_ENOUGH"
 
 
 def _skip_reason(

@@ -1223,6 +1223,9 @@ class OptimizerCoreTest(unittest.TestCase):
         snapshot = self._shortened(self._week_with(impossible_minutes=90), 3)
         snapshot["trip"]["requires_route_evidence"] = True
         snapshot["trip"]["accommodation_base_id"] = "base"
+        snapshot["trip"]["include_operational_timeline"] = True
+        snapshot["trip"]["terminal_transfer_minutes"] = 90
+        snapshot["trip"]["usable_windows"][0]["start"] = "17:20"
         snapshot["overnight_stays"] = {
             day: "base" for day in snapshot["trip"]["local_dates"]
         }
