@@ -372,6 +372,28 @@ class ArtifactTest(unittest.TestCase):
         finally:
             book.close()
 
+    def test_preparation_evening_does_not_shift_trip_day_numbers(self) -> None:
+        from openpyxl import load_workbook
+
+        source = planner_input()
+        source["trip"]["include_operational_timeline"] = True
+        export = build_export_snapshot(
+            trip={"trip_id": "t1", "name": "Tokyo day", "destination": "Tokyo"},
+            plan=plan_payload(source),
+            version_id="plan_1",
+            active_version_id="plan_1",
+            language="en",
+            exported_at="2030-01-01T00:00:00+00:00",
+        )
+        book = load_workbook(BytesIO(plan_workbook_xlsx(export)), read_only=True)
+        try:
+            headings = [row[0] for row in book["Itinerary"].values if isinstance(row[0], str)]
+            self.assertTrue(headings[2].startswith("The evening before you go ·"))
+            self.assertTrue(any(heading.startswith("Day 1 ·") for heading in headings))
+            self.assertFalse(any(heading.startswith("Day 2 ·") for heading in headings))
+        finally:
+            book.close()
+
     def test_itinerary_marks_route_and_opening_checks_in_plain_language(self) -> None:
         from openpyxl import load_workbook
 

@@ -247,10 +247,17 @@ def _write_itinerary(sheet: Any, snapshot: dict[str, Any], workbook: Any) -> Non
     sheet.set_margins(0.3, 0.3, 0.4, 0.4)
 
     row = 3
+    first_items = snapshot["days"][0]["items"] if snapshot["days"] else []
+    prep_first = bool(first_items) and all(item["type"] == "preparation" for item in first_items)
     for number, day in enumerate(snapshot["days"], start=1):
         day_date = date.fromisoformat(day["date"]).strftime("%a %d %b %Y")
+        day_name = (
+            "The evening before you go"
+            if prep_first and number == 1
+            else f"Day {number - prep_first}"
+        )
         label = (
-            f"Day {number} · {day_date} · "
+            f"{day_name} · {day_date} · "
             f"{day['totals']['scheduled_visits']} "
             f"{'stop' if day['totals']['scheduled_visits'] == 1 else 'stops'} · "
             f"{day['totals']['walking_minutes']} min walking"
