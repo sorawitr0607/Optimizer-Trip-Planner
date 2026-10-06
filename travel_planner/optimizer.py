@@ -1232,15 +1232,16 @@ def _build_day(
             current = home["end"]
 
     if snapshot["trip"].get("include_operational_timeline"):
-        # The trailing gap gets its own reason. It is the *evening*, not a hole the
-        # planner failed to fill: on the owner's Singapore trip all 14 chosen places were
-        # scheduled and the day still ran to 21:15, so the remainder was printed as a
-        # 165-minute `BUFFER` and read as a fault. Same row, same honest length, named
-        # for what it is. No frozen fixture sets `include_operational_timeline`, so this
-        # branch is not reached by the 27 regressions.
-        current = _append_wait(items, day, current, body_end, "day_ends_free")
-        for block in operational["suffix"]:
-            current = _append_operational(items, day, current, block)
+        # Return after the last planned activity, then leave the rest of the day free
+        # at the accommodation. Airport departure logistics stay pinned to the end.
+        if operational["suffix"] and operational["suffix"][0]["kind"] == "return_to_accommodation":
+            for block in operational["suffix"]:
+                current = _append_operational(items, day, current, block)
+            current = _append_wait(items, day, current, window_end, "day_ends_free")
+        else:
+            current = _append_wait(items, day, current, body_end, "day_ends_free")
+            for block in operational["suffix"]:
+                current = _append_operational(items, day, current, block)
     return {
         "day": {
             "date": day,
@@ -1520,9 +1521,8 @@ def _operational_layout(
                     latitude=terminal.get("latitude"),
                     longitude=terminal.get("longitude"),
                 )
-    elif first and not sequence:
-        # Arrival already ends at the accommodation. An empty arrival evening
-        # cannot owe a second transfer back to the same place.
+    elif not sequence:
+        # A day spent at the base has no return trip, including an empty arrival.
         suffix = []
     else:
         suffix = [
@@ -3347,12 +3347,8 @@ def _buffer_item(day: str, start: int, end: int, reason: str) -> dict[str, Any]:
     }
 
 
-#: Beyond this, a gap before a meal is not "waiting for the meal window" — it is an empty
-#: afternoon that happens to end at dinner. Measured on the owner's Sapporo arrival day: a
-#: single row read `12:30–17:30 · BUFFER · 300 min · meal_window`, which names the wrong
-#: cause and reads as the planner having decided on a five-hour lunch break. Ninety minutes
-#: is about the longest a genuine wait-for-opening can be while still being about the meal.
-MEAL_WAIT_MAX_MINUTES = 90
+#: A longer gap before a meal or visit is usable free time, not a contingency buffer.
+WAIT_MAX_MINUTES = 90
 
 
 def _append_wait(
@@ -3363,7 +3359,7 @@ def _append_wait(
         # real length; only the reason changes, because a row's reason is what the owner
         # reads to decide whether it is a problem — and "free time" invites filling the
         # day where "meal window" says the planner needed it.
-        if reason == "meal_window" and target - current > MEAL_WAIT_MAX_MINUTES:
+        if reason in {"meal_window", "timing_window"} and target - current > WAIT_MAX_MINUTES:
             reason = "free_time_or_rest"
         items.append(_buffer_item(day, current, target, reason))
     return max(current, target)

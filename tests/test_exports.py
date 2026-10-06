@@ -175,10 +175,17 @@ class ExportSnapshotTest(unittest.TestCase):
             item
             for day in plan["variant"]["days"]
             for item in day["items"]
-            if item["type"] == "buffer" and item["reason"] == "timing_window"
+            if item["type"] == "buffer" and item["reason"] == "free_time_or_rest"
         )
         free["reason"] = "day_ends_free"
         plan["optimizer_version"] = "whole-trip-v2"
+        plan["variant"]["metrics"]["buffer_minutes"] += sum(
+            item["duration_minutes"]
+            for day in plan["variant"]["days"]
+            for item in day["items"]
+            if item["type"] == "buffer"
+            and item.get("reason") in {"free_time_or_rest", "day_ends_free"}
+        )
 
         export = build_export_snapshot(
             trip={"trip_id": "t1", "name": "Trip", "destination": "Tokyo"},
@@ -193,6 +200,19 @@ class ExportSnapshotTest(unittest.TestCase):
             plan["variant"]["metrics"]["buffer_minutes"],
             export["totals"]["buffer_minutes"],
         )
+        from openpyxl import load_workbook
+
+        book = load_workbook(BytesIO(plan_workbook_xlsx(export)), read_only=True, data_only=True)
+        try:
+            timeline = list(book["Timeline"].values)
+            columns = {name: index for index, name in enumerate(timeline[0])}
+            self.assertTrue(any(
+                row[columns["Type"]] == "buffer"
+                and row[columns["Duration (min)"]] == free["duration_minutes"]
+                for row in timeline[1:]
+            ))
+        finally:
+            book.close()
 
     def test_unsupported_language_and_non_optimizer_plan_are_rejected(self) -> None:
         plan = plan_payload(planner_input())
@@ -385,12 +405,26 @@ class ArtifactTest(unittest.TestCase):
             language="en",
             exported_at="2030-01-01T00:00:00+00:00",
         )
-        book = load_workbook(BytesIO(plan_workbook_xlsx(export)), read_only=True)
+        book = load_workbook(BytesIO(plan_workbook_xlsx(export)), read_only=True, data_only=True)
         try:
             headings = [row[0] for row in book["Itinerary"].values if isinstance(row[0], str)]
             self.assertTrue(headings[2].startswith("The evening before you go ·"))
             self.assertTrue(any(heading.startswith("Day 1 ·") for heading in headings))
             self.assertFalse(any(heading.startswith("Day 2 ·") for heading in headings))
+
+            timeline = list(book["Timeline"].values)
+            columns = {name: index for index, name in enumerate(timeline[0])}
+            self.assertTrue(any(row[columns["Type"]] == "free_time" for row in timeline[1:]))
+            summary = list(book["Summary"].values)
+            buffer_column = next(row for row in summary if row[0] == "Date").index("Buffers (min)")
+            for day in export["days"]:
+                cached = next(row[buffer_column] for row in summary if row[0] == day["date"])
+                raw = sum(
+                    row[columns["Duration (min)"]] or 0
+                    for row in timeline[1:]
+                    if row[columns["Date"]] == day["date"] and row[columns["Type"]] == "buffer"
+                )
+                self.assertEqual(cached, raw)
         finally:
             book.close()
 

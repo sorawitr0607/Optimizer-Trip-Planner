@@ -365,7 +365,11 @@ def _write_timeline(
                     item["order"],
                     item["start"],
                     item["end"],
-                    item["type"],
+                    "free_time"
+                    if item["type"] == "buffer"
+                    and snapshot["stamp"]["optimizer_version"] != "whole-trip-v2"
+                    and item.get("reason") in {"free_time_or_rest", "day_ends_free"}
+                    else item["type"],
                     item.get("stop_number", ""),
                     item.get("display_name", ""),
                     item["duration_minutes"],

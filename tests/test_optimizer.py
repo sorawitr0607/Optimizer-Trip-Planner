@@ -1262,6 +1262,27 @@ class OptimizerCoreTest(unittest.TestCase):
         arrival = variant["days"][1]
         self.assertFalse(any(item.get("kind") == "return_to_accommodation" for item in arrival["items"]))
 
+    def test_free_day_has_no_return_and_visit_day_returns_before_free_time(self) -> None:
+        snapshot = self._week_with(impossible_minutes=None)
+        snapshot["trip"].update(include_operational_timeline=True, accommodation_base_id="base")
+        day = snapshot["trip"]["local_dates"][1]
+        config = optimizer_module.VARIANT_CONFIGS[0]
+
+        empty = optimizer_module._build_day(snapshot, day, [], config)
+        self.assertFalse(empty["hard_errors"])
+        self.assertFalse(any(item.get("kind") == "return_to_accommodation" for item in empty["day"]["items"]))
+
+        planned = optimizer_module._build_day(snapshot, day, [snapshot["candidates"][1]], config)
+        self.assertFalse(planned["hard_errors"])
+        items = planned["day"]["items"]
+        home = next(index for index, item in enumerate(items) if item.get("kind") == "return_to_accommodation")
+        self.assertEqual("day_ends_free", items[home + 1]["reason"])
+        self.assertEqual(items[home]["end"], items[home + 1]["start"])
+
+        wait = []
+        optimizer_module._append_wait(wait, day, 13 * 60, 16 * 60, "timing_window")
+        self.assertEqual("free_time_or_rest", wait[0]["reason"])
+
     def test_a_trip_genuinely_short_of_time_still_says_so(self) -> None:
         """The other side of the split, or the fix would have deleted a real answer.
 
