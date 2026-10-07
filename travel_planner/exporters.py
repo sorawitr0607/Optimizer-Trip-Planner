@@ -260,7 +260,7 @@ def _write_itinerary(sheet: Any, snapshot: dict[str, Any], workbook: Any) -> Non
             f"{day_name} · {day_date} · "
             f"{day['totals']['scheduled_visits']} "
             f"{'stop' if day['totals']['scheduled_visits'] == 1 else 'stops'} · "
-            f"{day['totals']['walking_minutes']} min walking"
+            f"{day['totals']['walking_minutes']} min walking between stops"
         )
         sheet.merge_range(row, 0, row, 4, label, day_band)
         sheet.set_row(row, 26)
@@ -821,7 +821,7 @@ DEFAULT_LABELS = {
     "meal_minutes": "Meals",
     "preparation_minutes": "Preparation",
     "logistics_minutes": "Airport / hotel logistics",
-    "walking_minutes": "Walking",
+    "walking_minutes": "Walking between stops",
     "plain_walking_minutes": "Plain walking",
     "rewarding_walking_minutes": "Rewarding walking",
     "buffer_minutes": "Buffers",

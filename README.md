@@ -129,6 +129,8 @@ parks and gardens. An officially confirmed best-time interval can guide timing;
 these preferences do not override opening hours or add an unselected event.
 Visit lengths remain editable category estimates, and places without usable
 route evidence remain visible as unresolved rather than being silently removed.
+Walking totals count only the routed legs between stops; time spent walking
+inside a park, market, or museum is not estimated.
 
 A long wait says where it has got to rather than only that it is running. Discovery and
 the draft build are queued jobs, so the worker reports the stages it has finished — the
