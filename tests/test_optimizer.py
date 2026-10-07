@@ -77,8 +77,40 @@ class OptimizerCoreTest(unittest.TestCase):
         self.assertEqual("transit", optimizer_module._best_inbound_route(snapshot, "visit")["mode"])
         self.assertEqual("transit", optimizer_module._best_route(snapshot, "base", "visit")["mode"])
         snapshot["thresholds"]["walking_minutes_per_leg"] = 30
+        snapshot["routes"][1]["duration_minutes"] = 40
         self.assertEqual("walk", optimizer_module._best_inbound_route(snapshot, "visit")["mode"])
         self.assertEqual("walk", optimizer_module._best_route(snapshot, "base", "visit")["mode"])
+
+    def test_a_long_transfer_walk_loses_to_a_shorter_walk_with_transit(self) -> None:
+        snapshot = {
+            "trip": {},
+            "thresholds": {"walking_minutes_per_leg": 40},
+            "candidates": [{"id": "base", "kind": "hotel_area"}],
+            "routes": [
+                {"origin_id": "base", "destination_id": "visit", "mode": "walk",
+                 "status": "verified", "duration_minutes": 34, "walking_minutes": 34},
+                {"origin_id": "base", "destination_id": "visit", "mode": "transit",
+                 "status": "estimated", "duration_minutes": 39, "walking_minutes": 7},
+            ],
+        }
+        self.assertEqual("transit", optimizer_module._best_inbound_route(snapshot, "visit")["mode"])
+        self.assertEqual("transit", optimizer_module._best_route(snapshot, "base", "visit")["mode"])
+
+    def test_a_direct_route_can_beat_a_faster_two_transfer_route(self) -> None:
+        snapshot = {
+            "trip": {}, "thresholds": {},
+            "candidates": [{"id": "base", "kind": "hotel_area"}],
+            "routes": [
+                {"origin_id": "base", "destination_id": "visit", "mode": "transit",
+                 "status": "estimated", "duration_minutes": 30, "walking_minutes": 8,
+                 "transfers": 2},
+                {"origin_id": "base", "destination_id": "visit", "mode": "taxi",
+                 "status": "estimated", "duration_minutes": 40, "walking_minutes": 0,
+                 "transfers": 0},
+            ],
+        }
+        self.assertEqual("taxi", optimizer_module._best_inbound_route(snapshot, "visit")["mode"])
+        self.assertEqual("taxi", optimizer_module._best_route(snapshot, "base", "visit")["mode"])
 
     def test_a_walk_nobody_would_take_reaches_no_reader(self) -> None:
         """Verified 87/103/237-minute walks reached a real Tokyo itinerary.
@@ -1283,6 +1315,21 @@ class OptimizerCoreTest(unittest.TestCase):
         optimizer_module._append_wait(wait, day, 13 * 60, 16 * 60, "timing_window")
         self.assertEqual("free_time_or_rest", wait[0]["reason"])
 
+    def test_confirmed_base_uses_one_routed_return_without_a_walk_buffer(self) -> None:
+        snapshot = self._week_with(impossible_minutes=None)
+        snapshot["trip"].update(include_operational_timeline=True, accommodation_base_id="base")
+        day = snapshot["trip"]["local_dates"][1]
+        built = optimizer_module._build_day(
+            snapshot, day, [snapshot["candidates"][1]],
+            optimizer_module.VARIANT_CONFIGS[0],
+            start_base="base", end_base="base",
+        )
+        self.assertFalse(built["hard_errors"])
+        items = built["day"]["items"]
+        self.assertEqual(1, sum(item["type"] == "travel" and item.get("destination_id") == "base" for item in items))
+        self.assertFalse(any(item.get("kind") == "return_to_accommodation" for item in items))
+        self.assertFalse(any(item.get("reason") == "transfer_contingency" for item in items))
+
     def test_a_trip_genuinely_short_of_time_still_says_so(self) -> None:
         """The other side of the split, or the fix would have deleted a real answer.
 
@@ -1416,10 +1463,8 @@ class OptimizerCoreTest(unittest.TestCase):
 
         `_insertion_search` hands over to `_greedy_sequences` whenever it runs out of
         time, which on a full catalogue is the ordinary case rather than the exception.
-        Plain first-fit walks the dates in order and takes the first day that still
-        builds, so it filled day one to its ceiling before day two was offered anything
-        -- the same crammed plan by a different route. Forced here with a budget no
-        search can finish inside.
+        The fallback must spread visits across days without scattering neighbourhoods.
+        Forced here with a budget no search can finish inside.
         """
 
         result = optimize_trip(self._ordinary_week(), time_limit_seconds=0.001)
@@ -1430,6 +1475,33 @@ class OptimizerCoreTest(unittest.TestCase):
                 [], [index for index, count in enumerate(per_day) if count == 0],
                 f"{variant['variant_id']} crammed the front: {per_day}",
             )
+
+    def test_the_greedy_floor_keeps_neighbourhoods_together(self) -> None:
+        variant = optimize_trip(self._three_clusters(), time_limit_seconds=0.001)["variants"][0]
+        self.assertTrue(variant["stopped_at_limit"])
+        self.assertEqual(9, variant["validation"]["scheduled_visit_count"])
+        self.assertLess(variant["metrics"]["travel_minutes"], 240)
+
+    def test_an_outdoor_park_uses_a_daylight_slot_when_one_is_available(self) -> None:
+        snapshot = {
+            "trip": {
+                "timezone": "Asia/Taipei",
+                "local_dates": ["2026-12-30", "2026-12-31"],
+                "usable_windows": [
+                    {"date": "2026-12-30", "start": "09:00", "end": "13:00"},
+                    {"date": "2026-12-31", "start": "18:00", "end": "22:00"},
+                ],
+            },
+            "travellers": [],
+            "candidates": [
+                {"id": "park", "kind": "park", "priority": "must_do", "score": 50,
+                 "latitude": 25.03, "longitude": 121.56, "duration_minutes": 60},
+            ],
+            "facts": [], "routes": [], "locks": [], "weights": {}, "thresholds": {},
+        }
+        variant = optimize_trip(snapshot)["variants"][0]
+        visit = next(item for day in variant["days"] for item in day["items"] if item["type"] == "visit")
+        self.assertEqual("2026-12-30", visit["date"])
 
 
 class OptimizerActionsTest(unittest.TestCase):
@@ -1533,7 +1605,14 @@ class OptimizerActionsTest(unittest.TestCase):
                 trip_id=trip.trip_id, place_id=first, action="must_do"
             )
 
-            windows = actions._optimizer_input(trip.trip_id)["trip"]["usable_windows"]
+            before_base = actions._optimizer_input(trip.trip_id)
+            windows = before_base["trip"]["usable_windows"]
+            self.assertTrue(before_base["trip"]["provisional"])
+            self.assertIn("ACCOMMODATION_BASE_UNCONFIRMED", before_base["trip"]["capability_gaps"])
+            self.assertIn(
+                "ACCOMMODATION_BASE_UNCONFIRMED",
+                actions.journey(trip.trip_id)["capability_gaps"],
+            )
             actions.confirm_accommodation_base(trip.trip_id, "Ximen", 25.0427, 121.5086)
             actions.store.upsert_trip_evidence(
                 trip_id=trip.trip_id,
@@ -1544,6 +1623,7 @@ class OptimizerActionsTest(unittest.TestCase):
                 expires_at="2099-01-01T00:00:00+00:00",
             )
             distant = actions._optimizer_input(trip.trip_id)["trip"]
+            self.assertFalse(distant["provisional"])
 
         # 10:40 minus pack-and-check-out, transfer and airport time.
         self.assertEqual(DEPARTURE_LOGISTICS_MINUTES, 180)

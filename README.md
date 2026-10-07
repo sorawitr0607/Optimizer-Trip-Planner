@@ -121,6 +121,14 @@ The timetable labels unfilled hours as **Free time**, including waits longer tha
 buffers. On sightseeing days, the return to the accommodation follows the last
 planned activity; an empty day has no return trip. The planner leaves
 unscheduled time visible rather than adding places that were not selected.
+With a confirmed accommodation location, the timetable uses one routed return
+instead of a fixed return allowance. The optimizer compares feasible day and
+stop positions to reduce cross-city travel, favors shorter transfer walks and
+fewer changes when route evidence offers alternatives, and prefers daylight for
+parks and gardens. An officially confirmed best-time interval can guide timing;
+these preferences do not override opening hours or add an unselected event.
+Visit lengths remain editable category estimates, and places without usable
+route evidence remain visible as unresolved rather than being silently removed.
 
 A long wait says where it has got to rather than only that it is running. Discovery and
 the draft build are queued jobs, so the worker reports the stages it has finished — the

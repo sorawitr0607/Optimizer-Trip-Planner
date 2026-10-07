@@ -58,6 +58,10 @@ class FullWorkflowTest(unittest.TestCase):
                 actions.save_candidate_choice(
                     trip_id=trip.trip_id, place_id=place_id, action="must_do"
                 )
+            place = discovery.candidates.as_dict()["candidates"][0]
+            actions.confirm_accommodation_base(
+                trip.trip_id, "Hotel", place["latitude"], place["longitude"]
+            )
 
             actions.refresh_opening_hours(trip.trip_id)
             actions.refresh_routes(trip.trip_id)

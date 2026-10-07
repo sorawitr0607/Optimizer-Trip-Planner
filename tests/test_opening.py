@@ -830,7 +830,7 @@ class ProvisionalDerivationTest(unittest.TestCase):
             ({"accommodation_status": "booked", "arrival_time": "10:00",
               "departure_time": None}, True),
             ({"accommodation_status": "booked", "arrival_time": "10:00",
-              "departure_time": "20:00"}, False),
+              "departure_time": "20:00"}, True),
         )
         for basics, expected in cases:
             self._setup(**basics)
@@ -838,10 +838,19 @@ class ProvisionalDerivationTest(unittest.TestCase):
             self.assertEqual(
                 expected, snapshot["trip"]["provisional"], f"basics={basics}"
             )
+        place = self.actions.get_latest_discovery(self.trip.trip_id).candidates.as_dict()["candidates"][0]
+        self.actions.confirm_accommodation_base(
+            self.trip.trip_id, "Hotel", place["latitude"], place["longitude"]
+        )
+        self.assertFalse(self.actions._optimizer_input(self.trip.trip_id)["trip"]["provisional"])
 
     def test_a_confirmed_trip_with_evidence_reaches_ready_and_activates(self) -> None:
         self._setup(
             accommodation_status="booked", arrival_time="09:00", departure_time="21:00"
+        )
+        place = self.actions.get_latest_discovery(self.trip.trip_id).candidates.as_dict()["candidates"][0]
+        self.actions.confirm_accommodation_base(
+            self.trip.trip_id, "Hotel", place["latitude"], place["longitude"]
         )
         # All three evidence sources, since one missing keeps a gap open.
         from tests.test_routes import FakeRouteProvider, FakeTimeZoneProvider

@@ -8,16 +8,17 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from copy import deepcopy
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from functools import lru_cache
 from hashlib import sha256
 import json
-from math import ceil
+from math import acos, ceil, cos, pi, radians, sin, tan
 from time import monotonic
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
-OPTIMIZER_VERSION = "whole-trip-v3"
+OPTIMIZER_VERSION = "whole-trip-v4"
 
 # What the departure day owes before the flight: pack and check out, reach the
 # terminal, be at the airport. Exported because the *usable window* for that day has
@@ -489,7 +490,7 @@ def _solve_variant(
             objective["must_do_unscheduled"],
             objective["comfort_violations"],
             -objective["experience_value"],
-            objective["dead_travel_minutes"],
+            objective["dead_travel_minutes"] + 2 * objective["timing_miss_minutes"],
             -objective["lower_priority_scheduled"],
         ],
         "greedy_baseline": baseline,
@@ -1147,7 +1148,7 @@ def _build_day(
     hard_errors: list[dict[str, Any]] = []
     previous: str | None = start_base
 
-    operational = _operational_layout(snapshot, day, window, sequence)
+    operational = _operational_layout(snapshot, day, window, sequence, end_base=end_base)
     for block in operational["prefix"]:
         current = _append_operational(items, day, current, block)
     body_end = window_end - sum(block["duration_minutes"] for block in operational["suffix"])
@@ -1295,7 +1296,7 @@ def _candidate_segment(
         if boarding:
             segment.append(_buffer_item(day, cursor, cursor + boarding, "boarding"))
             cursor += boarding
-        if config["buffer_minutes"] and previous is not None:
+        if config["buffer_minutes"] and previous is not None and route.get("mode") != "walk":
             segment.append(
                 _buffer_item(
                     day,
@@ -1417,7 +1418,7 @@ def _return_to_base(
     if boarding:
         segment.append(_buffer_item(day, cursor, cursor + boarding, "boarding"))
         cursor += boarding
-    if config["buffer_minutes"]:
+    if config["buffer_minutes"] and route.get("mode") != "walk":
         segment.append(
             _buffer_item(
                 day, cursor, cursor + config["buffer_minutes"], "transfer_contingency"
@@ -1454,6 +1455,8 @@ def _operational_layout(
     day: str,
     window: dict[str, Any],
     sequence: list[dict[str, Any]],
+    *,
+    end_base: str | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     """Visible defaults shared by preview, active view, PDF, and workbook."""
 
@@ -1521,8 +1524,9 @@ def _operational_layout(
                     latitude=terminal.get("latitude"),
                     longitude=terminal.get("longitude"),
                 )
-    elif not sequence:
-        # A day spent at the base has no return trip, including an empty arrival.
+    elif not sequence or end_base is not None:
+        # A confirmed base gets its actual routed return in `_build_day`.
+        # A day spent at the base needs no return at all.
         suffix = []
     else:
         suffix = [
@@ -1612,11 +1616,77 @@ def _terminal_name(snapshot: dict[str, Any], *, arrival: bool) -> str:
 
 
 def _base_name(snapshot: dict[str, Any]) -> str:
+    base_id = snapshot["trip"].get("accommodation_base_id")
+    if base_id:
+        base = next(
+            (item for item in snapshot.get("candidates", []) if _candidate_id(item) == base_id),
+            None,
+        )
+        if base:
+            return str(base.get("name") or base_id)
     return (
         "Booked accommodation base"
         if snapshot["trip"].get("accommodation_status") == "booked"
         else "Provisional accommodation area"
     )
+
+
+@lru_cache(maxsize=4096)
+def _daylight_interval(day: str, latitude: float, longitude: float, timezone: str) -> tuple[int, int] | None:
+    """Approximate local daylight for soft outdoor timing; never an opening-hours rule."""
+
+    try:
+        local_date = date.fromisoformat(day)
+        offset = datetime.combine(local_date, time(12), ZoneInfo(timezone)).utcoffset()
+        if offset is None or abs(latitude) >= 89.9:
+            return None
+    except (ValueError, ZoneInfoNotFoundError):
+        return None
+    day_of_year = local_date.timetuple().tm_yday
+    declination = radians(-23.44 * cos(2 * pi * (day_of_year + 10) / 365.2422))
+    lat = radians(latitude)
+    horizon = (cos(radians(90.833)) - sin(lat) * sin(declination)) / (
+        cos(lat) * cos(declination)
+    )
+    if horizon >= 1:
+        return (0, 0)
+    if horizon <= -1:
+        return (0, 24 * 60)
+    solar_noon = 12 + offset.total_seconds() / 3600 - longitude / 15
+    half_day = acos(horizon) * 12 / pi
+    return (round(60 * (solar_noon - half_day)), round(60 * (solar_noon + half_day)))
+
+
+def _timing_miss_minutes(
+    snapshot: dict[str, Any],
+    day: dict[str, Any],
+    visits: list[dict[str, Any]],
+    facts: dict[tuple[Any, Any], dict[str, Any]] | None,
+) -> int:
+    if not visits:
+        return 0
+    candidates = {_candidate_id(item): item for item in snapshot.get("candidates", [])}
+    timezone = snapshot.get("trip", {}).get("timezone")
+    missed = 0
+    for visit in visits:
+        place_id = visit["subject_id"]
+        preferred = _verified_fact(snapshot, place_id, "best_time_interval", facts)
+        if preferred:
+            interval = (_minutes(preferred["value"]["start"]), _minutes(preferred["value"]["end"]))
+        else:
+            candidate = candidates.get(place_id, {})
+            if candidate.get("kind") not in {"park", "garden", "nature_reserve"} or not timezone:
+                continue
+            latitude, longitude = candidate.get("latitude"), candidate.get("longitude")
+            if latitude is None or longitude is None:
+                continue
+            interval = _daylight_interval(day["date"], float(latitude), float(longitude), str(timezone))
+            if interval is None:
+                continue
+        start, end = _minutes(visit["start"]), _minutes(visit["end"])
+        overlap = max(0, min(end, interval[1]) - max(start, interval[0]))
+        missed += end - start - overlap
+    return missed
 
 
 def _day_metrics(
@@ -1677,6 +1747,7 @@ def _day_metrics(
         "meal_minutes": sum(item["duration_minutes"] for item in meals),
         "preparation_minutes": sum(item["duration_minutes"] for item in preparation),
         "logistics_minutes": sum(item["duration_minutes"] for item in logistics),
+        "timing_miss_minutes": _timing_miss_minutes(snapshot, day, visits, facts),
         "maximum_walking_minutes_per_leg": max(
             (item.get("walking_minutes", 0) for item in travel), default=0
         ),
@@ -1719,6 +1790,7 @@ def _combine_day_metrics(per_day: list[dict[str, Any]]) -> dict[str, Any]:
     meal_minutes = 0
     preparation_minutes = 0
     logistics_minutes = 0
+    timing_miss_minutes = 0
     worst_leg = 0
     worst_boarding = 0
     experience_value = 0
@@ -1741,6 +1813,7 @@ def _combine_day_metrics(per_day: list[dict[str, Any]]) -> dict[str, Any]:
         meal_minutes += entry["meal_minutes"]
         preparation_minutes += entry["preparation_minutes"]
         logistics_minutes += entry["logistics_minutes"]
+        timing_miss_minutes += entry["timing_miss_minutes"]
         leg = entry["maximum_walking_minutes_per_leg"]
         if leg > worst_leg:
             worst_leg = leg
@@ -1782,6 +1855,7 @@ def _combine_day_metrics(per_day: list[dict[str, Any]]) -> dict[str, Any]:
         "meal_minutes": meal_minutes,
         "preparation_minutes": preparation_minutes,
         "logistics_minutes": logistics_minutes,
+        "timing_miss_minutes": timing_miss_minutes,
         "maximum_walking_minutes_per_leg": worst_leg,
         "maximum_boarding_buffer_minutes": worst_boarding,
         "selected_modes": sorted(modes),
@@ -1830,6 +1904,7 @@ def _objective(
         "comfort_violations": comfort,
         "experience_value": round(experience, 2),
         "dead_travel_minutes": metrics["travel_minutes"],
+        "timing_miss_minutes": metrics["timing_miss_minutes"],
         "lower_priority_scheduled": lower,
     }
 
@@ -1842,40 +1917,42 @@ def _greedy_sequences(
     route_index: dict[str, Any] | None = None,
     day_cache: dict[tuple[str, tuple[int, ...]], tuple[Any, Any, Any, Any, Any]] | None = None,
 ) -> tuple[dict[str, list[dict[str, Any]]], set[str]]:
-    """First-fit over every candidate: one cheap deterministic sweep, no time limit.
+    """Best feasible insertion for every candidate, one deterministic sweep.
 
     Extracted for `WF-043` so `_insertion_search` can fall back to it. It considers
     **all** candidates where the beam search considers only those it reached, which is
-    what makes it a safe floor rather than merely a baseline to report.
+    what makes it a safe floor rather than merely a baseline to report. Testing each
+    insertion keeps that floor from scattering neighbourhoods across days.
     """
 
     dates = [window["date"] for window in snapshot["trip"]["usable_windows"]]
-    order = {day: index for index, day in enumerate(dates)}
     sequences: dict[str, list[dict[str, Any]]] = {day: [] for day in dates}
     skipped: set[str] = set()
-    for candidate in sorted(candidates, key=lambda item: _candidate_sort_key(snapshot, item)):
-        placed = False
-        # Emptiest day first, not the first day that fits. Plain first-fit walks the
-        # dates in order and takes the first day the schedule still builds on, which
-        # fills day one to its ceiling before day two is offered anything -- the same
-        # crammed shape `_day_crowding` exists to stop, arriving by a different route.
-        # It matters because this is the floor the beam search falls back to when it
-        # runs out of time, and a real city's catalogue is exactly where that happens.
-        # Ties break on the date, so the sweep stays deterministic.
-        for day in sorted(dates, key=lambda value: (len(sequences[value]), order[value])):
-            lock = _lock_for(snapshot, _candidate_id(candidate))
+    ordered = sorted(candidates, key=lambda item: _candidate_sort_key(snapshot, item))
+    for index, candidate in enumerate(ordered):
+        choice = None
+        lock = _lock_for(snapshot, _candidate_id(candidate))
+        for day in dates:
             if lock and lock.get("date") and lock["date"] != day:
                 continue
-            proposal = {key: list(value) for key, value in sequences.items()}
-            proposal[day].append(candidate)
-            if not _build_schedules(
-                snapshot, proposal, config, route_index=route_index, day_cache=day_cache
-            )["hard_errors"]:
-                sequences = proposal
-                placed = True
-                break
-        if not placed:
+            for position in range(len(sequences[day]) + 1):
+                proposal = {key: list(value) for key, value in sequences.items()}
+                proposal[day].insert(position, candidate)
+                built = _build_schedules(
+                    snapshot, proposal, config, route_index=route_index, day_cache=day_cache
+                )
+                if built["hard_errors"]:
+                    continue
+                score = _search_objective(
+                    snapshot, proposal, skipped, ordered[:index + 1], config,
+                    route_index=route_index, day_cache=day_cache, prebuilt=built,
+                )
+                if choice is None or score < choice[0]:
+                    choice = (score, proposal)
+        if choice is None:
             skipped.add(_candidate_id(candidate))
+        else:
+            sequences = choice[1]
     return sequences, skipped
 
 
@@ -1904,7 +1981,7 @@ def _greedy_baseline(
         objective["must_do_unscheduled"],
         objective["comfort_violations"],
         -objective["experience_value"],
-        objective["dead_travel_minutes"],
+        objective["dead_travel_minutes"] + 2 * objective["timing_miss_minutes"],
         -objective["lower_priority_scheduled"],
     ]
     return {
@@ -2056,7 +2133,8 @@ def _search_objective(
         # amount of it — see `EMPTY_DAY_MINUTES`. Ranked above this are the things no
         # amount of convenience may buy: a broken rule, a missing route, a must-do left
         # out, an unapproved comfort overage, a place dropped.
-        metrics["travel_minutes"] + EMPTY_DAY_MINUTES * empty_days,
+        metrics["travel_minutes"] + EMPTY_DAY_MINUTES * empty_days
+        + 2 * metrics["timing_miss_minutes"],
         -lower,
         len(skipped),
         tuple(cids for _, cids in signature)
@@ -2603,12 +2681,17 @@ def _best_route(
     return dict(found) if found is not None else None
 
 
-def _route_choice_key(route: dict[str, Any], walk_limit: int) -> tuple[int, int, int, str]:
-    walking = int(route.get("walking_minutes", 0))
+def _route_choice_key(route: dict[str, Any], walk_limit: int) -> tuple[int, int, int, int, str]:
+    walking = route.get("walking_minutes")
+    if walking is None and route.get("mode") == "walk":
+        walking = route.get("duration_minutes", 0)
+    walking = int(walking or 0)
     return (
         max(0, walking - walk_limit),
-        int(route.get("duration_minutes", 0)),
+        int(route.get("duration_minutes", 0)) + 2 * max(0, walking - 20)
+        + 15 * max(0, int(route.get("transfers") or 0) - 1),
         walking,
+        int(route.get("duration_minutes", 0)),
         str(route.get("mode")),
     )
 
@@ -2620,6 +2703,7 @@ def _best_route_uncached(
     route_index: dict[str, Any],
 ) -> dict[str, Any] | None:
     routes = _routes_between(snapshot, origin, destination, route_index=route_index)
+    walk_limit = int(route_index["thresholds"].get("walking_minutes_per_leg", 10**9))
     if not routes:
         hotel_ids = {
             _candidate_id(item)
@@ -2630,8 +2714,8 @@ def _best_route_uncached(
             first = _routes_between(snapshot, origin, hotel_id, route_index=route_index)
             second = _routes_between(snapshot, hotel_id, destination, route_index=route_index)
             if first and second:
-                left = min(first, key=lambda item: int(item.get("duration_minutes", 0)))
-                right = min(second, key=lambda item: int(item.get("duration_minutes", 0)))
+                left = min(first, key=lambda item: _route_choice_key(item, walk_limit))
+                right = min(second, key=lambda item: _route_choice_key(item, walk_limit))
                 routes.append(
                     {
                         "origin_id": origin,
@@ -2652,7 +2736,6 @@ def _best_route_uncached(
                 break
     if not routes:
         return None
-    walk_limit = int(_thresholds(snapshot).get("walking_minutes_per_leg", 10**9))
     # Pure compute: the memo write and the single shallow copy on return both
     # live in `_best_route`, so this never aliases snapshot-owned dicts outward.
     # The pick depends only on the pair, not on the day or the sequence, so the

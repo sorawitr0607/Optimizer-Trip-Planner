@@ -557,9 +557,7 @@ class PlannerActions:
 
         accommodation = self.get_accommodation_base(trip_id)
         base_implausible = bool(accommodation and accommodation.get("implausible"))
-        accommodation_confirmed = bool(
-            accommodation and not base_implausible
-        ) or basics.get("accommodation_status") == "booked"
+        accommodation_confirmed = bool(accommodation and not base_implausible)
         active_base_id = (
             "booked_accommodation_base"
             if accommodation and not base_implausible
@@ -2012,6 +2010,18 @@ class PlannerActions:
                     "requires_access_evidence": False,
                 }
             )
+            best_time = (current.get("operational_evidence") or {}).get("best_time") or {}
+            preferred = _simple_interval(best_time.get("value"))
+            if best_time.get("state") == "official_confirmed" and preferred:
+                facts.append(
+                    {
+                        "subject_id": choice.place_id,
+                        "fact_type": "best_time_interval",
+                        "value": preferred,
+                        "status": "verified",
+                        "source": "normalized_discovery",
+                    }
+                )
             provider_hours = opening_evidence.get(choice.place_id) or {}
             # Google's own verdict, independent of the hours: NHK Studio Park has
             # no usable weekly periods left to carry a closure, so this cannot
@@ -2256,9 +2266,7 @@ class PlannerActions:
             routes.extend(self._accepted_route_estimates(candidates, routes))
         zone = self.get_timezone_evidence(trip_id)
         verified_zone = zone["timezone"] if zone and zone.get("status") == "verified" else None
-        accommodation_confirmed = bool(accommodation_base) or basics.get(
-            "accommodation_status"
-        ) == "booked"
+        accommodation_confirmed = bool(accommodation_base)
         capability_gaps = []
         if not verified_zone:
             capability_gaps.append("DESTINATION_TIMEZONE_UNVERIFIED")

@@ -633,8 +633,9 @@ export function OptimizePage() {
   // More than one place to drop means checkboxes and one shared button rather
   // than a rebuild per row. The tick list is intersected with the live unfit
   // list on every render, so ticks cannot outlive the rows they were made on.
-  const multiDrop = unfit.length > 1;
-  const selectedDrops = unfit
+  const droppable = unfit.filter((item) => item.reason !== "ROUTE_UNVERIFIED");
+  const multiDrop = droppable.length > 1;
+  const selectedDrops = droppable
     .map((item) => item.place_id ?? "")
     .filter((id) => id !== "" && checkedDrops.includes(id));
   const toggleDrop = (placeId: string) =>
@@ -668,6 +669,12 @@ export function OptimizePage() {
       <header className="money-head">
         <h1>{copy(timetableAwaitingConfirmation ? "confirm_title" : "optimizer_title", language)}</h1>
         <p>{copy(timetableAwaitingConfirmation ? "confirm_help" : "optimizer_help", language)}</p>
+        {considered.length >= 5 && considered.every((choice) => choice.action === "must_do") ? (
+          <p className="setup-hint" role="status">
+            {copy("all_must_do_warning", language)}{" "}
+            <Link to={`/trips/${tripId}/places`}>{copy("stage_places", language)}</Link>
+          </p>
+        ) : null}
       </header>
 
       {refusal ? (
@@ -1113,7 +1120,7 @@ export function OptimizePage() {
                 <ul className="optimize-unfit-list">
                   {unfit.map((item) => (
                     <li key={item.place_id}>
-                      {multiDrop ? (
+                      {multiDrop && item.reason !== "ROUTE_UNVERIFIED" ? (
                         <input
                           checked={checkedDrops.includes(item.place_id ?? "")}
                           disabled={cutUnfitAndRebuild.isPending}
@@ -1126,7 +1133,7 @@ export function OptimizePage() {
                         {placeName(item, language, item.name)}
                       </span>
                       <small>{copyFrom("OPTIMIZER_CODE_TEXT", item.reason, language)}</small>
-                      {multiDrop ? null : (
+                      {multiDrop || item.reason === "ROUTE_UNVERIFIED" ? null : (
                         <button
                           disabled={dropAndRebuild.isPending}
                           onClick={() => dropAndRebuild.mutate(item.place_id)}
@@ -1167,6 +1174,7 @@ export function OptimizePage() {
           {variant.days.some((day) => day.items.length > 0) ? (
             <>
               <h2 className="money-eyebrow">{copy("timeline", language)}</h2>
+              <p className="setup-hint">{copy("visit_duration_estimate_notice", language)}</p>
               {/* One collapsible group per day, at the owner's asking.
                   It was a single flat table of every item on every day — on a real trip
                   sixty-odd rows, and the date printed once per day with a rule under it
