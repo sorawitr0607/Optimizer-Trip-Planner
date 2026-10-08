@@ -31,6 +31,12 @@ market meals cover their venue, and a driving matrix seeds all missing road pair
 Meal/rest steps mentioning a countdown remain flexible unless the parent is a fixed
 event. Return buffers are included in the day-end feasibility check. Unlocated
 recommendations remain visible and provide a search-and-retry action.
+Resolving the live countdown venue exposed a fourth gap: a researched preferred
+start could leave no time to return to the hotel, falsely rejecting an otherwise
+feasible anchor. A day that fails now retries with researched preferences relaxed;
+timing deviations still cost score, and fixed events and opening evidence stay binding.
+The captured production input then fit all nine original anchors plus the countdown
+in all three valid variants. The optional unlocated Xiangshan suggestion remains visible.
 
 The worker's bounded TDX subset now includes regional rail and buses 849/965, reading
 calendars and frequency headways. Intermediate bus times missing from the source are
@@ -41,7 +47,7 @@ future departures. Walking totals now include explicitly modeled excursion walks
 including walks represented inside activity steps, while ordinary venue walking is
 still unknown.
 
-Validation: 833 Python tests, 232 web tests, 27 historic optimizer fixtures across
+Validation: 834 Python tests, 232 web tests, 27 historic optimizer fixtures across
 three variants, graph integrity, egress boundaries, typecheck and lint passed.
 Screen-baseline comparison was skipped because no captured current set was available;
 the new setup was inspected manually with cmux and its optional journey fields were

@@ -1388,6 +1388,12 @@ def _build_day(
             items.extend(home["items"])
             current = home["end"]
 
+    if hard_errors and any(item.get("preferred_interval") and item.get("duration_basis") and not item.get("fixed_event") for item in sequence):
+        # Research suggests a good time; it cannot make an otherwise feasible
+        # anchor impossible after meals and the actual journey home are included.
+        relaxed = [{**item, "preferred_interval": None} if item.get("duration_basis") and not item.get("fixed_event") else item for item in sequence]
+        return _build_day(snapshot, day, relaxed, config, route_index=route_index, start_base=start_base, end_base=end_base)
+
     if snapshot["trip"].get("include_operational_timeline"):
         # Return after the last planned activity, then leave the rest of the day free
         # at the accommodation. Airport departure logistics stay pinned to the end.
@@ -1900,8 +1906,11 @@ def _timing_miss_minutes(
     for visit in visits:
         place_id = visit["subject_id"]
         preferred = _verified_fact(snapshot, place_id, "best_time_interval", facts)
+        researched = candidates.get(place_id, {}).get("preferred_interval")
         if preferred:
             interval = (_minutes(preferred["value"]["start"]), _minutes(preferred["value"]["end"]))
+        elif researched:
+            interval = (_minutes(researched["start"]), _minutes(researched["end"]))
         else:
             candidate = candidates.get(place_id, {})
             if candidate.get("kind") not in {"park", "garden", "nature_reserve"} or not timezone:

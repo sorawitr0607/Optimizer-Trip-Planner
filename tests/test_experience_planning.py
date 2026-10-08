@@ -25,6 +25,21 @@ def place(identifier, *, priority="must_do", score=80, minutes=60):
 
 
 class ExperiencePlanningTest(unittest.TestCase):
+    def test_researched_time_yields_to_real_return_without_relaxing_fixed_event(self):
+        from travel_planner.optimizer import _build_day, _timing_miss_minutes
+        value = snapshot()
+        value["trip"]["usable_windows"][0]["end"] = "21:00"
+        candidate = {**place("temple", minutes=55), "duration_basis": "researched_activity", "preferred_interval": {"start": "20:05", "end": "21:00"}}
+        value["candidates"] = [candidate]
+        value["routes"] = [{"origin_id": "temple", "destination_id": "hotel", "mode": "taxi", "duration_minutes": 15, "walking_minutes": 0, "status": "estimated"}]
+        result = _build_day(value, "2026-12-31", [candidate], {"duration": "ideal", "buffer_minutes": 10}, end_base="hotel")
+        self.assertFalse(result["hard_errors"])
+        visits = [item for item in result["day"]["items"] if item["type"] == "visit"]
+        self.assertLess(visits[0]["start"], "20:05")
+        self.assertEqual(55, _timing_miss_minutes(value, result["day"], visits, None))
+        fixed = _build_day(value, "2026-12-31", [{**candidate, "fixed_event": True}], {"duration": "ideal", "buffer_minutes": 10}, end_base="hotel")
+        self.assertTrue(fixed["hard_errors"])
+
     def test_countdown_dinner_is_flexible_and_return_buffer_must_fit(self):
         from travel_planner.optimizer import _fixed_step_timing, _return_to_base
         self.assertFalse(_fixed_step_timing({}, {"name": "Early dinner before countdown", "type": "meal"}))
