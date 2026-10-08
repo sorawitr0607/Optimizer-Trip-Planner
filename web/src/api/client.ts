@@ -610,6 +610,7 @@ export interface ExportSnapshot {
     language: string;
     base_currency: string;
     exported_at: string;
+    timezone?: string | null;
     capability_gaps: string[];
   };
   readiness: { state: string; variant_status: string; capability_gaps: string[] };

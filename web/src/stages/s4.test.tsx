@@ -411,6 +411,7 @@ describe("ItineraryPage", () => {
       client.setQueryData(["export_snapshot", TRIP, "en"], {
         ...SNAPSHOT,
         data: { ...SNAPSHOT.data,
+          stamp: { ...SNAPSHOT.data.stamp, timezone: "Asia/Taipei" },
           reference_source: { filename: "family-guide.xlsx", sha256: "source" },
           reference_guidance: {
             notices: ["Flight elapsed time uses both time zones"],
@@ -422,6 +423,7 @@ describe("ItineraryPage", () => {
     });
     expect(html).toContain("Imported tour guide");
     expect(html).toContain("family-guide.xlsx");
+    expect(html).toContain("Destination time zone: Asia/Taipei");
     expect(html).toContain("Optional; family hike is the default");
     expect(html).toContain("planning estimates");
   });

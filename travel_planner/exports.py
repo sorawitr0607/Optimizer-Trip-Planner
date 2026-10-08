@@ -371,7 +371,7 @@ def _item(
                 "local_name": (names or {}).get("local"),
                 "kind": item.get("kind"),
                 "priority": item.get("priority"),
-                "score": item.get("score"),
+                "score": 0 if item.get("source_reference") else item.get("score"),
                 "replaces": item.get("replaces"),
                 "latitude": card.get("latitude", item.get("latitude")),
                 "longitude": card.get("longitude", item.get("longitude")),
@@ -391,6 +391,7 @@ def _item(
         destination = str(item.get("destination_id") or "")
         row.update(
             {
+                "display_name": item.get("name"),
                 "origin_id": item.get("origin_id"),
                 "destination_id": item.get("destination_id"),
                 "origin_name": item.get("from_name") or _leg_name(origin, context),

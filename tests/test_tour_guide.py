@@ -1,6 +1,5 @@
 """The owner's timetable survives import, rebuild and native export."""
 from copy import deepcopy
-import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -8,7 +7,6 @@ from unittest.mock import patch
 from zipfile import ZipFile
 
 from travel_planner.actions import PlannerActions
-from travel_planner.core import freeze_snapshot
 from travel_planner.exporters import plan_workbook_xlsx
 from travel_planner.optimizer import optimize_trip, validate_variant
 from travel_planner.tour_guide import apply_import, prepare_import, read_workbook
@@ -87,6 +85,7 @@ class TourGuideTest(unittest.TestCase):
             version = apply_import(actions, trip.trip_id, prepared)
             self.assertEqual(old.version_id, version.parent_version_id)
             self.assertEqual(version.version_id, apply_import(actions, trip.trip_id, prepared).version_id)
+            self.assertFalse(actions.active_plan_drift(trip.trip_id)["moved"])
             rebuilt = actions._optimizer_input(trip.trip_id)
             self.assertEqual(native["trip"]["reference_guidance"], rebuilt["trip"]["reference_guidance"])
             self.assertEqual(native["trip"]["meal_windows_by_date"], rebuilt["trip"]["meal_windows_by_date"])
@@ -98,6 +97,7 @@ class TourGuideTest(unittest.TestCase):
             self.assertIsNone(costs[0]["actual_thb"])
             export = actions.build_export_snapshot(trip.trip_id).as_dict()
             self.assertEqual([], export["unscheduled"])
+            self.assertTrue(all(item.get("score", 0) == 0 for day in export["days"] for item in day["items"] if item["type"] == "visit"))
             self.assertTrue(all(item["status"] != "verified" for day in export["days"] for item in day["items"] if item["type"] == "visit"))
             from io import BytesIO
             with ZipFile(BytesIO(plan_workbook_xlsx(export))) as archive:

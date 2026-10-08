@@ -247,7 +247,7 @@ def _write_itinerary(sheet: Any, snapshot: dict[str, Any], workbook: Any) -> Non
         sheet.set_column(column, column, width)
     stamp = snapshot["stamp"]
     sheet.merge_range(0, 0, 0, 4, stamp["trip_name"], title)
-    sheet.merge_range(1, 0, 1, 4, stamp["destination"])
+    sheet.merge_range(1, 0, 1, 4, stamp["destination"] + (f" · Timetable time zone: {stamp['timezone']}" if stamp.get("timezone") else ""))
     missing_must_see = [
         item["display_name"]
         for item in snapshot["unscheduled"]

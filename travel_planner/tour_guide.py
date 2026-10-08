@@ -9,7 +9,6 @@ from __future__ import annotations
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
-import json
 from pathlib import Path
 import re
 from typing import Any
@@ -233,7 +232,7 @@ def apply_import(actions: Any, trip_id: str, prepared: dict[str, Any]) -> Any:
     if actions.store.get_trip(trip_id) is None:
         raise ValueError("Unknown trip")
     active = actions.get_active_plan(trip_id)
-    if active and active.snapshot.as_dict().get("reference_source") == prepared["source"]:
+    if active and (active.snapshot.as_dict().get("reference_source") or active.snapshot.as_dict().get("optimizer_input", {}).get("trip", {}).get("reference_source")) == prepared["source"]:
         return active
     native = deepcopy(prepared["optimizer_input"])
     proposal = prepared["proposal"]
@@ -297,6 +296,13 @@ def apply_import(actions: Any, trip_id: str, prepared: dict[str, Any]) -> Any:
         actions.save_rate_snapshot(trip_id=trip_id, rates={"TWD": float(settings["NT$ → THB (ประมาณ)"])}, as_of=now[:10], source="Owner's workbook estimate", buffer_percent=100 * float(settings.get("Buffer (%)", 0)))
     # Keep the supporting guides accessible with the active itinerary as well as
     # native bookings/packing/cost rows. No private source workbook is committed.
+    # Freeze the same current facts, preferences and acceptances that rebuild and
+    # drift checks read, after the new setup and choices have been installed.
+    native = actions._optimizer_input(trip_id)
+    proposal = optimize_trip(native)
+    variant = proposal["variants"][0]
+    if not variant["validation"]["valid"] or any(item["status"] == "cannot_currently_fit" for item in variant["reconciliation"]):
+        raise ValueError("Current trip evidence conflicts with the imported timetable")
     plan = {"schema_version": 1, "optimizer_version": proposal["optimizer_version"], "input_sha256": proposal["input_sha256"],
             "optimizer_input": native, "variant": variant, "accepted_provisional": True, "reference_source": prepared["source"]}
     version = actions.save_plan_version(trip_id=trip_id, snapshot=plan, cause="import:owner_tour_guide")

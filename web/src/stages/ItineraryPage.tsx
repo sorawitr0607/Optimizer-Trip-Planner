@@ -667,6 +667,7 @@ export function ItineraryPage() {
               later changed this and failed the screen gate. Marked so capture mode can
               hold it still -- the same reason it freezes transitions. */}
           <span data-volatile="clock">{plan.stamp.exported_at.slice(0, 16)}</span> · {plan.stamp.base_currency} · {plan.stamp.language.toUpperCase()}</span>
+        {plan.stamp.timezone ? <span>{copy("timezone_evidence", language)}: {plan.stamp.timezone}</span> : null}
       </div>
       {!plan.stamp.is_active_plan ? <p className="money-note money-note-warn"><b aria-hidden="true">⚠</b>{copy("superseded_plan", language)}</p> : null}
       {drift.data?.moved ? (

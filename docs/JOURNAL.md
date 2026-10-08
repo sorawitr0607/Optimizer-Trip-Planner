@@ -6663,3 +6663,12 @@ rollover, known closing evidence, tampering rejection and safe spreadsheet value
 A private dry run of the actual source passed all three variants with no unscheduled
 selections, and native export and rebuild passed. Full project gate passed 12 of 13
 stages: 838 Python tests and 233 web tests; screen baselines were unavailable.
+
+Production verification caught an immediate drift warning: the initial imported
+input had not frozen the existing preferences and current verified evidence that
+the normal rebuild reads. Import activation now compiles and validates that same
+current input before saving; the regression checks that a new import has no drift.
+The UI translates the two import warnings and names the destination time zone;
+flight notes preserve airport-local clocks. Owner priority scores are not shown as
+personalized match percentages. Production export and workbook download
+were verified after importing the actual trip; the original plan remains in history.

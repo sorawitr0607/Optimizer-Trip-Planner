@@ -308,7 +308,9 @@
       "NO_DAY_LONG_ENOUGH": "No single day of the trip is long enough for this place",
       "invalid_choice": "Choose a supported priority.",
       "invalid_duration": "Choose a duration from 5 to 900 minutes.",
-      "group_duration_needs_step_edit": "This connected experience has timed steps. Edit its steps to change the total duration."
+      "group_duration_needs_step_edit": "This connected experience has timed steps. Edit its steps to change the total duration.",
+      "ordinary_venue_walking_not_measured": "Walking inside attractions is not included in the modeled walking total.",
+      "owner_authored_times_and_routes_need_confirmation": "Your guide sets target times and routes; confirm tickets, opening hours and transport before travel."
     },
     "th": {
       "broader_replan_required": "ต้องวางแผนใหม่ในภาพกว้าง — วันนี้รับเพิ่มไม่ไหว",
@@ -472,7 +474,9 @@
       "NO_DAY_LONG_ENOUGH": "ไม่มีวันใดในทริปที่ยาวพอสำหรับที่นี่",
       "invalid_choice": "เลือกความสำคัญที่รองรับ",
       "invalid_duration": "เลือกระยะเวลา 5 ถึง 900 นาที",
-      "group_duration_needs_step_edit": "ประสบการณ์นี้มีขั้นตอนที่ต่อเนื่องกัน ต้องแก้เวลาของแต่ละขั้นตอนเพื่อเปลี่ยนเวลารวม"
+      "group_duration_needs_step_edit": "ประสบการณ์นี้มีขั้นตอนที่ต่อเนื่องกัน ต้องแก้เวลาของแต่ละขั้นตอนเพื่อเปลี่ยนเวลารวม",
+      "ordinary_venue_walking_not_measured": "เวลาเดินภายในสถานที่ยังไม่รวมในยอดเดินที่คำนวณไว้",
+      "owner_authored_times_and_routes_need_confirmation": "คู่มือระบุเวลาและเส้นทางเป้าหมาย โปรดยืนยันตั๋ว เวลาเปิด และการเดินทางก่อนออกเดินทาง"
     }
   },
   "REJECTION_TEXT": {
