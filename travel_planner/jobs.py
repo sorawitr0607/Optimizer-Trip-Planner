@@ -53,7 +53,7 @@ HANDLERS: dict[str, str] = {
 PAYLOAD_KEYS: dict[str, frozenset[str]] = {
     "discover_places": frozenset({"force_refresh"}),
     "generate_plan_preview": frozenset({"time_limit_seconds"}),
-    "update_preview_experience": frozenset({"place_id", "priority", "duration_minutes"}),
+    "update_preview_experience": frozenset({"place_id", "priority", "duration_minutes", "location_query"}),
     "refresh_routes": frozenset({"max_passes"}),
     "refresh_transit_routes": frozenset({"force"}),
     "recommend_areas": frozenset(),

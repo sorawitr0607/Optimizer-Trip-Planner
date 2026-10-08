@@ -1723,11 +1723,14 @@ class OpenRouteServiceMatrixProvider:
     #: (1681 elements) and fits. Chunk by `sources` blocks if a trip ever outgrows it.
     MAX_LOCATIONS = 50
 
-    def __init__(self) -> None:
+    def __init__(self, *, mode: str = "walk") -> None:
+        self.mode = mode
         self.matrix_url = os.environ.get(
             "TOURIST_ORS_MATRIX_URL",
             "https://api.openrouteservice.org/v2/matrix/foot-walking",
         )
+        if mode == "taxi":
+            self.matrix_url = self.matrix_url.replace("foot-walking", "driving-car")
         self.user_agent = os.environ.get(
             "TOURIST_USER_AGENT", "TouristPlannerPersonalPOC/0.2 (local personal use)"
         )
@@ -1834,7 +1837,7 @@ class OpenRouteServiceMatrixProvider:
                         "destination_id": str(destination["place_id"]),
                         "mode": self.mode,
                         "duration_minutes": minutes,
-                        "walking_minutes": minutes,
+                        "walking_minutes": minutes if self.mode == "walk" else 0,
                         "distance_m": metres,
                         # No path in a matrix response. The directions sweep upgrades the
                         # pairs a plan actually walks; see the class docstring.
@@ -1842,7 +1845,7 @@ class OpenRouteServiceMatrixProvider:
                         "transfers": 0,
                         "boarding_buffer_minutes": 0,
                         "experience_evidence": [],
-                        "status": "verified",
+                        "status": "estimated" if self.mode == "taxi" else "verified",
                         "provider": self.name,
                     }
                 )

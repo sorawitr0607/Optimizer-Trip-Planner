@@ -25,6 +25,42 @@ def place(identifier, *, priority="must_do", score=80, minutes=60):
 
 
 class ExperiencePlanningTest(unittest.TestCase):
+    def test_countdown_dinner_is_flexible_and_return_buffer_must_fit(self):
+        from travel_planner.optimizer import _fixed_step_timing, _return_to_base
+        self.assertFalse(_fixed_step_timing({}, {"name": "Early dinner before countdown", "type": "meal"}))
+        self.assertTrue(_fixed_step_timing({}, {"name": "Countdown", "type": "visit"}))
+        value = snapshot()
+        value["routes"] = [{"origin_id": "place", "destination_id": "hotel", "mode": "taxi", "duration_minutes": 10, "walking_minutes": 0, "status": "estimated"}]
+        result = _return_to_base(value, "2026-12-31", "place", "hotel", {"buffer_minutes": 10}, cursor=590, body_end=600)
+        self.assertEqual("DAY_WINDOW_EXCEEDED", result["error"]["code"])
+
+    def test_driving_matrix_has_no_walking_and_remains_estimated(self):
+        from travel_planner.providers import OpenRouteServiceMatrixProvider
+        provider = OpenRouteServiceMatrixProvider(mode="taxi")
+        routes = provider.normalize({"durations": [[0, 600], [660, 0]]}, points=[{"place_id": "a"}, {"place_id": "b"}])
+        self.assertEqual("taxi", routes[0]["mode"])
+        self.assertEqual(0, routes[0]["walking_minutes"])
+        self.assertEqual("estimated", routes[0]["status"])
+        self.assertIn("driving-car", provider.matrix_url)
+
+    def test_unresolved_fixed_event_remains_visible_in_reconciliation(self):
+        value = snapshot()
+        value["candidates"] = [place("anchor")]
+        profile = normalize_research({"experiences": [{"name": "Countdown", "date": "2026-12-31", "fixed_event": True, "sources": ["https://example.org"], "minimum_minutes": 40, "ideal_minutes": 40, "maximum_minutes": 40}]}, {"places": [{"id": "anchor"}], "dates": ["2026-12-31"]}, {"https://example.org"})
+        apply_research(value, profile)
+        event = next(item for item in optimize_trip(value)["variants"][0]["reconciliation"] if item["name"] == "Countdown")
+        self.assertEqual("cannot_currently_fit", event["status"])
+        self.assertEqual("ROUTE_UNVERIFIED", event["reason"])
+
+    def test_composite_market_meal_covers_the_selected_market(self):
+        value = snapshot()
+        value["candidates"] = [{**place("entry", minutes=120), "duration_bounds": {"minimum_minutes": 120, "ideal_minutes": 120, "maximum_minutes": 120},
+            "steps": [{"name": "Entry", "type": "visit", "duration_minutes": 30}, {"name": "Market dinner", "type": "meal", "meal_role": "dinner", "place_id": "market", "duration_minutes": 90}]},
+            {**place("market"), "group_parent_id": "entry"}]
+        result = optimize_trip(value)["variants"][0]
+        self.assertTrue(result["validation"]["valid"], result["validation"])
+        self.assertEqual("fits", next(item for item in result["reconciliation"] if item["place_id"] == "market")["status"])
+
     def test_complete_trip_requires_explicit_acceptance_of_a_provisional_plan(self):
         from travel_planner.actions import PlannerRefusal
         from travel_planner.core import new_optimization_preview

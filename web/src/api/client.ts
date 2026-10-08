@@ -488,6 +488,12 @@ export interface PlanPreview {
         id?: string;
         name?: string;
         names?: Names;
+        query?: string;
+        latitude?: number;
+        longitude?: number;
+        recommendation?: boolean;
+        priority?: string;
+        sources?: string[];
         duration_bounds?: {
           minimum_minutes?: number;
           ideal_minutes?: number;

@@ -331,7 +331,7 @@ def validate_variant(snapshot: dict[str, Any], variant: dict[str, Any]) -> dict[
                 bounds = {"breakfast": ("07:00", "09:30"), "lunch": ("11:30", "14:00"), "dinner": ("17:30", "21:00")}.get(item.get("kind"))
                 if bounds and not (_minutes(bounds[0]) <= start and end <= _minutes(bounds[1])):
                     errors.append({"code": "MANDATORY_MEAL_WINDOW_MISSED", "subject_id": item.get("kind")})
-            if item["type"] == "visit":
+            if item["type"] == "visit" or (item["type"] == "meal" and item.get("subject_id") in {_candidate_id(candidate) for candidate in snapshot["candidates"]}):
                 subject = item["subject_id"]
                 if item.get("experience_step") and subject not in {_candidate_id(candidate) for candidate in snapshot["candidates"]}:
                     continue
@@ -499,7 +499,7 @@ def _solve_variant(
         item["subject_id"]
         for day in schedules
         for item in day["items"]
-        if item["type"] == "visit"
+        if item["type"] in {"visit", "meal"}
     }
     # Measured before the reconciliation rather than after it, because `_skip_reason`
     # now names a threshold only where one was actually exceeded and needs the numbers
@@ -1336,6 +1336,9 @@ def _build_day(
                 route_index=route_index,
             )
             if segment["error"]:
+                if candidate.get("steps") and config["duration"] != "minimum" and not candidate.get("fixed_event"):
+                    segment = _candidate_segment(snapshot, day, candidate, previous, {**config, "duration": "minimum"}, current, route_index=route_index)
+            if segment["error"]:
                 hard_errors.append(segment["error"])
                 break
             due = meals[0] if meals else None
@@ -1644,6 +1647,8 @@ def _return_to_base(
             )
         )
         cursor += config["buffer_minutes"]
+    if cursor > body_end:
+        return {"items": [], "end": cursor, "error": {"code": "DAY_WINDOW_EXCEEDED", "subject_id": end_base}}
     return {"items": segment, "end": cursor, "error": None}
 
 
@@ -1914,7 +1919,7 @@ def _timing_miss_minutes(
 
 
 def _fixed_step_timing(candidate: dict[str, Any], step: dict[str, Any]) -> bool:
-    return bool(candidate.get("fixed_event")) or any(word in step.get("name", "").casefold() for word in ("countdown", "fireworks", "after illumination", "night view", "blue hour"))
+    return bool(candidate.get("fixed_event")) or (step.get("type") == "visit" and "before" not in step.get("name", "").casefold() and any(word in step.get("name", "").casefold() for word in ("countdown", "fireworks", "after illumination", "night view", "blue hour")))
 
 
 def _day_preference_cost(snapshot: dict[str, Any], day: dict[str, Any], visits: list[dict[str, Any]], travel: list[dict[str, Any]]) -> int:

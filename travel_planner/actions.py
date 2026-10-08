@@ -1817,6 +1817,7 @@ class PlannerActions:
         optimizer_input = self._optimizer_input(trip_id)
         if optimizer_input["trip"].get("complete_trip"):
             self._research_experiences(trip_id, optimizer_input)
+            self._seed_routes_from_matrix(trip_id, self._route_points(trip_id), provider=OpenRouteServiceMatrixProvider(mode="taxi"))
             optimizer_input = self._optimizer_input(trip_id)
         proposal = optimize_trip(
             optimizer_input,
@@ -1891,13 +1892,14 @@ class PlannerActions:
             except (ProviderUnavailable, PlannerRefusal):
                 pass
             try:
+                self._seed_routes_from_matrix(trip_id, points, provider=OpenRouteServiceMatrixProvider(mode="taxi"))
                 self._refresh_routes_with(OpenRouteServiceProvider(mode="taxi"), trip_id, points=points, deadline=monotonic() + 45)
             except (ProviderUnavailable, PlannerRefusal):
                 pass
 
         return result.get("status") == "researched"
 
-    def update_preview_experience(self, *, trip_id: str, place_id: str, priority: str, duration_minutes: int | None = None) -> OptimizationPreview:
+    def update_preview_experience(self, *, trip_id: str, place_id: str, priority: str, duration_minutes: int | None = None, location_query: str | None = None) -> OptimizationPreview:
         """Review edits are persisted before freezing a fresh deterministic preview."""
         from .planning import RESEARCH_KIND, research_key, research_payload
         if priority not in {"must_do", "interested", "maybe", "not_for_trip"}:
@@ -1910,6 +1912,10 @@ class PlannerActions:
         experience = next((item for item in research.get("experiences", []) if (item.get("place_id") or item["id"]) == place_id), None)
         if experience is None:
             raise PlannerRefusal("unknown_candidate", place_id=place_id)
+        if location_query:
+            geocoder = self.place_provider if hasattr(self.place_provider, "geocode") else OpenStreetMapProvider()
+            point = geocoder.geocode(str(location_query).strip()[:200])
+            experience.update(latitude=point["latitude"], longitude=point["longitude"], resolution_status="owner_confirmed")
         if duration_minutes is not None and experience.get("steps") and sum(step["duration_minutes"] for step in experience["steps"]) != duration_minutes:
             raise PlannerRefusal("group_duration_needs_step_edit")
         if experience.get("place_id"):
@@ -1926,6 +1932,9 @@ class PlannerActions:
         self.store.upsert_trip_evidence(trip_id=trip_id, kind=RESEARCH_KIND,
             value={key: value for key, value in research.items() if key not in {"retrieved_at", "expires_at"}},
             provider="owner_review", retrieved_at=now.isoformat(), expires_at=research["expires_at"])
+        if location_query:
+            self.refresh_transit_routes(trip_id)
+            self._seed_routes_from_matrix(trip_id, self._route_points(trip_id), provider=OpenRouteServiceMatrixProvider(mode="taxi"))
         optimizer_input = self._optimizer_input(trip_id)
         proposal = optimize_trip(optimizer_input, time_limit_seconds=bounded_preview_seconds(30))
         return self.store.save_optimization_preview(new_optimization_preview(trip_id=trip_id, optimizer_input=optimizer_input, proposal=proposal))
@@ -4028,7 +4037,7 @@ class PlannerActions:
         return result
 
     def _seed_routes_from_matrix(
-        self, trip_id: str, points: list[dict[str, Any]]
+        self, trip_id: str, points: list[dict[str, Any]], *, provider: Any | None = None
     ) -> int:
         """Measure every pair in one request, and return how many were stored.
 
@@ -4049,7 +4058,7 @@ class PlannerActions:
         would trade a line on the map for nothing.
         """
 
-        provider = self.matrix_provider or OpenRouteServiceMatrixProvider()
+        provider = provider or self.matrix_provider or OpenRouteServiceMatrixProvider()
         if not provider.covers(points):
             return 0
 

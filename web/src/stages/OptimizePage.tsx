@@ -188,7 +188,7 @@ export function OptimizePage() {
     queryFn: () => rpc<SetupDraft | null>("get_setup", { trip_id: tripId }),
   });
   const editExperience = useMutation({
-    mutationFn: (edit: { place_id: string; priority: string; duration_minutes?: number }) => rpc<PlanPreview>("update_preview_experience", { trip_id: tripId, ...edit }),
+    mutationFn: (edit: { place_id: string; priority: string; duration_minutes?: number; location_query?: string }) => rpc<PlanPreview>("update_preview_experience", { trip_id: tripId, ...edit }),
     onSuccess: (updated) => {
       queryClient.setQueryData(["plan_preview", tripId], updated);
       void queryClient.invalidateQueries({ queryKey: ["candidate_choices", tripId] });
@@ -857,6 +857,16 @@ export function OptimizePage() {
       <ComfortTradeoffs language={language} tripId={tripId} variantId={shownVariantId} />
 
         <div hidden={building}>
+      {optimizerInput?.candidates?.filter((item) => item.recommendation && item.latitude == null).map((item) => <form key={item.id} onSubmit={(event) => {
+        event.preventDefault();
+        const query = new FormData(event.currentTarget).get("location_query");
+        if (item.id && typeof query === "string" && query.trim()) editExperience.mutate({ place_id: item.id, priority: item.priority ?? "maybe", location_query: query });
+      }}>
+        <p>{language === "th" ? "ยังหาตำแหน่งไม่ได้: " : "Location could not be found: "}{item.name}</p>
+        <label>{language === "th" ? "ชื่อสถานที่หรือที่อยู่สำหรับค้นหา" : "Venue name or address to search"}<input name="location_query" defaultValue={item.query ?? item.name} required /></label>
+        <button disabled={editExperience.isPending} type="submit">{language === "th" ? "ค้นหาตำแหน่งและจัดแผนใหม่" : "Find location and update plan"}</button>
+        {item.sources?.map((url) => <a key={url} href={url} target="_blank" rel="noreferrer">{language === "th" ? "แหล่งข้อมูล" : "Source"}</a>)}
+      </form>)}
       {variant ? (
         <>
           <label className="optimize-variant">
