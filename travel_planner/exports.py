@@ -337,6 +337,9 @@ def _item(
 ) -> dict[str, Any]:
     subject_id = str(item.get("subject_id") or "")
     card = context["cards"].get(subject_id, {})
+    if item.get("experience_step"):
+        # Older frozen groups inherited the parent's translated name on each step.
+        item = {**item, "names": {"en": item.get("name", "")}}
     row = {
         "order": order,
         "item_id": f"{item['date']}#{order:02d}",
@@ -346,7 +349,7 @@ def _item(
         "start": item["start"],
         "end": item["end"],
         "duration_minutes": item["duration_minutes"],
-        "status": CONFIRMED,
+        "status": RECHECK if item.get("experience_step") and subject_id not in context["opening_verified"] else CONFIRMED,
         "starts_at": item.get("starts_at"), "ends_at": item.get("ends_at"),
         "sources": item.get("sources", []), "alternative": item.get("alternative", ""),
         "duration_basis": item.get("duration_basis"), "parent_id": item.get("parent_id"),
@@ -377,7 +380,7 @@ def _item(
                 # photographs must not be the screen that reads 390 KB to find them.
                 "photo_reference": card.get("photo_reference"),
                 "opening_verified": subject_id in context["opening_verified"],
-                "status": _visit_status(subject_id, card, context),
+                "status": RECHECK if item.get("experience_step") and subject_id not in context["opening_verified"] else _visit_status(subject_id, card, context),
             }
         )
     elif item["type"] == "travel":
@@ -425,11 +428,11 @@ def _item(
                 "reason": item.get("reason"),
                 "latitude": item.get("latitude"),
                 "longitude": item.get("longitude"),
-                "status": RECHECK if item.get("status") == "assumed" else CONFIRMED,
+                "status": RECHECK if item.get("status") == "assumed" else row["status"],
             }
         )
     else:
-        row["reason"] = item.get("reason")
+        row["reason"] = item.get("name") if item.get("experience_step") else item.get("reason")
     return row
 
 

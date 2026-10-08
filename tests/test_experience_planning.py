@@ -25,6 +25,19 @@ def place(identifier, *, priority="must_do", score=80, minutes=60):
 
 
 class ExperiencePlanningTest(unittest.TestCase):
+    def test_frozen_group_steps_export_their_own_names_and_unknown_hours(self):
+        from travel_planner.exports import _item
+        context = {"cards": {}, "opening_verified": set(), "language": "en"}
+        base = {"subject_id": "group_step_1", "parent_id": "group", "experience_step": True,
+                "date": "2026-12-31", "start": "12:00", "end": "13:00", "duration_minutes": 60,
+                "names": {"en": "Museum and market group"}}
+        for kind, name in (("visit", "Shilin Night Market"), ("meal", "Lunch near the museum")):
+            row = _item(1, 1, {**base, "type": kind, "name": name}, context)
+            self.assertEqual(name, row["display_name"])
+            self.assertEqual("recheck", row["status"])
+        crowd = _item(1, 1, {**base, "type": "buffer", "name": "Crowd space before countdown", "reason": "Research explanation"}, context)
+        self.assertEqual("Crowd space before countdown", crowd["reason"])
+
     def test_researched_time_yields_to_real_return_without_relaxing_fixed_event(self):
         from travel_planner.optimizer import _build_day, _timing_miss_minutes
         value = snapshot()
