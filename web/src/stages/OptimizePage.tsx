@@ -559,7 +559,7 @@ export function OptimizePage() {
 
   const activate = useMutation({
     mutationFn: (variant: string) =>
-      rpc<unknown>("activate_plan_preview", { trip_id: tripId, variant_id: variant }),
+      rpc<unknown>("activate_plan_preview", { trip_id: tripId, variant_id: variant, accept_provisional: Boolean(preview.data?.optimizer_input.data.trip?.complete_trip) }),
     onSuccess: async () => {
       setRefusal(null);
       navigate(`/trips/${tripId}/itinerary`);
@@ -597,7 +597,7 @@ export function OptimizePage() {
   const variant: PlanVariant | undefined =
     variants.find((item) => item.variant_id === variantId) ?? variants[0];
   const provisionalAllowed = Boolean(
-    trip?.planning_mode === "explore_first" &&
+    (trip?.planning_mode === "explore_first" || optimizerInput?.trip?.complete_trip) &&
       variant?.status === "provisional" &&
       variant?.validation?.valid,
   );
@@ -785,7 +785,9 @@ export function OptimizePage() {
           ) : null}
           <p className="setup-hint">{copy("no_preview_yet", language)}</p>
           {considered.length > 0 ? (
-            <p className="setup-hint">{copy("no_preview_help", language)}</p>
+            <p className="setup-hint">{stored.data?.snapshot.data.planning?.complete_trip
+              ? (language === "th" ? "ค้นคว้าประสบการณ์ด้วย AI ประมาณ US$0.50 ต่อครั้ง อาจแก้อีกหนึ่งครั้ง ผลเดิมใช้ซ้ำ ไม่มีอะไรยืนยันจนกว่าคุณเลือกแผน" : "Experience research uses the paid allowance: estimated US$0.50 per call, with at most one repair. Cached research is reused; nothing is committed until you choose a plan.")
+              : copy("no_preview_help", language)}</p>
           ) : null}
         </>
       ) : null}

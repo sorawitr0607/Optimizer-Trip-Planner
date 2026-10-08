@@ -25,6 +25,39 @@ def place(identifier, *, priority="must_do", score=80, minutes=60):
 
 
 class ExperiencePlanningTest(unittest.TestCase):
+    def test_complete_trip_requires_explicit_acceptance_of_a_provisional_plan(self):
+        from travel_planner.actions import PlannerRefusal
+        from travel_planner.core import new_optimization_preview
+        with TemporaryDirectory() as directory:
+            actions = PlannerActions(Path(directory) / "test.sqlite3")
+            trip = actions.create_trip(name="Scheduled trip", destination="Taipei", planning_mode="ready_to_schedule")
+            value = snapshot()
+            value["trip"].update(complete_trip=True, provisional=True, allow_provisional_assumptions=True)
+            value["candidates"] = [place("anchor")]
+            proposal = optimize_trip(value)
+            actions.store.save_optimization_preview(new_optimization_preview(trip_id=trip.trip_id, optimizer_input=value, proposal=proposal))
+            with patch.object(actions, "_optimizer_input", return_value=value):
+                with self.assertRaises(PlannerRefusal):
+                    actions.activate_plan_preview(trip_id=trip.trip_id, variant_id="best_balance")
+                version = actions.activate_plan_preview(trip_id=trip.trip_id, variant_id="best_balance", accept_provisional=True)
+            self.assertEqual("provisional", version.snapshot.as_dict()["variant"]["status"])
+
+    def test_existing_trip_can_relink_places_after_enabling_complete_planning(self):
+        with TemporaryDirectory() as directory:
+            actions = PlannerActions(Path(directory) / "test.sqlite3", place_provider=FakePlaceProvider())
+            trip = actions.create_trip(name="Existing trip", destination="Taipei")
+            actions.save_setup(trip_id=trip.trip_id, main_style=["nature"], confirmed=True)
+            original = actions.discover_places(trip_id=trip.trip_id)
+            chosen = original.candidates.as_dict()["candidates"][0]
+            actions.save_candidate_choice(trip_id=trip.trip_id, place_id=chosen["place_id"], action="must_do")
+            actions.save_setup(trip_id=trip.trip_id, main_style=["nature"], complete_trip=True, confirmed=True)
+            stale = actions.get_ranked_discovery(trip.trip_id)
+            self.assertEqual(original.run_id, stale["discovery"].run_id)
+            self.assertIsNone(stale["ranking"])
+            actions.discover_places(trip_id=trip.trip_id)
+            self.assertIsNotNone(actions.get_ranked_discovery(trip.trip_id)["ranking"])
+            self.assertEqual("must_do", actions.store.list_candidate_choices(trip.trip_id)[0].action)
+
     def test_untimed_bus_stops_are_explicit_topology_estimates(self):
         from travel_planner.gtfs import TransitFeed
         with TemporaryDirectory() as directory:

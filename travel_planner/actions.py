@@ -1193,9 +1193,11 @@ class PlannerActions:
         discovery = self.get_latest_discovery(trip_id)
         if discovery is None:
             return {"discovery": None, "ranking": None, "provider_no_match": []}
+        setup = self.store.get_setup(trip_id)
         return {
             "discovery": discovery,
-            "ranking": self._rank_candidates(trip_id, discovery),
+            # Return the catalogue so Places can render its existing relink action.
+            "ranking": self._rank_candidates(trip_id, discovery) if setup and setup.confirmed and discovery.setup_sha256 == setup.snapshot.sha256 else None,
             # Tiny state piggy-backed on the existing discovery read. Both paid-photo
             # buttons can now withdraw after Google's durable no-match answer, including
             # after reload, without another request or another catalogue transfer -- and
@@ -1932,7 +1934,7 @@ class PlannerActions:
         return self.store.get_optimization_preview(trip_id)
 
     def activate_plan_preview(
-        self, *, trip_id: str, variant_id: str
+        self, *, trip_id: str, variant_id: str, accept_provisional: bool = False
     ) -> PlanVersion:
         preview = self.store.get_optimization_preview(trip_id)
         if preview is None:
@@ -1960,7 +1962,7 @@ class PlannerActions:
         trip = self.store.get_trip(trip_id)
         provisional_allowed = bool(
             trip
-            and trip.planning_mode == "explore_first"
+            and (trip.planning_mode == "explore_first" or (accept_provisional is True and stored["trip"].get("complete_trip")))
             and variant["status"] == "provisional"
         )
         if not variant["validation"]["valid"] or (
@@ -1977,6 +1979,7 @@ class PlannerActions:
                 "input_sha256": proposal["input_sha256"],
                 "optimizer_input": preview.optimizer_input.as_dict(),
                 "variant": variant,
+                "accepted_provisional": bool(provisional_allowed),
             },
             cause=f"optimizer:{variant_id}",
         )

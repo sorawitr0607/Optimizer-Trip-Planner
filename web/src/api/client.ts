@@ -483,7 +483,7 @@ export interface PlanPreview {
    *  re-deriving a second opinion that could disagree with the plan. */
   optimizer_input: {
     data: {
-      trip?: { research_status?: string; research_reason?: string };
+      trip?: { complete_trip?: boolean; research_status?: string; research_reason?: string };
       candidates?: {
         id?: string;
         name?: string;
