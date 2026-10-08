@@ -18,6 +18,10 @@ export function wholeDraftWithDates(
   const owner = payload.owner ?? {};
   const basics = payload.trip_basics ?? {};
   return {
+    complete_trip: payload.planning?.complete_trip ?? false,
+    planning_brief: payload.planning?.brief ?? "",
+    day_preferences: payload.planning?.day_preferences ?? [],
+    journey_legs: payload.planning?.journey_legs ?? [],
     start_date: start,
     end_date: end,
     arrival_time: basics.arrival_time ?? null,

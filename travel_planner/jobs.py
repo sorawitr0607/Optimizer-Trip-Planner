@@ -33,6 +33,7 @@ from .wire import jsonable
 HANDLERS: dict[str, str] = {
     "discover_places": "discover_places",
     "generate_plan_preview": "generate_plan_preview",
+    "update_preview_experience": "update_preview_experience",
     "refresh_routes": "refresh_routes",
     # Vercel cannot see the private local GTFS feed. The worker can.
     "refresh_transit_routes": "refresh_transit_routes",
@@ -52,6 +53,7 @@ HANDLERS: dict[str, str] = {
 PAYLOAD_KEYS: dict[str, frozenset[str]] = {
     "discover_places": frozenset({"force_refresh"}),
     "generate_plan_preview": frozenset({"time_limit_seconds"}),
+    "update_preview_experience": frozenset({"place_id", "priority", "duration_minutes"}),
     "refresh_routes": frozenset({"max_passes"}),
     "refresh_transit_routes": frozenset({"force"}),
     "recommend_areas": frozenset(),

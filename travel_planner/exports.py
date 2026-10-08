@@ -321,6 +321,7 @@ def _day(
     return {
         "date": day["date"],
         "window": day["window"],
+        "purpose": day.get("purpose", ""),
         "start": items[0]["start"] if items else day["window"]["start"],
         "end": items[-1]["end"] if items else day["window"]["start"],
         "items": items,
@@ -346,6 +347,11 @@ def _item(
         "end": item["end"],
         "duration_minutes": item["duration_minutes"],
         "status": CONFIRMED,
+        "starts_at": item.get("starts_at"), "ends_at": item.get("ends_at"),
+        "sources": item.get("sources", []), "alternative": item.get("alternative", ""),
+        "duration_basis": item.get("duration_basis"), "parent_id": item.get("parent_id"),
+        "walking_minutes": int(item.get("walking_minutes", 0)),
+        "reason": item.get("reason"),
     }
     if item["type"] == "visit":
         names = item.get("names") or card.get("names")
@@ -361,8 +367,8 @@ def _item(
                 "priority": item.get("priority"),
                 "score": item.get("score"),
                 "replaces": item.get("replaces"),
-                "latitude": card.get("latitude"),
-                "longitude": card.get("longitude"),
+                "latitude": card.get("latitude", item.get("latitude")),
+                "longitude": card.get("longitude", item.get("longitude")),
                 "address": card.get("address"),
                 # OpenStreetMap's own `wikimedia_commons` / `image` tag, carried on the
                 # snapshot so the itinerary can show a picture without asking for the
@@ -391,7 +397,7 @@ def _item(
                 "boarding_station": item.get("boarding_station"),
                 "alighting_station": item.get("alighting_station"),
                 "route_codes": list(item.get("route_codes") or []),
-                "sightseeing_walk": bool(item.get("experience_evidence")),
+                "sightseeing_walk": bool(item.get("experience_evidence") or item.get("sightseeing_walk")),
                 "experience_evidence": list(item.get("experience_evidence", [])),
                 "claimed_experience": item.get("claimed_experience"),
                 "experience_supported_at_time": bool(
@@ -493,13 +499,13 @@ def _day_totals(
         "meal_minutes": sum(item["duration_minutes"] for item in meals),
         "preparation_minutes": sum(item["duration_minutes"] for item in preparation),
         "logistics_minutes": sum(item["duration_minutes"] for item in logistics),
-        "walking_minutes": sum(item["walking_minutes"] for item in travel),
+        "walking_minutes": sum(item.get("walking_minutes", 0) for item in travel + visits),
         "plain_walking_minutes": sum(
             item["walking_minutes"] for item in travel if not item["sightseeing_walk"]
         ),
         "rewarding_walking_minutes": sum(
             item["walking_minutes"] for item in travel if item["sightseeing_walk"]
-        ),
+        ) + sum(item.get("walking_minutes", 0) for item in visits),
     }
 
 

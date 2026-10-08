@@ -52,7 +52,7 @@ export function flattenDays(days: ExportDay[]): TimedItem[] {
       items.push({
         ...item,
         dayDate: day.date,
-        startAt: momentAt(item.date, item.start),
+        startAt: item.starts_at && /(?:Z|[+-]\d{2}:\d{2})$/.test(item.starts_at) ? new Date(item.starts_at) : momentAt(item.date, item.start),
         endAt: momentAt(item.date, item.start),
         key: `${item.date}|${item.start}|${item.item_id}`,
       });
@@ -60,7 +60,7 @@ export function flattenDays(days: ExportDay[]): TimedItem[] {
   }
   items.sort((left, right) => +left.startAt - +right.startAt);
   items.forEach((item, index) => {
-    const stated = item.end ? momentAt(item.date, item.end) : null;
+    const stated = item.ends_at && /(?:Z|[+-]\d{2}:\d{2})$/.test(item.ends_at) ? new Date(item.ends_at) : (item.end ? momentAt(item.date, item.end) : null);
     if (stated && +stated >= +item.startAt) {
       item.endAt = stated;
     } else if (stated) {

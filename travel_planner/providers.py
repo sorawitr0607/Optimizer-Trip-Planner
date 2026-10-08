@@ -1558,11 +1558,16 @@ class OpenRouteServiceProvider:
     cache_ttl_days = 14
     mode = "walk"
 
-    def __init__(self) -> None:
+    def __init__(self, *, mode: str = "walk") -> None:
+        if mode not in {"walk", "taxi"}:
+            raise ValueError("Unsupported road mode")
+        self.mode = mode
         self.directions_url = os.environ.get(
             "TOURIST_ORS_URL",
             "https://api.openrouteservice.org/v2/directions/foot-walking",
         )
+        if mode == "taxi":
+            self.directions_url = self.directions_url.replace("foot-walking", "driving-car")
         self.user_agent = os.environ.get(
             "TOURIST_USER_AGENT", "TouristPlannerPersonalPOC/0.2 (local personal use)"
         )
@@ -1669,14 +1674,15 @@ class OpenRouteServiceProvider:
             "mode": self.mode,
             "duration_minutes": minutes,
             # A foot route is walking end to end.
-            "walking_minutes": minutes,
+            "walking_minutes": minutes if self.mode == "walk" else 0,
             "distance_m": int(round(float(metres))),
             "geometry": shape if len(shape) >= 2 else [],
             "transfers": 0,
             "boarding_buffer_minutes": 0,
             # Plain transfer: no evidence that the walk is worth doing for itself.
             "experience_evidence": [],
-            "status": "verified",
+            "status": "verified" if self.mode == "walk" else "estimated",
+            "basis": "road_duration_no_live_traffic",
             "provider": self.name,
         }
 
@@ -2969,7 +2975,8 @@ out body qt;
             "walking_minutes": journey.walking_minutes,
             "distance_m": None,
             "transfers": journey.transfers,
-            "boarding_buffer_minutes": journey.waiting_minutes,
+            "boarding_buffer_minutes": 0,
+            "waiting_minutes": journey.waiting_minutes,
             **_journey_wayfinding(graph, journey),
             "experience_evidence": [],
             # Topology plus assumed speed and headway. Never "verified".
@@ -3001,7 +3008,7 @@ class GtfsTransitProvider:
 
     name = "gtfs"
     operation = "gtfs:transit"
-    cache_version = "gtfs-transit-v1"
+    cache_version = "gtfs-transit-v2"
     # Long, because the feed itself is the thing that goes stale, and replacing the
     # file is the deliberate act that should invalidate these.
     cache_ttl_days = 30
@@ -3015,6 +3022,7 @@ class GtfsTransitProvider:
 
     def __init__(self, feed: Any | None = None, fallback: Any | None = None) -> None:
         self._feed = feed
+        self._dated_feeds: dict[str, Any] = {}
         self._fallback = fallback
         self._area_graph = None
         self._path = os.environ.get("TOURIST_GTFS_PATH", "data/gtfs/transit.zip")
@@ -3070,6 +3078,8 @@ class GtfsTransitProvider:
             "version": self.cache_version,
             "mode": self.mode,
             "feed": Path(self._path).name,
+            "feed_version": (Path(self._path).stat().st_mtime_ns if Path(self._path).exists() else None),
+            "service_date": origin.get("service_date"),
             "origin": _point_key(origin),
             "destination": _point_key(destination),
         }
@@ -3077,7 +3087,14 @@ class GtfsTransitProvider:
     def route(
         self, origin: dict[str, Any], destination: dict[str, Any]
     ) -> dict[str, Any]:
-        journey = self.feed.journey(
+        feed = self.feed
+        service_date = origin.get("service_date")
+        if service_date and Path(self._path).is_file():
+            if service_date not in self._dated_feeds:
+                from .gtfs import TransitFeed
+                self._dated_feeds[service_date] = TransitFeed(self._path, service_date=service_date)
+            feed = self._dated_feeds[service_date]
+        journey = feed.journey(
             origin=(float(origin["latitude"]), float(origin["longitude"])),
             destination=(float(destination["latitude"]), float(destination["longitude"])),
         )
@@ -3100,11 +3117,15 @@ class GtfsTransitProvider:
             # distance this provider can honestly report.
             "distance_m": None,
             "transfers": journey.transfers,
-            "boarding_buffer_minutes": journey.waiting_minutes,
-            **_journey_wayfinding(self._area_graph or getattr(self.feed, "graph", None), journey),
+            "boarding_buffer_minutes": 0,
+            "waiting_minutes": journey.waiting_minutes,
+            **_journey_wayfinding(self._area_graph or getattr(feed, "graph", None), journey),
             # TDX route IDs encode the public line code in their second field:
             # TRTC_BL_BL-2_0 is the BL line, not a traveller-facing route name.
-            "route_codes": [_gtfs_line_code(route) for route in journey.boarded_routes],
+            "route_codes": [getattr(feed, "route_names", {}).get(route) or _gtfs_line_code(route) for route in journey.boarded_routes],
+            "service_coverage": getattr(feed, "service_coverage", {}),
+            "feed_version": (Path(self._path).stat().st_mtime_ns if Path(self._path).exists() else None),
+            "timetable_status": journey.basis if journey.basis == "bus_topology_estimate" else "schedule_derived_not_departure_verified",
             # A ride between two stops is a transfer, not an experience.
             "experience_evidence": [],
             # Derived from the timetable, not looked up in it.

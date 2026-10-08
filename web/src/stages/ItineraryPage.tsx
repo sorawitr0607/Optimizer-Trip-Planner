@@ -883,6 +883,7 @@ export function ItineraryPage() {
             && !(prepFirst && dayIndex === 0) ? (
             <p className="setup-hint">{copy("day_has_no_places", language)}</p>
           ) : null}
+          {day.purpose ? <p>{day.purpose}</p> : null}
           <DayStops
             coordsOf={(subjectId) => {
               const stop = day.stops.find((entry) => entry.subject_id === subjectId);

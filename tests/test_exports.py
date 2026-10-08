@@ -82,7 +82,7 @@ class ExportSnapshotTest(unittest.TestCase):
         self.assertEqual(version.version_id, export["stamp"]["plan_version_id"])
         self.assertTrue(export["stamp"]["is_active_plan"])
         self.assertEqual("THB", export["stamp"]["base_currency"])
-        self.assertEqual("whole-trip-v4", export["stamp"]["optimizer_version"])
+        self.assertEqual("whole-trip-v5", export["stamp"]["optimizer_version"])
 
         # Every optimizer item appears exactly once, in chronological order.
         exported = [item for day in export["days"] for item in day["items"]]
@@ -646,12 +646,12 @@ class ArtifactTest(unittest.TestCase):
     def test_documents_localize_optimizer_codes_like_the_app(self) -> None:
         export = export_for("ix-dali-hotel-whole-trip", language="th")
         reasons = {item["reason"] for item in export["unscheduled"]}
-        # `NO_TIME_CAPACITY`, not `PLAIN_WALK_THRESHOLD`. This fixture resolves a
+        # The optional stop now loses on value versus effort. This fixture resolves a
         # 60-minute plain-walking cap from a traveller's comfort thresholds and the plan
         # walks **10**, so blaming that cap was `_skip_reason` naming a threshold for
         # merely existing. The subject of this test is the *localisation* of a code, and
         # `PLAIN_WALK_THRESHOLD` is still the sample used for that below.
-        self.assertIn("NO_TIME_CAPACITY", reasons)
+        self.assertIn("WEAK_VALUE_FOR_EFFORT", reasons)
 
         thai = "การเดินทางธรรมดาเกินค่าที่ตั้งไว้"
         words = exporters._labels({"PLAIN_WALK_THRESHOLD": thai})

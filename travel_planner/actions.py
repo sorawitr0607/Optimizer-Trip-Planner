@@ -10,6 +10,7 @@ from pathlib import Path
 import re
 from time import monotonic
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from .core import (
     CLOSED_BUSINESS_STATUSES,
@@ -314,6 +315,7 @@ class PlannerActions:
         card_provider: Any = None,
         interpreter: Any = None,
         reviewer: Any = None,
+        research_provider: Any = None,
     ) -> None:
         self.store = open_store(database_path)
         # Additive and outside SCHEMA_VERSION, so a hosted database is not asked to
@@ -339,6 +341,7 @@ class PlannerActions:
         self.hours_provider = hours_provider
         self.card_provider = card_provider
         self.interpreter = interpreter
+        self.research_provider = research_provider
         self.reviewer = reviewer
         self._job_queue: Any = None
         #: The candidate catalogue, kept by run id. See `get_latest_discovery`.
@@ -763,6 +766,10 @@ class PlannerActions:
         departure_time: str | None = None,
         accommodation_status: str = "not_booked",
         confirmed: bool = False,
+        complete_trip: bool = False,
+        planning_brief: str = "",
+        day_preferences: Sequence[Mapping[str, Any]] = (),
+        journey_legs: Sequence[Mapping[str, Any]] = (),
     ) -> SetupDraft:
         trip = self.store.get_trip(trip_id)
         if trip is None:
@@ -786,6 +793,8 @@ class PlannerActions:
             departure_time=departure_time,
             accommodation_status=accommodation_status,
             confirmed=confirmed,
+            complete_trip=complete_trip, planning_brief=planning_brief,
+            day_preferences=day_preferences, journey_legs=journey_legs,
         )
         return self.store.save_setup(
             new_setup_draft(trip_id=trip_id, payload=payload, confirmed=confirmed)
@@ -1804,11 +1813,20 @@ class PlannerActions:
             # An unknown trip, which `_optimizer_input` is about to report properly.
             pass
         optimizer_input = self._optimizer_input(trip_id)
+        if optimizer_input["trip"].get("complete_trip"):
+            self._research_experiences(trip_id, optimizer_input)
+            optimizer_input = self._optimizer_input(trip_id)
         proposal = optimize_trip(
             optimizer_input,
             time_limit_seconds=bounded_preview_seconds(time_limit_seconds),
             on_variant=progress,
         )
+        if optimizer_input["trip"].get("complete_trip"):
+            conflicts = [item for item in proposal.get("variants", [{}])[0].get("reconciliation", [])
+                         if item.get("priority") == "must_do" and item.get("status") == "cannot_currently_fit" and item.get("reason") != "ROUTE_UNVERIFIED"]
+            if conflicts and self._research_experiences(trip_id, optimizer_input, conflicts=conflicts):
+                optimizer_input = self._optimizer_input(trip_id)
+                proposal = optimize_trip(optimizer_input, time_limit_seconds=bounded_preview_seconds(time_limit_seconds))
         preview = self.store.save_optimization_preview(
             new_optimization_preview(
                 trip_id=trip_id,
@@ -1819,6 +1837,96 @@ class PlannerActions:
         if progress is not None:
             progress(4)
         return preview
+
+    def _research_experiences(self, trip_id: str, snapshot: dict[str, Any], *, conflicts: list[dict[str, Any]] | None = None) -> bool:
+        from .planning import ExperienceResearchProvider, RESEARCH_KIND, research_key, research_payload
+        setup = self.store.get_setup(trip_id)
+        if setup is None:
+            return False
+        planning = setup.snapshot.as_dict().get("planning", {})
+        # Research key excludes prior generated suggestions; otherwise every rebuild re-researches itself.
+        seed = self._optimizer_input(trip_id, include_research=False)
+        payload = research_payload(seed, planning.get("brief", ""), planning.get("journey_legs", []))
+        key = research_key(payload)
+        now = datetime.now(timezone.utc)
+        held = self.store.get_trip_evidence(trip_id, RESEARCH_KIND)
+        if held and held.get("request_sha256") == key and held.get("expires_at", "") > now.isoformat():
+            if not conflicts or held.get("repair_attempted"):
+                return False
+        if conflicts:
+            payload["repair_conflicts"] = conflicts
+            payload["previous_sources"] = (held or {}).get("sources", [])
+            payload["previous_experiences"] = (held or {}).get("experiences", [])
+            payload["repair_instruction"] = "Return a replacement experience set preserving all anchors. Fix the infeasible dates, excessive composite durations and timing; split distant attractions and prefer flexible support stops. The application's meal, airport, preparation and hotel-return time must also fit. Do not change real commitments."
+        provider = self.research_provider or ExperienceResearchProvider()
+        try:
+            self._spend(operation=provider.operation, count=1, trip_id=trip_id, detail={"stage": "experience_research"})
+            result = provider.research(payload)
+        except (ProviderUnavailable, ProviderBudgetExceeded) as error:
+            result = {"status": "unavailable", "experiences": [], "day_purposes": {}, "reason": str(error)[:160]}
+        known = {item["id"]: item for item in seed["candidates"]}
+        geocoder = self.place_provider if hasattr(self.place_provider, "geocode") else OpenStreetMapProvider()
+        for experience in result.get("experiences", []):
+            try:
+                if experience.get("place_id") not in known:
+                    point = geocoder.geocode(f"{experience['query']}, {snapshot['trip']['destination']}")
+                    experience.update(latitude=point["latitude"], longitude=point["longitude"])
+                if experience.get("exit_query") and experience.get("exit_place_id") not in known:
+                    exit_point = geocoder.geocode(f"{experience['exit_query']}, {snapshot['trip']['destination']}")
+                    experience["exit_latitude"], experience["exit_longitude"] = exit_point["latitude"], exit_point["longitude"]
+            except (ProviderUnavailable, KeyError):
+                experience["resolution_status"] = "location_unresolved"
+        if conflicts and result.get("status") != "researched" and held:
+            result = {key: value for key, value in held.items() if key not in {"expires_at", "retrieved_at"}}
+        result.update(request_sha256=key, setup_sha256=setup.snapshot.sha256, repair_attempted=bool(conflicts))
+        self.store.upsert_trip_evidence(trip_id=trip_id, kind=RESEARCH_KIND, value=result, provider=provider.name,
+                                        retrieved_at=now.isoformat(), expires_at=(now + timedelta(days=7 if result["status"] == "researched" else 1)).isoformat())
+        points = self._route_points(trip_id)
+        if len(points) >= 2:
+            # Local transit measures every pair cheaply; road refinement remains bounded.
+            try:
+                self.refresh_transit_routes(trip_id)
+            except (ProviderUnavailable, PlannerRefusal):
+                pass
+            try:
+                self._refresh_routes_with(OpenRouteServiceProvider(mode="taxi"), trip_id, points=points, deadline=monotonic() + 45)
+            except (ProviderUnavailable, PlannerRefusal):
+                pass
+
+        return result.get("status") == "researched"
+
+    def update_preview_experience(self, *, trip_id: str, place_id: str, priority: str, duration_minutes: int | None = None) -> OptimizationPreview:
+        """Review edits are persisted before freezing a fresh deterministic preview."""
+        from .planning import RESEARCH_KIND, research_key, research_payload
+        if priority not in {"must_do", "interested", "maybe", "not_for_trip"}:
+            raise PlannerRefusal("invalid_choice", action=priority)
+        if duration_minutes is not None and (isinstance(duration_minutes, bool) or not isinstance(duration_minutes, int) or not 5 <= duration_minutes <= 900):
+            raise PlannerRefusal("invalid_duration")
+        research = self.store.get_trip_evidence(trip_id, RESEARCH_KIND)
+        if not research:
+            raise PlannerRefusal("preview_missing")
+        experience = next((item for item in research.get("experiences", []) if (item.get("place_id") or item["id"]) == place_id), None)
+        if experience is None:
+            raise PlannerRefusal("unknown_candidate", place_id=place_id)
+        if duration_minutes is not None and experience.get("steps") and sum(step["duration_minutes"] for step in experience["steps"]) != duration_minutes:
+            raise PlannerRefusal("group_duration_needs_step_edit")
+        if experience.get("place_id"):
+            self.save_candidate_choice(trip_id=trip_id, place_id=place_id, action=priority)
+        experience["owner_priority"] = priority
+        if duration_minutes is not None:
+            experience["duration_bounds"] = {key: duration_minutes for key in ("minimum_minutes", "ideal_minutes", "maximum_minutes")}
+            experience["duration_basis"] = "owner_confirmed_activity"
+        setup = self.store.get_setup(trip_id)
+        if setup:
+            planning = setup.snapshot.as_dict().get("planning", {})
+            research["request_sha256"] = research_key(research_payload(self._optimizer_input(trip_id, include_research=False), planning.get("brief", ""), planning.get("journey_legs", [])))
+        now = datetime.now(timezone.utc)
+        self.store.upsert_trip_evidence(trip_id=trip_id, kind=RESEARCH_KIND,
+            value={key: value for key, value in research.items() if key not in {"retrieved_at", "expires_at"}},
+            provider="owner_review", retrieved_at=now.isoformat(), expires_at=research["expires_at"])
+        optimizer_input = self._optimizer_input(trip_id)
+        proposal = optimize_trip(optimizer_input, time_limit_seconds=bounded_preview_seconds(30))
+        return self.store.save_optimization_preview(new_optimization_preview(trip_id=trip_id, optimizer_input=optimizer_input, proposal=proposal))
 
     def get_plan_preview(self, trip_id: str) -> OptimizationPreview | None:
         return self.store.get_optimization_preview(trip_id)
@@ -1925,7 +2033,7 @@ class PlannerActions:
             raise PlannerRefusal("discovery_empty")
         return setup, discovery, candidates
 
-    def _optimizer_input(self, trip_id: str) -> dict[str, Any]:
+    def _optimizer_input(self, trip_id: str, *, include_research: bool = True) -> dict[str, Any]:
         setup, discovery, current_candidates = self._current_choice_inputs(trip_id)
         trip = self.store.get_trip(trip_id)
         setup_payload = setup.snapshot.as_dict()
@@ -1942,6 +2050,19 @@ class PlannerActions:
         basics = setup_payload["trip_basics"]
         start_date, end_date = basics.get("start_date"), basics.get("end_date")
         local_dates = date_range(start_date, end_date) if start_date and end_date else []
+        planning = setup_payload.get("planning", {})
+        special_days = {item["date"]: item for item in planning.get("day_preferences", [])}
+        timezone_evidence = self.get_timezone_evidence(trip_id)
+        destination_zone = ZoneInfo(timezone_evidence["timezone"]) if timezone_evidence and timezone_evidence.get("timezone") else None
+        journey = planning.get("journey_legs", [])
+        arrivals = [datetime.fromisoformat(item["ends_at"]) for item in journey if item.get("role") == "arrival"]
+        departures = [datetime.fromisoformat(item["starts_at"]) for item in journey if item.get("role") == "departure"]
+        arrival = max(arrivals).astimezone(destination_zone) if arrivals and destination_zone else (max(arrivals) if arrivals else None)
+        departure = min(departures).astimezone(destination_zone) if departures and destination_zone else (min(departures) if departures else None)
+        if arrival and local_dates and arrival.date().isoformat() == local_dates[0]:
+            basics = {**basics, "arrival_time": arrival.strftime("%H:%M")}
+        if departure and local_dates and departure.date().isoformat() == local_dates[-1]:
+            basics = {**basics, "departure_time": departure.strftime("%H:%M")}
         usable_windows = []
         for index, local_date in enumerate(local_dates):
             # The owner's own hours, where they gave them. These were the literals
@@ -1968,8 +2089,20 @@ class PlannerActions:
                 # that emptied the whole plan. Clamped at midnight: a pre-dawn flight
                 # would owe the previous day, which is not modelled.
                 start = min(start, _shift_clock(end, -DEPARTURE_LOGISTICS_MINUTES))
+            special = special_days.get(local_date)
+            if special:
+                start, end = special["start"], special["end"]
+                if end < start:
+                    hour, minute = end.split(":")
+                    end = f"{int(hour) + 24:02d}:{minute}"
             if start >= end:
                 raise PlannerRefusal("no_planning_time", local_date=local_date)
+            if usable_windows:
+                previous_end = usable_windows[-1]["end"]
+                hour, minute = map(int, previous_end.split(":"))
+                if hour >= 24:
+                    recovery = (hour - 24) * 60 + minute + 8 * 60
+                    start = max(start, f"{recovery // 60:02d}:{recovery % 60:02d}")
             usable_windows.append({"date": local_date, "start": start, "end": end})
 
         candidates = []
@@ -2038,12 +2171,13 @@ class PlannerActions:
                         "retrieved_at": provider_hours.get("retrieved_at"),
                     }
                 )
-            if provider_hours.get("interval"):
+            if provider_hours.get("interval") or provider_hours.get("open_dates"):
                 facts.append(
                     {
                         "subject_id": choice.place_id,
                         "fact_type": "opening_interval",
-                        "value": provider_hours["interval"],
+                        "value": provider_hours.get("interval") or {"start": "00:00", "end": "24:00"},
+                        "intervals_by_date": provider_hours.get("by_date"),
                         "status": "verified",
                         "source": provider_hours.get("provider") or "provider_hours",
                         "retrieved_at": provider_hours.get("retrieved_at"),
@@ -2199,7 +2333,7 @@ class PlannerActions:
             {
                 "id": "owner",
                 "constraints": owner.get("must_respect", []),
-                "preferences": {"dislikes": owner.get("avoid", [])},
+                "preferences": {"dislikes": owner.get("avoid", []), "tags": owner.get("main_style", []) + owner.get("also_enjoy", []) + owner.get("comfort", [])},
             }
         ]
         travellers.extend(
@@ -2280,14 +2414,18 @@ class PlannerActions:
             capability_gaps.append("OPENING_EVIDENCE_MISSING")
         if any(person.get("constraints") for person in travellers):
             capability_gaps.append("FREE_TEXT_HARD_CONSTRAINT_NEEDS_STRUCTURED_CONFIRMATION")
-        return {
-            "schema_version": 1,
+        snapshot = {
+            "schema_version": 2,
             "source": {
                 "setup_sha256": setup.snapshot.sha256,
                 "discovery_run_id": discovery.run_id,
                 "discovery_status": discovery.status,
             },
             "trip": {
+                "complete_trip": planning.get("complete_trip", False),
+                "planning_brief": planning.get("brief", ""),
+                "journey_legs": planning.get("journey_legs", []),
+                "day_purposes": {item["date"]: item.get("purpose", "") for item in planning.get("day_preferences", [])},
                 "destination": trip.destination if trip else "",
                 "planning_mode": setup_payload["planning_mode"],
                 "allow_provisional_assumptions": allow_provisional_assumptions,
@@ -2344,6 +2482,13 @@ class PlannerActions:
             # can tell an accepted overage from a worse one that merely shares its code.
             "comfort_acceptances": self.store.list_comfort_acceptances(trip_id),
         }
+
+        if planning.get("complete_trip") and include_research:
+            from .planning import RESEARCH_KIND, apply_research
+            evidence = self.store.get_trip_evidence(trip_id, RESEARCH_KIND)
+            if evidence and evidence.get("setup_sha256") == setup.snapshot.sha256:
+                apply_research(snapshot, evidence)
+        return snapshot
 
     def resolve_default_terminal(self, trip_id: str) -> dict[str, Any] | None:
         """Cache the destination's likely airport as an explicit, provisional assumption."""
@@ -4381,6 +4526,7 @@ class PlannerActions:
                 # Older metro rows have only totals. Re-read the local graph once
                 # so the saved route can name boarding and alighting stations.
                 and not (provider.mode == "transit" and "route_codes" not in route)
+                and not (provider.name == "gtfs" and route.get("provider") == "gtfs" and route.get("feed_version") != provider.cache_descriptor(points[0], points[1]).get("feed_version"))
             )
         pairs = [
             (origin, destination)
@@ -4628,9 +4774,18 @@ class PlannerActions:
                     "longitude": float(longitude),
                 }
             )
+        from .planning import RESEARCH_KIND
+        setup = self.store.get_setup(trip_id)
+        planning = setup.snapshot.as_dict().get("planning", {}) if setup else {}
+        research = self.store.get_trip_evidence(trip_id, RESEARCH_KIND) if planning.get("complete_trip") else None
+        if research and research.get("setup_sha256") == setup.snapshot.sha256:
+            for item in research.get("experiences", []):
+                if not item.get("place_id") and item.get("latitude") is not None:
+                    points.append({"place_id": item["id"], "latitude": item["latitude"], "longitude": item["longitude"]})
+                if item.get("exit_latitude") is not None:
+                    points.append({"place_id": (item.get("place_id") or item["id"]) + "_exit", "latitude": item["exit_latitude"], "longitude": item["exit_longitude"]})
         accommodation = self.get_accommodation_base(trip_id)
         trip = self.store.get_trip(trip_id)
-        setup = self.store.get_setup(trip_id)
         basics = setup.snapshot.as_dict().get("trip_basics", {}) if setup else {}
         if accommodation:
             points.append(
@@ -4657,6 +4812,9 @@ class PlannerActions:
                     ),
                 }
             )
+        if basics.get("start_date"):
+            for point in points:
+                point["service_date"] = basics["start_date"]
         return sorted(points, key=lambda item: item["place_id"])
 
     def paid_usage_status(self, *, month: str | None = None) -> dict[str, Any]:

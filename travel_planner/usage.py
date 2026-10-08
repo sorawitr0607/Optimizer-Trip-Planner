@@ -23,6 +23,8 @@ STOPPED = "stopped"
 # Estimated unit price per request. Free-tier operations are priced at zero and
 # still recorded, so call counts stay reconcilable.
 PRICES_USD = {
+    # Bounded 12k output and web search; conservatively reserve the whole call.
+    "openai:experience_research": 0.50,
     "openstreetmap:discover": 0.0,
     "openrouteservice:directions": 0.0,
     "openrouteservice:matrix": 0.0,

@@ -1293,7 +1293,8 @@ class OsmMetroTransitTest(unittest.TestCase):
         self.assertEqual("estimated", route["status"])
         self.assertEqual("osm_metro", route["provider"])
         self.assertLess(route["walking_minutes"], route["duration_minutes"])
-        self.assertGreaterEqual(route["boarding_buffer_minutes"], 1)
+        self.assertEqual(route["boarding_buffer_minutes"], 0)
+        self.assertGreaterEqual(route["waiting_minutes"], 1)
 
     def test_the_metro_query_pulls_relation_members(self) -> None:
         """`>;` is what makes the ordered member list resolvable.

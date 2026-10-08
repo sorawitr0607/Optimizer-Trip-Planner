@@ -263,7 +263,8 @@ describe("SetupPage", () => {
     // Four: arrival and departure, plus the two active-hours fields that replaced the
     // 08:00-22:00 literals `_optimizer_input` used to invent for every trip.
     expect((html.match(/type="time"/g) ?? []).length).toBe(4);
-    expect((html.match(/type="checkbox"/g) ?? []).length).toBe(3);
+    expect((html.match(/type="checkbox"/g) ?? []).length).toBe(4);
+    expect(html).toContain("build a complete trip");
     expect(html).toContain('name="accommodation-status"');
     expectNoMissingCopy(html);
   });

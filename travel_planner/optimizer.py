@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from copy import deepcopy
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from functools import lru_cache
 from hashlib import sha256
 import json
@@ -18,7 +18,7 @@ from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
-OPTIMIZER_VERSION = "whole-trip-v4"
+OPTIMIZER_VERSION = "whole-trip-v5"
 
 # What the departure day owes before the flight: pack and check out, reach the
 # terminal, be at the airport. Exported because the *usable window* for that day has
@@ -107,7 +107,7 @@ def _accepts(snapshot: dict[str, Any], reason: str, measured: float) -> bool:
 
 VARIANT_CONFIGS = (
     {"id": "best_balance", "duration": "ideal", "buffer_minutes": 10},
-    {"id": "relaxed", "duration": "maximum", "buffer_minutes": 20},
+    {"id": "relaxed", "duration": "ideal", "buffer_minutes": 10},
     {"id": "more_highlights", "duration": "minimum", "buffer_minutes": 5},
 )
 PRIORITY_ORDER = {
@@ -309,7 +309,7 @@ def validate_variant(snapshot: dict[str, Any], variant: dict[str, Any]) -> dict[
     visits: dict[str, dict[str, Any]] = {}
     for day in variant.get("days", []):
         window = _window_for(snapshot, day["date"])
-        previous_end = _minutes(window["start"])
+        previous_end = 0 if snapshot["trip"].get("journey_legs") else _minutes(window["start"])
         for item in day.get("items", []):
             start = _minutes(item["start"])
             end = _minutes(item["end"])
@@ -320,19 +320,27 @@ def validate_variant(snapshot: dict[str, Any], variant: dict[str, Any]) -> dict[
                         "subject_id": day["date"],
                     }
                 )
-            if start < _minutes(window["start"]) or end > _minutes(window["end"]):
+            if not item.get("fixed_commitment") and (start < _minutes(window["start"]) or end > _minutes(window["end"])):
                 errors.append(
                     {"code": "OUTSIDE_USABLE_WINDOW", "subject_id": item.get("subject_id")}
                 )
             previous_end = end
+            if end - start != item.get("duration_minutes"):
+                errors.append({"code": "ITEM_DURATION_MISMATCH", "subject_id": item.get("subject_id")})
+            if item.get("experience_step") and item["type"] == "meal":
+                bounds = {"breakfast": ("07:00", "09:30"), "lunch": ("11:30", "14:00"), "dinner": ("17:30", "21:00")}.get(item.get("kind"))
+                if bounds and not (_minutes(bounds[0]) <= start and end <= _minutes(bounds[1])):
+                    errors.append({"code": "MANDATORY_MEAL_WINDOW_MISSED", "subject_id": item.get("kind")})
             if item["type"] == "visit":
                 subject = item["subject_id"]
+                if item.get("experience_step") and subject not in {_candidate_id(candidate) for candidate in snapshot["candidates"]}:
+                    continue
                 if subject in visits:
                     errors.append({"code": "DUPLICATE_VISIT", "subject_id": subject})
                 visits[subject] = item
                 opening = _planning_fact(snapshot, subject, "opening_interval")
                 if opening and (
-                    not _inside(item, opening["value"])
+                    not any(_inside(item, interval) for interval in _opening_windows(opening, day["date"]))
                     or not _open_on(opening, day["date"])
                 ):
                     errors.append({"code": "CLOSED_DURING_VISIT", "subject_id": subject})
@@ -344,7 +352,46 @@ def validate_variant(snapshot: dict[str, Any], variant: dict[str, Any]) -> dict[
                     {"code": "ROUTE_UNVERIFIED", "subject_id": item.get("subject_id")}
                 )
 
+    committed = {item["id"]: item for item in snapshot["trip"].get("journey_legs", [])}
+    fixed = [item for day in variant.get("days", []) for item in day["items"] if item.get("fixed_commitment")]
+    if {item.get("subject_id") for item in fixed} != set(committed) or len(fixed) != len(committed):
+        errors.append({"code": "FIXED_JOURNEY_INCOMPLETE", "subject_id": None})
+    for item in fixed:
+        original = committed.get(item.get("subject_id"), {})
+        if any(item.get(key) != original.get(key) for key in ("starts_at", "ends_at")):
+            errors.append({"code": "FIXED_JOURNEY_CHANGED", "subject_id": item.get("subject_id")})
+    actual = []
+    for day in variant.get("days", []):
+        for item in day["items"]:
+            if item.get("starts_at") and item.get("ends_at"):
+                start, end = datetime.fromisoformat(item["starts_at"]), datetime.fromisoformat(item["ends_at"])
+                if start.utcoffset() is not None and end.utcoffset() is not None:
+                    actual.append((start.astimezone(timezone.utc), end.astimezone(timezone.utc)))
+    actual.sort()
+    if any(left[1] > right[0] for left, right in zip(actual, actual[1:])):
+        errors.append({"code": "CROSS_DAY_TIMELINE_OVERLAP", "subject_id": None})
+    for candidate in snapshot["candidates"]:
+        steps = candidate.get("steps") or []
+        if not steps:
+            continue
+        expanded = [item for day in variant.get("days", []) for item in day["items"] if item.get("parent_id") == _candidate_id(candidate)]
+        if expanded and (sum(item["duration_minutes"] for item in expanded) < _duration(candidate, "minimum") or len(expanded) != len(steps) or any(actual.get("name") != expected.get("name") or actual["duration_minutes"] > expected["duration_minutes"] for actual, expected in zip(expanded, steps))):
+            errors.append({"code": "EXPERIENCE_GROUP_INCOMPLETE", "subject_id": _candidate_id(candidate)})
+        for item, step in zip(expanded, steps):
+            if step.get("preferred_interval") and _fixed_step_timing(candidate, step) and not _inside(item, step["preferred_interval"]):
+                errors.append({"code": "NO_VALID_VISIT_INTERVAL", "subject_id": _candidate_id(candidate)})
+        if candidate.get("daylight_exit") and candidate.get("latitude") is not None and snapshot["trip"].get("timezone"):
+            for item in expanded:
+                daylight = _daylight_interval(item["date"], candidate["latitude"], candidate["longitude"], snapshot["trip"]["timezone"])
+                if item["type"] in {"visit", "travel"} and daylight and _minutes(item["end"]) > daylight[1] - 20:
+                    errors.append({"code": "DAYLIGHT_EXIT_MISSED", "subject_id": _candidate_id(candidate)})
     selected_ids = {_candidate_id(item) for item in _selected_candidates(snapshot)}
+    for candidate in snapshot["candidates"]:
+        visit = visits.get(_candidate_id(candidate))
+        if visit and candidate.get("scheduled_date") and visit["date"] != candidate["scheduled_date"]:
+            errors.append({"code": "LOCK_DATE_CHANGED", "subject_id": _candidate_id(candidate)})
+        if visit and candidate.get("fixed_event") and candidate.get("preferred_interval") and not candidate.get("steps") and not _inside(visit, candidate["preferred_interval"]):
+            errors.append({"code": "NO_VALID_VISIT_INTERVAL", "subject_id": _candidate_id(candidate)})
     reconciliation = variant.get("reconciliation", [])
     reconciled_ids = [item["place_id"] for item in reconciliation]
     if len(reconciled_ids) != len(set(reconciled_ids)) or set(reconciled_ids) != selected_ids:
@@ -365,6 +412,8 @@ def validate_variant(snapshot: dict[str, Any], variant: dict[str, Any]) -> dict[
             errors.append({"code": "LOCK_TIME_CHANGED", "subject_id": subject})
 
     metrics = variant.get("metrics", {})
+    observed = _schedule_metrics(snapshot, variant.get("days", []))
+    metrics = {**metrics, **{rule["metric"]: max(float(metrics.get(rule["metric"], 0) or 0), float(observed.get(rule["metric"], 0) or 0)) for rule in COMFORT_RULES}}
     thresholds = _thresholds(snapshot)
     for rule in COMFORT_RULES:
         measured = float(
@@ -437,12 +486,15 @@ def _solve_variant(
 ) -> dict[str, Any]:
     prepared = _prepare_candidates(snapshot, config)
     active = prepared["active"]
+    group_ids = {_candidate_id(item) for item in active if item.get("steps")}
+    active = [item for item in active if item.get("group_parent_id") not in group_ids]
     active, fatigue_reconciliation = _apply_physical_load_limit(snapshot, active)
     prepared["reconciliation"].update(fatigue_reconciliation)
 
     schedules, skipped, stopped = _insertion_search(
         snapshot, active, config, deadline=deadline
     )
+    schedules = _relocate_for_anchors(snapshot, schedules, active, config, deadline=deadline)
     scheduled_ids = {
         item["subject_id"]
         for day in schedules
@@ -464,11 +516,14 @@ def _solve_variant(
                 _reconciliation(candidate, "fits", "SCHEDULED", "scheduled_once")
             )
         else:
+            reason = _skip_reason(snapshot, candidate, skipped, metrics, config)
+            if reason == "NO_TIME_CAPACITY" and candidate.get("priority") != "must_do" and _can_insert_in_plan(snapshot, schedules, active, candidate, config):
+                reason = "WEAK_VALUE_FOR_EFFORT"
             reconciliation.append(
                 _reconciliation(
                     candidate,
                     "cannot_currently_fit",
-                    _skip_reason(snapshot, candidate, skipped, metrics, config),
+                    reason,
                     "kept_in_unscheduled_shortlist",
                 )
             )
@@ -489,14 +544,16 @@ def _solve_variant(
             objective["hard_violations"],
             objective["must_do_unscheduled"],
             objective["comfort_violations"],
-            -objective["experience_value"],
-            objective["dead_travel_minutes"] + 2 * objective["timing_miss_minutes"],
+            objective["dead_travel_minutes"] + 2 * objective["timing_miss_minutes"] + EMPTY_DAY_MINUTES * _empty_day_count(schedules) - (2 if config["id"] == "relaxed" else 4) * objective["experience_value"],
             -objective["lower_priority_scheduled"],
         ],
         "greedy_baseline": baseline,
         "stopped_at_limit": stopped,
         "limit_action": "optimize_longer" if stopped else None,
     }
+    _annotate_timestamps(snapshot, variant)
+    _attach_journey(snapshot, variant)
+    variant["metrics"] = _schedule_metrics(snapshot, variant["days"])
     validation = validate_variant(snapshot, variant)
     variant["validation"] = validation
     variant["objective"]["hard_violations"] = len(validation["hard_violations"])
@@ -516,6 +573,102 @@ def _solve_variant(
     elif not validation["scheduled_visit_count"]:
         variant["warnings"].append("NO_SELECTED_PLACE_COULD_BE_SCHEDULED")
     return variant
+
+
+def _relocate_for_anchors(snapshot: dict[str, Any], days: list[dict[str, Any]], active: list[dict[str, Any]], config: dict[str, Any], *, deadline: float) -> list[dict[str, Any]]:
+    """Free a day for a missing anchor by moving one already placed experience."""
+    by_id = {_candidate_id(item): item for item in active}
+    sequences = {window["date"]: [] for window in snapshot["trip"]["usable_windows"]}
+    for day in days:
+        if day["date"] in sequences:
+            sequences[day["date"]] = [by_id[item["subject_id"]] for item in day["items"] if item["type"] == "visit" and item["subject_id"] in by_id]
+    placed = {_candidate_id(item) for values in sequences.values() for item in values}
+    missing = [item for item in active if item.get("priority") == "must_do" and _candidate_id(item) not in placed]
+    if not missing:
+        return days
+    index = _route_index(snapshot)
+    cache = {}
+    best = _search_objective(snapshot, sequences, set(), active, config, route_index=index, day_cache=cache)
+    # ponytail: one-group relocation repairs insertion traps; multi-group swaps only if benchmarks need them.
+    for anchor in missing:
+        winner = None
+        for source in sequences:
+            for position, moving in enumerate(sequences[source]):
+                for destination in sequences:
+                    if source == destination:
+                        continue
+                    for slot in range(len(sequences[destination]) + 1):
+                        if monotonic() >= deadline:
+                            return _build_schedules(snapshot, sequences, config, route_index=index, day_cache=cache)["days"]
+                        proposed = {key: list(value) for key, value in sequences.items()}
+                        proposed[source].pop(position)
+                        proposed[destination].insert(slot, moving)
+                        for anchor_slot in range(len(proposed[source]) + 1):
+                            candidate = {key: list(value) for key, value in proposed.items()}
+                            candidate[source].insert(anchor_slot, anchor)
+                            built = _build_schedules(snapshot, candidate, config, route_index=index, day_cache=cache)
+                            if built["hard_errors"]:
+                                continue
+                            score = _search_objective(snapshot, candidate, set(), active, config, route_index=index, prebuilt=built)
+                            if score < best:
+                                best, winner = score, candidate
+        if winner is not None:
+            sequences = winner
+    return _build_schedules(snapshot, sequences, config, route_index=index, day_cache=cache)["days"]
+
+
+def _can_insert_in_plan(snapshot: dict[str, Any], days: list[dict[str, Any]], active: list[dict[str, Any]], candidate: dict[str, Any], config: dict[str, Any]) -> bool:
+    by_id = {_candidate_id(item): item for item in active}
+    sequences = {window["date"]: [] for window in snapshot["trip"]["usable_windows"]}
+    for day in days:
+        if day["date"] in sequences:
+            sequences[day["date"]] = [by_id[item["subject_id"]] for item in day["items"]
+                                       if item["type"] == "visit" and item["subject_id"] in by_id]
+    index = _route_index(snapshot)
+    for day in sequences:
+        for position in range(len(sequences[day]) + 1):
+            proposed = {key: list(value) for key, value in sequences.items()}
+            proposed[day].insert(position, candidate)
+            if not _build_schedules(snapshot, proposed, config, route_index=index)["hard_errors"]:
+                return True
+    return False
+
+
+def _attach_journey(snapshot: dict[str, Any], variant: dict[str, Any]) -> None:
+    legs = snapshot["trip"].get("journey_legs", [])
+    if not legs:
+        return
+    zone_name = snapshot["trip"].get("timezone")
+    zone = ZoneInfo(zone_name) if zone_name else datetime.fromisoformat(legs[0]["ends_at"]).tzinfo
+    by_date = {day["date"]: day for day in variant["days"]}
+    for leg in legs:
+        start, end = (datetime.fromisoformat(leg[key]) for key in ("starts_at", "ends_at"))
+        local_start, local_end = start.astimezone(zone), end.astimezone(zone)
+        day = local_start.date().isoformat()
+        midnight = datetime.combine(local_start.date(), time(), tzinfo=zone)
+        block = {"type": "logistics", "kind": "booked_journey", "subject_id": leg["id"], "name": leg["name"],
+                 "from_name": leg.get("origin"), "to_name": leg.get("destination"), "fixed_commitment": True,
+                 "date": day, "start": _clock(round((local_start - midnight).total_seconds() / 60)),
+                 "end": _clock(round((local_end - midnight).total_seconds() / 60)),
+                 "starts_at": leg["starts_at"], "ends_at": leg["ends_at"],
+                 "duration_minutes": round((end - start).total_seconds() / 60), "status": "owner_confirmed"}
+        if day not in by_date:
+            by_date[day] = {"date": day, "window": {"start": "00:00", "end": "24:00"}, "items": []}
+        by_date[day]["items"].append(block)
+    for day in by_date.values():
+        day["items"].sort(key=lambda item: _minutes(item["start"]))
+    variant["days"] = [by_date[day] for day in sorted(by_date)]
+
+
+def _annotate_timestamps(snapshot: dict[str, Any], variant: dict[str, Any]) -> None:
+    timezone = snapshot["trip"].get("timezone")
+    zone = ZoneInfo(timezone) if timezone else None
+    for day in variant["days"]:
+        for item in day["items"]:
+            midnight = datetime.combine(date.fromisoformat(day["date"]), time(), tzinfo=zone)
+            item["starts_at"] = (midnight + timedelta(minutes=_minutes(item["start"]))).isoformat()
+            item["ends_at"] = (midnight + timedelta(minutes=_minutes(item["end"]))).isoformat()
+            item["calendar_date"] = item["starts_at"][:10]
 
 
 def _prepare_candidates(
@@ -1205,7 +1358,7 @@ def _build_day(
                 break
             items.extend(segment["items"])
             current = segment["end"]
-            previous = place_id
+            previous = candidate.get("exit_id", place_id)
             break
 
     for meal in meals:
@@ -1247,6 +1400,7 @@ def _build_day(
         "day": {
             "date": day,
             "window": {"start": window["start"], "end": window["end"]},
+            "purpose": " · ".join(dict.fromkeys(item.get("group") or item.get("name", "") for item in sequence)) if sequence else snapshot["trip"].get("day_purposes", {}).get(day, ""),
             "items": items,
         },
         "hard_errors": hard_errors,
@@ -1330,7 +1484,18 @@ def _candidate_segment(
         )
         cursor = route_end
 
-    duration = _duration(candidate, config["duration"])
+    steps = candidate.get("steps") or []
+    if steps and (config["duration"] == "minimum" or (day == snapshot["trip"]["local_dates"][0] and candidate.get("recommendation") and not candidate.get("fixed_event"))):
+        target = _duration(candidate, "minimum")
+        fixed = sum(step["duration_minutes"] for step in steps if step["type"] not in {"visit", "buffer"})
+        adjustable = sum(step["duration_minutes"] for step in steps if step["type"] in {"visit", "buffer"})
+        ratio = min(1, max(0, target - fixed) / max(1, adjustable))
+        steps = [{**step, "duration_minutes": max(0 if step["type"] == "buffer" else 5, 5 * round(step["duration_minutes"] * ratio / 5))}
+                 if step["type"] in {"visit", "buffer"} and not candidate.get("fixed_event") else step for step in steps]
+    if steps and sum(step["duration_minutes"] for step in steps) < _duration(candidate, "minimum"):
+        steps = [dict(step) for step in steps]
+        steps[0]["duration_minutes"] += 5 * ceil((_duration(candidate, "minimum") - sum(step["duration_minutes"] for step in steps)) / 5)
+    duration = sum(step["duration_minutes"] for step in steps) if steps else _duration(candidate, config["duration"])
     start = _earliest_visit_start(
         snapshot, candidate, day, cursor, duration, route_index
     )
@@ -1356,8 +1521,62 @@ def _candidate_segment(
             "priority": candidate.get("priority", "interested"),
             "score": float(candidate.get("score", 10)),
             "replaces": candidate.get("replaces"),
+            "latitude": candidate.get("latitude"), "longitude": candidate.get("longitude"),
+            "proposed_date": candidate.get("proposed_date"),
+            "effort": "high" if any(word in str(candidate.get("name", "")).casefold() for word in ("hike", "hiking", "ridge")) else "normal",
+            "sources": candidate.get("sources", []), "reason": candidate.get("reason", ""),
+            "alternative": candidate.get("alternative", ""), "group": candidate.get("group", ""),
+            "meal_roles": candidate.get("meal_roles", []), "duration_basis": candidate.get("duration_basis", "category_estimate"),
         }
     )
+    if steps:
+        parent = segment.pop()
+        cursor = start
+        parent_recorded = False
+        for index, step in enumerate(steps):
+            timed = step.get("preferred_interval")
+            label = step["name"].casefold()
+            timed_is_fixed = _fixed_step_timing(candidate, step)
+            earliest = _minutes(timed["start"]) if timed and timed_is_fixed else cursor
+            if not timed and candidate.get("latitude") is not None and snapshot["trip"].get("timezone"):
+                daylight = _daylight_interval(day, candidate["latitude"], candidate["longitude"], snapshot["trip"]["timezone"])
+                label = step["name"].casefold()
+                if daylight and any(word in label for word in ("after illumination", "night view", "blue hour")):
+                    earliest = max(earliest, daylight[1] - (20 if "blue hour" in label else 0))
+            role = step.get("meal_role")
+            if role:
+                earliest = max(earliest, _minutes({"breakfast": "07:00", "lunch": "11:30", "dinner": "17:30"}[role]))
+            cursor = _append_wait(segment, day, cursor, max(cursor, earliest), "timing_window")
+            minutes = int(step["duration_minutes"])
+            first_visit = step["type"] == "visit" and not parent_recorded
+            item = {**parent, **step, "type": step["type"],
+                    "subject_id": place_id if first_visit else (step.get("place_id") or f"{place_id}_step_{index}"),
+                    "parent_id": place_id, "experience_step": True,
+                    "start": _clock(cursor), "end": _clock(cursor + minutes),
+                    "duration_minutes": minutes, "score": parent["score"] if first_visit else 0}
+            parent_recorded = parent_recorded or first_visit
+            if step["type"] == "travel":
+                item.update(status="estimated", sightseeing_walk=step.get("mode") == "walk", transfers=0,
+                            origin_id=place_id, destination_id=candidate.get("exit_id", place_id))
+            if timed and timed_is_fixed and cursor + minutes > _minutes(timed["end"]):
+                return {"items": [], "end": current, "error": {"code": "NO_VALID_VISIT_INTERVAL", "subject_id": place_id}}
+            if candidate.get("daylight_exit") and step["type"] in {"visit", "travel"} and candidate.get("latitude") is not None and snapshot["trip"].get("timezone"):
+                daylight = _daylight_interval(day, candidate["latitude"], candidate["longitude"], snapshot["trip"]["timezone"])
+                if daylight and cursor + minutes > daylight[1] - 20:
+                    return {"items": [], "end": current, "error": {"code": "DAYLIGHT_EXIT_MISSED", "subject_id": place_id}}
+            member = step.get("place_id")
+            opening = _planning_fact(snapshot, member, "opening_interval") if member else None
+            if opening and (not _open_on(opening, day) or not any(_inside(item, interval) for interval in _opening_windows(opening, day))):
+                return {"items": [], "end": current, "error": {"code": "NO_VALID_VISIT_INTERVAL", "subject_id": member}}
+            role = step.get("meal_role")
+            if role:
+                bounds = {"breakfast": ("07:00", "09:30"), "lunch": ("11:30", "14:00"), "dinner": ("17:30", "21:00")}[role]
+                if cursor < _minutes(bounds[0]) or cursor + minutes > _minutes(bounds[1]):
+                    return {"items": [], "end": current, "error": {"code": "MANDATORY_MEAL_WINDOW_MISSED", "subject_id": role}}
+                item["kind"] = role
+            segment.append(item)
+            cursor += minutes
+        end = cursor
     return {"items": segment, "end": end, "error": None}
 
 
@@ -1548,7 +1767,7 @@ def _operational_layout(
     selected_meals = sum(item.get("kind") == "meal" for item in sequence)
     lunch = _meal_window(snapshot) or {"start": "11:30", "end": "13:30"}
     slots = [
-        ("breakfast", "07:00", "09:30", 45),
+        ("breakfast", "07:00", "10:30" if _minutes(window["start"]) >= 9 * 60 + 30 else "09:30", 45),
         ("lunch", lunch["start"], lunch["end"], 60),
         ("dinner", "17:30", "21:00", 60),
     ]
@@ -1557,7 +1776,12 @@ def _operational_layout(
     if selected_meals > 1:
         slots.pop(-1)
     meals = []
+    consumed = {role for candidate in sequence for role in (
+        [step.get("meal_role") for step in candidate["steps"] if step.get("meal_role")]
+        if candidate.get("steps") else candidate.get("meal_roles", []))}
     for kind, start, end, duration in slots:
+        if kind in consumed:
+            continue
         earliest = max(body_start, _minutes(start))
         latest_end = min(body_end, _minutes(end))
         if earliest + duration <= latest_end:
@@ -1689,6 +1913,22 @@ def _timing_miss_minutes(
     return missed
 
 
+def _fixed_step_timing(candidate: dict[str, Any], step: dict[str, Any]) -> bool:
+    return bool(candidate.get("fixed_event")) or any(word in step.get("name", "").casefold() for word in ("countdown", "fireworks", "after illumination", "night view", "blue hour"))
+
+
+def _day_preference_cost(snapshot: dict[str, Any], day: dict[str, Any], visits: list[dict[str, Any]], travel: list[dict[str, Any]]) -> int:
+    parents = [item for item in visits if not item.get("parent_id") or item["subject_id"] == item["parent_id"]]
+    cost = sum(30 for item in parents if item.get("proposed_date") and item["proposed_date"] != day["date"])
+    windows = snapshot.get("trip", {}).get("usable_windows", [])
+    position = next((index for index, window in enumerate(windows) if window["date"] == day["date"]), None)
+    if position is not None and position > 0 and _minutes(windows[position - 1]["end"]) > 24 * 60:
+        cost += sum(240 for item in parents if item.get("effort") == "high")
+    activity = sum(item["duration_minutes"] for item in visits) + sum(item["duration_minutes"] for item in travel if item.get("sightseeing_walk"))
+    limit = 360 if position is not None and _minutes(windows[position]["end"]) > 24 * 60 else 450
+    return cost + max(0, activity - limit)
+
+
 def _day_metrics(
     snapshot: dict[str, Any],
     day: dict[str, Any],
@@ -1719,13 +1959,13 @@ def _day_metrics(
     plain_walk = sum(
         item.get("walking_minutes", 0)
         for item in travel
-        if not item.get("experience_evidence")
+        if not item.get("experience_evidence") and not item.get("sightseeing_walk")
     )
     rewarding_walk = sum(
         item.get("walking_minutes", 0)
         for item in travel
-        if item.get("experience_evidence")
-    )
+        if item.get("experience_evidence") or item.get("sightseeing_walk")
+    ) + sum(item.get("walking_minutes", 0) for item in visits)
     item_warnings = []
     for item in travel:
         if item.get("claimed_experience") and not item.get("experience_supported_at_time"):
@@ -1736,7 +1976,8 @@ def _day_metrics(
         "scheduled_visits": len(visits),
         "visit_minutes": sum(item["duration_minutes"] for item in visits),
         "travel_minutes": sum(item["duration_minutes"] for item in travel),
-        "walking_minutes": sum(item.get("walking_minutes", 0) for item in travel),
+        "dead_travel_minutes": sum(item["duration_minutes"] for item in travel if not item.get("sightseeing_walk")),
+        "walking_minutes": sum(item.get("walking_minutes", 0) for item in travel + visits),
         "plain_walking_minutes": plain_walk,
         "maximum_plain_walking_minutes_for_day": plain_walk,
         "rewarding_walking_minutes": rewarding_walk,
@@ -1747,9 +1988,9 @@ def _day_metrics(
         "meal_minutes": sum(item["duration_minutes"] for item in meals),
         "preparation_minutes": sum(item["duration_minutes"] for item in preparation),
         "logistics_minutes": sum(item["duration_minutes"] for item in logistics),
-        "timing_miss_minutes": _timing_miss_minutes(snapshot, day, visits, facts),
+        "timing_miss_minutes": _timing_miss_minutes(snapshot, day, visits, facts) + _day_preference_cost(snapshot, day, visits, travel),
         "maximum_walking_minutes_per_leg": max(
-            (item.get("walking_minutes", 0) for item in travel), default=0
+            (item.get("walking_minutes", 0) for item in travel if not item.get("sightseeing_walk")), default=0
         ),
         "maximum_boarding_buffer_minutes": max(
             (item.get("boarding_buffer_minutes", 0) for item in travel), default=0
@@ -1781,6 +2022,7 @@ def _combine_day_metrics(per_day: list[dict[str, Any]]) -> dict[str, Any]:
     scheduled_visits = 0
     visit_minutes = 0
     travel_minutes = 0
+    dead_travel_minutes = 0
     walking_minutes = 0
     plain_walking_minutes = 0
     worst_plain_walk = 0
@@ -1802,6 +2044,7 @@ def _combine_day_metrics(per_day: list[dict[str, Any]]) -> dict[str, Any]:
         scheduled_visits += entry["scheduled_visits"]
         visit_minutes += entry["visit_minutes"]
         travel_minutes += entry["travel_minutes"]
+        dead_travel_minutes += entry["dead_travel_minutes"]
         walking_minutes += entry["walking_minutes"]
         plain_walking_minutes += entry["plain_walking_minutes"]
         day_plain = entry["maximum_plain_walking_minutes_for_day"]
@@ -1846,6 +2089,7 @@ def _combine_day_metrics(per_day: list[dict[str, Any]]) -> dict[str, Any]:
         "scheduled_visits": scheduled_visits,
         "visit_minutes": visit_minutes,
         "travel_minutes": travel_minutes,
+        "dead_travel_minutes": dead_travel_minutes,
         "walking_minutes": walking_minutes,
         "plain_walking_minutes": plain_walking_minutes,
         "maximum_plain_walking_minutes_per_day": worst_plain_walk,
@@ -1903,7 +2147,7 @@ def _objective(
         "must_do_unscheduled": len(must - scheduled_ids),
         "comfort_violations": comfort,
         "experience_value": round(experience, 2),
-        "dead_travel_minutes": metrics["travel_minutes"],
+        "dead_travel_minutes": metrics["dead_travel_minutes"],
         "timing_miss_minutes": metrics["timing_miss_minutes"],
         "lower_priority_scheduled": lower,
     }
@@ -1949,7 +2193,9 @@ def _greedy_sequences(
                 )
                 if choice is None or score < choice[0]:
                     choice = (score, proposal)
-        if choice is None:
+        unchanged = _search_objective(snapshot, sequences, skipped | {_candidate_id(candidate)}, ordered[:index + 1], config,
+                                      route_index=route_index, day_cache=day_cache)
+        if choice is None or (candidate.get("priority") != "must_do" and unchanged <= choice[0]):
             skipped.add(_candidate_id(candidate))
         else:
             sequences = choice[1]
@@ -1980,8 +2226,7 @@ def _greedy_baseline(
         objective["hard_violations"],
         objective["must_do_unscheduled"],
         objective["comfort_violations"],
-        -objective["experience_value"],
-        objective["dead_travel_minutes"] + 2 * objective["timing_miss_minutes"],
+        objective["dead_travel_minutes"] + 2 * objective["timing_miss_minutes"] + EMPTY_DAY_MINUTES * _empty_day_count(built["days"]) - (2 if config["id"] == "relaxed" else 4) * objective["experience_value"],
         -objective["lower_priority_scheduled"],
     ]
     return {
@@ -2128,13 +2373,12 @@ def _search_objective(
         missing_route_edges,
         must_missing,
         soft,
-        -experience,
         # One term, not two, because an empty day is worth *some* travel and not any
         # amount of it — see `EMPTY_DAY_MINUTES`. Ranked above this are the things no
         # amount of convenience may buy: a broken rule, a missing route, a must-do left
         # out, an unapproved comfort overage, a place dropped.
-        metrics["travel_minutes"] + EMPTY_DAY_MINUTES * empty_days
-        + 2 * metrics["timing_miss_minutes"],
+        metrics["dead_travel_minutes"] + EMPTY_DAY_MINUTES * empty_days
+        + 2 * metrics["timing_miss_minutes"] - (2 if config["id"] == "relaxed" else 4) * experience,
         -lower,
         len(skipped),
         tuple(cids for _, cids in signature)
@@ -2345,12 +2589,12 @@ def _opening_overlaps_trip(
     fact = _planning_fact(snapshot, _candidate_id(candidate), "opening_interval")
     if not fact:
         return True
-    duration = _duration(candidate, config["duration"])
-    opening = fact["value"]
+    duration = candidate["steps"][0]["duration_minutes"] if candidate.get("steps") else _duration(candidate, config["duration"])
     return any(
         max(_minutes(window["start"]), _minutes(opening["start"])) + duration
         <= min(_minutes(window["end"]), _minutes(opening["end"]))
         for window in snapshot["trip"]["usable_windows"]
+        for opening in _opening_windows(fact, window["date"])
     )
 
 
@@ -2384,9 +2628,7 @@ def _earliest_visit_start(
     opening = _planning_fact(snapshot, place_id, "opening_interval", facts)
     if not _open_on(opening, day):
         return None
-    if opening:
-        start = max(start, _minutes(opening["value"]["start"]))
-        latest = min(latest, _minutes(opening["value"]["end"]))
+    intervals = _opening_windows(opening, day) if opening else [{"start": _clock(start), "end": _clock(latest)}]
     show = _verified_fact(snapshot, place_id, "show_intervals", facts)
     if show:
         starts = [
@@ -2408,6 +2650,18 @@ def _earliest_visit_start(
     if meal:
         start = max(start, _minutes(meal["start"]))
         latest = min(latest, _minutes(meal["end"]))
+    target_day = candidate.get("scheduled_date")
+    if target_day and target_day != day:
+        return None
+    preferred = candidate.get("preferred_interval")
+    if preferred:
+        start = max(start, _minutes(preferred["start"]))
+        if candidate.get("fixed_event") or not candidate.get("duration_basis"):
+            latest = min(latest, _minutes(preferred["end"]))
+    for role in ([] if candidate.get("steps") else candidate.get("meal_roles", [])):
+        meal_interval = {"breakfast": ("07:00", "09:30"), "lunch": ("11:30", "14:00"), "dinner": ("17:30", "21:00")}[role]
+        start = max(start, _minutes(meal_interval[0]))
+        latest = min(latest, _minutes(meal_interval[1]))
     lock = _lock_for(snapshot, place_id)
     if lock:
         if lock.get("date") and lock["date"] != day:
@@ -2419,7 +2673,16 @@ def _earliest_visit_start(
             start = locked_start
         if lock.get("end"):
             latest = min(latest, _minutes(lock["end"]))
-    return start if start + duration <= latest else None
+    opening_duration = candidate["steps"][0]["duration_minutes"] if candidate.get("steps") else duration
+    starts = [max(start, _minutes(interval["start"])) for interval in intervals
+              if max(start, _minutes(interval["start"])) + opening_duration <= _minutes(interval["end"])
+              and max(start, _minutes(interval["start"])) + duration <= latest]
+    return min(starts) if starts else None
+
+
+def _opening_windows(fact: dict[str, Any], day: str) -> list[dict[str, str]]:
+    by_date = fact.get("intervals_by_date")
+    return by_date.get(day, []) if by_date is not None else [fact["value"]]
 
 
 def _fact_index(snapshot: dict[str, Any]) -> dict[tuple[Any, Any], dict[str, Any]]:
@@ -2689,7 +2952,8 @@ def _route_choice_key(route: dict[str, Any], walk_limit: int) -> tuple[int, int,
     return (
         max(0, walking - walk_limit),
         int(route.get("duration_minutes", 0)) + 2 * max(0, walking - 20)
-        + 15 * max(0, int(route.get("transfers") or 0) - 1),
+        + 35 * max(0, int(route.get("transfers") or 0) - 1)
+        + (20 if route.get("mode") == "taxi" else 0),
         walking,
         int(route.get("duration_minutes", 0)),
         str(route.get("mode")),
@@ -3303,6 +3567,8 @@ def _window_for(
         ).isoformat()
         if day == preparation_date:
             return {"date": day, "start": "19:00", "end": "20:30"}
+    if snapshot["trip"].get("journey_legs"):
+        return {"date": day, "start": "00:00", "end": "48:00"}
     raise ValueError(f"No usable window for {day}")
 
 
@@ -3464,7 +3730,7 @@ def _minutes(value: str) -> int:
         result = int(hour) * 60 + int(minute)
     except (AttributeError, TypeError, ValueError) as error:
         raise ValueError(f"Invalid local time: {value!r}") from error
-    if not (0 <= result <= 24 * 60) or int(minute) >= 60:
+    if not (0 <= result <= 48 * 60) or int(minute) >= 60:
         raise ValueError(f"Invalid local time: {value!r}")
     return result
 

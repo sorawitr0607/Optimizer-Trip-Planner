@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
-from datetime import date, time
+from datetime import date, datetime, time
 from typing import Any
 
 
@@ -118,6 +118,10 @@ def build_setup_payload(
     active_end: str | None = None,
     accommodation_status: str = "not_booked",
     confirmed: bool = False,
+    complete_trip: bool = False,
+    planning_brief: str = "",
+    day_preferences: Sequence[Mapping[str, Any]] = (),
+    journey_legs: Sequence[Mapping[str, Any]] = (),
 ) -> dict[str, Any]:
     if planning_mode not in {"explore_first", "ready_to_schedule"}:
         raise ValueError(f"Unsupported planning mode: {planning_mode}")
@@ -156,7 +160,9 @@ def build_setup_payload(
         group_weights.update({member["traveller_id"]: member_weight for member in members})
 
     return {
-        "schema_version": 1,
+        "schema_version": 2,
+        "planning": {"complete_trip": bool(complete_trip), "brief": str(planning_brief).strip()[:2000],
+                     "day_preferences": _day_preferences(day_preferences), "journey_legs": _journey_legs(journey_legs)},
         "planning_mode": planning_mode,
         "trip_basics": {
             "start_date": start,
@@ -233,3 +239,35 @@ def _time_text(value: str | None, field: str) -> str | None:
         return time.fromisoformat(value).strftime("%H:%M")
     except ValueError as error:
         raise ValueError(f"{field} must use HH:MM") from error
+
+
+def _day_preferences(values: Sequence[Mapping[str, Any]]) -> list[dict[str, str]]:
+    result = []
+    for item in values:
+        day = _date_text(item.get("date"), "date")
+        start = _time_text(item.get("start"), "start")
+        end = _time_text(item.get("end"), "end")
+        if not day or not start or not end or start == end:
+            raise ValueError("A special day needs its date, start and end")
+        result.append({"date": day, "start": start, "end": end, "purpose": str(item.get("purpose") or "")[:240]})
+    if len({item["date"] for item in result}) != len(result):
+        raise ValueError("Special day dates must be unique")
+    return result
+
+
+def _journey_legs(values: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    result = []
+    for index, item in enumerate(values):
+        start, end = (datetime.fromisoformat(str(item.get(field) or "")) for field in ("starts_at", "ends_at"))
+        if start.utcoffset() is None or end.utcoffset() is None or start >= end:
+            raise ValueError("Journey legs need timezone-aware timestamps and a positive duration")
+        name = str(item.get("name") or "").strip()
+        if not name:
+            raise ValueError("Journey legs need a name")
+        result.append({"id": f"journey_{index}", "name": name[:160], "starts_at": start.isoformat(), "ends_at": end.isoformat(),
+                       "origin": str(item.get("origin") or "")[:160], "destination": str(item.get("destination") or "")[:160],
+                       "kind": str(item.get("kind") or "flight"), "role": str(item.get("role") or "connection")})
+    ordered = sorted(result, key=lambda item: datetime.fromisoformat(item["starts_at"]))
+    if any(datetime.fromisoformat(left["ends_at"]) > datetime.fromisoformat(right["starts_at"]) for left, right in zip(ordered, ordered[1:])):
+        raise ValueError("Fixed journey legs cannot overlap")
+    return ordered

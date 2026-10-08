@@ -70,8 +70,24 @@ export interface SetupMember {
   nationality?: string | null;
 }
 
+export interface JourneyLeg {
+  name: string;
+  starts_at: string;
+  ends_at: string;
+  origin: string;
+  destination: string;
+  kind: string;
+  role: string;
+}
+
 export interface SetupPayload {
   planning_mode?: string;
+  planning?: {
+    complete_trip?: boolean;
+    brief?: string;
+    day_preferences?: { date: string; start: string; end: string; purpose: string }[];
+    journey_legs?: JourneyLeg[];
+  };
   trip_basics?: {
     start_date?: string | null;
     end_date?: string | null;
@@ -396,6 +412,9 @@ export interface PlaceInsight {
 }
 
 export interface PlanItem {
+  subject_id?: string;
+  parent_id?: string;
+  priority?: string;
   type: string;
   start: string;
   end: string;
@@ -403,10 +422,16 @@ export interface PlanItem {
   name?: string;
   names?: Names;
   reason?: string;
+  sources?: string[];
+  alternative?: string;
+  duration_basis?: string;
+  starts_at?: string;
+  ends_at?: string;
 }
 
 export interface PlanDay {
   date: string;
+  purpose?: string;
   items: PlanItem[];
 }
 
@@ -458,6 +483,7 @@ export interface PlanPreview {
    *  re-deriving a second opinion that could disagree with the plan. */
   optimizer_input: {
     data: {
+      trip?: { research_status?: string; research_reason?: string };
       candidates?: {
         id?: string;
         name?: string;
@@ -509,6 +535,10 @@ export interface ExportPlanItem {
   boarding_buffer_minutes?: number;
   sightseeing_walk?: boolean;
   notes?: string;
+  sources?: string[];
+  alternative?: string;
+  starts_at?: string;
+  ends_at?: string;
   from_name?: string | null;
   to_name?: string | null;
   reason?: string | null;
@@ -549,6 +579,7 @@ export interface ExportFallback {
 
 export interface ExportDay {
   date: string;
+  purpose?: string;
   start: string;
   end: string;
   items: ExportPlanItem[];

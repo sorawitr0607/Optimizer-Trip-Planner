@@ -119,18 +119,56 @@ Every trip flows through ten real, interactive screens:
 The timetable labels unfilled hours as **Free time**, including waits longer than
 90 minutes before a meal or visit. Shorter waits before those activities remain
 buffers. On sightseeing days, the return to the accommodation follows the last
-planned activity; an empty day has no return trip. The planner leaves
-unscheduled time visible rather than adding places that were not selected.
+planned activity; an empty day has no return trip. The planner leaves unscheduled time visible. Complete-trip planning can suggest
+complementary experiences; the owner can change their priority before activation.
 With a confirmed accommodation location, the timetable uses one routed return
 instead of a fixed return allowance. The optimizer compares feasible day and
 stop positions to reduce cross-city travel, favors shorter transfer walks and
 fewer changes when route evidence offers alternatives, and prefers daylight for
 parks and gardens. An officially confirmed best-time interval can guide timing;
-these preferences do not override opening hours or add an unselected event.
-Visit lengths remain editable category estimates, and places without usable
-route evidence remain visible as unresolved rather than being silently removed.
-Walking totals count only the routed legs between stops; time spent walking
-inside a park, market, or museum is not estimated.
+these preferences do not override opening hours. Complete-trip research supplies
+activity-specific duration bounds, meal roles, connected excursion steps, reasons
+and source links. Legacy trips keep category estimates until this mode is enabled.
+Places without usable route evidence remain visible as unresolved. Walking totals
+include routed legs and explicit walks inside connected excursions; walking inside
+ordinary venue visits is not estimated.
+
+### Complete-trip planning
+
+Choose true Must-do anchors in Places, enable complete-trip planning in Setup,
+and build once. Source-backed AI research recommends supporting experiences,
+including simple alternatives for weather, queues or fatigue. Recommendations
+remain provisional: a cited recommendation does not verify opening hours, access
+or transport. Existing saved priorities are preserved. The research uses the
+configured OpenAI model, charges an estimated US$0.50 per call against the global
+paid allowance, caches unchanged inputs for seven days, and permits one repair
+call when an anchor cannot fit. Provider or budget failures leave an explicit
+unavailable-research notice and the existing deterministic planner remains usable.
+
+Setup can record a dated overnight window and booked journey legs with UTC-offset
+timestamps. The solver protects real commitments, supports disjoint/date-specific
+opening intervals, counts a market meal once, and routes a connected excursion
+from its entry to its exit. Overnight events carry real next-day timestamps and
+reserve eight hours of recovery afterward. Review can change researched priorities
+and individual visit durations; a grouped excursion retains its ordered steps.
+Activation independently validates the frozen input and schedule before export.
+The weighted search balances timing, value, travel and daily effort; it is bounded
+and does not claim a globally optimal holiday.
+
+For Taiwan, build the ignored worker feed from an extracted TDX download:
+
+```bash
+uv run --locked python scripts/build_taiwan_transit_feed.py gtfs
+deploy/macos/install.sh restart
+```
+
+The subset includes metro, Taipei/Ruifang/Pingxi rail and bus routes 849/965 where
+source rows exist. Published calendars and frequency headways are read. Untimed
+bus stops use an explicitly labeled topology estimate (20 km/h, road factor 1.4,
+one minute per stop); missing directions are not invented. Feed dates outside
+published coverage remain provisional and no exact December/New Year departure
+is claimed. Road taxi estimates can compete with long walks or multiple transfers.
+The local feed is not bundled into Vercel.
 
 A long wait says where it has got to rather than only that it is running. Discovery and
 the draft build are queued jobs, so the worker reports the stages it has finished — the

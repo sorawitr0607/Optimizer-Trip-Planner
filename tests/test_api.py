@@ -113,7 +113,7 @@ class DispatchContractTest(unittest.TestCase):
         # ledger rows, so what is reachable over the socket has to be deliberate.
         # The plan review added review_plan: one paid model call returning typed
         # suggestions, applying nothing itself.
-        self.assertEqual(95, len(ACTIONS))  # ... +get_ranked_discovery, resolve_default_terminal, review_plan
+        self.assertEqual(96, len(ACTIONS))  # ... +get_ranked_discovery, resolve_default_terminal, review_plan
         self.assertIn("confirm_default_opening_windows", ACTIONS)
         self.assertIn("refresh_assumed_windows", ACTIONS)
         self.assertIn("active_plan_drift", ACTIONS)

@@ -9,6 +9,37 @@ all of it live in `CLAUDE.md` under "Rules that bind new work".
 Read this when you need to know *why* something is the way it is and the ticket in
 `.wayfinder/tickets/` does not say. Do not read it top-to-bottom before starting work.
 
+## Complete-trip planning, 2026-10-08
+
+The Taiwan reference changed the planning unit from isolated venue slots to coherent
+experiences. Complete-trip mode researches sourced duration bounds, distinct repeated
+venue experiences, meals, connected groups with entry/exit, reasons and simple
+alternatives. The deterministic solver balances timing and geographic travel with
+experience value, preserves anchors, supports dated/disjoint openings and overnight
+windows, and carries booked journey timestamps through validation and exports.
+Review edits are persisted before freezing; activation independently rechecks the plan.
+Legacy trips retain their priorities and can enable the new mode in Setup.
+
+The worker's bounded TDX subset now includes regional rail and buses 849/965, reading
+calendars and frequency headways. Intermediate bus times missing from the source are
+explicit topology estimates; unavailable directions remain unavailable. Taxi road
+estimates compete with transfer walking and repeated changes. Published feed coverage
+ends before the December benchmark: these are planning estimates, not verified
+future departures. Walking totals now include explicitly modeled excursion walks,
+including walks represented inside activity steps, while ordinary venue walking is
+still unknown.
+
+Validation: 827 Python tests, 232 web tests, 27 historic optimizer fixtures across
+three variants, graph integrity, egress boundaries, typecheck and lint passed.
+Screen-baseline comparison was skipped because no captured current set was available;
+the new setup was inspected manually with cmux and its optional journey fields were
+filled and saved. The repaired live-research benchmark scheduled all nine selected
+anchors across all three provisional variants, preserving the countdown, night Jiufen,
+recovery morning and hike/Raohe sequence. Its travel times were simulated conservative
+taxi estimates: it demonstrates scheduling behavior, not live route quality or a
+claim of globally optimal recommendations. Provider failures stay visible and paid
+research uses the existing allowance, seven-day cache and one repair pass.
+
 ## Owner testing and build rounds, 2026-08-13 to 2026-08-19
 
 ## Owner testing, 2026-08-13/14: what it found and what it changed

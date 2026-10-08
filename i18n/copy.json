@@ -216,7 +216,7 @@
       "SHOW_TYPE_UNAVAILABLE_AT_TIME": "The requested show type is unavailable during the available time",
       "TOURIST_TRAP_RISK": "This choice has a tourist-trap risk",
       "TRANSPORT_MODE_PROHIBITED": "This transport mode is not allowed",
-      "WEAK_VALUE_FOR_EFFORT": "The expected value does not justify the effort",
+      "WEAK_VALUE_FOR_EFFORT": "Kept flexible: its extra value does not justify the journey or lost time.",
       "accommodation_query_missing": "Enter the booked accommodation name or address",
       "accommodation_not_found": "We could not locate that base. Try a more specific name or choose an area.",
       "terminal_not_found": "We could not locate that airport or station near this destination. Try its full name.",
@@ -305,7 +305,10 @@
       "QUEUE_LONGER_THAN_ACCEPTED": "The queue here is longer than you said you would accept.",
       "not_your_trip": "This trip belongs to someone else on this deployment. Your own trips are on the home screen.",
       "place_not_in_provider": "Google has no record of this place, so there is no live gallery, rating or reviews to load. The free OpenStreetMap details and its position on the map are all that exist for it — asking again will not find more.",
-      "NO_DAY_LONG_ENOUGH": "No single day of the trip is long enough for this place"
+      "NO_DAY_LONG_ENOUGH": "No single day of the trip is long enough for this place",
+      "invalid_choice": "Choose a supported priority.",
+      "invalid_duration": "Choose a duration from 5 to 900 minutes.",
+      "group_duration_needs_step_edit": "This connected experience has timed steps. Edit its steps to change the total duration."
     },
     "th": {
       "broader_replan_required": "ต้องวางแผนใหม่ในภาพกว้าง — วันนี้รับเพิ่มไม่ไหว",
@@ -377,7 +380,7 @@
       "SHOW_TYPE_UNAVAILABLE_AT_TIME": "ไม่มีรอบการแสดงที่ต้องการในเวลาที่ใช้ได้",
       "TOURIST_TRAP_RISK": "มีความเสี่ยงเป็นกับดักนักท่องเที่ยว",
       "TRANSPORT_MODE_PROHIBITED": "วิธีเดินทางนี้ไม่อนุญาต",
-      "WEAK_VALUE_FOR_EFFORT": "คุณค่าที่คาดหวังไม่คุ้มแรงเดินทาง",
+      "WEAK_VALUE_FOR_EFFORT": "เก็บไว้เป็นตัวเลือก เพราะคุณค่าที่เพิ่มยังไม่คุ้มกับการเดินทางและเวลาที่เสียไป",
       "accommodation_query_missing": "กรอกชื่อหรือที่อยู่ของที่พักที่จองแล้ว",
       "accommodation_not_found": "ไม่พบตำแหน่งฐานนี้ ลองระบุชื่อให้ชัดขึ้นหรือเลือกย่าน",
       "terminal_not_found": "ไม่พบสนามบินหรือสถานีใกล้จุดหมาย ลองใช้ชื่อเต็ม",
@@ -466,7 +469,10 @@
       "QUEUE_LONGER_THAN_ACCEPTED": "คิวที่นี่นานกว่าที่คุณระบุว่ารับได้",
       "not_your_trip": "ทริปนี้เป็นของผู้ใช้อื่นในระบบนี้ ทริปของคุณอยู่ที่หน้าแรก",
       "place_not_in_provider": "Google ไม่มีข้อมูลของสถานที่นี้ จึงไม่มีแกลเลอรี คะแนน หรือรีวิวสดให้โหลด มีเพียงข้อมูลฟรีจาก OpenStreetMap และตำแหน่งบนแผนที่ การกดซ้ำจะไม่พบข้อมูลเพิ่ม",
-      "NO_DAY_LONG_ENOUGH": "ไม่มีวันใดในทริปที่ยาวพอสำหรับที่นี่"
+      "NO_DAY_LONG_ENOUGH": "ไม่มีวันใดในทริปที่ยาวพอสำหรับที่นี่",
+      "invalid_choice": "เลือกความสำคัญที่รองรับ",
+      "invalid_duration": "เลือกระยะเวลา 5 ถึง 900 นาที",
+      "group_duration_needs_step_edit": "ประสบการณ์นี้มีขั้นตอนที่ต่อเนื่องกัน ต้องแก้เวลาของแต่ละขั้นตอนเพื่อเปลี่ยนเวลารวม"
     }
   },
   "REJECTION_TEXT": {

@@ -132,6 +132,8 @@ export function DayStops({
           const details = [
             item.address ? ["stop_address", item.address] : null,
             item.notes ? ["stop_notes", item.notes] : null,
+            item.reason ? ["reason", item.reason] : null,
+            item.alternative ? ["stop_notes", item.alternative] : null,
             item.origin_name && item.destination_name
               ? ["stop_route", `${item.origin_name} → ${item.destination_name}`]
               : null,
@@ -201,7 +203,7 @@ export function DayStops({
                 <button
                   aria-expanded={expanded}
                   className="day-stop-open"
-                  disabled={!details.length && !photo}
+                  disabled={!details.length && !photo && !item.sources?.length}
                   onClick={() => setOpen((current) => ({ ...current, [item.key]: !expanded }))}
                   type="button"
                 >
@@ -242,12 +244,13 @@ export function DayStops({
                   {photo && !picture?.nearby ? (
                     <img alt="" className="day-stop-thumb" loading="lazy" src={photo} />
                   ) : null}
-                  {details.length || photo ? <span className="day-stop-chev">›</span> : null}
+                  {details.length || photo || item.sources?.length ? <span className="day-stop-chev">›</span> : null}
                 </button>
               </div>
 
               {expanded ? (
                 <div className="day-stop-detail">
+                  {item.sources?.map((url, index) => <a key={url} href={url} target="_blank" rel="noreferrer">{language === "th" ? "แหล่งข้อมูล" : "Source"} {index + 1} </a>)}
                   {details.map(([label, value]) => (
                     <p className="day-stop-line" key={label}>
                       <span className="day-stop-k">{copy(label, language)}</span>

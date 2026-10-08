@@ -67,6 +67,7 @@ ACTIONS = (
     "check_paid_call",
     "enrich_place_card",
     "generate_plan_preview",
+    "update_preview_experience",
     "get_plan_preview",
     "activate_plan_preview",
     # WF-039. The acceptance path was dead by construction; these are what make

@@ -187,6 +187,14 @@ export function OptimizePage() {
     queryKey: ["setup", tripId],
     queryFn: () => rpc<SetupDraft | null>("get_setup", { trip_id: tripId }),
   });
+  const editExperience = useMutation({
+    mutationFn: (edit: { place_id: string; priority: string; duration_minutes?: number }) => rpc<PlanPreview>("update_preview_experience", { trip_id: tripId, ...edit }),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["plan_preview", tripId], updated);
+      void queryClient.invalidateQueries({ queryKey: ["candidate_choices", tripId] });
+      void queryClient.invalidateQueries({ queryKey: ["comfort_tradeoffs", tripId] });
+    },
+  });
   const preview = useQuery({
     queryKey: ["plan_preview", tripId],
     queryFn: () => rpc<PlanPreview | null>("get_plan_preview", { trip_id: tripId }),
@@ -807,6 +815,7 @@ export function OptimizePage() {
                 : ""}
             </summary>
             <p className="setup-hint">{copy("assumptions_help", language)}</p>
+            {preview.data?.optimizer_input.data.trip?.research_status === "unavailable" ? <p role="status">{language === "th" ? "การค้นคว้าประสบการณ์ยังไม่พร้อม แผนนี้ใช้สถานที่ที่คุณเลือกไว้" : "Experience research was unavailable. This draft uses your chosen places."}</p> : null}
             {assumptions.length || gaps.length ? (
               <ul>
                 {assumptions.map((line) => {
@@ -920,6 +929,7 @@ export function OptimizePage() {
             </p>
           ) : null}
 
+          {editExperience.isError ? <p role="alert">{editExperience.error.message}</p> : null}
           {variant.warnings.length > 0 ? (
             <details className="optimize-warnings" open>
               <summary>{copy("optimizer_warning", language)}</summary>
@@ -1205,6 +1215,7 @@ export function OptimizePage() {
                           })}
                         </span>
                       </summary>
+                      {day.purpose ? <p>{day.purpose}</p> : null}
                       <div className="money-table-scroll">
                         <table className="money-table timeline-table">
                           <thead>
@@ -1241,6 +1252,15 @@ export function OptimizePage() {
                                     which it is. */}
                                 <td>
                                   {item.name ? placeName(item, language, item.name) : ""}
+                                  {item.reason ? <p className="setup-hint">{item.reason}</p> : null}
+                                  {item.alternative ? <p className="setup-hint">{language === "th" ? "ทางเลือก: " : "If needed: "}{item.alternative}</p> : null}
+                                  {item.type === "visit" && item.sources?.length && item.subject_id && (!item.parent_id || item.parent_id === item.subject_id) ? <div>
+                                    <label>{language === "th" ? "ความสำคัญ" : "Priority"}<select disabled={editExperience.isPending} value={item.priority ?? "maybe"} onChange={(event) => editExperience.mutate({ place_id: item.subject_id!, priority: event.target.value })}>
+                                      <option value="must_do">{copy("must_do", language)}</option><option value="interested">{copy("interested", language)}</option><option value="maybe">{copy("maybe", language)}</option><option value="not_for_trip">{language === "th" ? "ไม่ใส่ในทริป" : "Leave out"}</option>
+                                    </select></label>
+                                    {!item.parent_id ? <label>{language === "th" ? "ระยะเวลา (นาที)" : "Duration (minutes)"}<input type="number" min={5} max={900} defaultValue={item.duration_minutes} disabled={editExperience.isPending} onBlur={(event) => { const minutes = Number(event.target.value); if (Number.isInteger(minutes) && minutes >= 5 && minutes <= 900 && minutes !== item.duration_minutes) editExperience.mutate({ place_id: item.subject_id!, priority: item.priority ?? "maybe", duration_minutes: minutes }); }} /></label> : null}
+                                  </div> : null}
+                                  {item.sources?.map((url, sourceIndex) => <a key={url} href={url} target="_blank" rel="noreferrer">{language === "th" ? "แหล่งข้อมูล" : "Source"} {sourceIndex + 1} </a>)}
                                 </td>
                                 <td className="money-num">
                                   {item.duration_minutes} {copy("minutes", language)}

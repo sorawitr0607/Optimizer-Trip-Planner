@@ -33,12 +33,14 @@ They are for deciding whether two places belong in the same day.
 from __future__ import annotations
 
 import csv
+from datetime import date
+from dataclasses import replace
 from io import TextIOWrapper
 from pathlib import Path
 from typing import Any, Iterator
 import zipfile
 
-from .transit import Edge, Journey, Stop, TransitGraph, _station_of
+from .transit import Edge, Journey, Stop, TransitGraph, _station_of, metres
 
 
 # Headway is trips-per-edge over the span the feed actually covers, and the span is
@@ -83,7 +85,13 @@ def _rows(archive: zipfile.ZipFile, name: str) -> Iterator[dict[str, str]]:
 class TransitFeed:
     """A GTFS zip, indexed for repeated origin/destination questions."""
 
-    def __init__(self, path: str | Path) -> None:
+    def __init__(self, path: str | Path, *, service_date: str | None = None) -> None:
+        self.service_date = service_date
+        self.service_coverage: dict[str, str | None] = {"start": None, "end": None}
+        self.route_names: dict[str, str] = {}
+        self.bus_routes: set[str] = set()
+        self.estimated_routes: set[str] = set()
+        self.frequency_waits: dict[str, float] = {}
         self.path = Path(path)
         if not self.path.is_file():
             raise GtfsUnavailable(f"no GTFS feed at {self.path}")
@@ -125,10 +133,30 @@ class TransitFeed:
                     latitude=latitude,
                     longitude=longitude,
                 )
+            if "routes.txt" in archive.namelist():
+                self.route_names = {row["route_id"]: row.get("route_short_name") or row.get("route_long_name") or row["route_id"] for row in _rows(archive, "routes.txt")}
+                self.bus_routes = {row["route_id"] for row in _rows(archive, "routes.txt") if row.get("route_type") == "3"}
+            if "translations.txt" in archive.namelist():
+                for row in _rows(archive, "translations.txt"):
+                    if not row.get("language", "").startswith("en"):
+                        continue
+                    identifier = row.get("record_id")
+                    if row.get("table_name") == "stops" and identifier in self.stops:
+                        self.stops[identifier] = replace(self.stops[identifier], name_en=row.get("translation"))
+                    elif row.get("table_name") == "routes" and identifier in self.route_names:
+                        self.route_names[identifier] = row.get("translation") or self.route_names[identifier]
+            active = self._active_services(archive)
             route_of_trip = {
                 (row.get("trip_id") or "").strip(): (row.get("route_id") or "").strip()
                 for row in _rows(archive, "trips.txt")
+                if active is None or row.get("service_id") in active
             }
+            if "frequencies.txt" in archive.namelist():
+                for row in _rows(archive, "frequencies.txt"):
+                    try:
+                        self.frequency_waits[row["trip_id"]] = float(row["headway_secs"]) / 120
+                    except (KeyError, ValueError):
+                        continue
             self._load_edges(archive, route_of_trip)
         if not self.stops:
             raise GtfsUnavailable(f"{self.path.name} has no stops with coordinates")
@@ -138,6 +166,30 @@ class TransitFeed:
         # on a metro edge can answer a route or establish feed coverage.
         served = {stop_id for pair in self._edges for stop_id in pair}
         self.stops = {stop_id: stop for stop_id, stop in self.stops.items() if stop_id in served}
+
+    def _active_services(self, archive: zipfile.ZipFile) -> set[str] | None:
+        calendars = list(_rows(archive, "calendar.txt")) if "calendar.txt" in archive.namelist() else []
+        exceptions = list(_rows(archive, "calendar_dates.txt")) if "calendar_dates.txt" in archive.namelist() else []
+        starts = [row["start_date"] for row in calendars if row.get("start_date")] + [row["date"] for row in exceptions if row.get("date")]
+        ends = [row["end_date"] for row in calendars if row.get("end_date")] + [row["date"] for row in exceptions if row.get("date")]
+        if starts:
+            self.service_coverage = {"start": min(starts), "end": max(ends)}
+        if not self.service_date or not starts:
+            return None
+        day = date.fromisoformat(self.service_date)
+        value = day.strftime("%Y%m%d")
+        # Outside published coverage, retain the topology as an explicitly provisional estimate.
+        if value < min(starts) or value > max(ends):
+            return None
+        weekday = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")[day.weekday()]
+        active = {row["service_id"] for row in calendars if row.get("start_date", "") <= value <= row.get("end_date", "") and row.get(weekday) == "1"}
+        for row in exceptions:
+            if row.get("date") == value:
+                if row.get("exception_type") == "1":
+                    active.add(row["service_id"])
+                elif row.get("exception_type") == "2":
+                    active.discard(row["service_id"])
+        return active
 
     def _load_edges(
         self, archive: zipfile.ZipFile, route_of_trip: dict[str, str]
@@ -154,11 +206,19 @@ class TransitFeed:
         previous: tuple[str, int] | None = None
         for row in _rows(archive, "stop_times.txt"):
             current_trip = (row.get("trip_id") or "").strip()
+            if current_trip not in route_of_trip:
+                continue
             stop_id = (row.get("stop_id") or "").strip()
             arrival = _seconds(row.get("arrival_time") or "")
             moment = arrival if arrival is not None else _seconds(row.get("departure_time") or "")
             if current_trip != trip_id:
                 trip_id, previous = current_trip, None
+            if moment is None and previous and stop_id in self.stops and route_of_trip[current_trip] in self.bus_routes:
+                left, right = self.stops[previous[0]], self.stops[stop_id]
+                # ponytail: untimed bus topology uses 20 km/h, 1.4 road factor and one minute per stop; replace with published times when available.
+                ride = max(1, round(metres(left.latitude, left.longitude, right.latitude, right.longitude) * 1.4 / 333)) + 1
+                moment = previous[1] + ride * 60
+                self.estimated_routes.add(route_of_trip[current_trip])
             if stop_id not in self.stops or moment is None:
                 previous = None
                 continue
@@ -171,10 +231,13 @@ class TransitFeed:
                     key = (from_stop, stop_id)
                     edge = self._edges.get(key)
                     if edge is None:
-                        self._edges[key] = [ride, 1, route_of_trip.get(current_trip, "")]
+                        self._edges[key] = [ride, 1, route_of_trip.get(current_trip, ""), self.frequency_waits.get(current_trip)]
                     else:
                         edge[0] = min(edge[0], ride)
                         edge[1] += 1
+                        wait = self.frequency_waits.get(current_trip)
+                        if wait is not None:
+                            edge[3] = min(edge[3], wait) if edge[3] is not None else wait
             leaves_at = _seconds(row.get("departure_time") or "") or moment
             previous = (stop_id, leaves_at)
 
@@ -194,7 +257,7 @@ class TransitFeed:
             # is reachable; TransitGraph already charges the transfer and next wait.
             station_of = _station_of(self.stops)
             edges = {}
-            for (origin, destination), (ride, trips, route_id) in self._edges.items():
+            for (origin, destination), (ride, trips, route_id, frequency_wait) in self._edges.items():
                 key = (station_of[origin], station_of[destination])
                 if key[0] == key[1]:
                     continue
@@ -204,7 +267,7 @@ class TransitFeed:
                         MAX_HEADWAY_WAIT_MINUTES,
                         max(
                             MIN_HEADWAY_WAIT_MINUTES,
-                            self.service_minutes / (2.0 * max(1, trips)),
+                            frequency_wait if frequency_wait is not None else self.service_minutes / (2.0 * max(1, trips)),
                         ),
                     ),
                     route_id=route_id,
@@ -225,4 +288,7 @@ class TransitFeed:
         origin: tuple[float, float],
         destination: tuple[float, float],
     ) -> Journey | None:
-        return self.graph.journey(origin=origin, destination=destination)
+        journey = self.graph.journey(origin=origin, destination=destination)
+        if journey and self.estimated_routes.intersection(journey.boarded_routes):
+            return replace(journey, basis="bus_topology_estimate")
+        return journey

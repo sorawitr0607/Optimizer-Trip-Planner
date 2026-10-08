@@ -7,6 +7,7 @@ import {
   ApiError,
   rpc,
   type SetupDraft,
+  type JourneyLeg,
   type SetupVocabulary,
   type Trip,
 } from "../api/client";
@@ -88,6 +89,10 @@ interface Member {
  * five views over one piece of state rather than five requests.
  */
 interface Draft {
+  complete_trip: boolean;
+  planning_brief: string;
+  day_preferences: { date: string; start: string; end: string; purpose: string }[];
+  journey_legs: JourneyLeg[];
   start_date: string | null;
   end_date: string | null;
   arrival_time: string | null;
@@ -107,6 +112,10 @@ interface Draft {
 }
 
 const EMPTY: Draft = {
+  complete_trip: true,
+  planning_brief: "",
+  day_preferences: [],
+  journey_legs: [],
   start_date: null,
   end_date: null,
   arrival_time: null,
@@ -132,6 +141,10 @@ function toDraft(record: SetupDraft | null): Draft {
   const owner = payload.owner ?? {};
   const basics = payload.trip_basics ?? {};
   return {
+    complete_trip: payload.planning?.complete_trip ?? false,
+    planning_brief: payload.planning?.brief ?? "",
+    day_preferences: payload.planning?.day_preferences ?? [],
+    journey_legs: payload.planning?.journey_legs ?? [],
     start_date: basics.start_date ?? null,
     end_date: basics.end_date ?? null,
     arrival_time: basics.arrival_time ?? null,
@@ -548,6 +561,37 @@ export function SetupPage() {
           <p className="setup-hint setup-wide" id="active-hours-help">
             {copy("active_hours_help", language)}
           </p>
+
+          <fieldset className="setup-group setup-wide">
+            <legend className="setup-legend">{language === "th" ? "ให้ช่วยวางทริปอย่างไร" : "How should we plan your trip?"}</legend>
+            <label className="setup-check"><input type="checkbox" checked={values.complete_trip} onChange={(event) => edit({ complete_trip: event.target.checked })} />
+              {language === "th" ? "เลือกจุดที่ต้องไป แล้วให้ช่วยแนะนำประสบการณ์และจัดทริป" : "Choose your must-sees; recommend experiences and build a complete trip"}
+            </label>
+            <p className="setup-hint">{language === "th" ? "เลือก Must do เฉพาะจุดที่ขาดไม่ได้ จุดแนะนำอื่นจะยืดหยุ่นได้" : "Mark only your true anchors as Must do. Other recommendations stay flexible."}</p>
+            <p className="setup-hint">{language === "th" ? "การค้นคว้าด้วย AI ใช้โควตาแบบมีค่าใช้จ่าย ประมาณ US$0.50 ต่อครั้ง และอาจแก้แผนอีกหนึ่งครั้ง ผลเดิมจะถูกใช้ซ้ำ" : "AI research uses the paid allowance: estimated US$0.50 per call, with at most one repair call. Unchanged research is reused."}</p>
+            <label>{language === "th" ? "จุดประสงค์ทริป (ไม่จำเป็น)" : "Trip purpose (optional)"}
+              <input value={values.planning_brief} onChange={(event) => edit({ planning_brief: event.target.value })} placeholder={language === "th" ? "เช่น เคานต์ดาวน์ วิวกลางคืน เที่ยวกับครอบครัว" : "For example: New Year celebrations, night views, family experiences"} />
+            </label>
+            <details><summary>{language === "th" ? "วันที่มีเวลาพิเศษ เช่น เคานต์ดาวน์" : "Special days, such as a countdown night"}</summary>
+              {values.day_preferences.map((day, index) => <fieldset key={index}>
+                <label>{language === "th" ? "วันที่" : "Date"}<input type="date" value={day.date} onChange={(event) => edit({ day_preferences: values.day_preferences.map((entry, position) => position === index ? { ...entry, date: event.target.value } : entry) })} /></label>
+                <label>{language === "th" ? "เริ่ม" : "Start"}<input type="time" value={day.start} onChange={(event) => edit({ day_preferences: values.day_preferences.map((entry, position) => position === index ? { ...entry, start: event.target.value } : entry) })} /></label>
+                <label>{language === "th" ? "จบ (เวลาที่น้อยกว่าเริ่ม = วันถัดไป)" : "End (earlier than start means next day)"}<input type="time" value={day.end} onChange={(event) => edit({ day_preferences: values.day_preferences.map((entry, position) => position === index ? { ...entry, end: event.target.value } : entry) })} /></label>
+                <label>{language === "th" ? "จุดประสงค์" : "Purpose"}<input value={day.purpose} onChange={(event) => edit({ day_preferences: values.day_preferences.map((entry, position) => position === index ? { ...entry, purpose: event.target.value } : entry) })} /></label>
+                <button type="button" onClick={() => edit({ day_preferences: values.day_preferences.filter((_, position) => position !== index) })}>{language === "th" ? "ลบ" : "Remove"}</button>
+              </fieldset>)}
+              <button type="button" onClick={() => edit({ day_preferences: [...values.day_preferences, { date: values.start_date ?? "", start: "09:00", end: "02:00", purpose: "" }] })}>{language === "th" ? "เพิ่มวันพิเศษ" : "Add special day"}</button>
+            </details>
+            <details><summary>{language === "th" ? "เที่ยวบินและการเดินทางที่จองไว้ (ไม่จำเป็น)" : "Booked flights and connections (optional)"}</summary>
+              <p className="setup-hint">{language === "th" ? "เวลาแต่ละสนามบินพร้อมเขตเวลา เช่น 2026-12-29T12:40+07:00" : "Use each airport’s local date, time and UTC offset, for example 2026-12-29T12:40+07:00."}</p>
+              {values.journey_legs.map((leg, index) => <fieldset key={index}>
+                {(["name", "origin", "destination", "starts_at", "ends_at"] as const).map((field) => <label key={field}>{({ name: language === "th" ? "ชื่อเที่ยวบิน / การเดินทาง" : "Flight / transfer name", origin: language === "th" ? "จาก" : "From", destination: language === "th" ? "ถึง" : "To", starts_at: language === "th" ? "เวลาออกพร้อมเขตเวลา" : "Departure with UTC offset", ends_at: language === "th" ? "เวลาถึงพร้อมเขตเวลา" : "Arrival with UTC offset" })[field]}<input value={leg[field]} onChange={(event) => edit({ journey_legs: values.journey_legs.map((entry, position) => position === index ? { ...entry, [field]: event.target.value } : entry) })} /></label>)}
+                <label>{language === "th" ? "ช่วงของทริป" : "Trip leg"}<select value={leg.role} onChange={(event) => edit({ journey_legs: values.journey_legs.map((entry, position) => position === index ? { ...entry, role: event.target.value } : entry) })}><option value="connection">{language === "th" ? "ต่อเครื่อง / เดินทางต่อ" : "Connection"}</option><option value="arrival">{language === "th" ? "ถึงเมืองปลายทาง" : "Destination arrival"}</option><option value="departure">{language === "th" ? "ออกจากเมืองปลายทาง" : "Destination departure"}</option></select></label>
+                <button type="button" onClick={() => edit({ journey_legs: values.journey_legs.filter((_, position) => position !== index) })}>{language === "th" ? "ลบ" : "Remove"}</button>
+              </fieldset>)}
+              <button type="button" onClick={() => edit({ journey_legs: [...values.journey_legs, { name: "", starts_at: "", ends_at: "", origin: "", destination: "", kind: "flight", role: "connection" }] })}>{language === "th" ? "เพิ่มเที่ยวบิน / การเดินทาง" : "Add flight / transfer"}</button>
+            </details>
+          </fieldset>
 
           <fieldset className="setup-group setup-wide">
             <legend className="setup-legend">{copy("group_transit", language)}</legend>
