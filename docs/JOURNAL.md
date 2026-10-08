@@ -6632,3 +6632,34 @@ workbook's cached and formula-based buffer totals matched on every day. Remainin
 free periods are still real gaps: filling them requires more selected places or a
 shorter day window. The full project check passed 12 of 13 stages (812 Python and
 232 web tests); screen baselines were skipped because captures were absent.
+
+## Owner-authored final Taiwan tour guide, 2026-10-08
+
+Read all eight sheets of the final family guide. The native import keeps seven
+travel dates, 39 selected experiences with Must do / Interested / Maybe priorities,
+60 booking and packing tasks, and 28 estimated costs. The four-person TWD total is
+56,240 before the workbook's 10 percent contingency; the THB conversion is an owner
+estimate, not a verified market rate. The original workbook remains untouched.
+
+Shared scheduling now supports explicit per-date meal windows and typed fixed ground
+journeys. Fixed flights retain original timezone-aware timestamps and are independently
+checked for name, type, timing and elapsed duration. TG634's 12:40 Bangkok to 17:20
+Taipei flight is 220 minutes; TG633's 13:55 Taipei to 16:50 Bangkok flight is 235
+minutes. A member scheduled inside an explicitly provisional composite route no longer
+claims it cannot fit solely because its opening hours are unverified; verified
+closures still invalidate the schedule. Plain transfer walking is distinguished from
+sightseeing walks, and unlocated imported cards no longer crash ranking.
+
+The import creates a new active version while keeping the previous version. Rebuilds
+retain the source guidance and route until setup or selection changes. Native export
+includes supporting guides and prep/optional notes; workbook strings are not executed
+as formulas. This preserves an authored plan; it does not establish independent
+automatic-planning parity. Ticket slots, train services, venue hours and unspecified
+locations still require confirmation.
+
+Validation: three synthetic import tests cover the real action flow, rebuild, old
+version retention, budget/readiness, timezone elapsed times, late meals, midnight
+rollover, known closing evidence, tampering rejection and safe spreadsheet values.
+A private dry run of the actual source passed all three variants with no unscheduled
+selections, and native export and rebuild passed. Full project gate passed 12 of 13
+stages: 838 Python tests and 233 web tests; screen baselines were unavailable.

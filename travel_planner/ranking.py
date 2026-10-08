@@ -724,7 +724,10 @@ def _route_fit(
     others = [item for item in selected if item["place_id"] != candidate["place_id"]]
     if not others:
         return 7.5, None
-    distance = int(min(_distance_metres(candidate, item) for item in others))
+    nearest = min(_distance_metres(candidate, item) for item in others)
+    if nearest == float("inf"):
+        return 7.5, None
+    distance = int(nearest)
     if distance <= 1_000:
         return 15.0, distance
     if distance <= 3_000:
@@ -907,6 +910,8 @@ def _reconciliation(
 
 
 def _distance_metres(left: dict[str, Any], right: dict[str, Any]) -> float:
+    if any(not isinstance(point.get(key), (int, float)) for point in (left, right) for key in ("latitude", "longitude")):
+        return float("inf")
     lat1, lon1 = radians(left["latitude"]), radians(left["longitude"])
     lat2, lon2 = radians(right["latitude"]), radians(right["longitude"])
     delta_lat = lat2 - lat1

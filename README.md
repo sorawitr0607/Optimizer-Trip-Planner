@@ -256,3 +256,25 @@ This project is licensed under the [MIT License](LICENSE).
 ## Credits
 
 The split ledger and interface visual language derive from **Auto-Bill-Splitter**, this project's earlier application, absorbed as a read-only donor in Phase 2. Attributions are declared individually in the source via `derives-from:` tokens validated against `artifacts/parity/2026-08-04-auto-bill-donor/`. Map data is `© OpenStreetMap contributors` under the ODbL.
+
+### Importing the final Taiwan tour guide
+
+`travel_planner.tour_guide.prepare_import(path, setup=..., destination=..., locations=...)`
+reads the supported `ตารางเวลา` layout without executing workbook formulas.
+`apply_import(actions, trip_id, prepared)` validates the frozen input and schedule
+before activating a new native plan version. The previous active version remains
+in history. This is a Python import operation, not a browser upload feature.
+
+The import preserves the owner's dated routes, protected entry targets, real meal
+windows, priorities and alternatives. Four flight legs retain their original time
+zones; the app timeline uses Taipei time. Optional challenge routes remain notes.
+Bookings and packing become readiness tasks; costs remain estimates in their original
+currency with the workbook's explicitly estimated exchange rate. Supporting guides
+appear on the itinerary and in the downloaded workbook. Unconfirmed hours and
+transport remain provisional, and unknown map locations are left unresolved.
+
+Rebuilding preserves this owner's timetable while independently checking refreshed
+verified opening evidence. Changing setup or Places invalidates that timetable and
+returns to ordinary research and optimization. Import fidelity is not evidence that
+the automatic planner independently produces an equally good itinerary for every
+new trip. Source workbooks and private trip snapshots must not be committed.

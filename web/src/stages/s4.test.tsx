@@ -406,6 +406,26 @@ describe("pinch to zoom", () => {
 });
 
 describe("ItineraryPage", () => {
+  it("keeps imported guide and optional choices visible without confirming bookings", () => {
+    const html = render(<ItineraryPage />, "en", (client) => {
+      client.setQueryData(["export_snapshot", TRIP, "en"], {
+        ...SNAPSHOT,
+        data: { ...SNAPSHOT.data,
+          reference_source: { filename: "family-guide.xlsx", sha256: "source" },
+          reference_guidance: {
+            notices: ["Flight elapsed time uses both time zones"],
+            sections: { "Transport Guide": [{ _row: "1", A: "Use MRT; taxi for long transfers" }] },
+            annotations: [{ date: "2030-01-01", title: "Challenge hike", note: "Optional; family hike is the default" }],
+          },
+        },
+      });
+    });
+    expect(html).toContain("Imported tour guide");
+    expect(html).toContain("family-guide.xlsx");
+    expect(html).toContain("Optional; family hike is the default");
+    expect(html).toContain("planning estimates");
+  });
+
   it("says why a day carries no places instead of looking like a copy", () => {
     /**
      * Reported as "2 duplicate day plans, day 7 and day 8". They were not duplicates and

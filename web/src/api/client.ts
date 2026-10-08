@@ -596,6 +596,12 @@ export interface ExportDay {
 }
 
 export interface ExportSnapshot {
+  reference_source?: { filename: string; sha256: string };
+  reference_guidance?: {
+    notices: string[];
+    annotations: { date: string; title: string; note: string }[];
+    sections: Record<string, Record<string, string>[]>;
+  };
   stamp: {
     plan_version_id: string;
     is_active_plan: boolean;

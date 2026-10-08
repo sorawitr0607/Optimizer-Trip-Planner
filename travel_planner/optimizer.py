@@ -325,10 +325,13 @@ def validate_variant(snapshot: dict[str, Any], variant: dict[str, Any]) -> dict[
                     {"code": "OUTSIDE_USABLE_WINDOW", "subject_id": item.get("subject_id")}
                 )
             previous_end = end
-            if end - start != item.get("duration_minutes"):
+            elapsed = end - start
+            if item.get("fixed_commitment") and item.get("starts_at") and item.get("ends_at"):
+                elapsed = round((datetime.fromisoformat(item["ends_at"]) - datetime.fromisoformat(item["starts_at"])).total_seconds() / 60)
+            if elapsed != item.get("duration_minutes"):
                 errors.append({"code": "ITEM_DURATION_MISMATCH", "subject_id": item.get("subject_id")})
             if item.get("experience_step") and item["type"] == "meal":
-                bounds = {"breakfast": ("07:00", "09:30"), "lunch": ("11:30", "14:00"), "dinner": ("17:30", "21:00")}.get(item.get("kind"))
+                bounds = _meal_role_interval(snapshot, day["date"], item.get("kind"))
                 if bounds and not (_minutes(bounds[0]) <= start and end <= _minutes(bounds[1])):
                     errors.append({"code": "MANDATORY_MEAL_WINDOW_MISSED", "subject_id": item.get("kind")})
             if item["type"] == "visit" or (item["type"] == "meal" and item.get("subject_id") in {_candidate_id(candidate) for candidate in snapshot["candidates"]}):
@@ -358,7 +361,7 @@ def validate_variant(snapshot: dict[str, Any], variant: dict[str, Any]) -> dict[
         errors.append({"code": "FIXED_JOURNEY_INCOMPLETE", "subject_id": None})
     for item in fixed:
         original = committed.get(item.get("subject_id"), {})
-        if any(item.get(key) != original.get(key) for key in ("starts_at", "ends_at")):
+        if any(item.get(key) != original.get(key) for key in ("starts_at", "ends_at")) or item.get("name") != original.get("name") or item.get("type") != original.get("type", "logistics"):
             errors.append({"code": "FIXED_JOURNEY_CHANGED", "subject_id": item.get("subject_id")})
     actual = []
     for day in variant.get("days", []):
@@ -646,12 +649,12 @@ def _attach_journey(snapshot: dict[str, Any], variant: dict[str, Any]) -> None:
         local_start, local_end = start.astimezone(zone), end.astimezone(zone)
         day = local_start.date().isoformat()
         midnight = datetime.combine(local_start.date(), time(), tzinfo=zone)
-        block = {"type": "logistics", "kind": "booked_journey", "subject_id": leg["id"], "name": leg["name"],
+        block = {**leg, "type": leg.get("type", "logistics"), "kind": leg.get("kind", "booked_journey"), "subject_id": leg["id"], "name": leg["name"],
                  "from_name": leg.get("origin"), "to_name": leg.get("destination"), "fixed_commitment": True,
                  "date": day, "start": _clock(round((local_start - midnight).total_seconds() / 60)),
                  "end": _clock(round((local_end - midnight).total_seconds() / 60)),
                  "starts_at": leg["starts_at"], "ends_at": leg["ends_at"],
-                 "duration_minutes": round((end - start).total_seconds() / 60), "status": "owner_confirmed"}
+                 "duration_minutes": round((end - start).total_seconds() / 60), "status": leg.get("status", "owner_confirmed")}
         if day not in by_date:
             by_date[day] = {"date": day, "window": {"start": "00:00", "end": "24:00"}, "items": []}
         by_date[day]["items"].append(block)
@@ -665,6 +668,8 @@ def _annotate_timestamps(snapshot: dict[str, Any], variant: dict[str, Any]) -> N
     zone = ZoneInfo(timezone) if timezone else None
     for day in variant["days"]:
         for item in day["items"]:
+            if item.get("fixed_commitment") and item.get("starts_at") and item.get("ends_at"):
+                continue
             midnight = datetime.combine(date.fromisoformat(day["date"]), time(), tzinfo=zone)
             item["starts_at"] = (midnight + timedelta(minutes=_minutes(item["start"]))).isoformat()
             item["ends_at"] = (midnight + timedelta(minutes=_minutes(item["end"]))).isoformat()
@@ -752,7 +757,7 @@ def _prepare_candidates(
 
         if candidate.get("requires_opening_evidence") and not _planning_fact(
             snapshot, place_id, "opening_interval"
-        ):
+        ) and not (candidate.get("group_parent_id") and snapshot["trip"].get("allow_provisional_assumptions")):
             reconciliation[place_id] = _reconciliation(
                 candidate,
                 "cannot_currently_fit",
@@ -1554,7 +1559,7 @@ def _candidate_segment(
                     earliest = max(earliest, daylight[1] - (20 if "blue hour" in label else 0))
             role = step.get("meal_role")
             if role:
-                earliest = max(earliest, _minutes({"breakfast": "07:00", "lunch": "11:30", "dinner": "17:30"}[role]))
+                earliest = max(earliest, _minutes(_meal_role_interval(snapshot, day, role)[0]))
             cursor = _append_wait(segment, day, cursor, max(cursor, earliest), "timing_window")
             minutes = int(step["duration_minutes"])
             first_visit = step["type"] == "visit" and not parent_recorded
@@ -1565,8 +1570,8 @@ def _candidate_segment(
                     "duration_minutes": minutes, "score": parent["score"] if first_visit else 0}
             parent_recorded = parent_recorded or first_visit
             if step["type"] == "travel":
-                item.update(status="estimated", sightseeing_walk=step.get("mode") == "walk", transfers=0,
-                            origin_id=place_id, destination_id=candidate.get("exit_id", place_id))
+                item.update(status="estimated", sightseeing_walk=step.get("sightseeing_walk", step.get("mode") == "walk"), transfers=step.get("transfers", 0),
+                            origin_id=step.get("origin_id", place_id), destination_id=step.get("destination_id", candidate.get("exit_id", place_id)))
             if timed and timed_is_fixed and cursor + minutes > _minutes(timed["end"]):
                 return {"items": [], "end": current, "error": {"code": "NO_VALID_VISIT_INTERVAL", "subject_id": place_id}}
             if candidate.get("daylight_exit") and step["type"] in {"visit", "travel"} and candidate.get("latitude") is not None and snapshot["trip"].get("timezone"):
@@ -1579,7 +1584,7 @@ def _candidate_segment(
                 return {"items": [], "end": current, "error": {"code": "NO_VALID_VISIT_INTERVAL", "subject_id": member}}
             role = step.get("meal_role")
             if role:
-                bounds = {"breakfast": ("07:00", "09:30"), "lunch": ("11:30", "14:00"), "dinner": ("17:30", "21:00")}[role]
+                bounds = _meal_role_interval(snapshot, day, role)
                 if cursor < _minutes(bounds[0]) or cursor + minutes > _minutes(bounds[1]):
                     return {"items": [], "end": current, "error": {"code": "MANDATORY_MEAL_WINDOW_MISSED", "subject_id": role}}
                 item["kind"] = role
@@ -1929,6 +1934,12 @@ def _timing_miss_minutes(
 
 def _fixed_step_timing(candidate: dict[str, Any], step: dict[str, Any]) -> bool:
     return bool(candidate.get("fixed_event")) or (step.get("type") == "visit" and "before" not in step.get("name", "").casefold() and any(word in step.get("name", "").casefold() for word in ("countdown", "fireworks", "after illumination", "night view", "blue hour")))
+
+
+def _meal_role_interval(snapshot: dict[str, Any], day: str, role: str | None) -> tuple[str, str] | None:
+    defaults = {"breakfast": ("07:00", "09:30"), "lunch": ("11:30", "14:00"), "dinner": ("17:30", "21:00")}
+    value = snapshot["trip"].get("meal_windows_by_date", {}).get(day, {}).get(role)
+    return (value["start"], value["end"]) if value else defaults.get(role)
 
 
 def _day_preference_cost(snapshot: dict[str, Any], day: dict[str, Any], visits: list[dict[str, Any]], travel: list[dict[str, Any]]) -> int:
@@ -2557,6 +2568,19 @@ def _validate_input(snapshot: dict[str, Any]) -> None:
         date.fromisoformat(window["date"])
         if _minutes(window["start"]) >= _minutes(window["end"]):
             raise ValueError("Usable window end must be after start")
+    meals = snapshot["trip"].get("meal_windows_by_date", {})
+    if not isinstance(meals, dict):
+        raise ValueError("Meal windows must be an object keyed by local date")
+    for day, roles in meals.items():
+        if day not in dates or not isinstance(roles, dict):
+            raise ValueError("Meal windows must belong to a trip date")
+        for role, interval in roles.items():
+            if role not in {"breakfast", "lunch", "dinner"} or not isinstance(interval, dict):
+                raise ValueError("Unknown meal role or malformed interval")
+            if not all(isinstance(interval.get(key), str) and len(interval[key]) == 5 and interval[key][2] == ":" and interval[key][:2].isdigit() and interval[key][3:].isdigit() for key in ("start", "end")):
+                raise ValueError("Invalid meal window clock")
+            if _minutes(interval["start"]) >= _minutes(interval["end"]):
+                raise ValueError("Meal window end must be after start")
 
 
 def _selected_candidates(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
@@ -2673,7 +2697,7 @@ def _earliest_visit_start(
         if candidate.get("fixed_event") or not candidate.get("duration_basis"):
             latest = min(latest, _minutes(preferred["end"]))
     for role in ([] if candidate.get("steps") else candidate.get("meal_roles", [])):
-        meal_interval = {"breakfast": ("07:00", "09:30"), "lunch": ("11:30", "14:00"), "dinner": ("17:30", "21:00")}[role]
+        meal_interval = _meal_role_interval(snapshot, day, role)
         start = max(start, _minutes(meal_interval[0]))
         latest = min(latest, _minutes(meal_interval[1]))
     lock = _lock_for(snapshot, place_id)

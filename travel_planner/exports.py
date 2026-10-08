@@ -168,6 +168,7 @@ def build_export_snapshot(
         "fallbacks": fallbacks,
         "accommodation": _accommodation(variant, planner_input, context),
         "warnings": sorted(set(variant.get("warnings", []))),
+        **({"reference_guidance": planner_input["trip"]["reference_guidance"], "reference_source": planner_input["trip"]["reference_source"]} if planner_input["trip"].get("reference_guidance") else {}),
         # Owner-recorded costs in THB plus their original currency. A provider
         # fare would add rows here; it is not required for the sheet to work.
         "costs": {
@@ -353,8 +354,10 @@ def _item(
         "starts_at": item.get("starts_at"), "ends_at": item.get("ends_at"),
         "sources": item.get("sources", []), "alternative": item.get("alternative", ""),
         "duration_basis": item.get("duration_basis"), "parent_id": item.get("parent_id"),
+        "source_reference": item.get("source_reference"),
         "walking_minutes": int(item.get("walking_minutes", 0)),
         "reason": item.get("reason"),
+        "notes": item.get("note", ""),
     }
     if item["type"] == "visit":
         names = item.get("names") or card.get("names")
@@ -390,8 +393,8 @@ def _item(
             {
                 "origin_id": item.get("origin_id"),
                 "destination_id": item.get("destination_id"),
-                "origin_name": _leg_name(origin, context),
-                "destination_name": _leg_name(destination, context),
+                "origin_name": item.get("from_name") or _leg_name(origin, context),
+                "destination_name": item.get("to_name") or _leg_name(destination, context),
                 "mode": item.get("mode"),
                 "walking_minutes": int(item.get("walking_minutes", 0)),
                 "distance_m": item.get("distance_m"),

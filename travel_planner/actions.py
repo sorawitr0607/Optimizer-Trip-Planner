@@ -1815,7 +1815,7 @@ class PlannerActions:
             # An unknown trip, which `_optimizer_input` is about to report properly.
             pass
         optimizer_input = self._optimizer_input(trip_id)
-        if optimizer_input["trip"].get("complete_trip"):
+        if optimizer_input["trip"].get("complete_trip") and not optimizer_input["trip"].get("reference_source"):
             self._research_experiences(trip_id, optimizer_input)
             self._seed_routes_from_matrix(trip_id, self._route_points(trip_id), provider=OpenRouteServiceMatrixProvider(mode="taxi"))
             optimizer_input = self._optimizer_input(trip_id)
@@ -1824,7 +1824,7 @@ class PlannerActions:
             time_limit_seconds=bounded_preview_seconds(time_limit_seconds),
             on_variant=progress,
         )
-        if optimizer_input["trip"].get("complete_trip"):
+        if optimizer_input["trip"].get("complete_trip") and not optimizer_input["trip"].get("reference_source"):
             conflicts = [item for item in proposal.get("variants", [{}])[0].get("reconciliation", [])
                          if item.get("priority") == "must_do" and item.get("status") == "cannot_currently_fit" and item.get("reason") != "ROUTE_UNVERIFIED"]
             if conflicts and self._research_experiences(trip_id, optimizer_input, conflicts=conflicts):
@@ -2495,6 +2495,17 @@ class PlannerActions:
             "comfort_acceptances": self.store.list_comfort_acceptances(trip_id),
         }
 
+        if include_research:
+            from .tour_guide import EVIDENCE_KIND, choice_signature
+            imported = self.store.get_trip_evidence(trip_id, EVIDENCE_KIND)
+            if imported and imported.get("setup_sha256") == setup.snapshot.sha256 and imported.get("choices_sha256") == choice_signature(self.store.list_candidate_actions(trip_id)):
+                from copy import deepcopy
+                authored = deepcopy(imported["optimizer_input"])
+                authored["facts"] = [fact for fact in facts if fact.get("status") == "verified"]
+                authored["thresholds"] = snapshot["thresholds"]
+                authored["comfort_acceptances"] = snapshot["comfort_acceptances"]
+                authored["weights"] = snapshot["weights"]
+                return authored
         if planning.get("complete_trip") and include_research:
             from .planning import RESEARCH_KIND, apply_research
             evidence = self.store.get_trip_evidence(trip_id, RESEARCH_KIND)

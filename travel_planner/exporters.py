@@ -185,7 +185,7 @@ def plan_workbook_xlsx(
 
     words = _labels(labels)
     buffer = BytesIO()
-    workbook = xlsxwriter.Workbook(buffer, {"in_memory": True})
+    workbook = xlsxwriter.Workbook(buffer, {"in_memory": True, "strings_to_formulas": False})
     header = workbook.add_format(
         {"bold": True, "bg_color": _design_token("--export-header-bg"), "border": 1}
     )
@@ -200,6 +200,26 @@ def plan_workbook_xlsx(
     _write_checklist(sheets["Checklist"], snapshot, words, header, wrap)
     _write_costs(sheets["Costs"], snapshot, words, header)
     _write_sources(sheets["Sources"], snapshot, header)
+    guidance = snapshot.get("reference_guidance", {})
+    for name, rows in guidance.get("sections", {}).items():
+        sheet = workbook.add_worksheet(name[:31])
+        sheet.set_column(0, 8, 35, wrap)
+        sheet.freeze_panes(1, 0)
+        for index, row in enumerate(rows):
+            for column, value in sorted(row.items()):
+                if column != "_row":
+                    sheet.write_string(index, ord(column) - ord("A"), value, wrap)
+    if guidance.get("annotations") or guidance.get("notices"):
+        sheet = workbook.add_worksheet("Guide Notes")
+        sheet.set_column(0, 0, 18)
+        sheet.set_column(1, 1, 40)
+        sheet.set_column(2, 2, 100, wrap)
+        sheet.write_row(0, 0, ["Date", "Activity", "Guidance"], header)
+        for index, row in enumerate(guidance.get("annotations", []), 1):
+            for column, key in enumerate(("date", "title", "note")):
+                sheet.write_string(index, column, row.get(key, ""), wrap)
+        for index, notice in enumerate(guidance.get("notices", []), len(guidance.get("annotations", [])) + 1):
+            sheet.write_string(index, 2, notice, wrap)
     workbook.close()
     return buffer.getvalue()
 

@@ -1028,6 +1028,24 @@ export function ItineraryPage() {
         ))}
       </ul>
 
+      {plan.reference_guidance ? (
+        <details className="plan-unscheduled">
+          <summary>{language === "th" ? "คู่มือทริปที่นำเข้า" : "Imported tour guide"} · {plan.reference_source?.filename}</summary>
+          <p className="setup-hint">{language === "th" ? "เวลาและค่าใช้จ่ายเป็นแผนประมาณการ จนกว่าจะยืนยันตั๋วและบริการจริง" : "Times and costs are planning estimates until actual tickets and services are confirmed. Rebuilding preserves this imported timetable; change Places or setup to request a new optimization."}</p>
+          {plan.reference_guidance.notices.map((notice) => <p key={notice}>{notice}</p>)}
+          {Object.entries(plan.reference_guidance.sections).map(([name, rows]) => (
+            <details key={name}>
+              <summary>{name}</summary>
+              <ul>{rows.map((row) => <li key={row._row}>{Object.entries(row).filter(([key, value]) => key !== "_row" && value).map(([, value]) => value).join(" · ")}</li>)}</ul>
+            </details>
+          ))}
+          <details>
+            <summary>{language === "th" ? "เตรียมตัวและตัวเลือก" : "Preparation and optional choices"}</summary>
+            <ul>{plan.reference_guidance.annotations.map((item, index) => <li key={index}>{item.date} · {item.title} · {item.note}</li>)}</ul>
+          </details>
+        </details>
+      ) : null}
+
       <h2 className="money-eyebrow">{copy("downloads", language)}</h2>
       <div className="plan-downloads">
         <a className="primary-link" download href={workbook}>{copy("excel", language)}</a>
